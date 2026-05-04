@@ -52,12 +52,32 @@ class TestRegisterPlayerInput:
 
 class TestRegisterClanInput:
     def test_valid(self) -> None:
-        dto = RegisterClanInput(chat_id=-100123, title="Клан", added_by_tg_id=7)
+        dto = RegisterClanInput(
+            chat_id=-100123,
+            chat_kind="supergroup",
+            title="Клан",
+            added_by_tg_id=7,
+        )
         assert dto.title == "Клан"
+        assert dto.chat_kind == "supergroup"
 
     def test_empty_title_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            RegisterClanInput(chat_id=1, title="", added_by_tg_id=7)
+            RegisterClanInput(
+                chat_id=1,
+                chat_kind="group",
+                title="",
+                added_by_tg_id=7,
+            )
+
+    def test_invalid_chat_kind_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            RegisterClanInput(
+                chat_id=1,
+                chat_kind="private",  # type: ignore[arg-type]
+                title="Клан",
+                added_by_tg_id=7,
+            )
 
 
 class TestGrantLengthInput:
