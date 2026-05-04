@@ -68,7 +68,7 @@ class ForestOutcome(_Frozen):
     def _validate_min_max(self) -> ForestOutcome:
         if self.min > self.max:
             raise ValueError(
-                f"forest outcome {self.name!r}: min ({self.min}) " f"must be <= max ({self.max})"
+                f"forest outcome {self.name!r}: min ({self.min}) must be <= max ({self.max})"
             )
         return self
 
@@ -105,7 +105,7 @@ class OracleConfig(_Frozen):
     def _validate(self) -> OracleConfig:
         if self.bonus_min > self.bonus_max:
             raise ValueError(
-                f"oracle.bonus_min ({self.bonus_min}) " f"must be <= bonus_max ({self.bonus_max})"
+                f"oracle.bonus_min ({self.bonus_min}) must be <= bonus_max ({self.bonus_max})"
             )
         return self
 
@@ -135,12 +135,11 @@ class ReferralConfig(_Frozen):
         thicknesses = [m.thickness for m in self.on_thickness_milestones]
         if len(set(thicknesses)) != len(thicknesses):
             raise ValueError(
-                f"referral.on_thickness_milestones: duplicate thickness " f"in {thicknesses}"
+                f"referral.on_thickness_milestones: duplicate thickness in {thicknesses}"
             )
         if thicknesses != sorted(thicknesses):
             raise ValueError(
-                f"referral.on_thickness_milestones must be sorted by thickness, "
-                f"got {thicknesses}"
+                f"referral.on_thickness_milestones must be sorted by thickness, got {thicknesses}"
             )
         return self
 
@@ -186,8 +185,7 @@ class DailyHeadConfig(_Frozen):
     def _validate(self) -> DailyHeadConfig:
         if self.bonus_min > self.bonus_max:
             raise ValueError(
-                f"daily_head.bonus_min ({self.bonus_min}) "
-                f"must be <= bonus_max ({self.bonus_max})"
+                f"daily_head.bonus_min ({self.bonus_min}) must be <= bonus_max ({self.bonus_max})"
             )
         return self
 
