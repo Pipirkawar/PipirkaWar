@@ -16,9 +16,17 @@
 
 ---
 
-## 🟢 В работе
+## 🟢 В работе — Спринт 1.1 (Регистрация игрока и клана)
 
-_Пока пусто — Спринт 0.2 «достройка» (BalanceLoader) закрыт; следующий шаг — старт Спринта 1.1._
+Спринт разрезан на серию небольших PR-ов вместо одного «недельного» — каждый PR ~250–500 LoC и ревьюится за 10–15 минут.
+
+| PR | Содержимое | Статус | Задачи из `development_plan.md` §3 |
+|---|---|---|---|
+| **1.1.A** | Domain layer: `domain/player/` (`Player`, `Length`, `Thickness`, `Title`, `PlayerName`, `DisplayName`, `Username`, `IPlayerRepository`, ошибки) + `domain/clan/` (`Clan`, `ClanMember`, `ChatKind`, `ClanStatus`, `ClanTitle`, `IClanRepository`, `IClanMembershipRepository`, ошибки) | 🟢 в работе | 1.1.7 (DisplayName VO), доменная половина 1.1.3/1.1.4/1.1.5/1.1.6/1.1.10 |
+| **1.1.B** | `infrastructure/db/migrations/`: alembic-миграция `users`, `clans`, `clan_members` + ORM-модели + `SqlAlchemy{Player,Clan,ClanMembership}Repository` | ⚪ ожидает 1.1.A | 1.1.2 |
+| **1.1.C** | `bot/main.py` + `bot/middlewares/`: aiogram 3.x dispatcher, middleware (auth/locale/throttle/error_handler), `/start` stub | ⚪ ожидает 1.1.A | 1.1.1 |
+| **1.1.D** | `application/use_cases/`: `RegisterPlayer` (только ЛС), `RegisterClan` (только `my_chat_member`), `JoinClan`, `FreezeClan` + handlers `bot/handlers/registration.py` + audit/UoW обёртки | ⚪ ожидает 1.1.A/B/C | 1.1.3, 1.1.4, 1.1.5, 1.1.6, 1.1.10 |
+| **1.1.E** | `bot/presenters/profile.py` + handler `/profile` + админ-команда `/balance_reload` (live-reload `IBalanceConfig`) | ⚪ ожидает 1.1.A/B/C/D | 1.1.8, 1.1.9 |
 
 ---
 
@@ -71,16 +79,6 @@ PR #3 (см. [history.md → 2026-05-04 — Спринт 0.1](history.md)). Вс
 | 0.1.6 | `.pre-commit-config.yaml`: standard hooks + ruff + ruff-format + mypy + import-linter (`local`) | ✅ |
 | 0.1.7 | `.github/workflows/ci.yml`: матрица 3.11/3.12, отдельный job `audit` (pip-audit) | ✅ |
 | 0.1.8 | `Makefile`: install / install-dev / lint / format / typecheck / imports / test / cov / audit / pre-commit / ci / clean | ✅ |
-
----
-
-## 🟡 Готово к старту (Спринт 1.1 — Регистрация игрока и клана)
-
-Базовый каркас (Спринт 0.1) и каркас безопасности (Спринт 0.2 + достройка 0.2.9/0.2.10) — готовы. Можно стартовать первый «геймплейный» спринт:
-
-| ID | Приоритет | Задача | Критерий приёмки | Оценка |
-|---|---|---|---|---|
-| 1.1.* | P0 | Регистрация игрока в ЛС (длина 2, толщина 1, без титула, без имени), клан через добавление бота в группу, `display_names` берётся из `IBalanceConfig.get().display_name_for(length_cm)`, карточка `/profile`, кик бота → `frozen` | См. `development_plan.md` §3 / Спринт 1.1 | ~ 1 неделя |
 
 ---
 
