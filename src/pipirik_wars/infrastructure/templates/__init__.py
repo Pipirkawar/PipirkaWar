@@ -1,0 +1,1 @@
+"""infrastructure/templates package."""
