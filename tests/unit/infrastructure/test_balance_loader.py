@@ -128,6 +128,49 @@ class TestErrorHandling:
             loader.get()
 
 
+class TestReloadDisplayNamesEndToEnd:
+    """Acceptance Спринта 1.1.8: после reload `display_name_for` отдаёт
+    другое название для той же длины.
+
+    Это integration-style тест: пишем yaml, читаем, меняем, перечитываем,
+    и проверяем результат вызова `display_name_for(length_cm)` — то есть
+    именно то, что наблюдает пользователь через `/profile`.
+    """
+
+    def test_display_name_for_same_length_changes_after_reload(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        path = tmp_path / "balance.yaml"
+        v1 = valid_balance_payload()
+        v1["version"] = 1
+        v1["display_names"] = [
+            {"from": 0, "to": 30, "name": "Старый-маленький"},
+            {"from": 30, "to": None, "name": "Старый-большой"},
+        ]
+        _write_yaml(path, v1)
+        loader = YamlBalanceLoader(path)
+
+        old = loader.get()
+        assert old.display_name_for(15) == "Старый-маленький"
+        assert old.display_name_for(50) == "Старый-большой"
+
+        v2 = valid_balance_payload()
+        v2["version"] = 2
+        v2["display_names"] = [
+            {"from": 0, "to": 30, "name": "Новый-маленький"},
+            {"from": 30, "to": None, "name": "Новый-большой"},
+        ]
+        _write_yaml(path, v2)
+
+        new = loader.reload()
+        assert new is not old
+        assert new.display_name_for(15) == "Новый-маленький"
+        assert new.display_name_for(50) == "Новый-большой"
+        # Старый снимок остался валидным и неизменным.
+        assert old.display_name_for(15) == "Старый-маленький"
+
+
 class TestRealConfigBalanceYaml:
     def test_real_balance_yaml_loads(self) -> None:
         """Реальный `config/balance.yaml` валиден через loader."""
