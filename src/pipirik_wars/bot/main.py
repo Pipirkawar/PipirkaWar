@@ -40,12 +40,14 @@ from pipirik_wars.application.clan import (
     MigrateClanChatId,
     RegisterClan,
 )
+from pipirik_wars.application.dau import GetDauStats, SetMaxDau
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import register_middlewares
 from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
+from pipirik_wars.domain.dau import IDauCounter, IDauLimit
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.shared.ports import (
     IAuditLogger,
@@ -56,6 +58,7 @@ from pipirik_wars.domain.shared.ports import (
 )
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
+from pipirik_wars.infrastructure.dau import InMemoryDauCounter, InMemoryDauLimit
 from pipirik_wars.infrastructure.db.engine import build_engine, build_sessionmaker
 from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyAdminRepository,
@@ -101,7 +104,11 @@ class Container:
     clan_members: IClanMembershipRepository
     admins: IAdminRepository
 
-    # Use-case-ы (Спринт 1.1.D + 1.1.E)
+    # DAU Gate (Спринт 1.2.B)
+    dau_counter: IDauCounter
+    dau_limit: IDauLimit
+
+    # Use-case-ы (Спринт 1.1.D + 1.1.E + 1.2.B)
     register_player: RegisterPlayer
     register_clan: RegisterClan
     migrate_clan: MigrateClanChatId
@@ -109,6 +116,8 @@ class Container:
     freeze_clan: FreezeClan
     get_profile: GetProfile
     reload_balance: ReloadBalance
+    get_dau_stats: GetDauStats
+    set_max_dau: SetMaxDau
 
 
 def build_container(
@@ -190,6 +199,16 @@ def build_container(
         audit=audit,
         clock=clock,
     )
+    dau_counter = InMemoryDauCounter(clock=clock)
+    dau_limit = InMemoryDauLimit(initial=settings.bot.max_dau)
+    get_dau_stats = GetDauStats(counter=dau_counter, limit=dau_limit)
+    set_max_dau = SetMaxDau(
+        uow=uow,
+        admins=admins,
+        limit=dau_limit,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -204,6 +223,8 @@ def build_container(
         clans=clans,
         clan_members=clan_members,
         admins=admins,
+        dau_counter=dau_counter,
+        dau_limit=dau_limit,
         register_player=register_player,
         register_clan=register_clan,
         migrate_clan=migrate_clan,
@@ -211,6 +232,8 @@ def build_container(
         freeze_clan=freeze_clan,
         get_profile=get_profile,
         reload_balance=reload_balance,
+        get_dau_stats=get_dau_stats,
+        set_max_dau=set_max_dau,
     )
 
 
@@ -231,6 +254,8 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["freeze_clan"] = container.freeze_clan
     dispatcher["get_profile"] = container.get_profile
     dispatcher["reload_balance"] = container.reload_balance
+    dispatcher["get_dau_stats"] = container.get_dau_stats
+    dispatcher["set_max_dau"] = container.set_max_dau
     return dispatcher
 
 
