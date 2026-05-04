@@ -24,7 +24,11 @@ from typing import Final
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from pipirik_wars.application.dto.inputs import FinishForestRunInput
-from pipirik_wars.application.forest import FinishForestRun
+from pipirik_wars.application.forest import (
+    FinishForestRun,
+    ForestRunFinished,
+    IForestFinishNotifier,
+)
 from pipirik_wars.domain.forest import ForestRunNotFoundError
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
@@ -43,19 +47,27 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
     `FinishForestRun`-use-case (с активной транзакцией / зависимостями).
     Это нужно потому, что job исполняется в фоне и **не** должен
     повторно использовать сессию текущего bot-handler-а.
+
+    `notifier` (Спринт 1.3.D, опционален) — `IForestFinishNotifier`,
+    который зовётся **после** успешного `FinishForestRun.execute(...)`,
+    чтобы отправить игроку Telegram-сообщение «вернулся из леса»
+    (ГДД §8.2). Зовётся вне транзакции — ошибки доставки игнорируются
+    самим notifier-ом.
     """
 
-    __slots__ = ("_finish_factory", "_logger", "_scheduler")
+    __slots__ = ("_finish_factory", "_logger", "_notifier", "_scheduler")
 
     def __init__(
         self,
         *,
         scheduler: AsyncIOScheduler,
         finish_factory: Callable[[], FinishForestRun],
+        notifier: IForestFinishNotifier | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._scheduler = scheduler
         self._finish_factory = finish_factory
+        self._notifier = notifier
         self._logger = logger or logging.getLogger(__name__)
 
     async def schedule_finish_forest_run(
@@ -97,18 +109,33 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
 
         Любые доменные ошибки логируем и проглатываем — APScheduler
         иначе пометит job-у как «failed» и оставит её в job-store-е.
+        После успешного `FinishForestRun.execute(...)` зовём notifier
+        (если он есть) — это шлёт игроку «вернулся из леса» (ГДД §8.2).
         """
+        result: ForestRunFinished | None = None
         try:
             use_case = self._finish_factory()
-            await use_case.execute(FinishForestRunInput(run_id=run_id))
+            result = await use_case.execute(FinishForestRunInput(run_id=run_id))
         except (ForestRunNotFoundError, PlayerNotFoundError) as exc:
             self._logger.warning(
                 "forest_run_finish: domain error",
                 extra={"run_id": run_id, "error": type(exc).__name__},
             )
+            return
         except Exception as exc:  # последний барьер — APScheduler иначе пометит job-у «failed»
             self._logger.exception(
                 "forest_run_finish: unexpected error",
+                extra={"run_id": run_id, "error": type(exc).__name__},
+            )
+            return
+
+        if self._notifier is None or result is None:
+            return
+        try:
+            await self._notifier.notify(result)
+        except Exception as exc:  # notifier обязан сам ловить TelegramAPIError, но защищаемся
+            self._logger.exception(
+                "forest_run_finish: notifier failed",
                 extra={"run_id": run_id, "error": type(exc).__name__},
             )
 

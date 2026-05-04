@@ -38,3 +38,44 @@ class ForestRunNotFoundError(ForestError):
     def __init__(self, *, run_id: int) -> None:
         super().__init__(f"forest_run id={run_id} not found")
         self.run_id = run_id
+
+
+class ForestRunOwnershipError(ForestError):
+    """Игрок пытается применить дроп чужого похода.
+
+    Защита от подмены `callback_data`: id игрока, нажавшего кнопку,
+    обязан совпасть с `forest_runs.player_id`. Иначе use-case
+    `ApplyForestNameDrop` (Спринт 1.3.D) бросает эту ошибку, и handler
+    логирует попытку без раскрытия деталей пользователю.
+    """
+
+    __slots__ = ("actor_player_id", "run_id", "run_player_id")
+
+    def __init__(self, *, run_id: int, run_player_id: int, actor_player_id: int) -> None:
+        super().__init__(
+            f"forest_run id={run_id} belongs to player_id={run_player_id}, "
+            f"got actor player_id={actor_player_id}"
+        )
+        self.run_id = run_id
+        self.run_player_id = run_player_id
+        self.actor_player_id = actor_player_id
+
+
+class ForestDropMismatchError(ForestError):
+    """Тип дропа не соответствует ожидаемому действием use-case-а.
+
+    Например, `ApplyForestNameDrop` дернули на запись с `ItemDrop` или
+    `NoDrop`. Handler не должен такое строить — это защита для случая,
+    если callback_data «забалансирована» (например, после регенерации
+    кнопок при будущих изменениях формата).
+    """
+
+    __slots__ = ("expected", "got", "run_id")
+
+    def __init__(self, *, run_id: int, expected: str, got: str) -> None:
+        super().__init__(
+            f"forest_run id={run_id} drop kind mismatch: expected={expected!r}, got={got!r}"
+        )
+        self.run_id = run_id
+        self.expected = expected
+        self.got = got

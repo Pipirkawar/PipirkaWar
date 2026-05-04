@@ -28,7 +28,11 @@ import pytest
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from pipirik_wars.application.dto.inputs import FinishForestRunInput
-from pipirik_wars.application.forest import FinishForestRun, ForestRunFinished
+from pipirik_wars.application.forest import (
+    FinishForestRun,
+    ForestRunFinished,
+    IForestFinishNotifier,
+)
 from pipirik_wars.domain.forest import (
     ForestRun,
     ForestRunNotFoundError,
@@ -236,3 +240,79 @@ def test_real_finish_factory_signature() -> None:
 
     actual = factory()
     assert actual is cast(FinishForestRun, fake)
+
+
+@dataclass
+class _FakeNotifier(IForestFinishNotifier):
+    """Stub-нотификатор: считает, сколько раз был вызван и с чем."""
+
+    calls: list[ForestRunFinished] = field(default_factory=list)
+    raise_exc: BaseException | None = None
+
+    async def notify(self, result: ForestRunFinished) -> None:
+        self.calls.append(result)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+
+
+class TestNotifierIntegration:
+    @pytest.mark.asyncio
+    async def test_notifier_called_after_finish(self) -> None:
+        fake = _FakeFinishUseCase()
+        notifier = _FakeNotifier()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, fake),
+            notifier=notifier,
+        )
+
+        await adapter._run_finish_job(run_id=11)
+
+        assert len(notifier.calls) == 1
+        assert notifier.calls[0].run.id == 11
+
+    @pytest.mark.asyncio
+    async def test_notifier_not_called_on_domain_error(self) -> None:
+        fake = _FakeFinishUseCase(raise_exc=ForestRunNotFoundError(run_id=11))
+        notifier = _FakeNotifier()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, fake),
+            notifier=notifier,
+            logger=MagicMock(spec=logging.Logger),
+        )
+
+        await adapter._run_finish_job(run_id=11)
+
+        assert notifier.calls == []
+
+    @pytest.mark.asyncio
+    async def test_notifier_error_is_swallowed(self) -> None:
+        fake = _FakeFinishUseCase()
+        notifier = _FakeNotifier(raise_exc=RuntimeError("network down"))
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, fake),
+            notifier=notifier,
+            logger=logger,
+        )
+
+        # Не должно бросать наружу — APScheduler не должен пометить job-у failed
+        # из-за упавшего нотификатора.
+        await adapter._run_finish_job(run_id=11)
+
+        assert logger.exception.called
+
+    @pytest.mark.asyncio
+    async def test_no_notifier_is_optional(self) -> None:
+        """Без `notifier` (старая сигнатура) работает по-прежнему."""
+        fake = _FakeFinishUseCase()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, fake),
+        )
+
+        await adapter._run_finish_job(run_id=11)
+
+        assert fake.calls == [FinishForestRunInput(run_id=11)]

@@ -16,8 +16,10 @@ from pipirik_wars.domain.forest.entities import (
 )
 from pipirik_wars.domain.forest.errors import (
     AlreadyInForestError,
+    ForestDropMismatchError,
     ForestError,
     ForestRunNotFoundError,
+    ForestRunOwnershipError,
 )
 from pipirik_wars.domain.forest.repositories import IForestRunRepository
 from pipirik_wars.domain.forest.run import ForestRun, ForestRunStatus
@@ -26,10 +28,12 @@ from pipirik_wars.domain.forest.services import compute_forest_outcome
 __all__ = [
     "AlreadyInForestError",
     "Drop",
+    "ForestDropMismatchError",
     "ForestError",
     "ForestRun",
     "ForestRunNotFoundError",
     "ForestRunOutcome",
+    "ForestRunOwnershipError",
     "ForestRunStatus",
     "IForestRunRepository",
     "Item",
