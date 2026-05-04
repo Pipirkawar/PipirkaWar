@@ -32,3 +32,18 @@ class PlayerFrozenError(DomainError):
     def __init__(self, *, tg_id: int) -> None:
         super().__init__(f"player tg_id={tg_id} is frozen and cannot be mutated")
         self.tg_id = tg_id
+
+
+class PlayerNotFoundError(DomainError):
+    """Игрок с таким `tg_id` не зарегистрирован.
+
+    Use-case-ы, которые требуют существующего игрока (например,
+    `StartForestRun`), бросают её, чтобы handler показал «сначала
+    /start» вместо «непонятная ошибка». Не путать с
+    `PlayerAlreadyRegisteredError` — там попытка зарегистрировать
+    дубль; здесь — попытка работать с несуществующим.
+    """
+
+    def __init__(self, *, tg_id: int) -> None:
+        super().__init__(f"player with tg_id={tg_id} is not registered")
+        self.tg_id = tg_id

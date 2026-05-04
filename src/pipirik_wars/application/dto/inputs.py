@@ -104,3 +104,15 @@ class GrantLengthInput(_StrictBase):
     delta_cm: int = Field(description="Может быть отрицательным; ноль запрещён")
     reason: str = Field(min_length=3, max_length=512)
     idempotency_key: str = Field(min_length=8, max_length=255)
+
+
+class StartForestRunInput(_StrictBase):
+    """Старт похода в лес (Спринт 1.3.B).
+
+    Игрок идентифицируется `tg_id`, как и во всех остальных входных
+    DTO. Внутренний `player.id` use-case достанет через
+    `IPlayerRepository.get_by_tg_id` — это даёт единый внешний контракт
+    для bot-handler-ов, которые видят только Telegram-id.
+    """
+
+    tg_id: PositiveTgId = Field(gt=0, description="Telegram user_id игрока")

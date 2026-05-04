@@ -45,7 +45,9 @@ from pipirik_wars.application.dau import (
     GetDauStats,
     SetMaxDau,
 )
+from pipirik_wars.application.forest import StartForestRun
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
+from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import register_middlewares
@@ -53,7 +55,9 @@ from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.dau import IDauCounter, IDauLimit, IDauThresholdAlerter
+from pipirik_wars.domain.forest import IForestRunRepository
 from pipirik_wars.domain.player import IPlayerRepository
+from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import (
     IAuditLogger,
     IClock,
@@ -71,9 +75,11 @@ from pipirik_wars.infrastructure.dau import (
 )
 from pipirik_wars.infrastructure.db.engine import build_engine, build_sessionmaker
 from pipirik_wars.infrastructure.db.repositories import (
+    SqlAlchemyActivityLockRepository,
     SqlAlchemyAdminRepository,
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
+    SqlAlchemyForestRunRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemySignupQueueRepository,
 )
@@ -109,19 +115,21 @@ class Container:
     rate_limiter: IRateLimiter
     settings: Settings
 
-    # Репозитории (Спринт 1.1.D + 1.1.E + 1.2.C)
+    # Репозитории (Спринт 1.1.D + 1.1.E + 1.2.C + 1.3.B)
     players: IPlayerRepository
     clans: IClanRepository
     clan_members: IClanMembershipRepository
     admins: IAdminRepository
     signup_queue: ISignupQueueRepository
+    activity_locks: IActivityLockRepository
+    forest_runs: IForestRunRepository
 
     # DAU Gate (Спринт 1.2.B / 1.2.D)
     dau_counter: IDauCounter
     dau_limit: IDauLimit
     dau_threshold_alerter: IDauThresholdAlerter
 
-    # Use-case-ы (Спринт 1.1.D + 1.1.E + 1.2.B + 1.2.C)
+    # Use-case-ы (Спринт 1.1.D + 1.1.E + 1.2.B + 1.2.C + 1.3.B)
     register_player: RegisterPlayer
     register_clan: RegisterClan
     migrate_clan: MigrateClanChatId
@@ -133,6 +141,7 @@ class Container:
     set_max_dau: SetMaxDau
     promote_from_queue: PromoteFromQueue
     check_dau_threshold: CheckDauThreshold
+    start_forest_run: StartForestRun
 
 
 def build_container(
@@ -170,6 +179,8 @@ def build_container(
     clan_members = SqlAlchemyClanMembershipRepository(uow=uow)
     admins = SqlAlchemyAdminRepository(uow=uow)
     signup_queue = SqlAlchemySignupQueueRepository(uow=uow)
+    activity_locks = SqlAlchemyActivityLockRepository(uow=uow)
+    forest_runs = SqlAlchemyForestRunRepository(uow=uow, balance=balance)
     dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=settings.bot.max_dau)
     dau_threshold_alerter = StructlogDauThresholdAlerter()
@@ -250,6 +261,20 @@ def build_container(
         clock=clock,
         check_threshold=check_dau_threshold,
     )
+    activity_lock_service = ActivityLockService(
+        repository=activity_locks,
+        clock=clock,
+    )
+    start_forest_run = StartForestRun(
+        uow=uow,
+        players=players,
+        runs=forest_runs,
+        locks=activity_lock_service,
+        balance=balance,
+        random=RealRandom(),
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -265,6 +290,8 @@ def build_container(
         clan_members=clan_members,
         admins=admins,
         signup_queue=signup_queue,
+        activity_locks=activity_locks,
+        forest_runs=forest_runs,
         dau_counter=dau_counter,
         dau_limit=dau_limit,
         dau_threshold_alerter=dau_threshold_alerter,
@@ -279,6 +306,7 @@ def build_container(
         set_max_dau=set_max_dau,
         promote_from_queue=promote_from_queue,
         check_dau_threshold=check_dau_threshold,
+        start_forest_run=start_forest_run,
     )
 
 
@@ -303,6 +331,7 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["set_max_dau"] = container.set_max_dau
     dispatcher["signup_queue"] = container.signup_queue
     dispatcher["promote_from_queue"] = container.promote_from_queue
+    dispatcher["start_forest_run"] = container.start_forest_run
     return dispatcher
 
 

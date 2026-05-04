@@ -17,7 +17,9 @@ from tests.fakes.dau import (
     FakeDauLimit,
     FakeDauThresholdAlerter,
 )
+from tests.fakes.forest_run_repo import FakeForestRunRepository
 from tests.fakes.idempotency import FakeIdempotencyKey
+from tests.fakes.lock_repo import FakeActivityLockRepository
 from tests.fakes.player_repo import FakePlayerRepository
 from tests.fakes.random import FakeRandom
 from tests.fakes.signup_queue import FakeSignupQueueRepository
@@ -25,6 +27,7 @@ from tests.fakes.uow import FakeUnitOfWork
 
 __all__ = [
     "DauAlertEvent",
+    "FakeActivityLockRepository",
     "FakeAdminRepository",
     "FakeAuditLogger",
     "FakeBalanceConfig",
@@ -34,6 +37,7 @@ __all__ = [
     "FakeDauCounter",
     "FakeDauLimit",
     "FakeDauThresholdAlerter",
+    "FakeForestRunRepository",
     "FakeIdempotencyKey",
     "FakePlayerRepository",
     "FakeRandom",

@@ -1,12 +1,4 @@
-"""Domain-ошибки леса.
-
-Сейчас здесь только базовый `ForestError` для будущих use-case-ов
-(Спринт 1.3.B/C) — например, `AlreadyInForestError` будет
-наследоваться отсюда. На уровне 1.3.A (домен + расчёт исхода)
-никаких дополнительных ошибок не возникает: catalog-инварианты
-ловятся pydantic-валидатором `BalanceConfig`, а сам расчёт
-`compute_forest_outcome` детерминирован относительно входов.
-"""
+"""Domain-ошибки леса."""
 
 from __future__ import annotations
 
@@ -14,4 +6,19 @@ from pipirik_wars.shared.errors import DomainError
 
 
 class ForestError(DomainError):
-    """Базовая ошибка леса. Конкретные наследники появятся в 1.3.B/C."""
+    """Базовая ошибка леса."""
+
+
+class AlreadyInForestError(ForestError):
+    """Игрок уже в активном походе.
+
+    Бросает `StartForestRun`, когда `activity_lock` на `(player, FOREST)`
+    уже взят. Handler в Спринте 1.3.D перехватывает её и показывает
+    игроку сообщение «вы заняты, лес ещё не закончился» (ПД §1.3.9).
+    """
+
+    __slots__ = ("player_id",)
+
+    def __init__(self, *, player_id: int) -> None:
+        super().__init__(f"player_id={player_id} is already in a forest run")
+        self.player_id = player_id
