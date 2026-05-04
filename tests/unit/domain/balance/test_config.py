@@ -13,12 +13,24 @@ from pydantic import ValidationError
 from pipirik_wars.domain.balance.config import (
     BalanceConfig,
     DisplayNameRange,
+    ForestDropConfig,
     ForestOutcome,
+    ForestRarityWeights,
+    ItemEntry,
+    Rarity,
+    Slot,
 )
 from tests.unit.domain.balance.factories import (
     build_valid_balance,
     valid_balance_payload,
 )
+
+_VALID_DROP_PAYLOAD: dict[str, Any] = {
+    "probability_percent": 50,
+    "name_share_percent": 5,
+    "rarity_weights": {"common": 70, "rare": 25, "epic": 5},
+}
+"""Минимальный валидный `forest.drop` для подстановки в `forest`-патчи."""
 
 
 def _payload_with(**overrides: Any) -> dict[str, Any]:
@@ -35,12 +47,16 @@ class TestValidBalance:
         assert cfg.version == 1
         assert len(cfg.display_names) == 3
         assert cfg.forest.outcomes[0].name == "scarce"
+        assert cfg.forest.drop.probability_percent == 50
+        assert cfg.forest.drop.rarity_weights.common == 70
         assert cfg.oracle.bonus_max == 20
         assert cfg.referral.on_signup.newbie_bonus_cm == 5
         assert cfg.thickness.cost_base == 1000
         assert cfg.dau_gate.max_dau == 200
         assert cfg.daily_head.schedule_mode == "hybrid"
         assert cfg.content_policy.clan_quotes.mild_profanity is True
+        assert len(cfg.items_catalog) == 30
+        assert len(cfg.names_catalog) == 30
 
     def test_real_balance_yaml_parses(self) -> None:
         """Реальный `config/balance.yaml` валидируется без ошибок."""
@@ -188,6 +204,7 @@ class TestForestConfig:
                 "outcomes": [],
                 "cooldown_min_minutes": 10,
                 "cooldown_max_minutes": 20,
+                "drop": _VALID_DROP_PAYLOAD,
             }
         )
         with pytest.raises(ValidationError):
@@ -202,6 +219,7 @@ class TestForestConfig:
                 ],
                 "cooldown_min_minutes": 10,
                 "cooldown_max_minutes": 20,
+                "drop": _VALID_DROP_PAYLOAD,
             }
         )
         with pytest.raises(ValidationError, match="duplicate names"):
@@ -213,9 +231,21 @@ class TestForestConfig:
                 "outcomes": [{"name": "x", "weight": 1, "min": 1, "max": 5}],
                 "cooldown_min_minutes": 30,
                 "cooldown_max_minutes": 10,
+                "drop": _VALID_DROP_PAYLOAD,
             }
         )
         with pytest.raises(ValidationError, match="cooldown_min_minutes"):
+            BalanceConfig.model_validate(payload)
+
+    def test_drop_field_required(self) -> None:
+        payload = _payload_with(
+            forest={
+                "outcomes": [{"name": "x", "weight": 1, "min": 1, "max": 5}],
+                "cooldown_min_minutes": 10,
+                "cooldown_max_minutes": 20,
+            }
+        )
+        with pytest.raises(ValidationError):
             BalanceConfig.model_validate(payload)
 
 
@@ -396,4 +426,161 @@ class TestExtraForbid:
     def test_extra_top_level_field_rejected(self) -> None:
         payload = _payload_with(unknown_section={"foo": 1})
         with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(payload)
+
+
+class TestForestRarityWeights:
+    def test_valid(self) -> None:
+        w = ForestRarityWeights.model_validate({"common": 70, "rare": 25, "epic": 5})
+        assert w.common == 70
+        assert w.rare == 25
+        assert w.epic == 5
+
+    @pytest.mark.parametrize("rarity", ["common", "rare", "epic"])
+    def test_zero_weight_rejected(self, rarity: str) -> None:
+        payload = {"common": 70, "rare": 25, "epic": 5}
+        payload[rarity] = 0
+        with pytest.raises(ValidationError):
+            ForestRarityWeights.model_validate(payload)
+
+    def test_negative_weight_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            ForestRarityWeights.model_validate({"common": -1, "rare": 25, "epic": 5})
+
+    def test_missing_rarity_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            ForestRarityWeights.model_validate({"common": 70, "rare": 25})
+
+
+class TestForestDropConfig:
+    def test_valid(self) -> None:
+        d = ForestDropConfig.model_validate(_VALID_DROP_PAYLOAD)
+        assert d.probability_percent == 50
+        assert d.name_share_percent == 5
+        assert d.rarity_weights.epic == 5
+
+    @pytest.mark.parametrize("value", [-1, 101])
+    def test_probability_out_of_range_rejected(self, value: int) -> None:
+        payload = {**_VALID_DROP_PAYLOAD, "probability_percent": value}
+        with pytest.raises(ValidationError):
+            ForestDropConfig.model_validate(payload)
+
+    @pytest.mark.parametrize("value", [-1, 101])
+    def test_name_share_out_of_range_rejected(self, value: int) -> None:
+        payload = {**_VALID_DROP_PAYLOAD, "name_share_percent": value}
+        with pytest.raises(ValidationError):
+            ForestDropConfig.model_validate(payload)
+
+    def test_zero_probability_allowed(self) -> None:
+        # 0% — лес временно отключённый по дропу. Это валидное состояние
+        # для админ-панели (Phase 2.5+).
+        payload = {**_VALID_DROP_PAYLOAD, "probability_percent": 0}
+        d = ForestDropConfig.model_validate(payload)
+        assert d.probability_percent == 0
+
+    def test_zero_name_share_allowed(self) -> None:
+        payload = {**_VALID_DROP_PAYLOAD, "name_share_percent": 0}
+        d = ForestDropConfig.model_validate(payload)
+        assert d.name_share_percent == 0
+
+
+class TestItemEntry:
+    def test_valid(self) -> None:
+        e = ItemEntry.model_validate(
+            {"id": "item.hat.x", "slot": "hat", "display_name": "X", "rarity": "common"},
+        )
+        assert e.id == "item.hat.x"
+        assert e.slot is Slot.HAT
+        assert e.rarity is Rarity.COMMON
+
+    def test_unknown_slot_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            ItemEntry.model_validate(
+                {"id": "item.x", "slot": "shoulder", "display_name": "X", "rarity": "common"},
+            )
+
+    def test_unknown_rarity_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            ItemEntry.model_validate(
+                {"id": "item.x", "slot": "hat", "display_name": "X", "rarity": "legendary"},
+            )
+
+    def test_empty_id_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            ItemEntry.model_validate(
+                {"id": "", "slot": "hat", "display_name": "X", "rarity": "common"},
+            )
+
+    def test_empty_display_name_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            ItemEntry.model_validate(
+                {"id": "item.x", "slot": "hat", "display_name": "", "rarity": "common"},
+            )
+
+
+class TestItemsCatalog:
+    def test_below_30_rejected(self) -> None:
+        # 29 валидных записей с покрытыми редкостями.
+        items = [
+            {
+                "id": f"item.hat.test_{i}",
+                "slot": "hat",
+                "display_name": f"X{i}",
+                "rarity": "common" if i < 27 else ("rare" if i < 29 else "epic"),
+            }
+            for i in range(29)
+        ]
+        payload = _payload_with(items_catalog=items)
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(payload)
+
+    def test_duplicate_ids_rejected(self) -> None:
+        base = copy.deepcopy(valid_balance_payload())
+        base["items_catalog"][0] = {**base["items_catalog"][0], "id": "dup.id"}
+        base["items_catalog"][1] = {**base["items_catalog"][1], "id": "dup.id"}
+        with pytest.raises(ValidationError, match="duplicate item ids"):
+            BalanceConfig.model_validate(base)
+
+    def test_missing_rarity_rejected(self) -> None:
+        # Все 30 предметов — common; ни одного rare/epic не остаётся.
+        items = [
+            {
+                "id": f"item.hat.test_{i}",
+                "slot": "hat",
+                "display_name": f"X{i}",
+                "rarity": "common",
+            }
+            for i in range(30)
+        ]
+        payload = _payload_with(items_catalog=items)
+        with pytest.raises(ValidationError, match="at least one item per rarity"):
+            BalanceConfig.model_validate(payload)
+
+
+class TestNamesCatalog:
+    def test_below_30_rejected(self) -> None:
+        names = [f"Имя-{i}" for i in range(29)]
+        payload = _payload_with(names_catalog=names)
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(payload)
+
+    def test_empty_string_rejected(self) -> None:
+        names = [f"Имя-{i}" for i in range(30)]
+        names[0] = ""
+        payload = _payload_with(names_catalog=names)
+        with pytest.raises(ValidationError, match="empty or whitespace"):
+            BalanceConfig.model_validate(payload)
+
+    def test_whitespace_only_rejected(self) -> None:
+        names = [f"Имя-{i}" for i in range(30)]
+        names[5] = "   "
+        payload = _payload_with(names_catalog=names)
+        with pytest.raises(ValidationError, match="empty or whitespace"):
+            BalanceConfig.model_validate(payload)
+
+    def test_duplicates_rejected(self) -> None:
+        names = [f"Имя-{i}" for i in range(30)]
+        names[10] = names[1]
+        payload = _payload_with(names_catalog=names)
+        with pytest.raises(ValidationError, match="duplicate names"):
             BalanceConfig.model_validate(payload)

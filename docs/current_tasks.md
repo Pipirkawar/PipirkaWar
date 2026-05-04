@@ -16,16 +16,31 @@
 
 ---
 
-## 🟢 В работе — Спринт 1.2 (Правило 20 см и DAU Gate)
+## 🟢 В работе — Спринт 1.3 (Поход в лес + дроп шмота)
 
-Спринт разрезан на 4 PR-а в ту же логику, что и 1.1: маленькие, каждый ~150–500 LoC, без архитектурных слияний.
+Спринт большой (9 задач из §3 / Спринт 1.3 ПД), поэтому режется на 4 PR-а:
+
+| PR | Содержимое | Статус | Задачи из `development_plan.md` §3 |
+|---|---|---|---|
+| **1.3.A** | `balance.yaml`: `forest.drop` (probability/name_share/rarity 70/25/5), `items_catalog` ≥ 30 предметов на 6 слотов, `names_catalog` ≥ 30 имён + pydantic-схемы `ForestDropConfig` / `ForestRarityWeights` / `ItemEntry` (валидация ID-уникальности и покрытия редкостей) + `domain/forest/`: `Slot` / `Rarity` / `Item` / `Name` / `OutcomeBranch` + ADT `Drop = NoDrop \| ItemDrop \| NameDrop` + `compute_forest_outcome(*, balance, random)` (чистая функция через `IRandom`) | 🟢 в работе (PR open) | 1.3.4 (расчёт исхода), 1.3.5 (каталоги предметов/имён, веса редкости) |
+| **1.3.B** | Миграции `forest_runs` / `inventory_items` + `SqlAlchemy{ForestRun,Inventory}Repository` + use-case `StartForestRun` через `activity_lock` (1.3.9) + integration-тесты | ⚪ бэклог | 1.3.9 (activity_lock на /forest) |
+| **1.3.C** | Use-case `FinishForestRun` (длина + дроп 0–1, включая имя), титул «Новичок» (идемпотентный, 1.3.8), APScheduler-job (`IDelayedJobScheduler` порт + адаптер) | ⚪ бэклог | 1.3.3, 1.3.7 (смена/дроп имени), 1.3.8 (титул), частично 1.3.5 (применение дропа) |
+| **1.3.D** | bot-handler `/forest`, рандом-кулдаун 10–20 мин, сообщения по ГДД §8.2, инлайн-кнопки «Надеть/Выбросить» | ⚪ бэклог | 1.3.1, 1.3.2, 1.3.6 |
+
+> **Дизайн-решение:** Slot/Rarity вынесены в `domain/balance/config.py` (а не в `domain/forest/`), потому что ими типизирован сам каталог `items_catalog`. `domain/forest/entities.py` реэкспортирует их для удобства. Когда подключим горы / данжон (Спринт 3.x) — те же 6 слотов / 3 редкости останутся источником правды.
+
+---
+
+## ✅ Завершено (Спринт 1.2 — Правило 20 см и DAU Gate)
+
+Спринт разрезан на 4 PR-а в ту же логику, что и 1.1: маленькие, каждый ~150–500 LoC, без архитектурных слияний. Спринт закрыт.
 
 | PR | Содержимое | Статус | Задачи из `development_plan.md` §3 |
 |---|---|---|---|
 | **1.2.A** | Domain-сервис `progression.can_spend(length_cm, cost_cm)` + `require_spend(...)` (бросает `InsufficientLengthError`) + константа `MIN_LENGTH_AFTER_SPEND_CM=20` (ГДД §3.1) | ✅ смержено (PR #13) | 1.2.1 |
 | **1.2.B** | Domain-`Settings.MAX_DAU` (динамическая) + in-memory `DauCounter` (с ежедневным сбросом) + handler `/admin_stats` + admin-command `/set_max_dau N` + аудит | ✅ смержено (PR #14) | 1.2.3, 1.2.6 |
 | **1.2.C** | Миграция `signup_queue` + ветка очереди в `RegisterPlayer` (когда DAU == MAX) + use-case `PromoteFromQueue` (вызывается при `/set_max_dau` на повышение) + сообщение «серверы переполнены» | ✅ смержено (PR #15) | 1.2.4, 1.2.5 |
-| **1.2.D** | Уведомление админу при достижении 80 % от `MAX_DAU` (через AuditLogger или structlog алёрт; срабатывает один раз в сутки) | 🟢 в работе (PR open) | 1.2.7 |
+| **1.2.D** | Уведомление админу при достижении 80 % от `MAX_DAU` (через AuditLogger или structlog алёрт; срабатывает один раз в сутки) | ✅ смержено (PR #16) | 1.2.7 |
 
 > **Заметка по 1.2.2:** `ActivityLock` уже доделан в Спринте 0.2.1 (см. таблицу ниже) — `IActivityLockRepository` + `ActivityLockService` + тест двойного захвата зелёный. В Спринте 1.2 отдельной задачи под него нет; реальное «двойной /forest не проходит» появится в 1.3.9, когда у нас будет /forest handler.
 

@@ -5,7 +5,9 @@
 #
 # Источник правды для:
 #   • §2.3 ГДД — таблица «Длина → Название» (display_names)
-#   • §8.2 ГДД — три ветки исходов леса (forest.outcomes)
+#   • §8.2 ГДД — три ветки исходов леса (forest.outcomes) + дроп (forest.drop)
+#   • §1.3.5 / §2.6 ГДД — каталог экипировки (items_catalog)
+#   • §1.3.5 / §2.5 ГДД — каталог имён (names_catalog)
 #   • §11 ГДД — кулдаун и прибавка предсказателя (oracle)
 #   • §13.1 ГДД — реферальная схема (referral)
 #   • §3.2 ГДД — формула цены толщины (thickness)
@@ -14,12 +16,16 @@
 # ВАЛИДАЦИЯ: при загрузке (`BalanceLoader`) pydantic-схема проверяет:
 #   • display_names покрывают всю шкалу [0, +∞) без дыр и пересечений;
 #   • forest.outcomes имеют положительные веса и неотрицательные min ≤ max;
+#   • forest.drop.* проценты ∈ [0,100], rarity_weights — все 3 уровня > 0;
+#   • items_catalog: ≥ 30 предметов, уникальные id, каждая редкость
+#     (`common`/`rare`/`epic`) имеет ≥ 1 предмет, slot — один из 6 разрешённых;
+#   • names_catalog: ≥ 30 имён, без пустых строк, без дублей;
 #   • referral.on_thickness_milestones отсортированы по `thickness` без дублей;
 #   • oracle.bonus_min ≤ oracle.bonus_max и оба > 0.
 #
 # Любой невалидный YAML → отказ загрузки + алёрт в админ-чат.
 
-version: 2
+version: 3
 
 # -----------------------------------------------------------------------------
 # §2.3 — таблица «Длина → Название».
@@ -45,6 +51,14 @@ display_names:
 # -----------------------------------------------------------------------------
 # §8.2 — лес: 3 ветки исходов. Все ветки положительные (лес безопасен).
 # Веса нормализуются автоматически (не обязательно сумма 100).
+#
+# `drop` (Спринт 1.3.A) — параметры дропа предмета или имени:
+#   • probability_percent — шанс ЛЮБОГО дропа за поход (0–100, целые %).
+#   • name_share_percent — внутри дропов: доля «имя» vs «предмет экипировки»
+#     (`name as item type` — единственный путь получить имя, ГДД §2.5 / §1.3.5).
+#   • rarity_weights — распределение редкости для предметов (имена редкость
+#     не несут). 70/25/5 — тире-показатель из ГДД §1.3.5.
+# Веса rarity_weights нормализуются автоматически.
 # -----------------------------------------------------------------------------
 forest:
   outcomes:
@@ -53,6 +67,13 @@ forest:
     - { name: "abundant", weight: 15, min: 10, max: 20 }
   cooldown_min_minutes: 10
   cooldown_max_minutes: 20
+  drop:
+    probability_percent: 50
+    name_share_percent: 5
+    rarity_weights:
+      common: 70
+      rare: 25
+      epic: 5
 
 # -----------------------------------------------------------------------------
 # §11 — предсказатель. Кулдаун — по Москве (UTC+3), сброс в 00:00 MSK.
@@ -135,3 +156,92 @@ content_policy:
     sexual_explicit: false
     # Цитаты с матом помечаются тегом `profanity` для опционального
     # фильтра «детский режим» в будущем.
+
+# -----------------------------------------------------------------------------
+# §1.3.5 — каталог предметов экипировки (6 слотов: hat / body / legs /
+# boots / ring / chain). Минимум 30 предметов суммарно, у каждого `id`
+# уникальный, у каждой редкости (`common` / `rare` / `epic`) есть ≥ 1 предмет.
+# Список — стартовая болванка из ГДД §2.6, расширим по результатам беты.
+#
+# Поля:
+#   • id          — стабильный машинный идентификатор (`item.<slot>.<short>`).
+#   • slot        — один из 6 слотов экипировки.
+#   • display_name — человекочитаемое имя для UI и логов.
+#   • rarity      — `common` / `rare` / `epic` (цвета — см. ГДД §2.6).
+# -----------------------------------------------------------------------------
+items_catalog:
+  # 🎩 Шапка / голова
+  - { id: "item.hat.panama_newbie",      slot: "hat",   display_name: "Панамка Новичка",     rarity: "common" }
+  - { id: "item.hat.cap_dachnik",        slot: "hat",   display_name: "Кепка Дачника",       rarity: "common" }
+  - { id: "item.hat.helmet_berserker",   slot: "hat",   display_name: "Шлем Берсерка",       rarity: "rare" }
+  - { id: "item.hat.bandana_pirate",     slot: "hat",   display_name: "Бандана Пирата",      rarity: "rare" }
+  - { id: "item.hat.crown_baton",        slot: "hat",   display_name: "Корона Батона",       rarity: "epic" }
+  # 👕 Тело
+  - { id: "item.body.alkash_tank",       slot: "body",  display_name: "Майка-Алкоголичка",   rarity: "common" }
+  - { id: "item.body.t_shirt_brigade",   slot: "body",  display_name: "Футболка с Гербом",   rarity: "common" }
+  - { id: "item.body.chainmail_lesnik",  slot: "body",  display_name: "Кольчуга Лесника",    rarity: "rare" }
+  - { id: "item.body.flak_vest",         slot: "body",  display_name: "Бронежилет",          rarity: "rare" }
+  - { id: "item.body.cloak_phantom",     slot: "body",  display_name: "Плащ Призрака",       rarity: "epic" }
+  # 👖 Штаны
+  - { id: "item.legs.shorts_dachnik",    slot: "legs",  display_name: "Шорты Дачника",       rarity: "common" }
+  - { id: "item.legs.tracksuit_pants",   slot: "legs",  display_name: "Спортивки Адик",      rarity: "common" }
+  - { id: "item.legs.porty_byvalogo",    slot: "legs",  display_name: "Порты Бывалого",      rarity: "rare" }
+  - { id: "item.legs.tactical_pants",    slot: "legs",  display_name: "Тактические Брюки",   rarity: "rare" }
+  - { id: "item.legs.plate_legguards",   slot: "legs",  display_name: "Латные поножи",       rarity: "epic" }
+  # 👟 Обувь
+  - { id: "item.boots.lapti",            slot: "boots", display_name: "Лапти Скорохода",     rarity: "common" }
+  - { id: "item.boots.slippers_house",   slot: "boots", display_name: "Тапки",               rarity: "common" }
+  - { id: "item.boots.runners_kross",    slot: "boots", display_name: "Кроссы Бегуна",       rarity: "rare" }
+  - { id: "item.boots.berets_vdv",       slot: "boots", display_name: "Берцы ВДВ",           rarity: "rare" }
+  - { id: "item.boots.skorokhody",       slot: "boots", display_name: "Сапоги-Скороходы",    rarity: "epic" }
+  # 💍 Кольцо
+  - { id: "item.ring.babulino",          slot: "ring",  display_name: "Колечко Бабули",      rarity: "common" }
+  - { id: "item.ring.brass_pinky",       slot: "ring",  display_name: "Латунный Перстень",   rarity: "common" }
+  - { id: "item.ring.signet_avtoritet",  slot: "ring",  display_name: "Печатка Авторитета",  rarity: "rare" }
+  - { id: "item.ring.ring_wisdom",       slot: "ring",  display_name: "Перстень Мудрости",   rarity: "rare" }
+  - { id: "item.ring.ring_voennoplenny", slot: "ring",  display_name: "Кольцо Военнопленного", rarity: "epic" }
+  # ⛓️ Цепь
+  - { id: "item.chain.tin_chain",        slot: "chain", display_name: "Цепь с Рынка",        rarity: "common" }
+  - { id: "item.chain.chain_kacha",      slot: "chain", display_name: "Цепь Кача",           rarity: "common" }
+  - { id: "item.chain.beads_shaman",     slot: "chain", display_name: "Бусы Шамана",         rarity: "rare" }
+  - { id: "item.chain.gold_rinok",       slot: "chain", display_name: "Голда с Рынка",       rarity: "rare" }
+  - { id: "item.chain.chain_obsidian",   slot: "chain", display_name: "Обсидиановая Цепь",   rarity: "epic" }
+
+# -----------------------------------------------------------------------------
+# §2.5 / §1.3.5 — каталог имён. ≥ 30 строк. Имя — отдельная сущность
+# («7-й слот»), не несёт редкости. Дроп имени происходит, если drop-roll
+# попал в `forest.drop.name_share_percent` (см. выше).
+# -----------------------------------------------------------------------------
+names_catalog:
+  - "Коляндр"
+  - "Бацилла"
+  - "Жбан"
+  - "Тузик"
+  - "Кепыч"
+  - "Жорик"
+  - "Дюша"
+  - "Митяй"
+  - "Серёга"
+  - "Тоха"
+  - "Колян"
+  - "Вованыч"
+  - "Гена"
+  - "Лёха"
+  - "Костыль"
+  - "Шмыг"
+  - "Чупа"
+  - "Кулёма"
+  - "Бугор"
+  - "Серый"
+  - "Жека"
+  - "Палыч"
+  - "Бубен"
+  - "Хорёк"
+  - "Хомяк"
+  - "Леопольд"
+  - "Бамбук"
+  - "Дрюпа"
+  - "Сапог"
+  - "Чугун"
+  - "Тапок"
+  - "Балабол"
