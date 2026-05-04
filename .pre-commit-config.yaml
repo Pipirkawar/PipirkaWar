@@ -32,6 +32,8 @@ repos:
           - "pydantic>=2.7,<3"
           - "pydantic-settings>=2.4,<3"
           - "types-PyYAML>=6.0,<7"
+          - "SQLAlchemy[asyncio]>=2.0.30,<3"
+          - "alembic>=1.13,<2"
         args: ["--config-file=pyproject.toml"]
         # tests are checked separately via pytest+mypy in CI
         exclude: ^tests/

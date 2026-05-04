@@ -5,9 +5,11 @@
 явный конструктор `Container` собирает всё, что нужно use-case-ам, и
 пробрасывает в bot-handlers через `Dispatcher` data.
 
-В Спринте 0.1 здесь — только каркас (типизированный контейнер с TODO).
-Реальные адаптеры (`SqlAlchemyUnitOfWork`, `Aiogram*`, `RealClock`,
-`RealRandom`) появятся в Спринте 0.2 / 1.1, не раньше.
+Спринт 0.2: `build_container()` собирает реальные адаптеры
+(`SqlAlchemyUnitOfWork`, `RealClock`, `RealRandom`,
+`SqlAlchemyIdempotencyService`, `SqlAlchemyAuditLogger`).
+`main()` остаётся placeholder-ом — entry point появится в Спринте 1.1
+(aiogram Dispatcher + handlers).
 """
 
 from __future__ import annotations
@@ -21,6 +23,15 @@ from pipirik_wars.domain.shared.ports import (
     IRandom,
     IUnitOfWork,
 )
+from pipirik_wars.infrastructure.clock import RealClock
+from pipirik_wars.infrastructure.db.engine import build_engine, build_sessionmaker
+from pipirik_wars.infrastructure.db.services import (
+    SqlAlchemyAuditLogger,
+    SqlAlchemyIdempotencyService,
+)
+from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
+from pipirik_wars.infrastructure.random import RealRandom
+from pipirik_wars.infrastructure.settings import Settings
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,19 +48,29 @@ class Container:
     uow: IUnitOfWork
     idempotency: IIdempotencyKey
     audit: IAuditLogger
+    settings: Settings
 
 
-def build_container() -> Container:
+def build_container(settings: Settings | None = None) -> Container:
     """Собрать контейнер для production-запуска.
 
-    В Спринте 0.1 ещё нечего собирать — реализации портов появятся
-    в `infrastructure/` начиная со Спринта 0.2. Сейчас — placeholder,
-    помечен как `NotImplementedError`, чтобы в `bot/main.py` нельзя
-    было случайно запустить «пустой бот».
+    Production: настройки из env (через `pydantic-settings`).
+    Tests: можно передать заранее собранный `Settings(db=DatabaseSettings(url=...))`.
+
+    NB: `create_async_engine()` lazy — реальное подключение к БД
+    произойдёт только при первом запросе.
     """
-    raise NotImplementedError(
-        "build_container() появится в Спринте 0.2 (infrastructure adapters). "
-        "См. development_plan.md → Спринт 0.2.",
+    settings = settings or Settings()
+    engine = build_engine(settings.db)
+    session_maker = build_sessionmaker(engine)
+    uow = SqlAlchemyUnitOfWork(session_maker)
+    return Container(
+        clock=RealClock(),
+        random=RealRandom(),
+        uow=uow,
+        idempotency=SqlAlchemyIdempotencyService(uow=uow),
+        audit=SqlAlchemyAuditLogger(uow=uow),
+        settings=settings,
     )
 
 

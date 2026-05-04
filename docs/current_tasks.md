@@ -18,7 +18,29 @@
 
 ## 🟢 В работе
 
-_Пока пусто — выберите задачу из «🟡 Готово к старту»._
+_Пока пусто — Спринт 0.2 закрыт PR #5; следующий шаг — старт Спринта 1.1._
+
+---
+
+## ✅ Завершено (Спринт 0.2 — Каркас безопасности)
+
+PR #5 (см. [history.md → 2026-05-04 — Спринт 0.2](history.md)). Все 11 задач закрыты.
+
+| ID | Задача | Статус |
+|---|---|---|
+| 0.2.0 | Расширение runtime-deps (`SQLAlchemy[asyncio]`, `asyncpg`, `alembic`, `structlog`) и dev-deps (`aiosqlite`, `freezegun`) | ✅ |
+| 0.2.0b | Alembic init (`alembic.ini` + `infrastructure/db/migrations/`) + первая миграция (`idempotency_keys`, `audit_log`, `activity_locks`, `admins`) | ✅ |
+| 0.2.0c | `SqlAlchemyUnitOfWork` + `RealClock` + `RealRandom` + рабочий `bot/main.py:build_container()` | ✅ |
+| 0.2.6 | `pydantic-settings`: `Settings`/`DatabaseSettings`/`BootstrapSettings`; URL — `SecretStr`; CSV-парсинг `BOOTSTRAP_ADMIN_IDS` | ✅ |
+| 0.2.6b | Use-case `BootstrapSuperAdmin` (NO-OP при непустой `admins`; audit `bootstrap`; dedup входа) | ✅ |
+| 0.2.1 | `ActivityLock` (domain) + `SqlAlchemyActivityLockRepository` + `ActivityLockService` + тест двойного захвата | ✅ |
+| 0.2.2 | `SqlAlchemyIdempotencyService` (диалект-специфичный `INSERT ... ON CONFLICT DO NOTHING`) + тест дубля | ✅ |
+| 0.2.3 | `SqlAlchemyAuditLogger` (запись в `audit_log` + откат на исключение) | ✅ |
+| 0.2.4 | DTO входов `application/dto/inputs.py`: `RegisterPlayerInput`, `RegisterClanInput`, `GrantLengthInput` (`extra=forbid`, `frozen`, `strict`) | ✅ |
+| 0.2.5 | Декораторы `requires_level / requires_length / requires_clan_member` + `AuthContext` + `AuthorizationError` | ✅ |
+| 0.2.7 | `InMemoryTokenBucketRateLimiter` + тест `10 cmd/s → 11-я отказ` | ✅ |
+
+138 тестов (49 unit Спринта 0.1 + 89 новых: unit + integration на in-memory SQLite). Покрытие 93%.
 
 ---
 
@@ -39,22 +61,14 @@ PR #3 (см. [history.md → 2026-05-04 — Спринт 0.1](history.md)). Вс
 
 ---
 
-## 🟡 Готово к старту (Спринт 0.2 — Каркас безопасности)
+## 🟡 Готово к старту (Спринт 0.2 «достройка» — `BalanceLoader`)
+
+В Спринте 0.2 не вошли (вынесены отдельным маленьким PR между 0.2 и 1.1):
 
 | ID | Приоритет | Задача | Критерий приёмки | Оценка |
 |---|---|---|---|---|
-| 0.2.1 | P0 | Доменная сущность `ActivityLock` + интеграция через `IUnitOfWork` (PG `SELECT ... FOR UPDATE`) | Юнит-тесты на «двойной захват» (второй захват — отказ); тест на release | 1 д |
-| 0.2.2 | P0 | Сервис `IdempotencyService` (PG-таблица `idempotency_keys` + кэш в памяти) | Тест: повторный вызов по тому же ключу не дублирует мутации | 1 д |
-| 0.2.3 | P0 | `AuditLogger` — запись в `audit_log` для каждой публичной мутации длины/толщины/инвентаря | Тест: для каждой публичной операции есть запись с причиной и `idempotency_key` | 0.5 д |
-| 0.2.4 | P0 | pydantic-схемы валидации входов на границе `bot ↔ application` | Юнит-тесты на отказы при невалидных данных; нет «голых строк» в use-case | 0.5 д |
-| 0.2.5 | P1 | Декораторы/middlewares авторизации (`requires_level`, `requires_length`, `requires_clan_member`, `requires_no_active_lock`) | Покрытие тестами всех путей | 0.5 д |
-| 0.2.6 | P0 | Конфиг секретов через `pydantic-settings` (env-only) + `.env.example` | В коде нет хардкода; `.env` в `.gitignore` | 0.25 д |
-| 0.2.7 | P1 | Базовый rate-limiter (token bucket) на команды | Тест: 10 команд за секунду — последняя отказана | 0.5 д |
-| 0.2.8 | P1 | Audit-log миграция (Alembic): `audit_log`, `idempotency_keys`, `activity_lock` | Миграция проходит чисто; тесты в integration | 0.5 д |
-| 0.2.9 | P0 | Скелет `config/balance.yaml` со стартовыми секциями: `display_names` (заглушка из ГДД §2.3), `forest.outcomes` (3 ветки 1–10/5–15/10–20), `oracle` (Moscow, 1–20), `referral` (5/1/10/30), `thickness.cost_formula`, `dau_gate.max_dau` | Файл валидируется pydantic-схемой при старте; таблица `display_names` без дыр и пересечений; loader умеет hot-reload |  0.5 д |
-| 0.2.10 | P0 | `BalanceLoader` (singleton с кэшем) + интерфейс `IBalanceConfig` в domain | Юнит-тесты на: загрузку, валидацию (отказ на невалидный YAML), reload без потери ссылок |  0.5 д |
-
-**Итого по Фазе 0:** ~9 человеко-дней.
+| 0.2.9 | P0 | Pydantic-схема для `config/balance.yaml` (display_names, forest.outcomes, oracle, referral, thickness, dau_gate, daily_head) | Файл валидируется на старте; таблица `display_names` без дыр и пересечений; loader умеет hot-reload | 0.5 д |
+| 0.2.10 | P0 | `BalanceLoader` (singleton с кэшем) + интерфейс `IBalanceConfig` в domain | Юнит-тесты на: загрузку, валидацию (отказ на невалидный YAML), reload без потери ссылок | 0.5 д |
 
 ---
 
