@@ -126,3 +126,20 @@ class FinishForestRunInput(_StrictBase):
     """
 
     run_id: int = Field(gt=0, description="forest_runs.id")
+
+
+class ApplyForestNameDropInput(_StrictBase):
+    """Применить выпавшее в лесу имя (Спринт 1.3.D, ГДД §2.5 / §8.2).
+
+    Используется кнопкой «Заменить» на сообщении «вернулся из леса»,
+    когда у игрока уже было имя и `FinishForestRun` оставил `NameDrop`
+    без auto-apply. Use-case `ApplyForestNameDrop` делает фактическую
+    замену с аудитом.
+
+    `tg_id` сверяется с `forest_runs.player_id` через
+    `IPlayerRepository.get_by_tg_id`: чужой пользователь не может
+    применить чужой дроп.
+    """
+
+    run_id: int = Field(gt=0, description="forest_runs.id")
+    tg_id: PositiveTgId = Field(gt=0, description="Telegram user_id игрока")

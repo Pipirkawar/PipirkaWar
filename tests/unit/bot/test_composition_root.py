@@ -26,7 +26,11 @@ from pipirik_wars.application.dau import (
     GetDauStats,
     SetMaxDau,
 )
-from pipirik_wars.application.forest import FinishForestRun, StartForestRun
+from pipirik_wars.application.forest import (
+    ApplyForestNameDrop,
+    FinishForestRun,
+    StartForestRun,
+)
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
@@ -144,6 +148,13 @@ def _container_with_fakes() -> Container:
         audit=audit,
         clock=clock,
     )
+    apply_forest_name_drop = ApplyForestNameDrop(
+        uow=uow,
+        players=players,
+        runs=forest_runs,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -245,6 +256,7 @@ def _container_with_fakes() -> Container:
             scheduler=delayed_jobs,
         ),
         finish_forest_run=finish_forest_run,
+        apply_forest_name_drop=apply_forest_name_drop,
     )
 
 

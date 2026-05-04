@@ -46,12 +46,18 @@ from pipirik_wars.application.dau import (
     GetDauStats,
     SetMaxDau,
 )
-from pipirik_wars.application.forest import FinishForestRun, StartForestRun
+from pipirik_wars.application.forest import (
+    ApplyForestNameDrop,
+    FinishForestRun,
+    IForestFinishNotifier,
+    StartForestRun,
+)
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import register_middlewares
+from pipirik_wars.bot.notifications import TelegramForestFinishNotifier
 from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
@@ -149,12 +155,14 @@ class Container:
     check_dau_threshold: CheckDauThreshold
     start_forest_run: StartForestRun
     finish_forest_run: FinishForestRun
+    apply_forest_name_drop: ApplyForestNameDrop
 
 
 def build_container(
     settings: Settings | None = None,
     *,
     balance_yaml_path: Path | None = None,
+    bot: Bot | None = None,
 ) -> Container:
     """Собрать контейнер для production-запуска.
 
@@ -165,6 +173,12 @@ def build_container(
     `balance_yaml_path` — переопределение пути к `balance.yaml`
     (по умолчанию ``config/balance.yaml``). Loader **lazy** — файл
     читается только при первом `container.balance.get()`.
+
+    `bot` — опциональный aiogram-`Bot` для Sprint 1.3.D. Если передан —
+    `delayed_jobs` получит `TelegramForestFinishNotifier`, и после
+    `FinishForestRun.execute(...)` игроку придёт «вернулся из леса»
+    (ГДД §8.2). Без `bot` (в unit-тестах и admin-flow) notifier = `None`,
+    финиш работает как было раньше — сообщение не отправляется.
 
     NB: `create_async_engine()` lazy — реальное подключение к БД
     произойдёт только при первом запросе.
@@ -280,9 +294,18 @@ def build_container(
         audit=audit,
         clock=clock,
     )
+    forest_notifier: IForestFinishNotifier | None = None
+    if bot is not None:
+        forest_notifier = TelegramForestFinishNotifier(
+            bot=bot,
+            players=players,
+            balance=balance,
+            uow=uow,
+        )
     delayed_jobs = APSchedulerDelayedJobScheduler(
         scheduler=AsyncIOScheduler(),
         finish_factory=lambda: finish_forest_run,
+        notifier=forest_notifier,
     )
     start_forest_run = StartForestRun(
         uow=uow,
@@ -294,6 +317,13 @@ def build_container(
         audit=audit,
         clock=clock,
         scheduler=delayed_jobs,
+    )
+    apply_forest_name_drop = ApplyForestNameDrop(
+        uow=uow,
+        players=players,
+        runs=forest_runs,
+        audit=audit,
+        clock=clock,
     )
     return Container(
         clock=clock,
@@ -329,6 +359,7 @@ def build_container(
         check_dau_threshold=check_dau_threshold,
         start_forest_run=start_forest_run,
         finish_forest_run=finish_forest_run,
+        apply_forest_name_drop=apply_forest_name_drop,
     )
 
 
@@ -355,6 +386,7 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["promote_from_queue"] = container.promote_from_queue
     dispatcher["start_forest_run"] = container.start_forest_run
     dispatcher["finish_forest_run"] = container.finish_forest_run
+    dispatcher["apply_forest_name_drop"] = container.apply_forest_name_drop
     return dispatcher
 
 
@@ -380,10 +412,17 @@ async def run(
     стеком middleware-ов и роутерами, запускает long-polling. Завершается
     корректно через `await bot.session.close()`.
     """
-    container = build_container(settings, balance_yaml_path=balance_yaml_path)
+    # `Settings()` выносим на этот уровень — `Bot` нужен для notifier-а
+    # внутри `build_container`, поэтому сначала settings → bot → container.
+    settings = settings or Settings()
     bot = Bot(
-        token=container.settings.bot.token.get_secret_value(),
+        token=settings.bot.token.get_secret_value(),
         default=DefaultBotProperties(parse_mode="HTML"),
+    )
+    container = build_container(
+        settings,
+        balance_yaml_path=balance_yaml_path,
+        bot=bot,
     )
     dispatcher = build_dispatcher(container)
     scheduler = container.delayed_jobs

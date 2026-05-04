@@ -1,0 +1,15 @@
+"""bot/notifications package — outgoing-side Telegram-нотификаторы.
+
+Адаптеры implements портов из `application/` для исходящих сообщений
+бота, которые **не** инициированы пользователем (т.е. не через `dp.message`).
+Например, нотификатор «вернулся из леса» (`TelegramForestFinishNotifier`)
+шлёт сообщение игроку по событию APScheduler-job-а.
+
+Живут в `bot/`, а не `infrastructure/telegram/`, потому что используют
+презентеры из `bot/presenters/` (которые знают про aiogram-keyboard-ы).
+Импорт-контракт `bot → application` соблюдается.
+"""
+
+from pipirik_wars.bot.notifications.forest import TelegramForestFinishNotifier
+
+__all__ = ["TelegramForestFinishNotifier"]
