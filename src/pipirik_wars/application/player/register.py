@@ -1,4 +1,4 @@
-"""Use-case `RegisterPlayer` (Спринт 1.1.3).
+"""Use-case `RegisterPlayer` (Спринт 1.1.3 + DAU Gate в 1.2.4).
 
 Регистрирует нового игрока с **стартовыми параметрами** ГДД §1.1:
 длина = 2 см, толщина = 1, **титул = None**, **имя = None**.
@@ -6,27 +6,34 @@
 (имя — выбивается дропом из леса в Спринте 1.3.5; первый титул —
 после первого возвращения из леса в Спринте 1.3.8).
 
-Acceptance criteria из `development_plan.md` Спринт 1.1.3:
-> попытка регистрации из группы — отказ с подсказкой «напишите в ЛС»;
-> начальные значения соответствуют ГДД §1.1.
+DAU Gate (Спринт 1.2.4, ГДД §18):
+- Если `IDauCounter.current() < IDauLimit.get()` — регистрируем сразу
+  и возвращаем `PlayerRegistered`.
+- Если ёмкость исчерпана — ставим в `signup_queue` и возвращаем
+  `PlayerQueued(entry)` с уже посчитанной позицией. Handler покажет
+  игроку «серверы переполнены, позиция #N».
 
-**Контроль chat_kind = private** живёт **в bot-handler-е**, а не здесь:
-use-case не должен знать про Telegram-чаты, только про доменные данные.
-Handler делает раннюю фильтрацию и отдаёт пользователю helper-сообщение,
-не доходя до БД.
+Идемпотентность:
+- Дубль `tg_id` в `users` → `PlayerAlreadyRegisteredError` (handler
+  покажет «вы уже зарегистрированы»).
+- Дубль `tg_id` в `signup_queue` → `AlreadyQueuedError` (handler
+  покажет текущую позицию вместо «вы уже стояли в очереди»).
 
-Audit-запись пишется атомарно с INSERT-ом в `users` (правило ГДД §0):
-`PLAYER_REGISTER`, `actor_id = tg_id` (самовыданное действие),
-`target_kind = "player"`, `target_id = tg_id`.
+Audit-запись пишется атомарно с действием:
+- успешная регистрация → `PLAYER_REGISTER`;
+- постановка в очередь → `PLAYER_QUEUED` с позицией.
 
-Идемпотентность: при дубле `tg_id` репозиторий бросит
-`PlayerAlreadyRegisteredError` (UNIQUE-violation). Use-case не глотает
-эту ошибку — handler покажет «вы уже зарегистрированы».
+`record_active(...)` зовём только при успешной регистрации, чтобы
+очередники не «съедали» лимит и не блокировали себя же.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
+
 from pipirik_wars.application.dto.inputs import RegisterPlayerInput
+from pipirik_wars.domain.dau import IDauCounter, IDauLimit
 from pipirik_wars.domain.player import (
     IPlayerRepository,
     Player,
@@ -39,39 +46,82 @@ from pipirik_wars.domain.shared.ports import (
     IClock,
     IUnitOfWork,
 )
+from pipirik_wars.domain.signup_queue import (
+    AlreadyQueuedError,
+    ISignupQueueRepository,
+    SignupQueueEntry,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerRegistered:
+    """Результат успешной регистрации (ёмкость DAU была свободна)."""
+
+    player: Player
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerQueued:
+    """Результат постановки в очередь (DAU >= MAX_DAU)."""
+
+    entry: SignupQueueEntry
+
+
+RegisterPlayerResult = PlayerRegistered | PlayerQueued
 
 
 class RegisterPlayer:
-    """Use-case регистрации нового игрока через ЛС."""
+    """Use-case регистрации нового игрока через ЛС с DAU-гейтом."""
 
-    __slots__ = ("_audit", "_clock", "_players", "_uow")
+    __slots__ = (
+        "_audit",
+        "_clock",
+        "_dau_counter",
+        "_dau_limit",
+        "_players",
+        "_signup_queue",
+        "_uow",
+    )
 
     def __init__(
         self,
         *,
         uow: IUnitOfWork,
         players: IPlayerRepository,
+        signup_queue: ISignupQueueRepository,
+        dau_counter: IDauCounter,
+        dau_limit: IDauLimit,
         audit: IAuditLogger,
         clock: IClock,
     ) -> None:
         self._uow = uow
         self._players = players
+        self._signup_queue = signup_queue
+        self._dau_counter = dau_counter
+        self._dau_limit = dau_limit
         self._audit = audit
         self._clock = clock
 
-    async def execute(self, input_dto: RegisterPlayerInput) -> Player:
-        """Зарегистрировать игрока и вернуть «канонический» инстанс с `id`.
+    async def execute(self, input_dto: RegisterPlayerInput) -> RegisterPlayerResult:
+        """Зарегистрировать игрока **или** поставить его в очередь.
 
-        Бросает `PlayerAlreadyRegisteredError`, если `tg_id` уже занят.
+        Бросает `PlayerAlreadyRegisteredError`, если игрок уже в `users`,
+        или `AlreadyQueuedError`, если он уже в `signup_queue`.
         """
         username = Username(value=input_dto.username) if input_dto.username is not None else None
         async with self._uow:
             now = self._clock.now()
-            player = Player.new(
-                tg_id=input_dto.tg_id,
-                username=username,
-                now=now,
-            )
+            current_dau = await self._dau_counter.current()
+            max_dau = await self._dau_limit.get()
+            if current_dau >= max_dau:
+                queued = await self._enqueue(
+                    tg_id=input_dto.tg_id,
+                    username=input_dto.username,
+                    locale=input_dto.locale,
+                    now=now,
+                )
+                return PlayerQueued(entry=queued)
+            player = Player.new(tg_id=input_dto.tg_id, username=username, now=now)
             saved = await self._players.add(player)
             await self._audit.record(
                 AuditEntry(
@@ -91,4 +141,45 @@ class RegisterPlayer:
                     occurred_at=now,
                 )
             )
-            return saved
+        await self._dau_counter.record_active(tg_user_id=saved.tg_id)
+        return PlayerRegistered(player=saved)
+
+    async def _enqueue(
+        self,
+        *,
+        tg_id: int,
+        username: str | None,
+        locale: str | None,
+        now: datetime,
+    ) -> SignupQueueEntry:
+        existing = await self._signup_queue.get_by_tg_id(tg_id)
+        if existing is not None:
+            raise AlreadyQueuedError(tg_id=tg_id)
+        candidate = SignupQueueEntry(
+            id=None,
+            tg_id=tg_id,
+            username=username,
+            locale=locale,
+            position=0,  # перепишется после INSERT-а
+            enqueued_at=now,
+        )
+        queued = await self._signup_queue.enqueue(entry=candidate)
+        await self._audit.record(
+            AuditEntry(
+                action=AuditAction.PLAYER_QUEUED,
+                actor_id=tg_id,
+                target_kind="player",
+                target_id=str(tg_id),
+                before=None,
+                after={
+                    "tg_id": tg_id,
+                    "username": username,
+                    "locale": locale,
+                    "position": queued.position,
+                },
+                reason="dau_gate_full",
+                idempotency_key=f"queue_player:{tg_id}",
+                occurred_at=now,
+            )
+        )
+        return queued

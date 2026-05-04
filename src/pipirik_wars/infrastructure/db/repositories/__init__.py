@@ -13,6 +13,9 @@ from pipirik_wars.infrastructure.db.repositories.clan import (
 from pipirik_wars.infrastructure.db.repositories.player import (
     SqlAlchemyPlayerRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.signup_queue import (
+    SqlAlchemySignupQueueRepository,
+)
 
 __all__ = [
     "SqlAlchemyActivityLockRepository",
@@ -20,4 +23,5 @@ __all__ = [
     "SqlAlchemyClanMembershipRepository",
     "SqlAlchemyClanRepository",
     "SqlAlchemyPlayerRepository",
+    "SqlAlchemySignupQueueRepository",
 ]

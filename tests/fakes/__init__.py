@@ -11,9 +11,11 @@ from tests.fakes.audit import FakeAuditLogger
 from tests.fakes.balance import FakeBalanceConfig
 from tests.fakes.clan_repo import FakeClanMembershipRepository, FakeClanRepository
 from tests.fakes.clock import FakeClock
+from tests.fakes.dau import FakeDauCounter, FakeDauLimit
 from tests.fakes.idempotency import FakeIdempotencyKey
 from tests.fakes.player_repo import FakePlayerRepository
 from tests.fakes.random import FakeRandom
+from tests.fakes.signup_queue import FakeSignupQueueRepository
 from tests.fakes.uow import FakeUnitOfWork
 
 __all__ = [
@@ -23,8 +25,11 @@ __all__ = [
     "FakeClanMembershipRepository",
     "FakeClanRepository",
     "FakeClock",
+    "FakeDauCounter",
+    "FakeDauLimit",
     "FakeIdempotencyKey",
     "FakePlayerRepository",
     "FakeRandom",
+    "FakeSignupQueueRepository",
     "FakeUnitOfWork",
 ]

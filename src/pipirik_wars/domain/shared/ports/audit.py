@@ -44,6 +44,8 @@ class AuditAction(str, enum.Enum):
     CLAN_UNFREEZE = "clan_unfreeze"
     BALANCE_RELOAD = "balance_reload"
     DAU_LIMIT_CHANGE = "dau_limit_change"
+    PLAYER_QUEUED = "player_queued"
+    PLAYER_PROMOTED = "player_promoted"
     ADMIN_COMMAND = "admin_command"
 
 

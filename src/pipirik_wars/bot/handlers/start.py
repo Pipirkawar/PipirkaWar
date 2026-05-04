@@ -1,19 +1,20 @@
-"""`/start` handler (Спринт 1.1.C → расширен в 1.1.D).
+"""`/start` handler (Спринт 1.1.C → 1.1.D → 1.2.4 DAU Gate).
 
 Acceptance criteria из `development_plan.md`:
 - Спринт 1.1.1: `/start` отвечает в ЛС, в группе и в супергруппе.
 - Спринт 1.1.3: регистрация игрока **только через ЛС** (`chat_type == "private"`).
+- Спринт 1.2.4: при `DAU >= MAX_DAU` показываем «серверы переполнены,
+  позиция #N».
 
 В ЛС handler вызывает `RegisterPlayer`. В группе/супергруппе — выводит
 инструкцию (бот сам не регистрирует игрока в группе, чтобы не плодить
 случайных новичков из соседних чатов). В прочих типах (`channel` и т.п.)
 шлём нейтральное сообщение.
 
-Все ошибки use-case-а ловит `ErrorHandlerMiddleware`
-(см. `bot/middlewares/error_handler.py`); здесь handler не пытается
-обрабатывать `DomainError`-ы вручную, кроме одной business-as-usual
-ситуации — `PlayerAlreadyRegisteredError` (она ожидаема при повторном
-`/start` и заслуживает отдельного дружелюбного текста).
+Все технические ошибки use-case-а ловит `ErrorHandlerMiddleware`;
+handler ловит только три бизнес-кейса: уже зарегистрирован
+(`PlayerAlreadyRegisteredError`), уже стоит в очереди (`AlreadyQueuedError`),
+и discriminated union `RegisterPlayerResult` для развилки registered/queued.
 """
 
 from __future__ import annotations
@@ -23,9 +24,17 @@ from aiogram.filters import CommandStart
 from aiogram.types import Message
 
 from pipirik_wars.application.dto.inputs import RegisterPlayerInput
-from pipirik_wars.application.player import RegisterPlayer
+from pipirik_wars.application.player import (
+    PlayerQueued,
+    PlayerRegistered,
+    RegisterPlayer,
+)
 from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.domain.player import PlayerAlreadyRegisteredError
+from pipirik_wars.domain.signup_queue import (
+    AlreadyQueuedError,
+    ISignupQueueRepository,
+)
 
 router = Router(name="start")
 
@@ -43,30 +52,38 @@ REPLY_GROUP_RU = (
 REPLY_OTHER_RU = "🍆 «Пипирик Варс» здесь. Команда /start доступна в ЛС или в группе."
 
 
+def _format_queued(position: int) -> str:
+    return (
+        "🍆 Серверы переполнены — мы посадили тебя в очередь.\n\n"
+        f"Твоя позиция: #{position}.\n"
+        "Как только освободится место — мы тебя зарегистрируем "
+        "и пришлём уведомление."
+    )
+
+
 @router.message(CommandStart())
 async def handle_start(
     message: Message,
     tg_identity: TgIdentity | None,
     register_player: RegisterPlayer,
+    signup_queue: ISignupQueueRepository,
 ) -> None:
     """Отвечает на `/start`.
 
-    В ЛС — регистрирует игрока (или возвращает «уже зарегистрирован»);
+    В ЛС — регистрирует игрока ИЛИ ставит в очередь (DAU Gate);
     в группе/супергруппе — отдаёт инструкцию; в прочих типах — нейтрально.
 
-    `tg_identity` и `register_player` приходят через aiogram
-    workflow-data DI (`dispatcher["register_player"] = ...`).
+    `tg_identity`, `register_player` и `signup_queue` приходят через
+    aiogram workflow-data DI.
     """
     chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
 
     if chat_kind == "private":
         if tg_identity is None:
-            # Странная ситуация — `/start` в ЛС без user_id. На всякий
-            # случай отвечаем нейтрально и не регистрируем «никого».
             await message.answer(REPLY_OTHER_RU)
             return
         try:
-            await register_player.execute(
+            result = await register_player.execute(
                 RegisterPlayerInput(
                     tg_id=tg_identity.tg_user_id,
                     username=_username_of(message),
@@ -76,7 +93,15 @@ async def handle_start(
         except PlayerAlreadyRegisteredError:
             await message.answer(REPLY_ALREADY_RU)
             return
-        await message.answer(REPLY_REGISTERED_RU)
+        except AlreadyQueuedError:
+            existing = await signup_queue.get_by_tg_id(tg_identity.tg_user_id)
+            position = existing.position if existing is not None else 0
+            await message.answer(_format_queued(position))
+            return
+        if isinstance(result, PlayerRegistered):
+            await message.answer(REPLY_REGISTERED_RU)
+        elif isinstance(result, PlayerQueued):
+            await message.answer(_format_queued(result.entry.position))
         return
 
     if chat_kind in ("group", "supergroup"):

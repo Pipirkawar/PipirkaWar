@@ -20,6 +20,7 @@ from pipirik_wars.infrastructure.db.models.security import (
     AuditLogORM,
     IdempotencyKeyORM,
 )
+from pipirik_wars.infrastructure.db.models.signup_queue import SignupQueueORM
 
 __all__ = [
     "ActivityLockORM",
@@ -28,5 +29,6 @@ __all__ = [
     "ClanMemberORM",
     "ClanORM",
     "IdempotencyKeyORM",
+    "SignupQueueORM",
     "UserORM",
 ]

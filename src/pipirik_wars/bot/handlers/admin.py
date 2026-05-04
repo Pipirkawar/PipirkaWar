@@ -32,7 +32,9 @@ from aiogram.types import Message
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.dau import GetDauStats, SetMaxDau
+from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.bot.middlewares import TgIdentity
+from pipirik_wars.domain.signup_queue import ISignupQueueRepository
 from pipirik_wars.shared.errors import ConfigError
 
 router = Router(name="admin")
@@ -84,13 +86,13 @@ async def handle_balance_reload(
     await message.answer(_format_reloaded(result.version_before, result.version_after))
 
 
-def _format_dau_stats(current: int, max_dau: int) -> str:
+def _format_dau_stats(current: int, max_dau: int, queue_size: int) -> str:
     # paranoia: limit всегда >= 1, но защищаемся от ZeroDivisionError.
     percent = 0 if max_dau <= 0 else round(current * 100 / max_dau)
     return (
         "📊 Статистика бота\n"
         f"• DAU за сегодня: {current} / {max_dau} ({percent}%)\n"
-        "• Очередь регистраций: пока не подключена (см. Спринт 1.2.C)"
+        f"• Очередь регистраций: {queue_size}"
     )
 
 
@@ -99,13 +101,12 @@ async def handle_admin_stats(
     message: Message,
     tg_identity: TgIdentity | None,
     get_dau_stats: GetDauStats,
+    signup_queue: ISignupQueueRepository,
 ) -> None:
-    """Текущий DAU и MAX_DAU. На текущей фазе доступно всем — только в ЛС.
+    """Текущий DAU, MAX_DAU и размер очереди. Только в ЛС.
 
-    Семантически команда «админская», но `GetDauStats` — read-only без
-    side-эффектов и без чувствительных данных, поэтому RBAC-гейт не
-    нужен. Когда добавятся `/admin_user_search`, `/admin_clan_archive`
-    и т.п. — у них будет свой админ-гейт.
+    Семантически команда «админская», но режим read-only без
+    чувствительных данных делает RBAC-гейт избыточным на текущей фазе.
     """
     chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
     if chat_kind != "private" or tg_identity is None:
@@ -113,7 +114,8 @@ async def handle_admin_stats(
         return
 
     stats = await get_dau_stats.execute()
-    await message.answer(_format_dau_stats(stats.current, stats.max_dau))
+    queue_size = await signup_queue.size()
+    await message.answer(_format_dau_stats(stats.current, stats.max_dau, queue_size))
 
 
 def _parse_set_max_dau(text: str) -> int | None:
@@ -138,8 +140,13 @@ async def handle_set_max_dau(
     message: Message,
     tg_identity: TgIdentity | None,
     set_max_dau: SetMaxDau,
+    promote_from_queue: PromoteFromQueue,
 ) -> None:
-    """Изменить runtime-`MAX_DAU` (super_admin only)."""
+    """Изменить runtime-`MAX_DAU` (super_admin only).
+
+    Если лимит вырос — сразу же зовём `PromoteFromQueue.execute()`,
+    чтобы поднять из очереди всех, кого влезает по новой ёмкости.
+    """
     chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
     if chat_kind != "private" or tg_identity is None:
         await message.answer(REPLY_NON_PRIVATE_RU)
@@ -160,9 +167,15 @@ async def handle_set_max_dau(
         await message.answer(REPLY_DAU_FORBIDDEN_RU)
         return
 
+    promoted_count = 0
+    if result.changed and result.new_max_dau > result.previous_max_dau:
+        promote_result = await promote_from_queue.execute()
+        promoted_count = promote_result.promoted_count
+
     if result.changed:
-        await message.answer(
-            f"✅ MAX_DAU обновлён: {result.previous_max_dau} → {result.new_max_dau}."
-        )
+        msg = f"✅ MAX_DAU обновлён: {result.previous_max_dau} → {result.new_max_dau}."
+        if promoted_count:
+            msg += f"\n↑ Из очереди поднято: {promoted_count}."
+        await message.answer(msg)
     else:
         await message.answer(f"✅ MAX_DAU не изменён ({result.new_max_dau}) — значение совпало.")
