@@ -45,13 +45,14 @@ class TestAlembicMigrationsApplyCleanly:
         assert len(heads) == 1, f"expected single head, got {heads}"
 
     def test_expected_revisions_exist(self) -> None:
-        """0001, 0002 и 0003 должны быть зарегистрированы."""
+        """0001, 0002, 0003 и 0004 должны быть зарегистрированы."""
         cfg = _alembic_config("sqlite:///:memory:")
         script = ScriptDirectory.from_config(cfg)
         revisions = {rev.revision for rev in script.walk_revisions()}
         assert "0001_initial" in revisions
         assert "0002_player_clan" in revisions
         assert "0003_signup_queue" in revisions
+        assert "0004_forest_runs" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -67,6 +68,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0003 is not None
         assert rev_0003.down_revision == "0002_player_clan"
 
+    def test_0004_descends_from_0003(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0004 = script.get_revision("0004_forest_runs")
+        assert rev_0004 is not None
+        assert rev_0004.down_revision == "0003_signup_queue"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -74,6 +82,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260504_0001_initial_security_schema.py",
             "20260504_0002_player_clan_schema.py",
             "20260504_0003_signup_queue.py",
+            "20260504_0004_forest_runs.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -104,7 +113,7 @@ class TestAlembicMigrationsApplyCleanly:
         finally:
             engine.dispose()
 
-        # Sprint 0.2 + 1.1 + 1.2.C таблицы.
+        # Sprint 0.2 + 1.1 + 1.2.C + 1.3.B таблицы.
         expected = {
             "alembic_version",
             "idempotency_keys",
@@ -115,6 +124,7 @@ class TestAlembicMigrationsApplyCleanly:
             "clans",
             "clan_members",
             "signup_queue",
+            "forest_runs",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 

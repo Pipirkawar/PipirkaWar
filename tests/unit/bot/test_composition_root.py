@@ -26,12 +26,16 @@ from pipirik_wars.application.dau import (
     GetDauStats,
     SetMaxDau,
 )
+from pipirik_wars.application.forest import StartForestRun
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
+from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.bot.main import Container, build_container, build_dispatcher
 from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
+from pipirik_wars.domain.forest import IForestRunRepository
 from pipirik_wars.domain.player import IPlayerRepository
+from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
@@ -41,9 +45,11 @@ from pipirik_wars.infrastructure.dau import (
     StructlogDauThresholdAlerter,
 )
 from pipirik_wars.infrastructure.db.repositories import (
+    SqlAlchemyActivityLockRepository,
     SqlAlchemyAdminRepository,
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
+    SqlAlchemyForestRunRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemySignupQueueRepository,
 )
@@ -64,6 +70,7 @@ from pipirik_wars.infrastructure.settings import (
     Settings,
 )
 from tests.fakes import (
+    FakeActivityLockRepository,
     FakeAdminRepository,
     FakeAuditLogger,
     FakeBalanceConfig,
@@ -71,6 +78,7 @@ from tests.fakes import (
     FakeClanRepository,
     FakeClock,
     FakeDauThresholdAlerter,
+    FakeForestRunRepository,
     FakeIdempotencyKey,
     FakePlayerRepository,
     FakeRandom,
@@ -103,6 +111,8 @@ def _container_with_fakes() -> Container:
     members: IClanMembershipRepository = FakeClanMembershipRepository()
     admins: IAdminRepository = FakeAdminRepository()
     signup_queue: ISignupQueueRepository = FakeSignupQueueRepository()
+    activity_locks: IActivityLockRepository = FakeActivityLockRepository()
+    forest_runs: IForestRunRepository = FakeForestRunRepository()
     balance = FakeBalanceConfig(build_valid_balance())
     dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=200)
@@ -117,9 +127,10 @@ def _container_with_fakes() -> Container:
         alerter=dau_threshold_alerter,
         clock=clock,
     )
+    rng = FakeRandom()
     return Container(
         clock=clock,
-        random=FakeRandom(),
+        random=rng,
         uow=uow,
         idempotency=idempotency,
         audit=audit,
@@ -132,6 +143,8 @@ def _container_with_fakes() -> Container:
         clan_members=members,
         admins=admins,
         signup_queue=signup_queue,
+        activity_locks=activity_locks,
+        forest_runs=forest_runs,
         register_player=RegisterPlayer(
             uow=uow,
             players=players,
@@ -203,6 +216,19 @@ def _container_with_fakes() -> Container:
             check_threshold=check_dau_threshold,
         ),
         check_dau_threshold=check_dau_threshold,
+        start_forest_run=StartForestRun(
+            uow=uow,
+            players=players,
+            runs=forest_runs,
+            locks=ActivityLockService(
+                repository=activity_locks,
+                clock=clock,
+            ),
+            balance=balance,
+            random=rng,
+            audit=audit,
+            clock=clock,
+        ),
     )
 
 
@@ -239,6 +265,10 @@ class TestContainer:
         # DAU threshold alert (Спринт 1.2.D).
         assert isinstance(c.dau_threshold_alerter, FakeDauThresholdAlerter)
         assert isinstance(c.check_dau_threshold, CheckDauThreshold)
+        # Forest (Спринт 1.3.B).
+        assert isinstance(c.activity_locks, FakeActivityLockRepository)
+        assert isinstance(c.forest_runs, FakeForestRunRepository)
+        assert isinstance(c.start_forest_run, StartForestRun)
 
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
@@ -278,6 +308,10 @@ class TestBuildContainer:
         # DAU threshold alert (Спринт 1.2.D).
         assert isinstance(c.dau_threshold_alerter, StructlogDauThresholdAlerter)
         assert isinstance(c.check_dau_threshold, CheckDauThreshold)
+        # Forest (Спринт 1.3.B): реальные SQLAlchemy-репозитории.
+        assert isinstance(c.activity_locks, SqlAlchemyActivityLockRepository)
+        assert isinstance(c.forest_runs, SqlAlchemyForestRunRepository)
+        assert isinstance(c.start_forest_run, StartForestRun)
 
 
 class TestBuildDispatcher:
@@ -313,4 +347,5 @@ class TestBuildDispatcher:
         assert dp["get_dau_stats"] is c.get_dau_stats
         assert dp["set_max_dau"] is c.set_max_dau
         assert dp["signup_queue"] is c.signup_queue
+        assert dp["start_forest_run"] is c.start_forest_run
         assert dp["promote_from_queue"] is c.promote_from_queue
