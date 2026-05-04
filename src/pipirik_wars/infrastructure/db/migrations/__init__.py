@@ -1,0 +1,1 @@
+"""infrastructure/db/migrations package."""

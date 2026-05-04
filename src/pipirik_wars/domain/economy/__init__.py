@@ -1,0 +1,1 @@
+"""domain/economy package."""
