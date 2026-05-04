@@ -48,6 +48,7 @@ from pipirik_wars.domain.shared.ports import (
     AuditEntry,
     IAuditLogger,
     IClock,
+    IDelayedJobScheduler,
     IRandom,
     IUnitOfWork,
 )
@@ -76,6 +77,7 @@ class StartForestRun:
         "_players",
         "_random",
         "_runs",
+        "_scheduler",
         "_uow",
     )
 
@@ -90,6 +92,7 @@ class StartForestRun:
         random: IRandom,
         audit: IAuditLogger,
         clock: IClock,
+        scheduler: IDelayedJobScheduler,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -99,6 +102,7 @@ class StartForestRun:
         self._random = random
         self._audit = audit
         self._clock = clock
+        self._scheduler = scheduler
 
     async def execute(self, input_dto: StartForestRunInput) -> ForestRunStarted:
         """Стартовать поход. Бросает `PlayerNotFoundError`, если игрока
@@ -124,6 +128,12 @@ class StartForestRun:
                 ends_at=ends_at,
             )
             saved = await self._runs.add(run)
+
+            assert saved.id is not None  # repo гарантирует id после add()
+            await self._scheduler.schedule_finish_forest_run(
+                run_id=saved.id,
+                run_at=saved.ends_at,
+            )
 
             await self._audit.record(
                 AuditEntry(

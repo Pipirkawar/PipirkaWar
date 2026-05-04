@@ -27,6 +27,15 @@ class IForestRunRepository(abc.ABC):
         """
 
     @abc.abstractmethod
+    async def get_by_id(self, *, run_id: int) -> ForestRun | None:
+        """Найти поход по `id`, либо `None`.
+
+        Используется `FinishForestRun` (1.3.C) при срабатывании
+        APScheduler-job-а: job передаёт `run_id`, use-case подтягивает
+        запись и применяет исход.
+        """
+
+    @abc.abstractmethod
     async def get_active_by_player(self, *, player_id: int) -> ForestRun | None:
         """Найти активный (`IN_PROGRESS`) поход игрока, либо `None`.
 

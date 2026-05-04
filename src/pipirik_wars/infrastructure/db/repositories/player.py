@@ -59,6 +59,10 @@ class SqlAlchemyPlayerRepository(IPlayerRepository):
         row = result.scalar_one_or_none()
         return _row_to_entity(row) if row is not None else None
 
+    async def get_by_id(self, *, player_id: int) -> Player | None:
+        row = await self._uow.session.get(UserORM, player_id)
+        return _row_to_entity(row) if row is not None else None
+
     async def add(self, player: Player) -> Player:
         if player.id is not None:
             raise DomainIntegrityError(

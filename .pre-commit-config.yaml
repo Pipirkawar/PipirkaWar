@@ -39,6 +39,7 @@ repos:
           - "types-PyYAML>=6.0,<7"
           - "SQLAlchemy[asyncio]>=2.0.30,<3"
           - "alembic>=1.13,<2"
+          - "APScheduler>=3.10,<4"
         args: ["--config-file=pyproject.toml"]
         # tests are checked separately via pytest+mypy in CI
         exclude: ^tests/

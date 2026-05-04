@@ -252,3 +252,32 @@ class TestSqlAlchemyForestRunRepository:
         with pytest.raises(DomainIntegrityError, match="requires id"):
             async with uow:
                 await repo.save(new_run)
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_returns_run(self, uow: SqlAlchemyUnitOfWork) -> None:
+        player = await _seed_player(uow, tg_id=42)
+        assert player.id is not None
+        repo = _make_repo(uow)
+
+        async with uow:
+            stored = await repo.add(
+                _build_run(player_id=player.id, outcome=_outcome_no_drop()),
+            )
+        assert stored.id is not None
+
+        async with uow:
+            loaded = await repo.get_by_id(run_id=stored.id)
+            assert loaded is not None
+            assert loaded.id == stored.id
+            assert loaded.player_id == player.id
+            assert loaded.status is ForestRunStatus.IN_PROGRESS
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_missing_returns_none(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = _make_repo(uow)
+
+        async with uow:
+            assert await repo.get_by_id(run_id=99999) is None

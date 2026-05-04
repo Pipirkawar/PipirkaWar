@@ -31,6 +31,12 @@ class FakePlayerRepository(IPlayerRepository):
                 return p
         return None
 
+    async def get_by_id(self, *, player_id: int) -> Player | None:
+        for p in self.rows:
+            if p.id == player_id:
+                return p
+        return None
+
     async def add(self, player: Player) -> Player:
         if player.id is not None:
             raise IntegrityError(f"Player with pre-set id={player.id} cannot be added; use save()")

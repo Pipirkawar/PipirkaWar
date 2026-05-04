@@ -187,3 +187,25 @@ class TestSqlAlchemyPlayerRepository:
             even_later = later + timedelta(seconds=1)
             saved = await repo.save(reloaded.unfreeze(now=even_later))
             assert saved.status is PlayerStatus.ACTIVE
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_returns_player(self, uow: SqlAlchemyUnitOfWork) -> None:
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        async with uow:
+            stored = await repo.add(_make_new(tg_id=42, username=Username(value="ivan42")))
+        assert stored.id is not None
+
+        async with uow:
+            found = await repo.get_by_id(player_id=stored.id)
+            assert found is not None
+            assert found.id == stored.id
+            assert found.tg_id == 42
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_missing_returns_none(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        async with uow:
+            assert await repo.get_by_id(player_id=99999) is None

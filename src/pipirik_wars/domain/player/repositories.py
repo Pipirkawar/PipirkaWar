@@ -21,6 +21,15 @@ class IPlayerRepository(abc.ABC):
         """Найти игрока по Telegram-ID или вернуть `None`."""
 
     @abc.abstractmethod
+    async def get_by_id(self, *, player_id: int) -> Player | None:
+        """Найти игрока по внутреннему `id`, либо вернуть `None`.
+
+        Используется в use-case-ах, которые загружают игрока по
+        `player_id`, а не по `tg_id` (например, `FinishForestRun`
+        получает `player_id` из `forest_runs`).
+        """
+
+    @abc.abstractmethod
     async def add(self, player: Player) -> Player:
         """Добавить нового игрока. Возвращает копию с проставленным `id`.
 
