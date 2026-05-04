@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from pipirik_wars.application.dau import CheckDauThreshold
 from pipirik_wars.application.signup_queue import (
     PromoteFromQueue,
     PromoteFromQueueResult,
@@ -18,6 +19,8 @@ from tests.fakes import (
     FakeClock,
     FakeDauCounter,
     FakeDauLimit,
+    FakeDauThresholdAlerter,
+    FakeIdempotencyKey,
     FakePlayerRepository,
     FakeSignupQueueRepository,
     FakeUnitOfWork,
@@ -30,6 +33,7 @@ def _build(
     *,
     initial_dau: int = 0,
     max_dau: int = 5,
+    alerter: FakeDauThresholdAlerter | None = None,
 ) -> tuple[
     PromoteFromQueue,
     FakeUnitOfWork,
@@ -45,6 +49,17 @@ def _build(
     audit = FakeAuditLogger()
     counter = FakeDauCounter(initial=initial_dau)
     limit = FakeDauLimit(initial=max_dau)
+    clock = FakeClock(_BASE_NOW)
+    used_alerter = alerter if alerter is not None else FakeDauThresholdAlerter()
+    check_threshold = CheckDauThreshold(
+        uow=uow,
+        dau_counter=counter,
+        dau_limit=limit,
+        idempotency=FakeIdempotencyKey(),
+        audit=audit,
+        alerter=used_alerter,
+        clock=clock,
+    )
     use_case = PromoteFromQueue(
         uow=uow,
         players=players,
@@ -52,7 +67,8 @@ def _build(
         dau_counter=counter,
         dau_limit=limit,
         audit=audit,
-        clock=FakeClock(_BASE_NOW),
+        clock=clock,
+        check_threshold=check_threshold,
     )
     return use_case, uow, players, queue, audit, counter, limit
 
@@ -195,6 +211,44 @@ class TestPromoteFromQueue:
 
         assert result.promoted_count == 2
         assert await queue.size() == 0
+
+    async def test_threshold_alert_fires_after_promote_crosses_80_percent(self) -> None:
+        # MAX=10, начальный DAU=7, в очереди 3 → подняли всех → DAU=10 → алёрт.
+        alerter = FakeDauThresholdAlerter()
+        use_case, _, _, queue, audit, _, _ = _build(initial_dau=7, max_dau=10, alerter=alerter)
+        await _seed(queue, tg_ids=[1001, 1002, 1003])
+
+        result = await use_case.execute()
+
+        assert result.promoted_count == 3
+        assert len(alerter.events) == 1
+        assert alerter.events[0].current_dau == 10
+        threshold_audits = [
+            e for e in audit.entries if e.action is AuditAction.DAU_THRESHOLD_REACHED
+        ]
+        assert len(threshold_audits) == 1
+
+    async def test_no_alert_when_promote_keeps_below_threshold(self) -> None:
+        alerter = FakeDauThresholdAlerter()
+        # MAX=100, поднимаем 1 игрока, DAU=1/100 = 1% — далеко от 80%.
+        use_case, _, _, queue, _, _, _ = _build(initial_dau=0, max_dau=100, alerter=alerter)
+        await _seed(queue, tg_ids=[2001])
+
+        await use_case.execute()
+
+        assert alerter.events == []
+
+    async def test_no_alert_when_nothing_was_promoted(self) -> None:
+        # Очередь пуста → check_threshold НЕ зовётся.
+        alerter = FakeDauThresholdAlerter()
+        use_case, _, _, _, _, _, _ = _build(initial_dau=8, max_dau=10, alerter=alerter)
+
+        result = await use_case.execute()
+
+        assert result.promoted == ()
+        # Хотя 8/10=80% — мы и так на пороге, но без promoted ничего не делаем
+        # (это ответственность `RegisterPlayer`-а, который и привёл DAU к 80%).
+        assert alerter.events == []
 
     async def test_uow_rolls_back_when_player_repo_raises_unexpected(self) -> None:
         use_case, uow, players, queue, audit, _, _ = _build(initial_dau=0, max_dau=5)

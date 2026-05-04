@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from pipirik_wars.application.dau import CheckDauThreshold
 from pipirik_wars.application.dto.inputs import RegisterPlayerInput
 from pipirik_wars.application.player import (
     PlayerQueued,
@@ -23,6 +24,8 @@ from tests.fakes import (
     FakeClock,
     FakeDauCounter,
     FakeDauLimit,
+    FakeDauThresholdAlerter,
+    FakeIdempotencyKey,
     FakePlayerRepository,
     FakeSignupQueueRepository,
     FakeUnitOfWork,
@@ -34,6 +37,7 @@ def _build_use_case(
     clock: FakeClock | None = None,
     initial_dau: int = 0,
     max_dau: int = 200,
+    alerter: FakeDauThresholdAlerter | None = None,
 ) -> tuple[
     RegisterPlayer,
     FakePlayerRepository,
@@ -51,6 +55,16 @@ def _build_use_case(
     used_clock = clock or FakeClock(datetime(2026, 5, 4, 12, 0, tzinfo=UTC))
     counter = FakeDauCounter(initial=initial_dau)
     limit = FakeDauLimit(initial=max_dau)
+    used_alerter = alerter if alerter is not None else FakeDauThresholdAlerter()
+    check_threshold = CheckDauThreshold(
+        uow=uow,
+        dau_counter=counter,
+        dau_limit=limit,
+        idempotency=FakeIdempotencyKey(),
+        audit=audit,
+        alerter=used_alerter,
+        clock=used_clock,
+    )
     use_case = RegisterPlayer(
         uow=uow,
         players=players,
@@ -59,6 +73,7 @@ def _build_use_case(
         dau_limit=limit,
         audit=audit,
         clock=used_clock,
+        check_threshold=check_threshold,
     )
     return use_case, players, queue, audit, uow, used_clock, counter, limit
 
@@ -251,3 +266,80 @@ class TestDauGate:
         assert len(players.rows) == 1
         assert await queue.size() == 0
         assert await counter.current() == 2  # initial 1 + только что добавленный
+
+
+class TestThresholdAlertHook:
+    """Спринт 1.2.D: после `record_active(...)` зовём `CheckDauThreshold`."""
+
+    @pytest.mark.asyncio
+    async def test_alert_emitted_when_registration_crosses_80_percent(self) -> None:
+        # MAX=10, начальный DAU=7. После регистрации станет 8 → 80%.
+        alerter = FakeDauThresholdAlerter()
+        use_case, _, _, audit, _, _, _, _ = _build_use_case(
+            initial_dau=7,
+            max_dau=10,
+            alerter=alerter,
+        )
+
+        await use_case.execute(RegisterPlayerInput(tg_id=42))
+
+        assert len(alerter.events) == 1
+        assert alerter.events[0].current_dau == 8
+        assert alerter.events[0].max_dau == 10
+        # Audit: PLAYER_REGISTER + DAU_THRESHOLD_REACHED.
+        actions = [e.action for e in audit.entries]
+        assert AuditAction.PLAYER_REGISTER in actions
+        assert AuditAction.DAU_THRESHOLD_REACHED in actions
+
+    @pytest.mark.asyncio
+    async def test_no_alert_when_well_below_threshold(self) -> None:
+        alerter = FakeDauThresholdAlerter()
+        use_case, _, _, audit, _, _, _, _ = _build_use_case(
+            initial_dau=0,
+            max_dau=10,
+            alerter=alerter,
+        )
+
+        await use_case.execute(RegisterPlayerInput(tg_id=42))
+
+        assert alerter.events == []
+        actions = [e.action for e in audit.entries]
+        assert AuditAction.DAU_THRESHOLD_REACHED not in actions
+
+    @pytest.mark.asyncio
+    async def test_no_alert_when_player_queued(self) -> None:
+        # DAU == MAX → в очередь, никаких record_active, никакого алёрта.
+        alerter = FakeDauThresholdAlerter()
+        use_case, _, _, audit, _, _, _, _ = _build_use_case(
+            initial_dau=2,
+            max_dau=2,
+            alerter=alerter,
+        )
+
+        result = await use_case.execute(RegisterPlayerInput(tg_id=42))
+
+        assert isinstance(result, PlayerQueued)
+        assert alerter.events == []
+        actions = [e.action for e in audit.entries]
+        assert AuditAction.DAU_THRESHOLD_REACHED not in actions
+
+    @pytest.mark.asyncio
+    async def test_threshold_alert_only_once_per_day(self) -> None:
+        # Несколько регистраций подряд после порога → 1 алёрт.
+        alerter = FakeDauThresholdAlerter()
+        use_case, _, _, audit, _, _, _, _ = _build_use_case(
+            initial_dau=7,
+            max_dau=10,
+            alerter=alerter,
+        )
+
+        await use_case.execute(RegisterPlayerInput(tg_id=1))
+        await use_case.execute(RegisterPlayerInput(tg_id=2))
+        await use_case.execute(RegisterPlayerInput(tg_id=3))
+
+        # Только один DAU_THRESHOLD_REACHED, хотя regs было 3.
+        threshold_events = [
+            e for e in audit.entries if e.action is AuditAction.DAU_THRESHOLD_REACHED
+        ]
+        assert len(threshold_events) == 1
+        assert len(alerter.events) == 1

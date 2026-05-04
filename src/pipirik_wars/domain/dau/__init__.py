@@ -10,6 +10,10 @@
 МСК). Use-case-ы — в `application/dau/`.
 """
 
-from pipirik_wars.domain.dau.ports import IDauCounter, IDauLimit
+from pipirik_wars.domain.dau.ports import (
+    IDauCounter,
+    IDauLimit,
+    IDauThresholdAlerter,
+)
 
-__all__ = ["IDauCounter", "IDauLimit"]
+__all__ = ["IDauCounter", "IDauLimit", "IDauThresholdAlerter"]

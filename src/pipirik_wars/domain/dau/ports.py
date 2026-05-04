@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+from datetime import datetime
 
 
 class IDauCounter(abc.ABC):
@@ -53,3 +54,30 @@ class IDauLimit(abc.ABC):
 
         Бросает `ValueError`, если `max_dau < 1`.
         """
+
+
+class IDauThresholdAlerter(abc.ABC):
+    """Эмиттер алёрта о пересечении порога DAU (ГДД §8.3, задача 1.2.7).
+
+    Зачем выделен отдельный порт (а не `structlog.get_logger()` прямо
+    в use-case-е): use-case относится к слою `application`, для которого
+    `import-linter` запрещает прямые I/O-зависимости. Текущая реализация —
+    `StructlogDauThresholdAlerter` (просто `log.warning(...)`); в будущем
+    её можно расширить отправкой Telegram-уведомления админам без правки
+    самого `CheckDauThreshold`.
+
+    Идемпотентность «1 раз в сутки» **не** живёт здесь: эмиттер тупой,
+    его задача — отправить алёрт. За «слать или нет» отвечает use-case
+    через `IIdempotencyKey`.
+    """
+
+    @abc.abstractmethod
+    async def emit(
+        self,
+        *,
+        current_dau: int,
+        max_dau: int,
+        percent: int,
+        occurred_at: datetime,
+    ) -> None:
+        """Отправить одно событие алёрта. Идемпотентность за caller-ом."""

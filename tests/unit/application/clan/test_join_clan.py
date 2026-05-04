@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import pytest
 
 from pipirik_wars.application.clan import JoinClan, RegisterClan
+from pipirik_wars.application.dau import CheckDauThreshold
 from pipirik_wars.application.dto.inputs import (
     JoinClanInput,
     RegisterClanInput,
@@ -23,6 +24,8 @@ from tests.fakes import (
     FakeClock,
     FakeDauCounter,
     FakeDauLimit,
+    FakeDauThresholdAlerter,
+    FakeIdempotencyKey,
     FakePlayerRepository,
     FakeSignupQueueRepository,
     FakeUnitOfWork,
@@ -55,14 +58,26 @@ def _build() -> tuple[
         clock=clock,
     )
     register_clan = RegisterClan(uow=uow, clans=clans, audit=audit, clock=clock)
+    counter = FakeDauCounter()
+    limit = FakeDauLimit(initial=10_000)
+    check_threshold = CheckDauThreshold(
+        uow=uow,
+        dau_counter=counter,
+        dau_limit=limit,
+        idempotency=FakeIdempotencyKey(),
+        audit=audit,
+        alerter=FakeDauThresholdAlerter(),
+        clock=clock,
+    )
     register_player = RegisterPlayer(
         uow=uow,
         players=players,
         signup_queue=FakeSignupQueueRepository(),
-        dau_counter=FakeDauCounter(),
-        dau_limit=FakeDauLimit(initial=10_000),
+        dau_counter=counter,
+        dau_limit=limit,
         audit=audit,
         clock=clock,
+        check_threshold=check_threshold,
     )
     return (
         join,

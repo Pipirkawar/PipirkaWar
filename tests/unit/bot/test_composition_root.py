@@ -21,7 +21,11 @@ from pipirik_wars.application.clan import (
     MigrateClanChatId,
     RegisterClan,
 )
-from pipirik_wars.application.dau import GetDauStats, SetMaxDau
+from pipirik_wars.application.dau import (
+    CheckDauThreshold,
+    GetDauStats,
+    SetMaxDau,
+)
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.bot.main import Container, build_container, build_dispatcher
@@ -31,7 +35,11 @@ from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
-from pipirik_wars.infrastructure.dau import InMemoryDauCounter, InMemoryDauLimit
+from pipirik_wars.infrastructure.dau import (
+    InMemoryDauCounter,
+    InMemoryDauLimit,
+    StructlogDauThresholdAlerter,
+)
 from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyAdminRepository,
     SqlAlchemyClanMembershipRepository,
@@ -62,6 +70,7 @@ from tests.fakes import (
     FakeClanMembershipRepository,
     FakeClanRepository,
     FakeClock,
+    FakeDauThresholdAlerter,
     FakeIdempotencyKey,
     FakePlayerRepository,
     FakeRandom,
@@ -97,11 +106,22 @@ def _container_with_fakes() -> Container:
     balance = FakeBalanceConfig(build_valid_balance())
     dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=200)
+    dau_threshold_alerter = FakeDauThresholdAlerter()
+    idempotency = FakeIdempotencyKey()
+    check_dau_threshold = CheckDauThreshold(
+        uow=uow,
+        dau_counter=dau_counter,
+        dau_limit=dau_limit,
+        idempotency=idempotency,
+        audit=audit,
+        alerter=dau_threshold_alerter,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=FakeRandom(),
         uow=uow,
-        idempotency=FakeIdempotencyKey(),
+        idempotency=idempotency,
         audit=audit,
         balance=balance,
         balance_reloader=balance,
@@ -120,6 +140,7 @@ def _container_with_fakes() -> Container:
             dau_limit=dau_limit,
             audit=audit,
             clock=clock,
+            check_threshold=check_dau_threshold,
         ),
         register_clan=RegisterClan(
             uow=uow,
@@ -162,6 +183,7 @@ def _container_with_fakes() -> Container:
         ),
         dau_counter=dau_counter,
         dau_limit=dau_limit,
+        dau_threshold_alerter=dau_threshold_alerter,
         get_dau_stats=GetDauStats(counter=dau_counter, limit=dau_limit),
         set_max_dau=SetMaxDau(
             uow=uow,
@@ -178,7 +200,9 @@ def _container_with_fakes() -> Container:
             dau_limit=dau_limit,
             audit=audit,
             clock=clock,
+            check_threshold=check_dau_threshold,
         ),
+        check_dau_threshold=check_dau_threshold,
     )
 
 
@@ -212,6 +236,9 @@ class TestContainer:
         # Signup queue + promote (Спринт 1.2.C).
         assert isinstance(c.signup_queue, FakeSignupQueueRepository)
         assert isinstance(c.promote_from_queue, PromoteFromQueue)
+        # DAU threshold alert (Спринт 1.2.D).
+        assert isinstance(c.dau_threshold_alerter, FakeDauThresholdAlerter)
+        assert isinstance(c.check_dau_threshold, CheckDauThreshold)
 
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
@@ -248,6 +275,9 @@ class TestBuildContainer:
         # Signup queue + promote (Спринт 1.2.C).
         assert isinstance(c.signup_queue, SqlAlchemySignupQueueRepository)
         assert isinstance(c.promote_from_queue, PromoteFromQueue)
+        # DAU threshold alert (Спринт 1.2.D).
+        assert isinstance(c.dau_threshold_alerter, StructlogDauThresholdAlerter)
+        assert isinstance(c.check_dau_threshold, CheckDauThreshold)
 
 
 class TestBuildDispatcher:

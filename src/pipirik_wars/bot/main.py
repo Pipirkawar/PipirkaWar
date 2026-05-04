@@ -40,7 +40,11 @@ from pipirik_wars.application.clan import (
     MigrateClanChatId,
     RegisterClan,
 )
-from pipirik_wars.application.dau import GetDauStats, SetMaxDau
+from pipirik_wars.application.dau import (
+    CheckDauThreshold,
+    GetDauStats,
+    SetMaxDau,
+)
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.bot.handlers import register_routers
@@ -48,7 +52,7 @@ from pipirik_wars.bot.middlewares import register_middlewares
 from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
-from pipirik_wars.domain.dau import IDauCounter, IDauLimit
+from pipirik_wars.domain.dau import IDauCounter, IDauLimit, IDauThresholdAlerter
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.shared.ports import (
     IAuditLogger,
@@ -60,7 +64,11 @@ from pipirik_wars.domain.shared.ports import (
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
-from pipirik_wars.infrastructure.dau import InMemoryDauCounter, InMemoryDauLimit
+from pipirik_wars.infrastructure.dau import (
+    InMemoryDauCounter,
+    InMemoryDauLimit,
+    StructlogDauThresholdAlerter,
+)
 from pipirik_wars.infrastructure.db.engine import build_engine, build_sessionmaker
 from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyAdminRepository,
@@ -108,9 +116,10 @@ class Container:
     admins: IAdminRepository
     signup_queue: ISignupQueueRepository
 
-    # DAU Gate (Спринт 1.2.B)
+    # DAU Gate (Спринт 1.2.B / 1.2.D)
     dau_counter: IDauCounter
     dau_limit: IDauLimit
+    dau_threshold_alerter: IDauThresholdAlerter
 
     # Use-case-ы (Спринт 1.1.D + 1.1.E + 1.2.B + 1.2.C)
     register_player: RegisterPlayer
@@ -123,6 +132,7 @@ class Container:
     get_dau_stats: GetDauStats
     set_max_dau: SetMaxDau
     promote_from_queue: PromoteFromQueue
+    check_dau_threshold: CheckDauThreshold
 
 
 def build_container(
@@ -162,6 +172,17 @@ def build_container(
     signup_queue = SqlAlchemySignupQueueRepository(uow=uow)
     dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=settings.bot.max_dau)
+    dau_threshold_alerter = StructlogDauThresholdAlerter()
+    idempotency = SqlAlchemyIdempotencyService(uow=uow)
+    check_dau_threshold = CheckDauThreshold(
+        uow=uow,
+        dau_counter=dau_counter,
+        dau_limit=dau_limit,
+        idempotency=idempotency,
+        audit=audit,
+        alerter=dau_threshold_alerter,
+        clock=clock,
+    )
     register_player = RegisterPlayer(
         uow=uow,
         players=players,
@@ -170,6 +191,7 @@ def build_container(
         dau_limit=dau_limit,
         audit=audit,
         clock=clock,
+        check_threshold=check_dau_threshold,
     )
     register_clan = RegisterClan(
         uow=uow,
@@ -226,12 +248,13 @@ def build_container(
         dau_limit=dau_limit,
         audit=audit,
         clock=clock,
+        check_threshold=check_dau_threshold,
     )
     return Container(
         clock=clock,
         random=RealRandom(),
         uow=uow,
-        idempotency=SqlAlchemyIdempotencyService(uow=uow),
+        idempotency=idempotency,
         audit=audit,
         balance=balance,
         balance_reloader=balance,
@@ -244,6 +267,7 @@ def build_container(
         signup_queue=signup_queue,
         dau_counter=dau_counter,
         dau_limit=dau_limit,
+        dau_threshold_alerter=dau_threshold_alerter,
         register_player=register_player,
         register_clan=register_clan,
         migrate_clan=migrate_clan,
@@ -254,6 +278,7 @@ def build_container(
         get_dau_stats=get_dau_stats,
         set_max_dau=set_max_dau,
         promote_from_queue=promote_from_queue,
+        check_dau_threshold=check_dau_threshold,
     )
 
 
