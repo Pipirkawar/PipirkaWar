@@ -22,10 +22,10 @@
 
 | PR | Содержимое | Статус | Задачи из `development_plan.md` §3 |
 |---|---|---|---|
-| **1.2.A** | Domain-сервис `progression.can_spend(length_cm, cost_cm)` + `require_spend(...)` (бросает `InsufficientLengthError`) + константа `MIN_LENGTH_AFTER_SPEND_CM=20` (ГДД §3.1) | 🟢 в работе | 1.2.1 |
-| **1.2.B** | Domain-`Settings.MAX_DAU` (динамическая) + in-memory `DauCounter` (с ежедневным сбросом) + handler `/admin_stats` + admin-command `/set_max_dau N` + аудит | ⚪ ожидает 1.2.A | 1.2.3, 1.2.6 |
-| **1.2.C** | Миграция `signup_queue` + ветка очереди в `RegisterPlayer` (когда DAU == MAX) + APScheduler-job для авто-разблокировки + сообщение «серверы переполнены» | ⚪ ожидает 1.2.B | 1.2.4, 1.2.5 |
-| **1.2.D** | Уведомление админу при достижении 80 % от `MAX_DAU` (через AuditLogger или structlog алёрт; срабатывает один раз в сутки) | ⚪ ожидает 1.2.B | 1.2.7 |
+| **1.2.A** | Domain-сервис `progression.can_spend(length_cm, cost_cm)` + `require_spend(...)` (бросает `InsufficientLengthError`) + константа `MIN_LENGTH_AFTER_SPEND_CM=20` (ГДД §3.1) | ✅ смержено (PR #13) | 1.2.1 |
+| **1.2.B** | Domain-`Settings.MAX_DAU` (динамическая) + in-memory `DauCounter` (с ежедневным сбросом) + handler `/admin_stats` + admin-command `/set_max_dau N` + аудит | ✅ смержено (PR #14) | 1.2.3, 1.2.6 |
+| **1.2.C** | Миграция `signup_queue` + ветка очереди в `RegisterPlayer` (когда DAU == MAX) + use-case `PromoteFromQueue` (вызывается при `/set_max_dau` на повышение) + сообщение «серверы переполнены» | 🟢 в работе (PR open) | 1.2.4, 1.2.5 |
+| **1.2.D** | Уведомление админу при достижении 80 % от `MAX_DAU` (через AuditLogger или structlog алёрт; срабатывает один раз в сутки) | ⚪ ожидает 1.2.C | 1.2.7 |
 
 > **Заметка по 1.2.2:** `ActivityLock` уже доделан в Спринте 0.2.1 (см. таблицу ниже) — `IActivityLockRepository` + `ActivityLockService` + тест двойного захвата зелёный. В Спринте 1.2 отдельной задачи под него нет; реальное «двойной /forest не проходит» появится в 1.3.9, когда у нас будет /forest handler.
 

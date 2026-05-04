@@ -21,7 +21,10 @@ from tests.fakes import (
     FakeClanMembershipRepository,
     FakeClanRepository,
     FakeClock,
+    FakeDauCounter,
+    FakeDauLimit,
     FakePlayerRepository,
+    FakeSignupQueueRepository,
     FakeUnitOfWork,
 )
 
@@ -55,6 +58,9 @@ def _build() -> tuple[
     register_player = RegisterPlayer(
         uow=uow,
         players=players,
+        signup_queue=FakeSignupQueueRepository(),
+        dau_counter=FakeDauCounter(),
+        dau_limit=FakeDauLimit(initial=10_000),
         audit=audit,
         clock=clock,
     )
