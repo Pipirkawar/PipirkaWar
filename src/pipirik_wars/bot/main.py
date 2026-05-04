@@ -8,6 +8,7 @@
 Спринт 0.2: `build_container()` собирает реальные адаптеры
 (`SqlAlchemyUnitOfWork`, `RealClock`, `RealRandom`,
 `SqlAlchemyIdempotencyService`, `SqlAlchemyAuditLogger`).
+Спринт 0.2.10: добавлен `YamlBalanceLoader` (порт `IBalanceConfig`).
 `main()` остаётся placeholder-ом — entry point появится в Спринте 1.1
 (aiogram Dispatcher + handlers).
 """
@@ -15,7 +16,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
+from pipirik_wars.domain.balance import IBalanceConfig
 from pipirik_wars.domain.shared.ports import (
     IAuditLogger,
     IClock,
@@ -23,6 +26,7 @@ from pipirik_wars.domain.shared.ports import (
     IRandom,
     IUnitOfWork,
 )
+from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
 from pipirik_wars.infrastructure.db.engine import build_engine, build_sessionmaker
 from pipirik_wars.infrastructure.db.services import (
@@ -32,6 +36,11 @@ from pipirik_wars.infrastructure.db.services import (
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from pipirik_wars.infrastructure.random import RealRandom
 from pipirik_wars.infrastructure.settings import Settings
+
+# Путь к балансовому файлу по умолчанию (относительно cwd процесса).
+# Деплой кладёт `config/balance.yaml` рядом с бинарём; локально
+# pytest/`make ci` стартуют из корня репо, где он и лежит.
+_DEFAULT_BALANCE_YAML = Path("config/balance.yaml")
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,14 +57,23 @@ class Container:
     uow: IUnitOfWork
     idempotency: IIdempotencyKey
     audit: IAuditLogger
+    balance: IBalanceConfig
     settings: Settings
 
 
-def build_container(settings: Settings | None = None) -> Container:
+def build_container(
+    settings: Settings | None = None,
+    *,
+    balance_yaml_path: Path | None = None,
+) -> Container:
     """Собрать контейнер для production-запуска.
 
     Production: настройки из env (через `pydantic-settings`).
     Tests: можно передать заранее собранный `Settings(db=DatabaseSettings(url=...))`.
+
+    `balance_yaml_path` — переопределение пути к `balance.yaml`
+    (по умолчанию ``config/balance.yaml``). Loader **lazy** — файл
+    читается только при первом `container.balance.get()`.
 
     NB: `create_async_engine()` lazy — реальное подключение к БД
     произойдёт только при первом запросе.
@@ -64,12 +82,14 @@ def build_container(settings: Settings | None = None) -> Container:
     engine = build_engine(settings.db)
     session_maker = build_sessionmaker(engine)
     uow = SqlAlchemyUnitOfWork(session_maker)
+    balance = YamlBalanceLoader(balance_yaml_path or _DEFAULT_BALANCE_YAML)
     return Container(
         clock=RealClock(),
         random=RealRandom(),
         uow=uow,
         idempotency=SqlAlchemyIdempotencyService(uow=uow),
         audit=SqlAlchemyAuditLogger(uow=uow),
+        balance=balance,
         settings=settings,
     )
 
