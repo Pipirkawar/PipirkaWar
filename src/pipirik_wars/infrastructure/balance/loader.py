@@ -68,7 +68,7 @@ class YamlBalanceLoader(IBalanceConfig):
             raise ConfigError(f"invalid YAML in {self._path}: {e}") from e
         if not isinstance(raw, dict):
             raise ConfigError(
-                f"{self._path}: root must be a YAML mapping, " f"got {type(raw).__name__}"
+                f"{self._path}: root must be a YAML mapping, got {type(raw).__name__}"
             )
         try:
             return BalanceConfig.model_validate(raw)
