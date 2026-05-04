@@ -14,9 +14,23 @@ import pytest
 from aiogram import Dispatcher
 from pydantic import SecretStr
 
+from pipirik_wars.application.clan import (
+    FreezeClan,
+    JoinClan,
+    MigrateClanChatId,
+    RegisterClan,
+)
+from pipirik_wars.application.player import RegisterPlayer
 from pipirik_wars.bot.main import Container, build_container, build_dispatcher
+from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
+from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
+from pipirik_wars.infrastructure.db.repositories import (
+    SqlAlchemyClanMembershipRepository,
+    SqlAlchemyClanRepository,
+    SqlAlchemyPlayerRepository,
+)
 from pipirik_wars.infrastructure.db.services import (
     SqlAlchemyAuditLogger,
     SqlAlchemyIdempotencyService,
@@ -36,8 +50,11 @@ from pipirik_wars.infrastructure.settings import (
 from tests.fakes import (
     FakeAuditLogger,
     FakeBalanceConfig,
+    FakeClanMembershipRepository,
+    FakeClanRepository,
     FakeClock,
     FakeIdempotencyKey,
+    FakePlayerRepository,
     FakeRandom,
     FakeUnitOfWork,
 )
@@ -58,15 +75,57 @@ def _fake_limiter() -> IRateLimiter:
 
 
 def _container_with_fakes() -> Container:
+    """Полный фейковый Container для unit-тестов composition-root-а."""
+    uow = FakeUnitOfWork()
+    audit = FakeAuditLogger()
+    clock = FakeClock()
+    players: IPlayerRepository = FakePlayerRepository()
+    clans: IClanRepository = FakeClanRepository()
+    members: IClanMembershipRepository = FakeClanMembershipRepository()
     return Container(
-        clock=FakeClock(),
+        clock=clock,
         random=FakeRandom(),
-        uow=FakeUnitOfWork(),
+        uow=uow,
         idempotency=FakeIdempotencyKey(),
-        audit=FakeAuditLogger(),
+        audit=audit,
         balance=FakeBalanceConfig(build_valid_balance()),
         rate_limiter=_fake_limiter(),
         settings=_test_settings(),
+        players=players,
+        clans=clans,
+        clan_members=members,
+        register_player=RegisterPlayer(
+            uow=uow,
+            players=players,
+            audit=audit,
+            clock=clock,
+        ),
+        register_clan=RegisterClan(
+            uow=uow,
+            clans=clans,
+            audit=audit,
+            clock=clock,
+        ),
+        migrate_clan=MigrateClanChatId(
+            uow=uow,
+            clans=clans,
+            audit=audit,
+            clock=clock,
+        ),
+        join_clan=JoinClan(
+            uow=uow,
+            clans=clans,
+            clan_members=members,
+            players=players,
+            audit=audit,
+            clock=clock,
+        ),
+        freeze_clan=FreezeClan(
+            uow=uow,
+            clans=clans,
+            audit=audit,
+            clock=clock,
+        ),
     )
 
 
@@ -81,6 +140,12 @@ class TestContainer:
         assert isinstance(c.balance, FakeBalanceConfig)
         assert c.rate_limiter is not None
         assert c.settings.environment == "test"
+        # Use-case-ы и репозитории (Спринт 1.1.D).
+        assert isinstance(c.register_player, RegisterPlayer)
+        assert isinstance(c.register_clan, RegisterClan)
+        assert isinstance(c.migrate_clan, MigrateClanChatId)
+        assert isinstance(c.join_clan, JoinClan)
+        assert isinstance(c.freeze_clan, FreezeClan)
 
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
@@ -99,16 +164,35 @@ class TestBuildContainer:
         assert isinstance(c.balance, YamlBalanceLoader)
         assert isinstance(c.rate_limiter, InMemoryTokenBucketRateLimiter)
         assert c.settings.environment == "test"
+        # Реальные SQLAlchemy-репозитории (Спринт 1.1.D).
+        assert isinstance(c.players, SqlAlchemyPlayerRepository)
+        assert isinstance(c.clans, SqlAlchemyClanRepository)
+        assert isinstance(c.clan_members, SqlAlchemyClanMembershipRepository)
 
 
 class TestBuildDispatcher:
-    def test_build_dispatcher_registers_middlewares_and_routers(self) -> None:
-        dp = build_dispatcher(_container_with_fakes())
+    """Один тест — один build_dispatcher.
+
+    aiogram-роутеры — singleton-ы на уровне модуля; при повторном
+    вызове `dispatcher.include_router(...)` они бросают
+    `RuntimeError: Router is already attached`. Поэтому проверяем
+    структуру через **один** общий test, а не дробим.
+    """
+
+    def test_build_dispatcher_assembles_full_stack(self) -> None:
+        c = _container_with_fakes()
+        dp = build_dispatcher(c)
         assert isinstance(dp, Dispatcher)
         # Каждый из observer-ов должен иметь 4 middleware-а:
         # error / auth / locale / throttle.
         for observer in (dp.message, dp.callback_query, dp.my_chat_member):
             assert len(list(observer.middleware)) == 4
-        # Хотя бы один router зарегистрирован — это `start`.
-        assert len(dp.sub_routers) >= 1
+        # Минимум 2 router-а: `start` и `registration`.
         assert any(r.name == "start" for r in dp.sub_routers)
+        assert any(r.name == "registration" for r in dp.sub_routers)
+        # Use-case-ы прокинуты в workflow-data для aiogram DI.
+        assert dp["register_player"] is c.register_player
+        assert dp["register_clan"] is c.register_clan
+        assert dp["migrate_clan"] is c.migrate_clan
+        assert dp["join_clan"] is c.join_clan
+        assert dp["freeze_clan"] is c.freeze_clan

@@ -7,10 +7,16 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 # В геймплее tg_id всегда положительный; ботов и каналов мы здесь не валидируем.
 PositiveTgId = int
+
+# Telegram chat_kind для регистрации клана. Личные/каналы здесь не имеют
+# смысла — клан = группа или супергруппа.
+ClanChatKind = Literal["group", "supergroup"]
 
 
 class _StrictBase(BaseModel):
@@ -44,11 +50,51 @@ class RegisterPlayerInput(_StrictBase):
 
 
 class RegisterClanInput(_StrictBase):
-    """Регистрация клана при добавлении бота в группу."""
+    """Регистрация клана при добавлении бота в группу.
+
+    Use-case `RegisterClan` идемпотентен: если клан с таким `chat_id`
+    уже существует и `frozen` — он размораживается; если `active` —
+    no-op.
+    """
 
     chat_id: int = Field(description="Telegram chat_id (отрицательный для групп)")
+    chat_kind: ClanChatKind = Field(description='Тип чата: "group" или "supergroup".')
     title: str = Field(min_length=1, max_length=128)
     added_by_tg_id: PositiveTgId = Field(gt=0)
+
+
+class MigrateClanChatIdInput(_StrictBase):
+    """Миграция клана с group → supergroup (Telegram меняет `chat_id`).
+
+    Передаётся из bot-handler-а, который ловит
+    `message.migrate_to_chat_id`.
+    """
+
+    old_chat_id: int = Field(description="Прежний chat_id (group)")
+    new_chat_id: int = Field(description="Новый chat_id (supergroup, обычно `-100…`)")
+    new_chat_kind: ClanChatKind = Field(description='Тип нового чата (обычно "supergroup")')
+
+
+class JoinClanInput(_StrictBase):
+    """Добавление зарегистрированного игрока в клан-чат.
+
+    Срабатывает при `chat_member`/`my_chat_member`, когда уже
+    зарегистрированный (через ЛС) игрок виден в чате клана.
+    """
+
+    chat_id: int = Field(description="Telegram chat_id клана")
+    tg_id: PositiveTgId = Field(gt=0, description="Telegram user_id игрока")
+
+
+class FreezeClanInput(_StrictBase):
+    """Заморозка клана при удалении бота из чата (Спринт 1.1.6)."""
+
+    chat_id: int = Field(description="Telegram chat_id клана")
+    reason: str = Field(
+        default="bot_removed_from_chat",
+        min_length=1,
+        max_length=255,
+    )
 
 
 class GrantLengthInput(_StrictBase):
