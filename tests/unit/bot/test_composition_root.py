@@ -21,6 +21,7 @@ from pipirik_wars.application.clan import (
     MigrateClanChatId,
     RegisterClan,
 )
+from pipirik_wars.application.dau import GetDauStats, SetMaxDau
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.bot.main import Container, build_container, build_dispatcher
 from pipirik_wars.domain.admin import IAdminRepository
@@ -28,6 +29,7 @@ from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
+from pipirik_wars.infrastructure.dau import InMemoryDauCounter, InMemoryDauLimit
 from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyAdminRepository,
     SqlAlchemyClanMembershipRepository,
@@ -88,6 +90,8 @@ def _container_with_fakes() -> Container:
     members: IClanMembershipRepository = FakeClanMembershipRepository()
     admins: IAdminRepository = FakeAdminRepository()
     balance = FakeBalanceConfig(build_valid_balance())
+    dau_counter = InMemoryDauCounter(clock=clock)
+    dau_limit = InMemoryDauLimit(initial=200)
     return Container(
         clock=clock,
         random=FakeRandom(),
@@ -147,6 +151,16 @@ def _container_with_fakes() -> Container:
             audit=audit,
             clock=clock,
         ),
+        dau_counter=dau_counter,
+        dau_limit=dau_limit,
+        get_dau_stats=GetDauStats(counter=dau_counter, limit=dau_limit),
+        set_max_dau=SetMaxDau(
+            uow=uow,
+            admins=admins,
+            limit=dau_limit,
+            audit=audit,
+            clock=clock,
+        ),
     )
 
 
@@ -172,6 +186,11 @@ class TestContainer:
         assert c.balance_reloader is c.balance
         assert isinstance(c.get_profile, GetProfile)
         assert isinstance(c.reload_balance, ReloadBalance)
+        # DAU Gate (Спринт 1.2.B).
+        assert isinstance(c.dau_counter, InMemoryDauCounter)
+        assert isinstance(c.dau_limit, InMemoryDauLimit)
+        assert isinstance(c.get_dau_stats, GetDauStats)
+        assert isinstance(c.set_max_dau, SetMaxDau)
 
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
@@ -200,6 +219,11 @@ class TestBuildContainer:
         assert c.balance_reloader is c.balance
         assert isinstance(c.get_profile, GetProfile)
         assert isinstance(c.reload_balance, ReloadBalance)
+        # DAU Gate (Спринт 1.2.B): in-memory counter + limit.
+        assert isinstance(c.dau_counter, InMemoryDauCounter)
+        assert isinstance(c.dau_limit, InMemoryDauLimit)
+        assert isinstance(c.get_dau_stats, GetDauStats)
+        assert isinstance(c.set_max_dau, SetMaxDau)
 
 
 class TestBuildDispatcher:
@@ -232,3 +256,5 @@ class TestBuildDispatcher:
         assert dp["freeze_clan"] is c.freeze_clan
         assert dp["get_profile"] is c.get_profile
         assert dp["reload_balance"] is c.reload_balance
+        assert dp["get_dau_stats"] is c.get_dau_stats
+        assert dp["set_max_dau"] is c.set_max_dau

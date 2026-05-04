@@ -50,3 +50,14 @@ class Admin:
     def can_grant_admin(self) -> bool:
         """Может ли выдавать новых админов."""
         return self.is_active and self.role == AdminRole.SUPER_ADMIN
+
+    def can_manage_runtime_config(self) -> bool:
+        """Может ли менять runtime-настройки бота (`MAX_DAU` и т.п.).
+
+        Отличается от `can_write_balance`: балансовые константы — это
+        геймдиз (правит `economist`), а runtime-настройки — это
+        инфраструктура (правит `super_admin`). На текущей фазе
+        изменение `MAX_DAU` через `/set_max_dau` — единственная
+        runtime-настройка под этим правом.
+        """
+        return self.is_active and self.role == AdminRole.SUPER_ADMIN

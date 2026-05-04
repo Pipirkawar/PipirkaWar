@@ -58,6 +58,14 @@ class BotSettings(BaseSettings):
     )
     default_throttle_per_second: float = Field(default=5.0, gt=0)
     default_throttle_capacity: int = Field(default=10, gt=0)
+    max_dau: int = Field(
+        default=200,
+        ge=1,
+        description=(
+            "Стартовый MAX_DAU (ГДД §18.5: 200 для VPS 1 GB). "
+            "Меняется на горячую через `/set_max_dau N`."
+        ),
+    )
 
 
 class BootstrapSettings(BaseSettings):
