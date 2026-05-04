@@ -1,15 +1,20 @@
-"""ORM-модели Спринта 0.2 (security skeleton).
+"""ORM-модели проекта.
 
-Только то, что нужно для подсистемы безопасности и идемпотентности:
+Подсистема безопасности (Спринт 0.2):
 - `IdempotencyKeyORM` — таблица `idempotency_keys`.
 - `AuditLogORM` — таблица `audit_log`.
 - `ActivityLockORM` — таблица `activity_locks`.
 - `AdminORM` — таблица `admins`.
 
-Player/Clan ORM появятся в Спринте 1.1+, когда будет домен игрока.
+Игрок/клан (Спринт 1.1):
+- `UserORM` — таблица `users`.
+- `ClanORM` — таблица `clans`.
+- `ClanMemberORM` — таблица `clan_members`.
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
+from pipirik_wars.infrastructure.db.models.clan import ClanMemberORM, ClanORM
+from pipirik_wars.infrastructure.db.models.player import UserORM
 from pipirik_wars.infrastructure.db.models.security import (
     ActivityLockORM,
     AuditLogORM,
@@ -20,5 +25,8 @@ __all__ = [
     "ActivityLockORM",
     "AdminORM",
     "AuditLogORM",
+    "ClanMemberORM",
+    "ClanORM",
     "IdempotencyKeyORM",
+    "UserORM",
 ]

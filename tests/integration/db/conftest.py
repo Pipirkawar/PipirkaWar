@@ -23,7 +23,10 @@ from pipirik_wars.infrastructure.db.models import (  # noqa: F401  (регист
     ActivityLockORM,
     AdminORM,
     AuditLogORM,
+    ClanMemberORM,
+    ClanORM,
     IdempotencyKeyORM,
+    UserORM,
 )
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
 

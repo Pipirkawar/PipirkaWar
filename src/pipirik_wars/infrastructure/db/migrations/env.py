@@ -14,7 +14,10 @@ from pipirik_wars.infrastructure.db.models import (  # noqa: F401  (важно: 
     ActivityLockORM,
     AdminORM,
     AuditLogORM,
+    ClanMemberORM,
+    ClanORM,
     IdempotencyKeyORM,
+    UserORM,
 )
 from pipirik_wars.infrastructure.settings import DatabaseSettings
 
