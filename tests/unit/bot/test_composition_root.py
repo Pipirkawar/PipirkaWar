@@ -32,6 +32,7 @@ from pipirik_wars.application.forest import (
     StartForestRun,
 )
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
+from pipirik_wars.application.progression import UpgradeThickness
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.bot.main import Container, build_container, build_dispatcher
@@ -257,6 +258,13 @@ def _container_with_fakes() -> Container:
         ),
         finish_forest_run=finish_forest_run,
         apply_forest_name_drop=apply_forest_name_drop,
+        upgrade_thickness=UpgradeThickness(
+            uow=uow,
+            players=players,
+            balance=balance,
+            audit=audit,
+            clock=clock,
+        ),
     )
 
 
@@ -300,6 +308,8 @@ class TestContainer:
         # Forest finish + scheduler (Спринт 1.3.C).
         assert isinstance(c.delayed_jobs, FakeDelayedJobScheduler)
         assert isinstance(c.finish_forest_run, FinishForestRun)
+        # Thickness upgrade (Спринт 1.4.A).
+        assert isinstance(c.upgrade_thickness, UpgradeThickness)
 
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
@@ -346,6 +356,8 @@ class TestBuildContainer:
         # Forest finish + scheduler (Спринт 1.3.C).
         assert isinstance(c.delayed_jobs, APSchedulerDelayedJobScheduler)
         assert isinstance(c.finish_forest_run, FinishForestRun)
+        # Thickness upgrade (Спринт 1.4.A).
+        assert isinstance(c.upgrade_thickness, UpgradeThickness)
 
 
 class TestBuildDispatcher:
@@ -384,3 +396,7 @@ class TestBuildDispatcher:
         assert dp["start_forest_run"] is c.start_forest_run
         assert dp["finish_forest_run"] is c.finish_forest_run
         assert dp["promote_from_queue"] is c.promote_from_queue
+        assert dp["upgrade_thickness"] is c.upgrade_thickness
+        assert dp["balance"] is c.balance
+        # Sprint 1.4.A: новый router `upgrade`.
+        assert any(r.name == "upgrade" for r in dp.sub_routers)
