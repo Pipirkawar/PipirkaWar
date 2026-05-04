@@ -7,6 +7,7 @@
 """
 
 from tests.fakes.audit import FakeAuditLogger
+from tests.fakes.balance import FakeBalanceConfig
 from tests.fakes.clock import FakeClock
 from tests.fakes.idempotency import FakeIdempotencyKey
 from tests.fakes.random import FakeRandom
@@ -14,6 +15,7 @@ from tests.fakes.uow import FakeUnitOfWork
 
 __all__ = [
     "FakeAuditLogger",
+    "FakeBalanceConfig",
     "FakeClock",
     "FakeIdempotencyKey",
     "FakeRandom",

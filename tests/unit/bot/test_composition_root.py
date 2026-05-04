@@ -11,6 +11,7 @@ import pytest
 from pydantic import SecretStr
 
 from pipirik_wars.bot.main import Container, build_container, main
+from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
 from pipirik_wars.infrastructure.db.services import (
     SqlAlchemyAuditLogger,
@@ -25,11 +26,13 @@ from pipirik_wars.infrastructure.settings import (
 )
 from tests.fakes import (
     FakeAuditLogger,
+    FakeBalanceConfig,
     FakeClock,
     FakeIdempotencyKey,
     FakeRandom,
     FakeUnitOfWork,
 )
+from tests.unit.domain.balance.factories import build_valid_balance
 
 
 def _test_settings() -> Settings:
@@ -48,6 +51,7 @@ class TestContainer:
             uow=FakeUnitOfWork(),
             idempotency=FakeIdempotencyKey(),
             audit=FakeAuditLogger(),
+            balance=FakeBalanceConfig(build_valid_balance()),
             settings=_test_settings(),
         )
         assert isinstance(c.clock, FakeClock)
@@ -55,6 +59,7 @@ class TestContainer:
         assert isinstance(c.uow, FakeUnitOfWork)
         assert isinstance(c.idempotency, FakeIdempotencyKey)
         assert isinstance(c.audit, FakeAuditLogger)
+        assert isinstance(c.balance, FakeBalanceConfig)
         assert c.settings.environment == "test"
 
     def test_container_is_frozen(self) -> None:
@@ -64,6 +69,7 @@ class TestContainer:
             uow=FakeUnitOfWork(),
             idempotency=FakeIdempotencyKey(),
             audit=FakeAuditLogger(),
+            balance=FakeBalanceConfig(build_valid_balance()),
             settings=_test_settings(),
         )
         with pytest.raises((AttributeError, TypeError)):
@@ -78,6 +84,7 @@ class TestBuildContainer:
         assert isinstance(c.uow, SqlAlchemyUnitOfWork)
         assert isinstance(c.idempotency, SqlAlchemyIdempotencyService)
         assert isinstance(c.audit, SqlAlchemyAuditLogger)
+        assert isinstance(c.balance, YamlBalanceLoader)
         assert c.settings.environment == "test"
 
 
