@@ -45,12 +45,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert len(heads) == 1, f"expected single head, got {heads}"
 
     def test_expected_revisions_exist(self) -> None:
-        """0001 и 0002 должны быть зарегистрированы."""
+        """0001, 0002 и 0003 должны быть зарегистрированы."""
         cfg = _alembic_config("sqlite:///:memory:")
         script = ScriptDirectory.from_config(cfg)
         revisions = {rev.revision for rev in script.walk_revisions()}
         assert "0001_initial" in revisions
         assert "0002_player_clan" in revisions
+        assert "0003_signup_queue" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -59,12 +60,20 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0002 is not None
         assert rev_0002.down_revision == "0001_initial"
 
+    def test_0003_descends_from_0002(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0003 = script.get_revision("0003_signup_queue")
+        assert rev_0003 is not None
+        assert rev_0003.down_revision == "0002_player_clan"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
         assert files == [
             "20260504_0001_initial_security_schema.py",
             "20260504_0002_player_clan_schema.py",
+            "20260504_0003_signup_queue.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -95,7 +104,7 @@ class TestAlembicMigrationsApplyCleanly:
         finally:
             engine.dispose()
 
-        # Sprint 0.2 + 1.1 таблицы.
+        # Sprint 0.2 + 1.1 + 1.2.C таблицы.
         expected = {
             "alembic_version",
             "idempotency_keys",
@@ -105,6 +114,7 @@ class TestAlembicMigrationsApplyCleanly:
             "users",
             "clans",
             "clan_members",
+            "signup_queue",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 

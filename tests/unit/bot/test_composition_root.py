@@ -23,10 +23,12 @@ from pipirik_wars.application.clan import (
 )
 from pipirik_wars.application.dau import GetDauStats, SetMaxDau
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
+from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.bot.main import Container, build_container, build_dispatcher
 from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.player import IPlayerRepository
+from pipirik_wars.domain.signup_queue import ISignupQueueRepository
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
 from pipirik_wars.infrastructure.dau import InMemoryDauCounter, InMemoryDauLimit
@@ -35,6 +37,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
     SqlAlchemyPlayerRepository,
+    SqlAlchemySignupQueueRepository,
 )
 from pipirik_wars.infrastructure.db.services import (
     SqlAlchemyAuditLogger,
@@ -62,6 +65,7 @@ from tests.fakes import (
     FakeIdempotencyKey,
     FakePlayerRepository,
     FakeRandom,
+    FakeSignupQueueRepository,
     FakeUnitOfWork,
 )
 from tests.unit.domain.balance.factories import build_valid_balance
@@ -89,6 +93,7 @@ def _container_with_fakes() -> Container:
     clans: IClanRepository = FakeClanRepository()
     members: IClanMembershipRepository = FakeClanMembershipRepository()
     admins: IAdminRepository = FakeAdminRepository()
+    signup_queue: ISignupQueueRepository = FakeSignupQueueRepository()
     balance = FakeBalanceConfig(build_valid_balance())
     dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=200)
@@ -106,9 +111,13 @@ def _container_with_fakes() -> Container:
         clans=clans,
         clan_members=members,
         admins=admins,
+        signup_queue=signup_queue,
         register_player=RegisterPlayer(
             uow=uow,
             players=players,
+            signup_queue=signup_queue,
+            dau_counter=dau_counter,
+            dau_limit=dau_limit,
             audit=audit,
             clock=clock,
         ),
@@ -161,6 +170,15 @@ def _container_with_fakes() -> Container:
             audit=audit,
             clock=clock,
         ),
+        promote_from_queue=PromoteFromQueue(
+            uow=uow,
+            players=players,
+            signup_queue=signup_queue,
+            dau_counter=dau_counter,
+            dau_limit=dau_limit,
+            audit=audit,
+            clock=clock,
+        ),
     )
 
 
@@ -191,6 +209,9 @@ class TestContainer:
         assert isinstance(c.dau_limit, InMemoryDauLimit)
         assert isinstance(c.get_dau_stats, GetDauStats)
         assert isinstance(c.set_max_dau, SetMaxDau)
+        # Signup queue + promote (Спринт 1.2.C).
+        assert isinstance(c.signup_queue, FakeSignupQueueRepository)
+        assert isinstance(c.promote_from_queue, PromoteFromQueue)
 
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
@@ -224,6 +245,9 @@ class TestBuildContainer:
         assert isinstance(c.dau_limit, InMemoryDauLimit)
         assert isinstance(c.get_dau_stats, GetDauStats)
         assert isinstance(c.set_max_dau, SetMaxDau)
+        # Signup queue + promote (Спринт 1.2.C).
+        assert isinstance(c.signup_queue, SqlAlchemySignupQueueRepository)
+        assert isinstance(c.promote_from_queue, PromoteFromQueue)
 
 
 class TestBuildDispatcher:
@@ -258,3 +282,5 @@ class TestBuildDispatcher:
         assert dp["reload_balance"] is c.reload_balance
         assert dp["get_dau_stats"] is c.get_dau_stats
         assert dp["set_max_dau"] is c.set_max_dau
+        assert dp["signup_queue"] is c.signup_queue
+        assert dp["promote_from_queue"] is c.promote_from_queue

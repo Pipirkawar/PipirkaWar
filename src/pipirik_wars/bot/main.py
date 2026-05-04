@@ -42,6 +42,7 @@ from pipirik_wars.application.clan import (
 )
 from pipirik_wars.application.dau import GetDauStats, SetMaxDau
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
+from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import register_middlewares
 from pipirik_wars.domain.admin import IAdminRepository
@@ -56,6 +57,7 @@ from pipirik_wars.domain.shared.ports import (
     IRandom,
     IUnitOfWork,
 )
+from pipirik_wars.domain.signup_queue import ISignupQueueRepository
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
 from pipirik_wars.infrastructure.dau import InMemoryDauCounter, InMemoryDauLimit
@@ -65,6 +67,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
     SqlAlchemyPlayerRepository,
+    SqlAlchemySignupQueueRepository,
 )
 from pipirik_wars.infrastructure.db.services import (
     SqlAlchemyAuditLogger,
@@ -98,17 +101,18 @@ class Container:
     rate_limiter: IRateLimiter
     settings: Settings
 
-    # Репозитории (Спринт 1.1.D + 1.1.E)
+    # Репозитории (Спринт 1.1.D + 1.1.E + 1.2.C)
     players: IPlayerRepository
     clans: IClanRepository
     clan_members: IClanMembershipRepository
     admins: IAdminRepository
+    signup_queue: ISignupQueueRepository
 
     # DAU Gate (Спринт 1.2.B)
     dau_counter: IDauCounter
     dau_limit: IDauLimit
 
-    # Use-case-ы (Спринт 1.1.D + 1.1.E + 1.2.B)
+    # Use-case-ы (Спринт 1.1.D + 1.1.E + 1.2.B + 1.2.C)
     register_player: RegisterPlayer
     register_clan: RegisterClan
     migrate_clan: MigrateClanChatId
@@ -118,6 +122,7 @@ class Container:
     reload_balance: ReloadBalance
     get_dau_stats: GetDauStats
     set_max_dau: SetMaxDau
+    promote_from_queue: PromoteFromQueue
 
 
 def build_container(
@@ -154,9 +159,15 @@ def build_container(
     clans = SqlAlchemyClanRepository(uow=uow)
     clan_members = SqlAlchemyClanMembershipRepository(uow=uow)
     admins = SqlAlchemyAdminRepository(uow=uow)
+    signup_queue = SqlAlchemySignupQueueRepository(uow=uow)
+    dau_counter = InMemoryDauCounter(clock=clock)
+    dau_limit = InMemoryDauLimit(initial=settings.bot.max_dau)
     register_player = RegisterPlayer(
         uow=uow,
         players=players,
+        signup_queue=signup_queue,
+        dau_counter=dau_counter,
+        dau_limit=dau_limit,
         audit=audit,
         clock=clock,
     )
@@ -199,13 +210,20 @@ def build_container(
         audit=audit,
         clock=clock,
     )
-    dau_counter = InMemoryDauCounter(clock=clock)
-    dau_limit = InMemoryDauLimit(initial=settings.bot.max_dau)
     get_dau_stats = GetDauStats(counter=dau_counter, limit=dau_limit)
     set_max_dau = SetMaxDau(
         uow=uow,
         admins=admins,
         limit=dau_limit,
+        audit=audit,
+        clock=clock,
+    )
+    promote_from_queue = PromoteFromQueue(
+        uow=uow,
+        players=players,
+        signup_queue=signup_queue,
+        dau_counter=dau_counter,
+        dau_limit=dau_limit,
         audit=audit,
         clock=clock,
     )
@@ -223,6 +241,7 @@ def build_container(
         clans=clans,
         clan_members=clan_members,
         admins=admins,
+        signup_queue=signup_queue,
         dau_counter=dau_counter,
         dau_limit=dau_limit,
         register_player=register_player,
@@ -234,6 +253,7 @@ def build_container(
         reload_balance=reload_balance,
         get_dau_stats=get_dau_stats,
         set_max_dau=set_max_dau,
+        promote_from_queue=promote_from_queue,
     )
 
 
@@ -256,6 +276,8 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["reload_balance"] = container.reload_balance
     dispatcher["get_dau_stats"] = container.get_dau_stats
     dispatcher["set_max_dau"] = container.set_max_dau
+    dispatcher["signup_queue"] = container.signup_queue
+    dispatcher["promote_from_queue"] = container.promote_from_queue
     return dispatcher
 
 

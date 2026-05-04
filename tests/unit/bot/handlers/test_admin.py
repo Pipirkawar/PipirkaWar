@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
@@ -32,6 +33,10 @@ from pipirik_wars.application.dau import (
     SetMaxDau,
     SetMaxDauResult,
 )
+from pipirik_wars.application.signup_queue import (
+    PromoteFromQueue,
+    PromoteFromQueueResult,
+)
 from pipirik_wars.bot.handlers.admin import (
     REPLY_DAU_FORBIDDEN_RU,
     REPLY_FORBIDDEN_RU,
@@ -43,7 +48,10 @@ from pipirik_wars.bot.handlers.admin import (
     handle_set_max_dau,
 )
 from pipirik_wars.bot.middlewares.auth import TgIdentity
+from pipirik_wars.domain.player import Player
+from pipirik_wars.domain.signup_queue import ISignupQueueRepository, SignupQueueEntry
 from pipirik_wars.shared.errors import ConfigError
+from tests.fakes import FakeSignupQueueRepository
 
 
 def _build_message_mock(chat_type: str = "private") -> MagicMock:
@@ -189,16 +197,35 @@ def _set_max_stub(
     return use_case
 
 
+def _make_promoted(count: int) -> tuple[Player, ...]:
+    now = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
+    return tuple(Player.new(tg_id=1000 + i, username=None, now=now) for i in range(count))
+
+
+def _promote_stub(*, promoted_count: int = 0) -> MagicMock:
+    use_case = MagicMock(spec=PromoteFromQueue)
+    use_case.execute = AsyncMock(
+        return_value=PromoteFromQueueResult(
+            promoted=_make_promoted(promoted_count),
+            skipped_already_registered=(),
+            available_slots=promoted_count,
+        ),
+    )
+    return use_case
+
+
 @pytest.mark.asyncio
 class TestHandleAdminStats:
     async def test_replies_with_current_and_max(self) -> None:
         msg = _build_message_mock("private")
         get_stats = _stats_stub(current=42, max_dau=200)
+        queue = FakeSignupQueueRepository()
 
         await handle_admin_stats(
             cast(Message, msg),
             _identity("private"),
             cast(GetDauStats, get_stats),
+            cast(ISignupQueueRepository, queue),
         )
 
         get_stats.execute.assert_awaited_once_with()
@@ -206,15 +233,18 @@ class TestHandleAdminStats:
         assert "42" in sent
         assert "200" in sent
         assert "21%" in sent
+        assert "Очередь регистраций: 0" in sent
 
     async def test_at_capacity_renders_100_percent(self) -> None:
         msg = _build_message_mock("private")
         get_stats = _stats_stub(current=200, max_dau=200)
+        queue = FakeSignupQueueRepository()
 
         await handle_admin_stats(
             cast(Message, msg),
             _identity("private"),
             cast(GetDauStats, get_stats),
+            cast(ISignupQueueRepository, queue),
         )
 
         sent = msg.answer.await_args.args[0]
@@ -223,24 +253,55 @@ class TestHandleAdminStats:
     async def test_zero_dau_renders_0_percent(self) -> None:
         msg = _build_message_mock("private")
         get_stats = _stats_stub(current=0, max_dau=200)
+        queue = FakeSignupQueueRepository()
 
         await handle_admin_stats(
             cast(Message, msg),
             _identity("private"),
             cast(GetDauStats, get_stats),
+            cast(ISignupQueueRepository, queue),
         )
 
         sent = msg.answer.await_args.args[0]
         assert "0%" in sent
 
+    async def test_renders_actual_queue_size(self) -> None:
+        msg = _build_message_mock("private")
+        get_stats = _stats_stub(current=200, max_dau=200)
+        queue = FakeSignupQueueRepository()
+
+        for tg_id in (101, 102, 103):
+            await queue.enqueue(
+                entry=SignupQueueEntry(
+                    id=None,
+                    tg_id=tg_id,
+                    username=None,
+                    locale=None,
+                    position=0,
+                    enqueued_at=datetime(2026, 5, 4, 12, tg_id % 60, tzinfo=UTC),
+                ),
+            )
+
+        await handle_admin_stats(
+            cast(Message, msg),
+            _identity("private"),
+            cast(GetDauStats, get_stats),
+            cast(ISignupQueueRepository, queue),
+        )
+
+        sent = msg.answer.await_args.args[0]
+        assert "Очередь регистраций: 3" in sent
+
     async def test_group_chat_skips_use_case(self) -> None:
         msg = _build_message_mock("group")
         get_stats = _stats_stub(current=10, max_dau=200)
+        queue = FakeSignupQueueRepository()
 
         await handle_admin_stats(
             cast(Message, msg),
             _identity("group"),
             cast(GetDauStats, get_stats),
+            cast(ISignupQueueRepository, queue),
         )
 
         get_stats.execute.assert_not_awaited()
@@ -249,11 +310,13 @@ class TestHandleAdminStats:
     async def test_no_identity_skips_use_case(self) -> None:
         msg = _build_message_mock("private")
         get_stats = _stats_stub(current=10, max_dau=200)
+        queue = FakeSignupQueueRepository()
 
         await handle_admin_stats(
             cast(Message, msg),
             None,
             cast(GetDauStats, get_stats),
+            cast(ISignupQueueRepository, queue),
         )
 
         get_stats.execute.assert_not_awaited()
@@ -268,18 +331,63 @@ class TestHandleSetMaxDau:
         set_max = _set_max_stub(
             return_value=SetMaxDauResult(previous_max_dau=200, new_max_dau=1000),
         )
+        promote = _promote_stub(promoted_count=0)
 
         await handle_set_max_dau(
             cast(Message, msg),
             _identity("private", tg_user_id=42),
             cast(SetMaxDau, set_max),
+            cast(PromoteFromQueue, promote),
         )
 
         set_max.execute.assert_awaited_once_with(actor_tg_id=42, new_max_dau=1000)
+        promote.execute.assert_awaited_once_with()
         sent = msg.answer.await_args.args[0]
         assert "✅" in sent
         assert "200" in sent
         assert "1000" in sent
+        # Очередь была пуста — добавочной строки «↑ Из очереди поднято: ...» нет.
+        assert "поднято" not in sent
+
+    async def test_increase_promotes_from_queue_and_appends_count(self) -> None:
+        msg = _build_message_mock("private")
+        msg.text = "/set_max_dau 1000"
+        set_max = _set_max_stub(
+            return_value=SetMaxDauResult(previous_max_dau=200, new_max_dau=1000),
+        )
+        promote = _promote_stub(promoted_count=3)
+
+        await handle_set_max_dau(
+            cast(Message, msg),
+            _identity("private", tg_user_id=42),
+            cast(SetMaxDau, set_max),
+            cast(PromoteFromQueue, promote),
+        )
+
+        promote.execute.assert_awaited_once_with()
+        sent = msg.answer.await_args.args[0]
+        assert "поднято" in sent
+        assert "3" in sent
+
+    async def test_decrease_does_not_call_promote(self) -> None:
+        msg = _build_message_mock("private")
+        msg.text = "/set_max_dau 100"
+        set_max = _set_max_stub(
+            return_value=SetMaxDauResult(previous_max_dau=200, new_max_dau=100),
+        )
+        promote = _promote_stub()
+
+        await handle_set_max_dau(
+            cast(Message, msg),
+            _identity("private"),
+            cast(SetMaxDau, set_max),
+            cast(PromoteFromQueue, promote),
+        )
+
+        promote.execute.assert_not_awaited()
+        sent = msg.answer.await_args.args[0]
+        assert "✅" in sent
+        assert "поднято" not in sent
 
     async def test_no_change_replies_with_unchanged_marker(self) -> None:
         msg = _build_message_mock("private")
@@ -287,13 +395,16 @@ class TestHandleSetMaxDau:
         set_max = _set_max_stub(
             return_value=SetMaxDauResult(previous_max_dau=200, new_max_dau=200),
         )
+        promote = _promote_stub()
 
         await handle_set_max_dau(
             cast(Message, msg),
             _identity("private"),
             cast(SetMaxDau, set_max),
+            cast(PromoteFromQueue, promote),
         )
 
+        promote.execute.assert_not_awaited()
         sent = msg.answer.await_args.args[0]
         assert "200" in sent
         assert "✅" in sent
@@ -305,11 +416,13 @@ class TestHandleSetMaxDau:
         set_max = _set_max_stub(
             return_value=SetMaxDauResult(previous_max_dau=200, new_max_dau=500),
         )
+        promote = _promote_stub()
 
         await handle_set_max_dau(
             cast(Message, msg),
             _identity("private"),
             cast(SetMaxDau, set_max),
+            cast(PromoteFromQueue, promote),
         )
 
         set_max.execute.assert_awaited_once_with(actor_tg_id=42, new_max_dau=500)
@@ -318,25 +431,30 @@ class TestHandleSetMaxDau:
         msg = _build_message_mock("private")
         msg.text = "/set_max_dau"
         set_max = _set_max_stub()
+        promote = _promote_stub()
 
         await handle_set_max_dau(
             cast(Message, msg),
             _identity("private"),
             cast(SetMaxDau, set_max),
+            cast(PromoteFromQueue, promote),
         )
 
         set_max.execute.assert_not_awaited()
+        promote.execute.assert_not_awaited()
         msg.answer.assert_awaited_once_with(REPLY_SET_MAX_DAU_USAGE_RU)
 
     async def test_non_integer_argument_shows_usage(self) -> None:
         msg = _build_message_mock("private")
         msg.text = "/set_max_dau abc"
         set_max = _set_max_stub()
+        promote = _promote_stub()
 
         await handle_set_max_dau(
             cast(Message, msg),
             _identity("private"),
             cast(SetMaxDau, set_max),
+            cast(PromoteFromQueue, promote),
         )
 
         set_max.execute.assert_not_awaited()
@@ -346,11 +464,13 @@ class TestHandleSetMaxDau:
         msg = _build_message_mock("private")
         msg.text = "/set_max_dau 0"
         set_max = _set_max_stub()
+        promote = _promote_stub()
 
         await handle_set_max_dau(
             cast(Message, msg),
             _identity("private"),
             cast(SetMaxDau, set_max),
+            cast(PromoteFromQueue, promote),
         )
 
         set_max.execute.assert_not_awaited()
@@ -360,11 +480,13 @@ class TestHandleSetMaxDau:
         msg = _build_message_mock("private")
         msg.text = "/set_max_dau -1"
         set_max = _set_max_stub()
+        promote = _promote_stub()
 
         await handle_set_max_dau(
             cast(Message, msg),
             _identity("private"),
             cast(SetMaxDau, set_max),
+            cast(PromoteFromQueue, promote),
         )
 
         set_max.execute.assert_not_awaited()
@@ -379,39 +501,48 @@ class TestHandleSetMaxDau:
                 detail="actor tg_id=42 cannot change MAX_DAU",
             ),
         )
+        promote = _promote_stub()
 
         await handle_set_max_dau(
             cast(Message, msg),
             _identity("private"),
             cast(SetMaxDau, set_max),
+            cast(PromoteFromQueue, promote),
         )
 
+        promote.execute.assert_not_awaited()
         msg.answer.assert_awaited_once_with(REPLY_DAU_FORBIDDEN_RU)
 
     async def test_group_chat_skips_use_case(self) -> None:
         msg = _build_message_mock("group")
         msg.text = "/set_max_dau 1000"
         set_max = _set_max_stub()
+        promote = _promote_stub()
 
         await handle_set_max_dau(
             cast(Message, msg),
             _identity("group"),
             cast(SetMaxDau, set_max),
+            cast(PromoteFromQueue, promote),
         )
 
         set_max.execute.assert_not_awaited()
+        promote.execute.assert_not_awaited()
         msg.answer.assert_awaited_once_with(REPLY_NON_PRIVATE_RU)
 
     async def test_no_identity_skips_use_case(self) -> None:
         msg = _build_message_mock("private")
         msg.text = "/set_max_dau 1000"
         set_max = _set_max_stub()
+        promote = _promote_stub()
 
         await handle_set_max_dau(
             cast(Message, msg),
             None,
             cast(SetMaxDau, set_max),
+            cast(PromoteFromQueue, promote),
         )
 
         set_max.execute.assert_not_awaited()
+        promote.execute.assert_not_awaited()
         msg.answer.assert_awaited_once_with(REPLY_NON_PRIVATE_RU)
