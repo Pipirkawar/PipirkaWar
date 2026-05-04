@@ -4,6 +4,7 @@ from pipirik_wars.domain.player.entities import Player, PlayerStatus
 from pipirik_wars.domain.player.errors import (
     PlayerAlreadyRegisteredError,
     PlayerFrozenError,
+    PlayerNotFoundError,
 )
 from pipirik_wars.domain.player.repositories import IPlayerRepository
 from pipirik_wars.domain.player.value_objects import (
@@ -23,6 +24,7 @@ __all__ = [
     "PlayerAlreadyRegisteredError",
     "PlayerFrozenError",
     "PlayerName",
+    "PlayerNotFoundError",
     "PlayerStatus",
     "Thickness",
     "Title",

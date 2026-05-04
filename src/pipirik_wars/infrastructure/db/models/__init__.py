@@ -10,10 +10,17 @@
 - `UserORM` — таблица `users`.
 - `ClanORM` — таблица `clans`.
 - `ClanMemberORM` — таблица `clan_members`.
+
+Регистрация (Спринт 1.2):
+- `SignupQueueORM` — таблица `signup_queue`.
+
+Лес (Спринт 1.3):
+- `ForestRunORM` — таблица `forest_runs`.
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
 from pipirik_wars.infrastructure.db.models.clan import ClanMemberORM, ClanORM
+from pipirik_wars.infrastructure.db.models.forest import ForestRunORM
 from pipirik_wars.infrastructure.db.models.player import UserORM
 from pipirik_wars.infrastructure.db.models.security import (
     ActivityLockORM,
@@ -28,6 +35,7 @@ __all__ = [
     "AuditLogORM",
     "ClanMemberORM",
     "ClanORM",
+    "ForestRunORM",
     "IdempotencyKeyORM",
     "SignupQueueORM",
     "UserORM",
