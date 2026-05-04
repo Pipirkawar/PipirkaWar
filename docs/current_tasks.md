@@ -23,8 +23,8 @@
 | PR | Содержимое | Статус | Задачи из `development_plan.md` §3 |
 |---|---|---|---|
 | **1.1.A** | Domain layer: `domain/player/` (`Player`, `Length`, `Thickness`, `Title`, `PlayerName`, `DisplayName`, `Username`, `IPlayerRepository`, ошибки) + `domain/clan/` (`Clan`, `ClanMember`, `ChatKind`, `ClanStatus`, `ClanTitle`, `IClanRepository`, `IClanMembershipRepository`, ошибки) | ✅ смержено (PR #8) | 1.1.7 (DisplayName VO), доменная половина 1.1.3/1.1.4/1.1.5/1.1.6/1.1.10 |
-| **1.1.B** | `infrastructure/db/migrations/`: alembic-миграция `users`, `clans`, `clan_members` + ORM-модели + `SqlAlchemy{Player,Clan,ClanMembership}Repository` + миграционный smoke-тест | 🟢 в работе | 1.1.2 |
-| **1.1.C** | `bot/main.py` + `bot/middlewares/`: aiogram 3.x dispatcher, middleware (auth/locale/throttle/error_handler), `/start` stub | ⚪ ожидает 1.1.B | 1.1.1 |
+| **1.1.B** | `infrastructure/db/migrations/`: alembic-миграция `users`, `clans`, `clan_members` + ORM-модели + `SqlAlchemy{Player,Clan,ClanMembership}Repository` + миграционный smoke-тест | ✅ смержено (PR #9) | 1.1.2 |
+| **1.1.C** | `bot/main.py` + `bot/middlewares/`: aiogram 3.x dispatcher, middleware (auth/locale/throttle/error_handler), `/start` stub | 🟢 в работе | 1.1.1 |
 | **1.1.D** | `application/use_cases/`: `RegisterPlayer` (только ЛС), `RegisterClan` (только `my_chat_member`), `JoinClan`, `FreezeClan` + handlers `bot/handlers/registration.py` + audit/UoW обёртки | ⚪ ожидает 1.1.A/B/C | 1.1.3, 1.1.4, 1.1.5, 1.1.6, 1.1.10 |
 | **1.1.E** | `bot/presenters/profile.py` + handler `/profile` + админ-команда `/balance_reload` (live-reload `IBalanceConfig`) | ⚪ ожидает 1.1.A/B/C/D | 1.1.8, 1.1.9 |
 

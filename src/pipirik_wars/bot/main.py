@@ -9,15 +9,23 @@
 (`SqlAlchemyUnitOfWork`, `RealClock`, `RealRandom`,
 `SqlAlchemyIdempotencyService`, `SqlAlchemyAuditLogger`).
 Спринт 0.2.10: добавлен `YamlBalanceLoader` (порт `IBalanceConfig`).
-`main()` остаётся placeholder-ом — entry point появится в Спринте 1.1
-(aiogram Dispatcher + handlers).
+Спринт 1.1.C: добавлен `InMemoryTokenBucketRateLimiter` (порт
+`IRateLimiter`) — нужен `ThrottleMiddleware`. `build_dispatcher()`
+собирает aiogram `Dispatcher` со стеком middleware-ов и роутерами;
+`run()` — реальный entry point поллинга.
 """
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 
+from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+
+from pipirik_wars.bot.handlers import register_routers
+from pipirik_wars.bot.middlewares import register_middlewares
 from pipirik_wars.domain.balance import IBalanceConfig
 from pipirik_wars.domain.shared.ports import (
     IAuditLogger,
@@ -35,6 +43,10 @@ from pipirik_wars.infrastructure.db.services import (
 )
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from pipirik_wars.infrastructure.random import RealRandom
+from pipirik_wars.infrastructure.rate_limit import (
+    InMemoryTokenBucketRateLimiter,
+    IRateLimiter,
+)
 from pipirik_wars.infrastructure.settings import Settings
 
 # Путь к балансовому файлу по умолчанию (относительно cwd процесса).
@@ -58,6 +70,7 @@ class Container:
     idempotency: IIdempotencyKey
     audit: IAuditLogger
     balance: IBalanceConfig
+    rate_limiter: IRateLimiter
     settings: Settings
 
 
@@ -83,26 +96,63 @@ def build_container(
     session_maker = build_sessionmaker(engine)
     uow = SqlAlchemyUnitOfWork(session_maker)
     balance = YamlBalanceLoader(balance_yaml_path or _DEFAULT_BALANCE_YAML)
+    clock = RealClock()
+    rate_limiter = InMemoryTokenBucketRateLimiter(
+        capacity=settings.bot.default_throttle_capacity,
+        refill_per_second=settings.bot.default_throttle_per_second,
+        clock=clock,
+    )
     return Container(
-        clock=RealClock(),
+        clock=clock,
         random=RealRandom(),
         uow=uow,
         idempotency=SqlAlchemyIdempotencyService(uow=uow),
         audit=SqlAlchemyAuditLogger(uow=uow),
         balance=balance,
+        rate_limiter=rate_limiter,
         settings=settings,
     )
 
 
-def main() -> None:
-    """Entry point. Будет реализован в Спринте 1.1.
+def build_dispatcher(container: Container) -> Dispatcher:
+    """Собрать aiogram `Dispatcher` со стеком middleware-ов и роутерами.
 
-    Сейчас — placeholder, чтобы `python -m pipirik_wars.bot.main` не
-    делал ничего «случайно».
+    Вынесено в отдельную функцию (а не «всё в `run()`»), чтобы тесты
+    могли проверить факт регистрации middleware-ов и handler-ов на
+    том же объекте, который пойдёт в production.
     """
-    raise NotImplementedError(
-        "main() появится в Спринте 1.1 (регистрация и БД). См. development_plan.md → Спринт 1.1.",
+    dispatcher = Dispatcher()
+    register_middlewares(dispatcher, limiter=container.rate_limiter)
+    register_routers(dispatcher)
+    return dispatcher
+
+
+async def run(
+    settings: Settings | None = None,
+    *,
+    balance_yaml_path: Path | None = None,
+) -> None:
+    """Точка входа production-поллинга.
+
+    Создаёт `Bot` (HTML parse_mode по умолчанию), `Dispatcher` со всем
+    стеком middleware-ов и роутерами, запускает long-polling. Завершается
+    корректно через `await bot.session.close()`.
+    """
+    container = build_container(settings, balance_yaml_path=balance_yaml_path)
+    bot = Bot(
+        token=container.settings.bot.token.get_secret_value(),
+        default=DefaultBotProperties(parse_mode="HTML"),
     )
+    dispatcher = build_dispatcher(container)
+    try:
+        await dispatcher.start_polling(bot)
+    finally:
+        await bot.session.close()
+
+
+def main() -> None:  # pragma: no cover
+    """Sync wrapper над `run()`. Используется как ``python -m``-entry."""
+    asyncio.run(run())
 
 
 if __name__ == "__main__":  # pragma: no cover

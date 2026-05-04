@@ -7,6 +7,7 @@ from pydantic import SecretStr, ValidationError
 
 from pipirik_wars.infrastructure.settings import (
     BootstrapSettings,
+    BotSettings,
     DatabaseSettings,
     Settings,
 )
@@ -54,13 +55,43 @@ class TestBootstrapSettings:
             BootstrapSettings(admin_ids="abc,def")  # type: ignore[arg-type]
 
 
+class TestBotSettings:
+    def test_default_token_is_placeholder(self) -> None:
+        s = BotSettings()
+        assert "placeholder" in s.token.get_secret_value()
+
+    def test_token_kept_secret(self) -> None:
+        s = BotSettings(token=SecretStr("123:ABCDEFsecret"))
+        assert "ABCDEFsecret" not in repr(s)
+
+    def test_throttle_validation_per_second_must_be_positive(self) -> None:
+        with pytest.raises(ValidationError):
+            BotSettings(default_throttle_per_second=0)
+
+    def test_throttle_validation_capacity_must_be_positive(self) -> None:
+        with pytest.raises(ValidationError):
+            BotSettings(default_throttle_capacity=0)
+
+    def test_explicit_values(self) -> None:
+        s = BotSettings(
+            token=SecretStr("123:tok"),
+            default_throttle_per_second=2.5,
+            default_throttle_capacity=4,
+        )
+        assert s.token.get_secret_value() == "123:tok"
+        assert s.default_throttle_per_second == 2.5
+        assert s.default_throttle_capacity == 4
+
+
 class TestSettings:
     def test_compose(self) -> None:
         s = Settings(
             environment="dev",
             db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+            bot=BotSettings(token=SecretStr("test-token")),
             bootstrap=BootstrapSettings(admin_ids=(42,)),
         )
         assert s.environment == "dev"
         assert s.db.url.get_secret_value() == "sqlite+aiosqlite:///:memory:"
+        assert s.bot.token.get_secret_value() == "test-token"
         assert s.bootstrap.admin_ids == (42,)
