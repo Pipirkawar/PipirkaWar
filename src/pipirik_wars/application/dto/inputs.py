@@ -143,3 +143,26 @@ class ApplyForestNameDropInput(_StrictBase):
 
     run_id: int = Field(gt=0, description="forest_runs.id")
     tg_id: PositiveTgId = Field(gt=0, description="Telegram user_id игрока")
+
+
+class UpgradeThicknessInput(_StrictBase):
+    """Прокачка уровня толщины (Спринт 1.4.A, ГДД §3.2).
+
+    Use-case `UpgradeThickness` сам считает стоимость по
+    `balance.yaml::thickness.cost_*`, делает проверку правила 20 см
+    через `progression.require_spend(THICKNESS_UPGRADE)` и поднимает
+    `player.thickness` на 1.
+
+    `expected_cost_cm` — опциональный «контракт» от UI: если он отличается
+    от свежепосчитанной стоимости, use-case бросает `ConcurrencyError`.
+    Это защита от ситуации «balance.yaml перегружен между показом
+    подтверждения и нажатием Подтвердить» (см. Спринт 1.4.B при горячей
+    перезагрузке баланса). `None` — пропустить проверку.
+    """
+
+    tg_id: PositiveTgId = Field(gt=0, description="Telegram user_id игрока")
+    expected_cost_cm: int | None = Field(
+        default=None,
+        gt=0,
+        description="Стоимость, которую UI показал пользователю; для защиты от race",
+    )
