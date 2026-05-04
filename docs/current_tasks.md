@@ -16,9 +16,24 @@
 
 ---
 
-## 🟢 В работе — Спринт 1.1 (Регистрация игрока и клана)
+## 🟢 В работе — Спринт 1.2 (Правило 20 см и DAU Gate)
 
-Спринт разрезан на серию небольших PR-ов вместо одного «недельного» — каждый PR ~250–500 LoC и ревьюится за 10–15 минут.
+Спринт разрезан на 4 PR-а в ту же логику, что и 1.1: маленькие, каждый ~150–500 LoC, без архитектурных слияний.
+
+| PR | Содержимое | Статус | Задачи из `development_plan.md` §3 |
+|---|---|---|---|
+| **1.2.A** | Domain-сервис `progression.can_spend(length_cm, cost_cm)` + `require_spend(...)` (бросает `InsufficientLengthError`) + константа `MIN_LENGTH_AFTER_SPEND_CM=20` (ГДД §3.1) | 🟢 в работе | 1.2.1 |
+| **1.2.B** | Domain-`Settings.MAX_DAU` (динамическая) + in-memory `DauCounter` (с ежедневным сбросом) + handler `/admin_stats` + admin-command `/set_max_dau N` + аудит | ⚪ ожидает 1.2.A | 1.2.3, 1.2.6 |
+| **1.2.C** | Миграция `signup_queue` + ветка очереди в `RegisterPlayer` (когда DAU == MAX) + APScheduler-job для авто-разблокировки + сообщение «серверы переполнены» | ⚪ ожидает 1.2.B | 1.2.4, 1.2.5 |
+| **1.2.D** | Уведомление админу при достижении 80 % от `MAX_DAU` (через AuditLogger или structlog алёрт; срабатывает один раз в сутки) | ⚪ ожидает 1.2.B | 1.2.7 |
+
+> **Заметка по 1.2.2:** `ActivityLock` уже доделан в Спринте 0.2.1 (см. таблицу ниже) — `IActivityLockRepository` + `ActivityLockService` + тест двойного захвата зелёный. В Спринте 1.2 отдельной задачи под него нет; реальное «двойной /forest не проходит» появится в 1.3.9, когда у нас будет /forest handler.
+
+---
+
+## ✅ Завершено (Спринт 1.1 — Регистрация игрока и клана)
+
+5 PR-ов смержено, спринт закрыт. См. [history.md](history.md) (записи 1.1.A → 1.1.E).
 
 | PR | Содержимое | Статус | Задачи из `development_plan.md` §3 |
 |---|---|---|---|
@@ -26,7 +41,7 @@
 | **1.1.B** | `infrastructure/db/migrations/`: alembic-миграция `users`, `clans`, `clan_members` + ORM-модели + `SqlAlchemy{Player,Clan,ClanMembership}Repository` + миграционный smoke-тест | ✅ смержено (PR #9) | 1.1.2 |
 | **1.1.C** | `bot/main.py` + `bot/middlewares/`: aiogram 3.x dispatcher, middleware (auth/locale/throttle/error_handler), `/start` stub | ✅ смержено (PR #10) | 1.1.1 |
 | **1.1.D** | `application/{player,clan}/`: `RegisterPlayer` (только ЛС), `RegisterClan`/`MigrateClanChatId`/`FreezeClan` (только `my_chat_member`/`migrate_to`), `JoinClan` (только `chat_member`) + handlers `bot/handlers/registration.py` + audit/UoW обёртки + workflow-data DI | ✅ смержено (PR #11) | 1.1.3, 1.1.4, 1.1.5, 1.1.6, 1.1.10 |
-| **1.1.E** | `bot/presenters/profile.py` + handler `/profile` + админ-команда `/balance_reload` (live-reload `IBalanceConfig`/`IBalanceReloader`, аудит `BALANCE_RELOAD`) | 🟢 в работе | 1.1.8, 1.1.9 |
+| **1.1.E** | `bot/presenters/profile.py` + handler `/profile` + админ-команда `/balance_reload` (live-reload `IBalanceConfig`/`IBalanceReloader`, аудит `BALANCE_RELOAD`) | ✅ смержено (PR #12) | 1.1.8, 1.1.9 |
 
 ---
 
