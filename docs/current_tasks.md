@@ -22,18 +22,20 @@ _Пока пусто — выберите задачу из «🟡 Готово 
 
 ---
 
-## 🟡 Готово к старту (Спринт 0.1 — Каркас clean architecture)
+## ✅ Завершено (Спринт 0.1 — Каркас clean architecture)
 
-| ID | Приоритет | Задача | Критерий приёмки | Оценка |
-|---|---|---|---|---|
-| 0.1.1 | P0 | Структура папок `domain/application/infrastructure/bot/admin/shared/tests/config/ops` | Все директории созданы, в каждой `__init__.py` (или `README.md`) с docstring о слое | 0.5 д |
-| 0.1.2 | P0 | Контракт «слоёв» через `import-linter` | CI падает при попытке импорта `domain → infrastructure` или `application → bot` | 0.5 д |
-| 0.1.3 | P0 | Базовые абстракции в `domain/shared/`: `IClock`, `IRandom`, `IUnitOfWork`, `IIdempotencyKey`, `IAuditLogger` | Покрытие unit-тестами через fakes (детерминированные) | 0.5 д |
-| 0.1.4 | P0 | Composition root в `bot/main.py` (DI-контейнер `dependency-injector` или ручной) | Один центральный сборщик зависимостей; нет сервис-локатора | 0.5 д |
-| 0.1.5 | P0 | `pyproject.toml` (PEP 621): `python>=3.11`, `aiogram^3`, `sqlalchemy[asyncio]^2`, `alembic`, `pydantic-settings`, `apscheduler`, `fluent-runtime`, `structlog`, dev: `ruff`, `mypy`, `pytest`, `pytest-asyncio`, `pytest-cov`, `pip-audit`, `pre-commit`, `import-linter` | `uv sync` или `pip install -e .[dev]` отрабатывает |  0.5 д |
-| 0.1.6 | P0 | `pre-commit-config.yaml` (`ruff`, `ruff-format`, `mypy`, `import-linter`) | `pre-commit run --all-files` зелёный на пустом проекте | 0.25 д |
-| 0.1.7 | P0 | GitHub Actions workflow: матрица Python 3.11/3.12, кэш pip, артефакты тестов, `pip-audit` | CI зелёный на пустом репозитории | 0.5 д |
-| 0.1.8 | P1 | `Makefile`: `make install`, `make ci`, `make test`, `make lint`, `make migrate`, `make run` | Все таргеты работают локально | 0.25 д |
+PR #3 (см. [history.md → 2026-05-04 — Спринт 0.1](history.md)). Все 8 задач закрыты, локальный `make ci` зелёный, GitHub Actions матрица 3.11/3.12 проходит на пустом репо.
+
+| ID | Задача | Статус |
+|---|---|---|
+| 0.1.1 | Структура папок (`domain/application/infrastructure/bot/admin/shared`, `tests/{unit,integration,e2e,fakes}`) | ✅ |
+| 0.1.2 | `.importlinter`: 3 контракта (layered_architecture, domain-purity, application-purity) | ✅ |
+| 0.1.3 | Доменные порты `IClock / IRandom / IUnitOfWork / IIdempotencyKey / IAuditLogger` + fakes + 49 unit-тестов | ✅ |
+| 0.1.4 | Composition root `bot/main.py:Container` (frozen dataclass, без сервис-локатора) | ✅ |
+| 0.1.5 | `pyproject.toml`: ruff / mypy --strict / pytest 9 / pytest-asyncio 1.3 / pytest-cov / pip-audit / pre-commit / import-linter | ✅ |
+| 0.1.6 | `.pre-commit-config.yaml`: standard hooks + ruff + ruff-format + mypy + import-linter (`local`) | ✅ |
+| 0.1.7 | `.github/workflows/ci.yml`: матрица 3.11/3.12, отдельный job `audit` (pip-audit) | ✅ |
+| 0.1.8 | `Makefile`: install / install-dev / lint / format / typecheck / imports / test / cov / audit / pre-commit / ci / clean | ✅ |
 
 ---
 

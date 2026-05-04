@@ -1,0 +1,68 @@
+[importlinter]
+root_packages =
+    pipirik_wars
+include_external_packages = True
+
+# -----------------------------------------------------------------------------
+# Контракт «слои» (layered architecture).
+#
+# Правило (одно направление зависимостей; любое нарушение → CI падает):
+#
+#   bot, admin   ──►  application  ──►  domain
+#                          ▲
+#                          │
+#                  infrastructure (адаптеры портов)
+#
+# • domain      — чистая модель и порты (интерфейсы); зависит ТОЛЬКО от
+#                 stdlib. Никаких aiogram/sqlalchemy/asyncpg/pydantic.
+# • application — use-cases, оркестрация; зависит от domain. Не знает
+#                 ни про БД, ни про Telegram. Может зависеть от pydantic
+#                 (DTO) — но не от инфраструктуры.
+# • infrastructure — реализации портов (БД, телега, кэш, шедулер).
+#                 Зависит от domain и application (их интерфейсов).
+# • bot, admin  — точки входа (composition root + handlers/routes).
+#                 Знают про всё, но сами не должны быть импортированы
+#                 ни одним другим слоем.
+# • shared      — общие контракты (errors, types). Может импортироваться
+#                 из любого слоя.
+# -----------------------------------------------------------------------------
+
+[importlinter:contract:layers]
+name = layered_architecture
+type = layers
+layers =
+    pipirik_wars.bot | pipirik_wars.admin
+    pipirik_wars.infrastructure
+    pipirik_wars.application
+    pipirik_wars.domain
+    pipirik_wars.shared
+
+[importlinter:contract:domain-purity]
+name = domain_must_not_import_infrastructure
+type = forbidden
+source_modules =
+    pipirik_wars.domain
+forbidden_modules =
+    pipirik_wars.infrastructure
+    pipirik_wars.bot
+    pipirik_wars.admin
+    aiogram
+    sqlalchemy
+    asyncpg
+    httpx
+ignore_imports =
+
+[importlinter:contract:application-purity]
+name = application_must_not_import_io_libs
+type = forbidden
+source_modules =
+    pipirik_wars.application
+forbidden_modules =
+    pipirik_wars.infrastructure
+    pipirik_wars.bot
+    pipirik_wars.admin
+    aiogram
+    sqlalchemy
+    asyncpg
+    httpx
+ignore_imports =
