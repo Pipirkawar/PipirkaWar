@@ -3,14 +3,16 @@
 Структура:
 - `Settings` — корень, агрегирует под-секции.
 - `DatabaseSettings` — подключение к Postgres.
+- `BotSettings` — токен и параметры throttle-а для aiogram-бота.
 - `BootstrapSettings` — `BOOTSTRAP_ADMIN_IDS` для одноразового
   bootstrap первого `super_admin`-а (ГДД §18.6.4).
 """
 
 from pipirik_wars.infrastructure.settings.settings import (
     BootstrapSettings,
+    BotSettings,
     DatabaseSettings,
     Settings,
 )
 
-__all__ = ["BootstrapSettings", "DatabaseSettings", "Settings"]
+__all__ = ["BootstrapSettings", "BotSettings", "DatabaseSettings", "Settings"]
