@@ -78,7 +78,6 @@ class TestUpgradeCallbackDataRoundTrip:
         [("confirm", 1_000), ("confirm", 100_000), ("cancel", 0)],
     )
     def test_round_trip(self, action: str, expected_cost: int) -> None:
-        # type: ignore[arg-type]
         if action == "confirm":
             raw = upgrade_callback_data("confirm", expected_cost)
         else:
