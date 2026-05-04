@@ -44,6 +44,12 @@ class FakeForestRunRepository(IForestRunRepository):
         self.rows.append(saved)
         return saved
 
+    async def get_by_id(self, *, run_id: int) -> ForestRun | None:
+        for r in self.rows:
+            if r.id == run_id:
+                return r
+        return None
+
     async def get_active_by_player(self, *, player_id: int) -> ForestRun | None:
         for r in self.rows:
             if r.player_id == player_id and r.status is ForestRunStatus.IN_PROGRESS:

@@ -116,3 +116,13 @@ class StartForestRunInput(_StrictBase):
     """
 
     tg_id: PositiveTgId = Field(gt=0, description="Telegram user_id игрока")
+
+
+class FinishForestRunInput(_StrictBase):
+    """Финиш похода в лес (Спринт 1.3.C).
+
+    На вход — `run_id` записи `forest_runs`. Источник вызова —
+    APScheduler-job, который Запланировал `StartForestRun` на `ends_at`.
+    """
+
+    run_id: int = Field(gt=0, description="forest_runs.id")

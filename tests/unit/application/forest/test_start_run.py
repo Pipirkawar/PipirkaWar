@@ -38,6 +38,7 @@ from tests.fakes import (
     FakeAuditLogger,
     FakeBalanceConfig,
     FakeClock,
+    FakeDelayedJobScheduler,
     FakeForestRunRepository,
     FakePlayerRepository,
     FakeRandom,
@@ -97,6 +98,7 @@ def _build_use_case(
     FakeClock,
     FakeRandom,
     FakeLockRepo,
+    FakeDelayedJobScheduler,
 ]:
     uow = FakeUnitOfWork()
     players = FakePlayerRepository()
@@ -107,6 +109,7 @@ def _build_use_case(
     lock_repo = FakeLockRepo()
     locks = ActivityLockService(repository=lock_repo, clock=used_clock)
     balance = FakeBalanceConfig(build_valid_balance())
+    scheduler = FakeDelayedJobScheduler()
     use_case = StartForestRun(
         uow=uow,
         players=players,
@@ -116,8 +119,9 @@ def _build_use_case(
         random=rng,
         audit=audit,
         clock=used_clock,
+        scheduler=scheduler,
     )
-    return use_case, players, runs, audit, uow, used_clock, rng, lock_repo
+    return use_case, players, runs, audit, uow, used_clock, rng, lock_repo, scheduler
 
 
 async def _seed_player(players: FakePlayerRepository, *, tg_id: int) -> Player:
@@ -127,7 +131,7 @@ async def _seed_player(players: FakePlayerRepository, *, tg_id: int) -> Player:
 class TestHappyPath:
     @pytest.mark.asyncio
     async def test_creates_in_progress_run_with_outcome(self) -> None:
-        use_case, players, runs, _audit, uow, clock, _rng, _locks = _build_use_case()
+        use_case, players, runs, _audit, uow, clock, _rng, _locks, scheduler = _build_use_case()
         player = await _seed_player(players, tg_id=42)
 
         result = await use_case.execute(StartForestRunInput(tg_id=42))
@@ -135,6 +139,8 @@ class TestHappyPath:
         assert isinstance(result, ForestRunStarted)
         run = result.run
         assert run.id == 1
+        # 1.3.C: finish-job запланирован на ends_at
+        assert scheduler.scheduled[run.id].run_at == run.ends_at
         assert run.player_id == player.id
         assert run.status is ForestRunStatus.IN_PROGRESS
         assert run.started_at == clock.now()
@@ -147,7 +153,7 @@ class TestHappyPath:
 
     @pytest.mark.asyncio
     async def test_cooldown_in_balance_range(self) -> None:
-        use_case, players, _runs, _audit, _uow, _clock, _rng, _locks = _build_use_case()
+        use_case, players, _runs, _audit, _uow, _clock, _rng, _locks, _scheduler = _build_use_case()
         await _seed_player(players, tg_id=42)
         balance = build_valid_balance().forest
 
@@ -159,7 +165,9 @@ class TestHappyPath:
 
     @pytest.mark.asyncio
     async def test_lock_taken_after_start(self) -> None:
-        use_case, players, _runs, _audit, _uow, _clock, _rng, lock_repo = _build_use_case()
+        use_case, players, _runs, _audit, _uow, _clock, _rng, lock_repo, _scheduler = (
+            _build_use_case()
+        )
         player = await _seed_player(players, tg_id=42)
 
         await use_case.execute(StartForestRunInput(tg_id=42))
@@ -173,7 +181,7 @@ class TestHappyPath:
 class TestAuditEntry:
     @pytest.mark.asyncio
     async def test_audit_records_forest_run_started(self) -> None:
-        use_case, players, _runs, audit, _uow, clock, _rng, _locks = _build_use_case()
+        use_case, players, _runs, audit, _uow, clock, _rng, _locks, _scheduler = _build_use_case()
         await _seed_player(players, tg_id=42)
 
         result = await use_case.execute(StartForestRunInput(tg_id=42))
@@ -204,7 +212,9 @@ class TestAuditEntry:
         # даёт корректный label `none`.
         seen_labels: set[str] = set()
         for seed in range(1, 30):
-            use_case, players, _runs, audit, _uow, _clock, _rng, _locks = _build_use_case(seed=seed)
+            use_case, players, _runs, audit, _uow, _clock, _rng, _locks, _scheduler = (
+                _build_use_case(seed=seed)
+            )
             await _seed_player(players, tg_id=42)
             result = await use_case.execute(StartForestRunInput(tg_id=42))
             label = audit.entries[0].after["drop_kind"] if audit.entries[0].after else None
@@ -219,7 +229,7 @@ class TestAuditEntry:
 class TestErrors:
     @pytest.mark.asyncio
     async def test_player_not_found_raises(self) -> None:
-        use_case, _players, _runs, audit, uow, _clock, _rng, _locks = _build_use_case()
+        use_case, _players, _runs, audit, uow, _clock, _rng, _locks, _scheduler = _build_use_case()
 
         with pytest.raises(PlayerNotFoundError) as exc:
             await use_case.execute(StartForestRunInput(tg_id=42))
@@ -230,7 +240,7 @@ class TestErrors:
 
     @pytest.mark.asyncio
     async def test_double_start_raises_already_in_forest(self) -> None:
-        use_case, players, runs, audit, uow, _clock, _rng, _locks = _build_use_case()
+        use_case, players, runs, audit, uow, _clock, _rng, _locks, _scheduler = _build_use_case()
         player = await _seed_player(players, tg_id=42)
 
         await use_case.execute(StartForestRunInput(tg_id=42))
@@ -253,7 +263,9 @@ class TestDeterminism:
         result1: ForestRunStarted
         result2: ForestRunStarted
         for i, target in enumerate((1, 2)):
-            use_case, players, _runs, _audit, _uow, _clock, _rng, _locks = _build_use_case(seed=99)
+            use_case, players, _runs, _audit, _uow, _clock, _rng, _locks, _scheduler = (
+                _build_use_case(seed=99)
+            )
             await _seed_player(players, tg_id=42)
             result = await use_case.execute(StartForestRunInput(tg_id=42))
             if i == 0:

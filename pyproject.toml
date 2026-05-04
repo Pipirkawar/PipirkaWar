@@ -31,6 +31,7 @@ dependencies = [
   "asyncpg>=0.29,<1",
   "alembic>=1.13,<2",
   "structlog>=24.1,<26",
+  "APScheduler>=3.10,<4",
 ]
 
 [project.optional-dependencies]
@@ -123,6 +124,10 @@ files = ["src", "tests"]
 module = ["tests.*"]
 disallow_untyped_defs = true
 disable_error_code = ["misc"]
+
+[[tool.mypy.overrides]]
+module = ["apscheduler.*"]
+ignore_missing_imports = true
 
 # -----------------------------------------------------------------------------
 # Pytest.

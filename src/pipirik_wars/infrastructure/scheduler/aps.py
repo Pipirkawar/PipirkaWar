@@ -1,0 +1,116 @@
+"""Адаптер `IDelayedJobScheduler` поверх APScheduler 3.x.
+
+Использует `AsyncIOScheduler` со стандартным in-memory job-store.
+В production (Спринт 1.3.D + 1.3.4 ConfigurePersistentJobStore) можно
+будет подменить на `SQLAlchemyJobStore`, чтобы задачи переживали
+рестарт процесса. На уровне 1.3.C мы держим планировщик в памяти —
+после рестарта бот должен делать recovery: пройтись по `forest_runs`
+со `status='in_progress'` и пере-запланировать `finish`-job-ы (это
+будет в 1.3.D, hook на старте процесса).
+
+`AsyncIOScheduler.start()` запускает внутренний планировщик в текущем
+event-loop-е. `shutdown()` дожидается завершения уже выполняющихся
+job-ов (`wait=True` — поведение по умолчанию). И то и другое —
+ответственность композиционного root-а (`bot/main.py`).
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Callable
+from datetime import datetime
+from typing import Final
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+from pipirik_wars.application.dto.inputs import FinishForestRunInput
+from pipirik_wars.application.forest import FinishForestRun
+from pipirik_wars.domain.forest import ForestRunNotFoundError
+from pipirik_wars.domain.player.errors import PlayerNotFoundError
+from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
+
+_FINISH_JOB_PREFIX: Final[str] = "forest_run_finish:"
+
+
+def _job_id(run_id: int) -> str:
+    return f"{_FINISH_JOB_PREFIX}{run_id}"
+
+
+class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
+    """Production-адаптер: APScheduler `AsyncIOScheduler`.
+
+    `finish_factory` — фабрика, которая возвращает свежий
+    `FinishForestRun`-use-case (с активной транзакцией / зависимостями).
+    Это нужно потому, что job исполняется в фоне и **не** должен
+    повторно использовать сессию текущего bot-handler-а.
+    """
+
+    __slots__ = ("_finish_factory", "_logger", "_scheduler")
+
+    def __init__(
+        self,
+        *,
+        scheduler: AsyncIOScheduler,
+        finish_factory: Callable[[], FinishForestRun],
+        logger: logging.Logger | None = None,
+    ) -> None:
+        self._scheduler = scheduler
+        self._finish_factory = finish_factory
+        self._logger = logger or logging.getLogger(__name__)
+
+    async def schedule_finish_forest_run(
+        self,
+        *,
+        run_id: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_finish_job,
+            trigger="date",
+            run_date=run_at,
+            args=(run_id,),
+            id=_job_id(run_id),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_finish_forest_run(self, *, run_id: int) -> None:
+        try:
+            self._scheduler.remove_job(_job_id(run_id))
+        except Exception:
+            # APScheduler.JobLookupError; конкретный класс зависит от версии.
+            # Cancel — best-effort: если job-ы нет, цели достигнуты.
+            return
+
+    def start(self) -> None:
+        """Запустить APScheduler. Вызывается из `run()` после `build_container`."""
+        if not self._scheduler.running:
+            self._scheduler.start()
+
+    def shutdown(self, *, wait: bool = True) -> None:
+        """Остановить APScheduler. Вызывается из `run()` в `finally`-блоке."""
+        if self._scheduler.running:
+            self._scheduler.shutdown(wait=wait)
+
+    async def _run_finish_job(self, run_id: int) -> None:
+        """Callback, который APScheduler вызывает в `run_at`.
+
+        Любые доменные ошибки логируем и проглатываем — APScheduler
+        иначе пометит job-у как «failed» и оставит её в job-store-е.
+        """
+        try:
+            use_case = self._finish_factory()
+            await use_case.execute(FinishForestRunInput(run_id=run_id))
+        except (ForestRunNotFoundError, PlayerNotFoundError) as exc:
+            self._logger.warning(
+                "forest_run_finish: domain error",
+                extra={"run_id": run_id, "error": type(exc).__name__},
+            )
+        except Exception as exc:  # последний барьер — APScheduler иначе пометит job-у «failed»
+            self._logger.exception(
+                "forest_run_finish: unexpected error",
+                extra={"run_id": run_id, "error": type(exc).__name__},
+            )
+
+
+__all__ = ["APSchedulerDelayedJobScheduler"]

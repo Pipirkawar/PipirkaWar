@@ -14,7 +14,11 @@ from pipirik_wars.domain.forest.entities import (
     Rarity,
     Slot,
 )
-from pipirik_wars.domain.forest.errors import AlreadyInForestError, ForestError
+from pipirik_wars.domain.forest.errors import (
+    AlreadyInForestError,
+    ForestError,
+    ForestRunNotFoundError,
+)
 from pipirik_wars.domain.forest.repositories import IForestRunRepository
 from pipirik_wars.domain.forest.run import ForestRun, ForestRunStatus
 from pipirik_wars.domain.forest.services import compute_forest_outcome
@@ -24,6 +28,7 @@ __all__ = [
     "Drop",
     "ForestError",
     "ForestRun",
+    "ForestRunNotFoundError",
     "ForestRunOutcome",
     "ForestRunStatus",
     "IForestRunRepository",

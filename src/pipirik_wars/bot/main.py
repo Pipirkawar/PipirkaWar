@@ -32,6 +32,7 @@ from pathlib import Path
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.clan import (
@@ -45,7 +46,7 @@ from pipirik_wars.application.dau import (
     GetDauStats,
     SetMaxDau,
 )
-from pipirik_wars.application.forest import StartForestRun
+from pipirik_wars.application.forest import FinishForestRun, StartForestRun
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
@@ -61,6 +62,7 @@ from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import (
     IAuditLogger,
     IClock,
+    IDelayedJobScheduler,
     IIdempotencyKey,
     IRandom,
     IUnitOfWork,
@@ -93,6 +95,7 @@ from pipirik_wars.infrastructure.rate_limit import (
     InMemoryTokenBucketRateLimiter,
     IRateLimiter,
 )
+from pipirik_wars.infrastructure.scheduler import APSchedulerDelayedJobScheduler
 from pipirik_wars.infrastructure.settings import Settings
 
 # Путь к балансовому файлу по умолчанию (относительно cwd процесса).
@@ -124,6 +127,9 @@ class Container:
     activity_locks: IActivityLockRepository
     forest_runs: IForestRunRepository
 
+    # Планировщик отложенных задач (Спринт 1.3.C)
+    delayed_jobs: IDelayedJobScheduler
+
     # DAU Gate (Спринт 1.2.B / 1.2.D)
     dau_counter: IDauCounter
     dau_limit: IDauLimit
@@ -142,6 +148,7 @@ class Container:
     promote_from_queue: PromoteFromQueue
     check_dau_threshold: CheckDauThreshold
     start_forest_run: StartForestRun
+    finish_forest_run: FinishForestRun
 
 
 def build_container(
@@ -265,6 +272,18 @@ def build_container(
         repository=activity_locks,
         clock=clock,
     )
+    finish_forest_run = FinishForestRun(
+        uow=uow,
+        players=players,
+        runs=forest_runs,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+    )
+    delayed_jobs = APSchedulerDelayedJobScheduler(
+        scheduler=AsyncIOScheduler(),
+        finish_factory=lambda: finish_forest_run,
+    )
     start_forest_run = StartForestRun(
         uow=uow,
         players=players,
@@ -274,6 +293,7 @@ def build_container(
         random=RealRandom(),
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
     )
     return Container(
         clock=clock,
@@ -292,6 +312,7 @@ def build_container(
         signup_queue=signup_queue,
         activity_locks=activity_locks,
         forest_runs=forest_runs,
+        delayed_jobs=delayed_jobs,
         dau_counter=dau_counter,
         dau_limit=dau_limit,
         dau_threshold_alerter=dau_threshold_alerter,
@@ -307,6 +328,7 @@ def build_container(
         promote_from_queue=promote_from_queue,
         check_dau_threshold=check_dau_threshold,
         start_forest_run=start_forest_run,
+        finish_forest_run=finish_forest_run,
     )
 
 
@@ -332,6 +354,7 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["signup_queue"] = container.signup_queue
     dispatcher["promote_from_queue"] = container.promote_from_queue
     dispatcher["start_forest_run"] = container.start_forest_run
+    dispatcher["finish_forest_run"] = container.finish_forest_run
     return dispatcher
 
 
@@ -363,12 +386,17 @@ async def run(
         default=DefaultBotProperties(parse_mode="HTML"),
     )
     dispatcher = build_dispatcher(container)
+    scheduler = container.delayed_jobs
+    if isinstance(scheduler, APSchedulerDelayedJobScheduler):
+        scheduler.start()
     try:
         await dispatcher.start_polling(
             bot,
             allowed_updates=list(_ALLOWED_UPDATES),
         )
     finally:
+        if isinstance(scheduler, APSchedulerDelayedJobScheduler):
+            scheduler.shutdown(wait=False)
         await bot.session.close()
 
 

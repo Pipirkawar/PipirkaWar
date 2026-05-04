@@ -144,6 +144,12 @@ class SqlAlchemyForestRunRepository(IForestRunRepository):
             ) from exc
         return _row_to_entity(row, balance=self._balance)
 
+    async def get_by_id(self, *, run_id: int) -> ForestRun | None:
+        row = await self._uow.session.get(ForestRunORM, run_id)
+        if row is None:
+            return None
+        return _row_to_entity(row, balance=self._balance)
+
     async def get_active_by_player(self, *, player_id: int) -> ForestRun | None:
         result = await self._uow.session.execute(
             select(ForestRunORM).where(

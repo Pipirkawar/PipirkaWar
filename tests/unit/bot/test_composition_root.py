@@ -26,7 +26,7 @@ from pipirik_wars.application.dau import (
     GetDauStats,
     SetMaxDau,
 )
-from pipirik_wars.application.forest import StartForestRun
+from pipirik_wars.application.forest import FinishForestRun, StartForestRun
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
@@ -36,6 +36,7 @@ from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.forest import IForestRunRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.security import IActivityLockRepository
+from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
@@ -63,6 +64,7 @@ from pipirik_wars.infrastructure.rate_limit import (
     InMemoryTokenBucketRateLimiter,
     IRateLimiter,
 )
+from pipirik_wars.infrastructure.scheduler import APSchedulerDelayedJobScheduler
 from pipirik_wars.infrastructure.settings import (
     BootstrapSettings,
     BotSettings,
@@ -78,6 +80,7 @@ from tests.fakes import (
     FakeClanRepository,
     FakeClock,
     FakeDauThresholdAlerter,
+    FakeDelayedJobScheduler,
     FakeForestRunRepository,
     FakeIdempotencyKey,
     FakePlayerRepository,
@@ -128,6 +131,19 @@ def _container_with_fakes() -> Container:
         clock=clock,
     )
     rng = FakeRandom()
+    delayed_jobs: IDelayedJobScheduler = FakeDelayedJobScheduler()
+    activity_lock_service = ActivityLockService(
+        repository=activity_locks,
+        clock=clock,
+    )
+    finish_forest_run = FinishForestRun(
+        uow=uow,
+        players=players,
+        runs=forest_runs,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -145,6 +161,7 @@ def _container_with_fakes() -> Container:
         signup_queue=signup_queue,
         activity_locks=activity_locks,
         forest_runs=forest_runs,
+        delayed_jobs=delayed_jobs,
         register_player=RegisterPlayer(
             uow=uow,
             players=players,
@@ -220,15 +237,14 @@ def _container_with_fakes() -> Container:
             uow=uow,
             players=players,
             runs=forest_runs,
-            locks=ActivityLockService(
-                repository=activity_locks,
-                clock=clock,
-            ),
+            locks=activity_lock_service,
             balance=balance,
             random=rng,
             audit=audit,
             clock=clock,
+            scheduler=delayed_jobs,
         ),
+        finish_forest_run=finish_forest_run,
     )
 
 
@@ -269,6 +285,9 @@ class TestContainer:
         assert isinstance(c.activity_locks, FakeActivityLockRepository)
         assert isinstance(c.forest_runs, FakeForestRunRepository)
         assert isinstance(c.start_forest_run, StartForestRun)
+        # Forest finish + scheduler (Спринт 1.3.C).
+        assert isinstance(c.delayed_jobs, FakeDelayedJobScheduler)
+        assert isinstance(c.finish_forest_run, FinishForestRun)
 
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
@@ -312,6 +331,9 @@ class TestBuildContainer:
         assert isinstance(c.activity_locks, SqlAlchemyActivityLockRepository)
         assert isinstance(c.forest_runs, SqlAlchemyForestRunRepository)
         assert isinstance(c.start_forest_run, StartForestRun)
+        # Forest finish + scheduler (Спринт 1.3.C).
+        assert isinstance(c.delayed_jobs, APSchedulerDelayedJobScheduler)
+        assert isinstance(c.finish_forest_run, FinishForestRun)
 
 
 class TestBuildDispatcher:
@@ -348,4 +370,5 @@ class TestBuildDispatcher:
         assert dp["set_max_dau"] is c.set_max_dau
         assert dp["signup_queue"] is c.signup_queue
         assert dp["start_forest_run"] is c.start_forest_run
+        assert dp["finish_forest_run"] is c.finish_forest_run
         assert dp["promote_from_queue"] is c.promote_from_queue
