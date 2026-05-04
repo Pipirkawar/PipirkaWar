@@ -11,6 +11,30 @@ from typing import Any
 
 from pipirik_wars.domain.balance.config import BalanceConfig
 
+# Валидный каталог: ровно 30 предметов, по 5 на каждый из 6 слотов,
+# с покрытием всех 3 редкостей (12 common / 12 rare / 6 epic).
+_SLOTS = ("hat", "body", "legs", "boots", "ring", "chain")
+_RARITY_PATTERN = ("common", "common", "rare", "rare", "epic")
+
+
+def _build_valid_items_catalog() -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for slot in _SLOTS:
+        for idx, rarity in enumerate(_RARITY_PATTERN, start=1):
+            items.append(
+                {
+                    "id": f"item.{slot}.test_{idx}",
+                    "slot": slot,
+                    "display_name": f"Тестовый {slot} #{idx}",
+                    "rarity": rarity,
+                }
+            )
+    return items
+
+
+def _build_valid_names_catalog() -> list[str]:
+    return [f"ИмяТест-{i:02d}" for i in range(1, 31)]
+
 
 def valid_balance_payload() -> dict[str, Any]:
     """Минимально валидный сырой dict (как после `yaml.safe_load`).
@@ -32,6 +56,11 @@ def valid_balance_payload() -> dict[str, Any]:
             ],
             "cooldown_min_minutes": 10,
             "cooldown_max_minutes": 20,
+            "drop": {
+                "probability_percent": 50,
+                "name_share_percent": 5,
+                "rarity_weights": {"common": 70, "rare": 25, "epic": 5},
+            },
         },
         "oracle": {
             "cooldown_tz": "Europe/Moscow",
@@ -76,6 +105,8 @@ def valid_balance_payload() -> dict[str, Any]:
                 "sexual_explicit": False,
             }
         },
+        "items_catalog": _build_valid_items_catalog(),
+        "names_catalog": _build_valid_names_catalog(),
     }
 
 

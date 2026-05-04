@@ -13,11 +13,37 @@
 from __future__ import annotations
 
 import itertools
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from pipirik_wars.shared.errors import IntegrityError
+
+
+class Slot(StrEnum):
+    """6 слотов экипировки (ГДД §2.6).
+
+    Тип общий для каталога (`items_catalog`) и для рантайм-сущностей в
+    `domain/forest/` (потом — `domain/items/`, когда подключим горы /
+    данжон). Живёт здесь, чтобы pydantic-схема `BalanceConfig` могла
+    типизировать слот без обратного импорта в forest-пакет.
+    """
+
+    HAT = "hat"
+    BODY = "body"
+    LEGS = "legs"
+    BOOTS = "boots"
+    RING = "ring"
+    CHAIN = "chain"
+
+
+class Rarity(StrEnum):
+    """3 уровня редкости предметов экипировки (ГДД §2.6, §1.3.5)."""
+
+    COMMON = "common"
+    RARE = "rare"
+    EPIC = "epic"
 
 
 class _Frozen(BaseModel):
@@ -73,12 +99,41 @@ class ForestOutcome(_Frozen):
         return self
 
 
+class ForestRarityWeights(_Frozen):
+    """Распределение редкости предметов в дропе леса (ГДД §1.3.5).
+
+    Дефолтное распределение по ГДД — 70/25/5, но веса могут быть любыми
+    положительными целыми. Все 3 уровня обязательны: иначе при rarity-roll
+    мы получили бы недостижимый pool для отсутствующей ветки.
+    """
+
+    common: int = Field(gt=0)
+    rare: int = Field(gt=0)
+    epic: int = Field(gt=0)
+
+
+class ForestDropConfig(_Frozen):
+    """Параметры дропа за поход в лес (ГДД §1.3.5).
+
+    `probability_percent` — целочисленный шанс ЛЮБОГО дропа за поход
+    (0 — лес ничего не даёт, 100 — каждый поход с дропом).
+    `name_share_percent` — внутри дропов: доля «имя» vs «предмет
+    экипировки» (имя — единственный путь его получить, ГДД §2.5).
+    Оба значения — в `[0, 100]`.
+    """
+
+    probability_percent: int = Field(ge=0, le=100)
+    name_share_percent: int = Field(ge=0, le=100)
+    rarity_weights: ForestRarityWeights
+
+
 class ForestConfig(_Frozen):
     """Конфиг похода в лес (ГДД §8.2)."""
 
     outcomes: tuple[ForestOutcome, ...] = Field(min_length=1)
     cooldown_min_minutes: int = Field(gt=0)
     cooldown_max_minutes: int = Field(gt=0)
+    drop: ForestDropConfig
 
     @model_validator(mode="after")
     def _validate(self) -> ForestConfig:
@@ -91,6 +146,20 @@ class ForestConfig(_Frozen):
         if len(set(names)) != len(names):
             raise ValueError(f"forest.outcomes have duplicate names: {names}")
         return self
+
+
+class ItemEntry(_Frozen):
+    """Одна запись каталога экипировки `items_catalog` (ГДД §1.3.5, §2.6).
+
+    `id` — стабильный машинный идентификатор (`item.<slot>.<short>`).
+    Используется в `equipment.item_id` и `audit_log.target_id`. Не
+    меняется без миграции.
+    """
+
+    id: str = Field(min_length=1, max_length=64)
+    slot: Slot
+    display_name: str = Field(min_length=1, max_length=64)
+    rarity: Rarity
 
 
 class OracleConfig(_Frozen):
@@ -207,16 +276,28 @@ class ContentPolicy(_Frozen):
     clan_quotes: ContentPolicyClanQuotes
 
 
+_MIN_ITEMS_CATALOG_SIZE: int = 30
+"""Минимальный размер `items_catalog` (ГДД §1.3.5: «≥ 30 предметов на 6 слотов»)."""
+
+_MIN_NAMES_CATALOG_SIZE: int = 30
+"""Минимальный размер `names_catalog` (ГДД §1.3.5: «≥ 30 имён в каталоге»)."""
+
+
 class BalanceConfig(_Frozen):
     """Корневая конфигурация баланса игры.
 
     Источник правды для ГДД §2.3 (display_names), §8.2 (лес),
+    §1.3.5 / §2.6 (items_catalog), §1.3.5 / §2.5 (names_catalog),
     §11 (оракул), §13.1 (рефералка), §3.2 (толщина), §0.5 (DAU-Gate),
     §6.1 (Глава клана дня).
 
     Целостность display_names проверяется здесь же: первый ряд
     стартует с 0, ряды примыкают друг к другу без дыр и пересечений,
     последний ряд имеет ``to=null`` (бесконечный хвост).
+
+    Каталоги (`items_catalog` / `names_catalog`) проверяются на размер,
+    уникальность и покрытие всех редкостей — иначе при rolle дропа
+    можно было бы получить пустой pool.
     """
 
     version: int = Field(ge=1)
@@ -228,6 +309,8 @@ class BalanceConfig(_Frozen):
     dau_gate: DauGateConfig
     daily_head: DailyHeadConfig
     content_policy: ContentPolicy
+    items_catalog: tuple[ItemEntry, ...] = Field(min_length=_MIN_ITEMS_CATALOG_SIZE)
+    names_catalog: tuple[str, ...] = Field(min_length=_MIN_NAMES_CATALOG_SIZE)
 
     @model_validator(mode="after")
     def _validate_display_names_cover_axis(self) -> BalanceConfig:
@@ -250,6 +333,32 @@ class BalanceConfig(_Frozen):
                 f"display_names: last range {ranges[-1].name!r} must have "
                 f"to=null, got to={ranges[-1].to_cm}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_items_catalog(self) -> BalanceConfig:
+        ids = [e.id for e in self.items_catalog]
+        if len(set(ids)) != len(ids):
+            duplicates = sorted({i for i in ids if ids.count(i) > 1})
+            raise ValueError(f"items_catalog: duplicate item ids: {duplicates}")
+        present_rarities: set[Rarity] = {e.rarity for e in self.items_catalog}
+        all_rarities: set[Rarity] = {Rarity.COMMON, Rarity.RARE, Rarity.EPIC}
+        missing: set[Rarity] = all_rarities - present_rarities
+        if missing:
+            raise ValueError(
+                "items_catalog must contain at least one item per rarity, "
+                f"missing: {sorted(r.value for r in missing)}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_names_catalog(self) -> BalanceConfig:
+        for name in self.names_catalog:
+            if not name or not name.strip():
+                raise ValueError("names_catalog: empty or whitespace-only name")
+        if len(set(self.names_catalog)) != len(self.names_catalog):
+            duplicates = sorted({n for n in self.names_catalog if self.names_catalog.count(n) > 1})
+            raise ValueError(f"names_catalog: duplicate names: {duplicates}")
         return self
 
     def display_name_for(self, length_cm: int) -> str:
