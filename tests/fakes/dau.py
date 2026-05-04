@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from pipirik_wars.domain.dau import IDauCounter, IDauLimit
+from dataclasses import dataclass
+from datetime import datetime
+
+from pipirik_wars.domain.dau import IDauCounter, IDauLimit, IDauThresholdAlerter
 
 
 class FakeDauCounter(IDauCounter):
@@ -43,3 +46,37 @@ class FakeDauLimit(IDauLimit):
         previous = self._max_dau
         self._max_dau = max_dau
         return previous
+
+
+@dataclass(frozen=True, slots=True)
+class DauAlertEvent:
+    """Snapshot одного `IDauThresholdAlerter.emit(...)`."""
+
+    current_dau: int
+    max_dau: int
+    percent: int
+    occurred_at: datetime
+
+
+class FakeDauThresholdAlerter(IDauThresholdAlerter):
+    """Записывает события в `events` без побочных эффектов."""
+
+    def __init__(self) -> None:
+        self.events: list[DauAlertEvent] = []
+
+    async def emit(
+        self,
+        *,
+        current_dau: int,
+        max_dau: int,
+        percent: int,
+        occurred_at: datetime,
+    ) -> None:
+        self.events.append(
+            DauAlertEvent(
+                current_dau=current_dau,
+                max_dau=max_dau,
+                percent=percent,
+                occurred_at=occurred_at,
+            )
+        )

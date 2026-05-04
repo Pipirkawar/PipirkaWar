@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pipirik_wars.application.dau import CheckDauThreshold
 from pipirik_wars.domain.dau import IDauCounter, IDauLimit
 from pipirik_wars.domain.player import (
     IPlayerRepository,
@@ -57,6 +58,7 @@ class PromoteFromQueue:
 
     __slots__ = (
         "_audit",
+        "_check_threshold",
         "_clock",
         "_dau_counter",
         "_dau_limit",
@@ -75,6 +77,7 @@ class PromoteFromQueue:
         dau_limit: IDauLimit,
         audit: IAuditLogger,
         clock: IClock,
+        check_threshold: CheckDauThreshold,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -83,6 +86,7 @@ class PromoteFromQueue:
         self._dau_limit = dau_limit
         self._audit = audit
         self._clock = clock
+        self._check_threshold = check_threshold
 
     async def execute(self) -> PromoteFromQueueResult:
         """Поднять из очереди столько, сколько влезает по `MAX_DAU - DAU`.
@@ -118,6 +122,8 @@ class PromoteFromQueue:
                     promoted.append(saved)
         for saved in promoted:
             await self._dau_counter.record_active(tg_user_id=saved.tg_id)
+        if promoted:
+            await self._check_threshold.execute()
         return PromoteFromQueueResult(
             promoted=tuple(promoted),
             skipped_already_registered=tuple(skipped),

@@ -32,6 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from pipirik_wars.application.dau import CheckDauThreshold
 from pipirik_wars.application.dto.inputs import RegisterPlayerInput
 from pipirik_wars.domain.dau import IDauCounter, IDauLimit
 from pipirik_wars.domain.player import (
@@ -75,6 +76,7 @@ class RegisterPlayer:
 
     __slots__ = (
         "_audit",
+        "_check_threshold",
         "_clock",
         "_dau_counter",
         "_dau_limit",
@@ -93,6 +95,7 @@ class RegisterPlayer:
         dau_limit: IDauLimit,
         audit: IAuditLogger,
         clock: IClock,
+        check_threshold: CheckDauThreshold,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -101,6 +104,7 @@ class RegisterPlayer:
         self._dau_limit = dau_limit
         self._audit = audit
         self._clock = clock
+        self._check_threshold = check_threshold
 
     async def execute(self, input_dto: RegisterPlayerInput) -> RegisterPlayerResult:
         """Зарегистрировать игрока **или** поставить его в очередь.
@@ -142,6 +146,7 @@ class RegisterPlayer:
                 )
             )
         await self._dau_counter.record_active(tg_user_id=saved.tg_id)
+        await self._check_threshold.execute()
         return PlayerRegistered(player=saved)
 
     async def _enqueue(
