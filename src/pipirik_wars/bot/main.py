@@ -17,6 +17,11 @@
 clan_members`) и use-case-ы (`RegisterPlayer / RegisterClan /
 MigrateClanChatId / JoinClan / FreezeClan`). Use-case-ы прокидываются
 в handler-ы через `dispatcher["..."] = ...` workflow-data.
+Спринт 1.1.E: добавлены `SqlAlchemyAdminRepository`, use-case-ы
+`GetProfile` (read-only карточка) и `ReloadBalance` (admin-only
+hot-reload `balance.yaml`). `YamlBalanceLoader` прокидывается под
+двумя ролями: `IBalanceConfig` (read-side) и `IBalanceReloader`
+(write-side, ISP).
 """
 
 from __future__ import annotations
@@ -28,16 +33,18 @@ from pathlib import Path
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 
+from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.clan import (
     FreezeClan,
     JoinClan,
     MigrateClanChatId,
     RegisterClan,
 )
-from pipirik_wars.application.player import RegisterPlayer
+from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import register_middlewares
-from pipirik_wars.domain.balance import IBalanceConfig
+from pipirik_wars.domain.admin import IAdminRepository
+from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.shared.ports import (
@@ -51,6 +58,7 @@ from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
 from pipirik_wars.infrastructure.db.engine import build_engine, build_sessionmaker
 from pipirik_wars.infrastructure.db.repositories import (
+    SqlAlchemyAdminRepository,
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
     SqlAlchemyPlayerRepository,
@@ -83,20 +91,24 @@ class Container:
     idempotency: IIdempotencyKey
     audit: IAuditLogger
     balance: IBalanceConfig
+    balance_reloader: IBalanceReloader
     rate_limiter: IRateLimiter
     settings: Settings
 
-    # Репозитории (Спринт 1.1.D)
+    # Репозитории (Спринт 1.1.D + 1.1.E)
     players: IPlayerRepository
     clans: IClanRepository
     clan_members: IClanMembershipRepository
+    admins: IAdminRepository
 
-    # Use-case-ы (Спринт 1.1.D)
+    # Use-case-ы (Спринт 1.1.D + 1.1.E)
     register_player: RegisterPlayer
     register_clan: RegisterClan
     migrate_clan: MigrateClanChatId
     join_clan: JoinClan
     freeze_clan: FreezeClan
+    get_profile: GetProfile
+    reload_balance: ReloadBalance
 
 
 def build_container(
@@ -132,6 +144,7 @@ def build_container(
     players = SqlAlchemyPlayerRepository(uow=uow)
     clans = SqlAlchemyClanRepository(uow=uow)
     clan_members = SqlAlchemyClanMembershipRepository(uow=uow)
+    admins = SqlAlchemyAdminRepository(uow=uow)
     register_player = RegisterPlayer(
         uow=uow,
         players=players,
@@ -164,6 +177,19 @@ def build_container(
         audit=audit,
         clock=clock,
     )
+    get_profile = GetProfile(
+        uow=uow,
+        players=players,
+        balance=balance,
+    )
+    reload_balance = ReloadBalance(
+        uow=uow,
+        admins=admins,
+        balance=balance,
+        reloader=balance,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -171,16 +197,20 @@ def build_container(
         idempotency=SqlAlchemyIdempotencyService(uow=uow),
         audit=audit,
         balance=balance,
+        balance_reloader=balance,
         rate_limiter=rate_limiter,
         settings=settings,
         players=players,
         clans=clans,
         clan_members=clan_members,
+        admins=admins,
         register_player=register_player,
         register_clan=register_clan,
         migrate_clan=migrate_clan,
         join_clan=join_clan,
         freeze_clan=freeze_clan,
+        get_profile=get_profile,
+        reload_balance=reload_balance,
     )
 
 
@@ -199,6 +229,8 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["migrate_clan"] = container.migrate_clan
     dispatcher["join_clan"] = container.join_clan
     dispatcher["freeze_clan"] = container.freeze_clan
+    dispatcher["get_profile"] = container.get_profile
+    dispatcher["reload_balance"] = container.reload_balance
     return dispatcher
 
 

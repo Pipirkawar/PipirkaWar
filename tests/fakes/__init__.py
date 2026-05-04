@@ -6,6 +6,7 @@
 рефакторинг интерфейсов.
 """
 
+from tests.fakes.admin_repo import FakeAdminRepository
 from tests.fakes.audit import FakeAuditLogger
 from tests.fakes.balance import FakeBalanceConfig
 from tests.fakes.clan_repo import FakeClanMembershipRepository, FakeClanRepository
@@ -16,6 +17,7 @@ from tests.fakes.random import FakeRandom
 from tests.fakes.uow import FakeUnitOfWork
 
 __all__ = [
+    "FakeAdminRepository",
     "FakeAuditLogger",
     "FakeBalanceConfig",
     "FakeClanMembershipRepository",

@@ -26,7 +26,7 @@ from pipirik_wars.domain.balance.config import (
     ReferralOnSignup,
     ThicknessConfig,
 )
-from pipirik_wars.domain.balance.ports import IBalanceConfig
+from pipirik_wars.domain.balance.ports import IBalanceConfig, IBalanceReloader
 
 __all__ = [
     "BalanceConfig",
@@ -38,6 +38,7 @@ __all__ = [
     "ForestConfig",
     "ForestOutcome",
     "IBalanceConfig",
+    "IBalanceReloader",
     "OracleConfig",
     "ReferralConfig",
     "ReferralMilestone",

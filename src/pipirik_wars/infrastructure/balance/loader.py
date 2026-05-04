@@ -21,12 +21,18 @@ import yaml
 from pydantic import ValidationError
 
 from pipirik_wars.domain.balance.config import BalanceConfig
-from pipirik_wars.domain.balance.ports import IBalanceConfig
+from pipirik_wars.domain.balance.ports import IBalanceConfig, IBalanceReloader
 from pipirik_wars.shared.errors import ConfigError
 
 
-class YamlBalanceLoader(IBalanceConfig):
-    """Lazy-кэширующий loader `BalanceConfig` из YAML-файла."""
+class YamlBalanceLoader(IBalanceConfig, IBalanceReloader):
+    """Lazy-кэширующий loader `BalanceConfig` из YAML-файла.
+
+    Реализует оба порта (`IBalanceConfig` — чтение, `IBalanceReloader`
+    — hot-reload), но в DI прокидывается отдельно: read-only use-case-ы
+    получают только `IBalanceConfig`, админский use-case
+    `ReloadBalance` — `IBalanceReloader`.
+    """
 
     __slots__ = ("_cached", "_path")
 
