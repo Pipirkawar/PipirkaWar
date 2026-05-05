@@ -26,6 +26,7 @@ from tests.fakes.delayed_job_scheduler import (
     FakeDelayedJobScheduler,
     ScheduledFinish,
     ScheduledLobbyJob,
+    ScheduledRoundAfkJob,
 )
 from tests.fakes.duel_repo import FakeDuelRepository
 from tests.fakes.forest_run_repo import FakeForestRunRepository
@@ -75,4 +76,5 @@ __all__ = [
     "FakeUnitOfWork",
     "ScheduledFinish",
     "ScheduledLobbyJob",
+    "ScheduledRoundAfkJob",
 ]

@@ -22,6 +22,14 @@ escalation `CHAT_THEN_GLOBAL → GLOBAL_ONLY` через 3 мин и expiration
 `GLOBAL_ONLY` после 10 мин в лобби (см. ГДД §7.1, balance
 `pvp.duel_1v1.{chat_to_global_promotion_minutes,
 global_lobby_ttl_minutes}`).
+
+Спринт 2.1.G: добавлен AFK-таймер раунда —
+`schedule_round_afk_resolution(*, duel_id, round_num, run_at)`
+ставит job, который через 30..60 сек дёрнет `ResolveAfkRound` для
+конкретного раунда (если хотя бы один игрок не отправил `submit_move`).
+Job-id-ы — per-(duel_id, round_num), потому что в активной дуэли
+ровно один pending раунд за раз, но cancel должен быть точечным
+(чтобы не задеть таймер следующего раунда, если он уже запланирован).
 """
 
 from __future__ import annotations
@@ -93,4 +101,35 @@ class IDelayedJobScheduler(abc.ABC):
 
         Вызывается из `MatchFromLobby` (вызов забран другим игроком),
         `CancelDuel` (челленджер отменил вручную).
+        """
+
+    # ── Спринт 2.1.G: AFK-таймер раунда PvP ──
+
+    @abc.abstractmethod
+    async def schedule_round_afk_resolution(
+        self,
+        *,
+        duel_id: int,
+        round_num: int,
+        run_at: datetime,
+    ) -> None:
+        """Запланировать `ResolveAfkRound(duel_id, round_num)` на `run_at` (UTC).
+
+        Срабатывает через `pvp.duel_1v1.round_timer_seconds` после
+        начала раунда (`accept` для раунда 1; закрытие предыдущего —
+        для раундов 2..N). Идемпотентно по паре `(duel_id, round_num)`:
+        повторный вызов перезаписывает job.
+        """
+
+    @abc.abstractmethod
+    async def cancel_round_afk_resolution(
+        self,
+        *,
+        duel_id: int,
+        round_num: int,
+    ) -> None:
+        """Снять AFK-таймер для конкретного раунда (NO-OP, если его нет).
+
+        Вызывается из `SubmitMove` / `CancelDuel` / `ResolveAfkRound`,
+        когда раунд закрылся реальными ходами или дуэль отменена.
         """

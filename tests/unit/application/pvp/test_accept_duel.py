@@ -28,7 +28,9 @@ from tests.fakes import (
     FakeAuditLogger,
     FakeBalanceConfig,
     FakeClock,
+    FakeDelayedJobScheduler,
     FakeDuelRepository,
+    FakeGlobalLobbyRepository,
     FakePlayerRepository,
     FakeUnitOfWork,
 )
@@ -47,6 +49,20 @@ def _build() -> tuple[
     FakeUnitOfWork,
     FakeActivityLockRepository,
 ]:
+    use_case, players, duels, audit, uow, lock_repo, _scheduler, _lobby = _build_full()
+    return use_case, players, duels, audit, uow, lock_repo
+
+
+def _build_full() -> tuple[
+    AcceptDuel,
+    FakePlayerRepository,
+    FakeDuelRepository,
+    FakeAuditLogger,
+    FakeUnitOfWork,
+    FakeActivityLockRepository,
+    FakeDelayedJobScheduler,
+    FakeGlobalLobbyRepository,
+]:
     uow = FakeUnitOfWork()
     players = FakePlayerRepository()
     duels = FakeDuelRepository()
@@ -55,6 +71,8 @@ def _build() -> tuple[
     lock_repo = FakeActivityLockRepository()
     locks = ActivityLockService(repository=lock_repo, clock=clock)
     balance = FakeBalanceConfig(build_valid_balance())
+    scheduler = FakeDelayedJobScheduler()
+    lobby = FakeGlobalLobbyRepository()
     use_case = AcceptDuel(
         uow=uow,
         players=players,
@@ -63,8 +81,10 @@ def _build() -> tuple[
         balance=balance,
         audit=audit,
         clock=clock,
+        scheduler=scheduler,
+        lobby=lobby,
     )
-    return use_case, players, duels, audit, uow, lock_repo
+    return use_case, players, duels, audit, uow, lock_repo, scheduler, lobby
 
 
 async def _seed_pending_duel(
@@ -270,6 +290,49 @@ class TestErrors:
         assert pending.id is not None
         with pytest.raises(NotADuelParticipantError):
             await use_case.execute(AcceptDuelInput(duel_id=pending.id, tg_id=3))
+
+    @pytest.mark.asyncio
+    async def test_schedules_round_afk_timer_for_round_one(self) -> None:
+        """Спринт 2.1.G: после успешного accept-а — таймер на раунд 1."""
+        use_case, players, duels, _a, _u, _l, scheduler, _lobby = _build_full()
+        challenger = await seed_pvp_eligible_player(players, tg_id=1)
+        accepter = await seed_pvp_eligible_player(players, tg_id=2, username="bob")
+        assert challenger.id is not None
+        assert accepter.id is not None
+        pending = await _seed_pending_duel(
+            duels, challenger_id=challenger.id, challenged_id=accepter.id
+        )
+        assert pending.id is not None
+
+        await use_case.execute(AcceptDuelInput(duel_id=pending.id, tg_id=2))
+
+        assert (pending.id, 1) in scheduler.scheduled_round_afk
+        scheduled = scheduler.scheduled_round_afk[(pending.id, 1)]
+        assert scheduled.duel_id == pending.id
+        assert scheduled.round_num == 1
+        # round_timer_seconds=45 (default из build_valid_balance)
+        assert scheduled.run_at == _NOW + timedelta(seconds=45)
+
+    @pytest.mark.asyncio
+    async def test_does_not_schedule_round_timer_when_accept_fails(self) -> None:
+        """Если accept упал на валидации — таймер не ставится."""
+        use_case, players, duels, _a, _u, _l, scheduler, _lobby = _build_full()
+        challenger = await seed_pvp_eligible_player(players, tg_id=1)
+        # accepter с короткой длиной → PvpRequirementsNotMetError
+        await seed_pvp_eligible_player(players, tg_id=2, length_cm=10, username="bob")
+        assert challenger.id is not None
+        pending = await _seed_pending_duel(
+            duels,
+            challenger_id=challenger.id,
+            challenged_id=None,
+            mode=DuelMode.GLOBAL_ONLY,
+        )
+        assert pending.id is not None
+
+        with pytest.raises(PvpRequirementsNotMetError):
+            await use_case.execute(AcceptDuelInput(duel_id=pending.id, tg_id=2))
+
+        assert scheduler.scheduled_round_afk == {}
 
     @pytest.mark.asyncio
     async def test_cannot_accept_completed_duel(self) -> None:

@@ -35,6 +35,7 @@ def _build(**overrides: int) -> PvpDuel1v1Config:
         "min_thickness_level": 2,
         "global_lobby_ttl_minutes": 10,
         "chat_to_global_promotion_minutes": 3,
+        "round_timer_seconds": 45,
     }
     base.update(overrides)
     return PvpDuel1v1Config(**base)
@@ -51,6 +52,7 @@ class TestPvpDuel1v1Config:
             min_thickness_level=2,
             global_lobby_ttl_minutes=10,
             chat_to_global_promotion_minutes=3,
+            round_timer_seconds=45,
         )
         assert cfg.rounds == 3
         assert cfg.hit_pct == 10
@@ -58,6 +60,7 @@ class TestPvpDuel1v1Config:
         assert cfg.min_thickness_level == 2
         assert cfg.global_lobby_ttl_minutes == 10
         assert cfg.chat_to_global_promotion_minutes == 3
+        assert cfg.round_timer_seconds == 45
 
     @pytest.mark.parametrize("rounds", [0, -1, 11])
     def test_rounds_out_of_range(self, rounds: int) -> None:
@@ -107,6 +110,16 @@ class TestPvpDuel1v1Config:
         cfg = _build(chat_to_global_promotion_minutes=value)
         assert cfg.chat_to_global_promotion_minutes == value
 
+    @pytest.mark.parametrize("value", [29, 0, -1, 61, 100])
+    def test_round_timer_seconds_out_of_range(self, value: int) -> None:
+        with pytest.raises(ValidationError):
+            _build(round_timer_seconds=value)
+
+    @pytest.mark.parametrize("value", [30, 45, 60])
+    def test_round_timer_seconds_in_range(self, value: int) -> None:
+        cfg = _build(round_timer_seconds=value)
+        assert cfg.round_timer_seconds == value
+
     def test_frozen(self) -> None:
         cfg = _build()
         with pytest.raises(ValidationError):
@@ -122,6 +135,7 @@ class TestPvpDuel1v1Config:
                     "min_thickness_level": 2,
                     "global_lobby_ttl_minutes": 10,
                     "chat_to_global_promotion_minutes": 3,
+                    "round_timer_seconds": 45,
                     "unknown_field": 42,
                 }
             )
@@ -135,6 +149,7 @@ class TestPvpDuel1v1Config:
                     "min_length_cm": 20,
                     "min_thickness_level": 2,
                     "chat_to_global_promotion_minutes": 3,
+                    "round_timer_seconds": 45,
                 }
             )
         assert "global_lobby_ttl_minutes" in str(exc_info.value)
@@ -176,6 +191,7 @@ class TestBalanceConfigPvpRequired:
         assert cfg.pvp.duel_1v1.min_thickness_level == 2
         assert cfg.pvp.duel_1v1.global_lobby_ttl_minutes == 10
         assert cfg.pvp.duel_1v1.chat_to_global_promotion_minutes == 3
+        assert cfg.pvp.duel_1v1.round_timer_seconds == 45
 
     def test_balance_config_rejects_missing_pvp(self) -> None:
         payload = copy.deepcopy(valid_balance_payload())

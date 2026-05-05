@@ -33,11 +33,12 @@ AFK-фоллбэк раунда. Шедулер раунд-таймера (Сп�
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from pipirik_wars.application.dto.inputs import ResolveAfkRoundInput
 from pipirik_wars.application.pvp.apply_outcome import apply_duel_outcome
 from pipirik_wars.application.security import ActivityLockService
+from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.progression.length_granter import ILengthGranter
 from pipirik_wars.domain.pvp import (
@@ -52,6 +53,7 @@ from pipirik_wars.domain.shared.ports import (
     AuditEntry,
     IAuditLogger,
     IClock,
+    IDelayedJobScheduler,
     IRandom,
     IUnitOfWork,
 )
@@ -76,12 +78,14 @@ class ResolveAfkRound:
 
     __slots__ = (
         "_audit",
+        "_balance",
         "_clock",
         "_duels",
         "_length_granter",
         "_locks",
         "_players",
         "_random",
+        "_scheduler",
         "_uow",
     )
 
@@ -96,6 +100,8 @@ class ResolveAfkRound:
         random: IRandom,
         audit: IAuditLogger,
         clock: IClock,
+        balance: IBalanceConfig | None = None,
+        scheduler: IDelayedJobScheduler | None = None,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -105,6 +111,8 @@ class ResolveAfkRound:
         self._random = random
         self._audit = audit
         self._clock = clock
+        self._balance = balance
+        self._scheduler = scheduler
 
     async def execute(self, input_dto: ResolveAfkRoundInput) -> AfkRoundResolved:
         """AFK-резолв раунда. Бросает:
@@ -155,24 +163,39 @@ class ResolveAfkRound:
             saved = await self._duels.save(mutated)
 
             if not saved.is_completed:
-                return AfkRoundResolved(
+                duel_completed = False
+            else:
+                await apply_duel_outcome(
                     duel=saved,
-                    duel_completed=False,
-                    was_already_resolved=False,
+                    players=self._players,
+                    length_granter=self._length_granter,
+                    audit=self._audit,
+                    now=now,
                 )
+                await self._release_locks(saved)
+                await self._audit_completed(duel=saved, now=now)
+                duel_completed = True
 
-            await apply_duel_outcome(
-                duel=saved,
-                players=self._players,
-                length_granter=self._length_granter,
-                audit=self._audit,
-                now=now,
+        # AFK-таймер следующего раунда (Спринт 2.1.G).
+        # Только если дуэль осталась в IN_PROGRESS — schedule новый timer.
+        # Предыдущий (только что сработавший) уже удалён APScheduler-ом
+        # самостоятельно («date»-trigger одноразовый).
+        if (
+            self._scheduler is not None
+            and self._balance is not None
+            and not duel_completed
+            and saved.pending_round is not None
+        ):
+            assert saved.id is not None
+            cfg = self._balance.get().pvp.duel_1v1
+            await self._scheduler.schedule_round_afk_resolution(
+                duel_id=saved.id,
+                round_num=saved.pending_round.round_num,
+                run_at=now + timedelta(seconds=cfg.round_timer_seconds),
             )
-            await self._release_locks(saved)
-            await self._audit_completed(duel=saved, now=now)
         return AfkRoundResolved(
             duel=saved,
-            duel_completed=True,
+            duel_completed=duel_completed,
             was_already_resolved=False,
         )
 
