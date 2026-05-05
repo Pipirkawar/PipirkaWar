@@ -23,6 +23,49 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.5.A: i18n-фундамент (Locale + IMessageBundle + FluentMessageBundle + LocaleMiddleware)
+
+**Автор:** Devin (по запросу sufficientdorette)
+**Тип:** plan + feature (application port + value-object + infrastructure adapter + middleware wiring)
+**Связано:** Текущий PR (Спринт 1.5.A), [development_plan.md §3 / Спринт 1.5, задачи 1.5.1–1.5.2](development_plan.md), [current_tasks.md Спринт 1.5 → 1.5.A](current_tasks.md). Открытие Спринта 1.5 после смерженного 1.4.D (PR #24).
+
+Стартовый PR Спринта 1.5 — две вещи:
+
+1. **Plan & roadmap Спринта 1.5** — те же 4 PR-а (1.5.A/B/C/D), что и в спринтах 1.1–1.4. Цель спринта — закрыть DoD MVP (см. `development_plan.md` §4): локализация, аудитлог длины, деплой на VPS.
+2. **i18n-фундамент** (1.5.A) — value-object `Locale`, стратегия `LocaleResolver`, порт `IMessageBundle`, реализация `FluentMessageBundle` (Mozilla Fluent), включение `LocaleMiddleware` в middleware-стек.
+
+Что сделано:
+- **`src/pipirik_wars/application/i18n/`**: `Locale` (frozen-dataclass, `code ∈ {"ru", "en"}`, валидация в `__post_init__`) + `DEFAULT_LOCALE = Locale("en")` + `SUPPORTED_LOCALES = frozenset({"ru", "en"})`. `LocaleResolver` — чистая stateless-стратегия: `tg.language_code` (BCP-47, например `"ru-RU"` / `"en-US"`) приводит к `Locale("ru" | "en")` префиксным сравнением (case-insensitive), всё остальное / `None` / пустое — `default` (по умолчанию `Locale("en")`, ПД 1.5.2 «fallback EN»). Порт `IMessageBundle` (`Protocol`) + `MessageKey` (`NewType[str]`) + ошибки `I18nError` / `MessageKeyError`.
+- **`src/pipirik_wars/infrastructure/i18n/FluentMessageBundle`** — реализация `IMessageBundle` поверх `fluent.runtime`. Per-locale ленивый кэш (`dict + threading.Lock`, double-check), загрузка `locales/{ru,en}.ftl` через `FluentResource(file.read_text())`. Стратегия fallback: `locale.format(key)` → `Locale("en").format(key)` → `MessageKeyError(key)`. «Soft fail» на отсутствующие плейсхолдеры (`logger.warning`, не падаем).
+- **`src/pipirik_wars/bot/middlewares/locale.py`** — `LocaleMiddleware` теперь читает `tg_identity.language_code` и пробрасывает через `LocaleResolver` (DI-параметр), кладёт `Locale` в `data["locale"]` и сырой `language_code` в `data["telegram_language_code"]` (пригодится для аналитики). Без `tg_identity` — `DEFAULT_LOCALE`.
+- **`src/pipirik_wars/bot/middlewares/__init__.py`** — `register_middlewares` принимает опциональный `locale_resolver` и регистрирует `LocaleMiddleware` между `AuthMiddleware` и `ThrottleMiddleware`. Применяется к `dp.message`, `dp.callback_query`, `dp.my_chat_member`.
+- **`locales/ru.ftl` / `locales/en.ftl`** — стартовый набор ключей `start-registered`, `start-already`, `start-group`, `start-other`, `start-queued` (в одной локали по 5 ключей; остальные ключи из handler-ов будут перенесены в .ftl в спринте 1.5.B).
+- **`pyproject.toml`** — добавлен runtime-`fluent.runtime>=0.4,<1` и mypy-override `module = "fluent.*"; ignore_missing_imports = true` (у `fluent.runtime` нет PEP-561 stubs).
+- **Тесты:** 27 новых юнит-тестов:
+  - `tests/unit/application/i18n/test_locale.py` — Locale (валидация, equality, hash) + LocaleResolver (RU/EN-варианты, fallback, override default).
+  - `tests/unit/application/i18n/test_message_bundle_protocol.py` — Protocol-смок (FakeBundle satisfies `IMessageBundle`, `MessageKey` is `str` at runtime).
+  - `tests/unit/infrastructure/i18n/test_fluent_bundle.py` — рендер RU/EN с параметрами, fallback RU→EN, `MessageKeyError` для отсутствующего ключа, `FileNotFoundError` для отсутствующей локали, кэширование bundle (удаляем .ftl после первого вызова — второй всё ещё работает).
+  - `tests/unit/bot/middlewares/test_locale.py` — middleware с RU/EN/unknown/None `language_code`, без identity, custom resolver.
+- **CI**: `make ci` локально — **955 passed, 1 skipped, 96.84%** покрытие.
+
+Результат / артефакты:
+- `src/pipirik_wars/application/i18n/{__init__.py,errors.py,locale.py,message_bundle.py}` (новый пакет, ~200 LoC).
+- `src/pipirik_wars/infrastructure/i18n/{__init__.py,fluent_bundle.py}` (новый пакет, ~150 LoC).
+- `src/pipirik_wars/bot/middlewares/{__init__.py,locale.py}` (обновлены — `LocaleResolver` в стэке).
+- `locales/{ru,en}.ftl` (новые файлы, ~30 строк каждый).
+- `pyproject.toml` (`fluent.runtime` runtime + mypy override).
+- `tests/unit/{application,infrastructure}/i18n/...` + `tests/unit/bot/middlewares/test_locale.py` (новые / обновлённые).
+
+Заметки / решения:
+- **Почему `Locale` живёт в `application`, а не в `domain`.** `Locale` — артефакт UI / презентационного слоя. Домен (`Player`, `Length`, `Forest`) понятия не имеет о языках. Класть value-object в `domain` сейчас означало бы потом таскать `Locale` через все use-case-ы как «доменное» значение и нарушить инвариант «`domain` не зависит от UI».
+- **Почему `LocaleResolver` — это стратегия в `application`, а не функция в middleware.** Middleware должен оставаться тонким (Single Responsibility): «прочитать язык, передать в DI». Резолв — **доменно-нейтральная** логика, и в спринте 1.5.B мы захотим переопределить её на уровне игрока через `players.locale_override` (handler `/lang ru|en`). Чтобы это произошло без переписывания middleware-а — стратегия инжектится через DI.
+- **Почему `MessageKey` — это `NewType[str]`, а не Enum.** На MVP у нас будет ~50–100 ключей, и они растут вместе с handler-ами (новые презентеры → новые ключи). Enum заставлял бы делать релиз `application/i18n/keys.py` каждый раз, когда handler в bot-слое добавляет новую строку. `NewType` даёт type-safety (mypy ловит `bundle.format("typo", ...)` если функция объявлена как `MessageKey`) при минимальном overhead-е.
+- **Почему «soft fail» на сломанные плейсхолдеры.** Бот предпочтительнее показать «Привет { $name }!» чем упасть с 500-кой в ЛС игрока. Логирование `logger.warning` на ошибки Fluent-а поможет ловить такие случаи в стейджинг-ране до прода.
+- **Почему стартовый ftl содержит только `start-*`, а не все ключи разом.** Спринт 1.5.A — фундамент. Реальный «прогон handler-ов через bundle» произойдёт в 1.5.B (отдельный PR), когда мы добавим `IMessageBundle` в DI у handler-ов и удалим hardcoded-строки. Вытаскивать всё разом + менять handler-ы + добавлять `/lang`-команду в одном PR-е — это нарушение нашего принципа «маленькие PR-ы по 200–500 LoC».
+- **Почему `LocaleMiddleware` пишет `tg_lang` в `data["telegram_language_code"]`.** Сырое значение пригодится для аналитики («сколько RU-телег у нас на самом деле») и для `/lang reset` (показать игроку «твой Telegram-язык: ru-RU; включить override?»).
+
+---
+
 ## 2026-05-05 — Спринт 1.4.D: мини-нагрузочный тест `/forest` + полировка `/top`
 
 **Автор:** Devin (по запросу persisyellow)

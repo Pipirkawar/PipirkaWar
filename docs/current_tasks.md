@@ -16,16 +16,33 @@
 
 ---
 
-## 🟢 В работе — Спринт 1.4 (Прокачка толщины + предсказатель + топ)
+## 🟢 В работе — Спринт 1.5 (Локализация, логи, полировка, деплой)
 
-7 задач из §3 / Спринт 1.4 ПД режутся на 4 PR-а (по тому же принципу, что 1.1–1.3):
+7 задач из §3 / Спринт 1.5 ПД режутся на 4 PR-а (тот же принцип, что 1.1–1.4). Цель спринта — закрыть **Definition of Done MVP** (см. `development_plan.md` §4): RU+EN-локализация, аудитлог изменения длины, документация и деплой на VPS.
 
 | PR | Содержимое | Статус | Задачи из `development_plan.md` §3 |
 |---|---|---|---|
-| **1.4.A** | Domain `progression/thickness.py`: `cost_for_upgrade(current_thickness, *, cost_base, cost_exponent)` (формула `n²·base`, `n` — целевой уровень) + `is_activity_unlocked(thickness, activity, unlock_levels)` (table-driven, ГДД §3.3) + ошибка `ActivityLockedError`. Use-case `UpgradeThickness` (списание длины через `require_spend(THICKNESS_UPGRADE)`, `with_thickness(level+1)`, audit `THICKNESS_UPGRADE` с `idempotency_key=f"thickness_upgrade:{player_id}:{new_level}"`). Bot-handler `/upgrade` с inline-подтверждением «Подтвердить ХХХХ см / Отменить» + презентер. Композиционный root + полный набор тестов. | ✅ смержено | 1.4.1 (формула n²·base), 1.4.2 (`/upgrade` с подтверждением), 1.4.3 (unlock-таблица для unlock-проверок будущих активностей) |
+| **1.5.A** | i18n-фундамент: `application/i18n/` (`Locale` value-object с RU/EN, `LocaleResolver` — strategy «`tg.language_code` → Locale», fallback EN; порт `IMessageBundle` + `MessageKey` NewType + ошибки `I18nError`/`MessageKeyError`); `infrastructure/i18n/FluentMessageBundle` (Mozilla Fluent поверх `locales/{ru,en}.ftl`, ленивый кэш + RU→EN fallback); `LocaleMiddleware` использует `LocaleResolver` и кладёт `Locale` в `data["locale"]`. Стартовый набор ключей `start-*` в `locales/{ru,en}.ftl`. Полные unit-тесты (Locale/LocaleResolver, FluentMessageBundle, LocaleMiddleware, IMessageBundle protocol). | 🟢 готово к ревью (текущий PR) | 1.5.1 (подключение fluent), 1.5.2 (`language_code` → Locale, fallback EN) — фундамент |
+| **1.5.B** | Прогон hardcoded-строк через `IMessageBundle`: handler-ы `/start`, `/profile`, `/forest`, `/oracle`, `/upgrade`, `/top` + презентеры → ключи в `.ftl`. Команда `/lang ru\|en` (опциональный override локали; в БД через `IPlayerRepository.set_locale`). Каталог 300+ JSON-шаблонов забавных логов (`templates/forest_logs_ru.json`/`_en.json`, рандомайзер с весами). | ⚪ бэклог | 1.5.1 (все строки из кода → `.ftl`), 1.5.3 (300+ шаблонов забавных логов) |
+| **1.5.C** | Аудитлог изменения длины: каждая ±см пишется через `AuditLogger` с `LENGTH_DELTA` + причина (`forest`/`oracle`/`upgrade`/`pvp`/...) и `length_before`/`length_after`/`delta_cm`. Ревизия существующих use-case-ов — добавить в audit недостающие случаи. E2E-тест на двух пользователей разных локалей (RU + EN), проверяющий что и текст в правильной локали, и audit-row корректен. | ⚪ бэклог | 1.5.4 (audit_log ±см с причиной), 1.5.2 (E2E на двух локалях) |
+| **1.5.D** | Базовый `docker-compose.yml` (бот + локальная Postgres + applied migrations). README + CONTRIBUTING + инструкция деплоя на VPS (1 GB RAM + Neon free). Smoke-runbook деплоя в `ops/`. Финальный DoD MVP-чек-лист. | ⚪ бэклог | 1.5.5 (docker-compose), 1.5.6 (README/CONTRIBUTING/deploy), 1.5.7 (деплой MVP на VPS + Neon) |
+
+> **Дизайн-решение по 1.5.A:** `LocaleResolver` стоит в **application** (а не в `domain`), потому что `Locale` — артефакт UI/презентационного слоя: домен (Player/Length/Forest) не должен знать о языках. И не в `bot/middlewares` — middleware должен использовать **порт-стратегию**, чтобы `infrastructure.i18n` (или будущий `/lang`-handler в Спринте 1.5.B) мог переопределять её через DI без переписывания middleware-а. `IMessageBundle` — **port** в application, реализация (`FluentMessageBundle`) — в infrastructure. Это сохраняет однонаправленность зависимостей (см. `.importlinter`).
+
+> **Дизайн-решение по 1.5.B:** `/lang ru|en` — НЕ доменное правило, а явный override-канал. Хранение per-player локали в `players.locale_override` (миграция в 1.5.B). При резолве middleware идёт по приоритету: `player.locale_override` → `LocaleResolver(tg.language_code)` → `DEFAULT_LOCALE = Locale("en")`.
+
+---
+
+## ✅ Завершено (Спринт 1.4 — Прокачка толщины + предсказатель + топ)
+
+7 задач из §3 / Спринт 1.4 ПД, разрезано на 4 PR-а. Спринт закрыт.
+
+| PR | Содержимое | Статус | Задачи из `development_plan.md` §3 |
+|---|---|---|---|
+| **1.4.A** | Domain `progression/thickness.py`: `cost_for_upgrade(current_thickness, *, cost_base, cost_exponent)` (формула `n²·base`, `n` — целевой уровень) + `is_activity_unlocked(thickness, activity, unlock_levels)` (table-driven, ГДД §3.3) + ошибка `ActivityLockedError`. Use-case `UpgradeThickness` (списание длины через `require_spend(THICKNESS_UPGRADE)`, `with_thickness(level+1)`, audit `THICKNESS_UPGRADE` с `idempotency_key=f"thickness_upgrade:{player_id}:{new_level}"`). Bot-handler `/upgrade` с inline-подтверждением «Подтвердить ХХХХ см / Отменить» + презентер. Композиционный root + полный набор тестов. | ✅ смержено (PR #21) | 1.4.1 (формула n²·base), 1.4.2 (`/upgrade` с подтверждением), 1.4.3 (unlock-таблица для unlock-проверок будущих активностей) |
 | **1.4.B** | Domain `oracle/`: иммутабельный `OracleResult` (бонус-cm + темплейт-id) + чистая функция `roll_oracle(*, balance, random, templates)`. Application `IOracleHistoryRepository` (запись «последний `/oracle`-вызов на игрока в Moscow-day»). Миграция `oracle_invocations` (unique по `(player_id, moscow_date)`). Use-case `InvokeOracle` (cooldown_check → roll → длина-grant → audit `LENGTH_GRANT/oracle`). 220 темплейтов в `templates/oracle_ru.json` + 220 в `oracle_en.json` (i18n будет в 1.5). Bot-handler `/oracle`. | ✅ смержено (PR #22) | 1.4.4 (Moscow-TZ кулдаун + uniform(1,20)), 1.4.5 (200+ темплейтов) |
 | **1.4.C** | Application `IPlayerRepository.list_top_by_length(limit)` + `SqlAlchemyPlayerRepository.list_top_by_length`. In-memory кэш `TopPlayersCache(ttl=60s)` (порт `ITopPlayersQuery`, реализация поверх IPlayerRepository). Use-case / query `GetTopPlayers(limit=100)`. Bot-handler `/top` + презентер «Титул Название Имя — N см». | ✅ смержено (PR #23) | 1.4.6 (топ-100, кэш 60 с) |
-| **1.4.D** | Мини-нагрузочный тест: 100 параллельных `/forest` без потери лока (`asyncio.gather` поверх файлового SQLite). Финальный полировочный round: чистка неиспользуемых импортов в `/top`-хендлере, проверка ПД-чек-листа «всё ли DOD MVP покрыто». | 🟢 готово к ревью (PR ожидает CI) | 1.4.7 |
+| **1.4.D** | Мини-нагрузочный тест: 100 параллельных `/forest` без потери лока (`asyncio.gather` поверх файлового SQLite). Финальный полировочный round: чистка неиспользуемых импортов в `/top`-хендлере, проверка ПД-чек-листа «всё ли DOD MVP покрыто». | ✅ смержено (PR #24) | 1.4.7 |
 
 > **Дизайн-решение по 1.4.A:** unlock-таблица храним в `balance.yaml::thickness.unlock_levels` (там она и есть с 1.3.A). Но проверка «можно ли войти в активность» — **доменное правило**, поэтому домен принимает её как аргумент (`Mapping[str, int]`), а не лезет в `IBalanceConfig` напрямую. Use-case-ы получают snapshot и зовут `is_activity_unlocked(thickness, activity, unlock_levels=balance.thickness.unlock_levels)`. Это сохраняет чистоту домена и упрощает тесты.
 
