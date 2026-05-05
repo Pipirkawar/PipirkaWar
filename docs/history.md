@@ -23,6 +23,39 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.4.D: мини-нагрузочный тест `/forest` + полировка `/top`
+
+**Автор:** Devin (по запросу persisyellow)
+**Тип:** test (load) + refactor (cleanup)
+**Связано:** Текущий PR (Спринт 1.4.D), [development_plan.md §3 / Спринт 1.4, задача 1.4.7](development_plan.md), [current_tasks.md Спринт 1.4 → 1.4.D](current_tasks.md). Закрытие Спринта 1.4 после смерженного 1.4.C (PR #23).
+
+Финальный PR Спринта 1.4 — две вещи:
+
+1. **Мини-нагрузочный тест ПД §1.4.7** «100 параллельных «походов в лес» без потери лока». Закрывает acceptance-критерий: под пиковой нагрузкой `activity_lock` корректно отбивает дублирующие запросы.
+2. **Полировка `/top`** — чистка неиспользуемых импортов (`logging`, `typing.Final`) в handler-е после 1.4.C.
+
+Что сделано:
+- **`tests/integration/load/test_forest_concurrent.py`** — два сценария под `asyncio.gather`:
+  - `test_100_parallel_starts_for_same_player_only_one_wins` — один игрок, 100 одновременных вызовов `StartForestRun` через **независимые `SqlAlchemyUnitOfWork`**: ровно 1 успех, 99 — `AlreadyInForestError`. После теста проверяем consistency БД: 1 строка `forest_runs(IN_PROGRESS)`, 1 строка `activity_locks` для этого игрока.
+  - `test_100_parallel_starts_for_different_players_all_succeed` — 100 разных игроков по одному `/forest` каждый: все 100 успешны, ровно 100 `IN_PROGRESS`-походов и 100 локов в БД (нет ложных конфликтов на чужих локах).
+- **`tests/integration/load/conftest.py`** — фикстура `shared_engine` поверх **файловой** SQLite (`tmp_path / "load.db"`), а не `:memory:` + `StaticPool`. Причина: `:memory:` через `StaticPool` мультиплексирует все асинхронные сессии на одно соединение/одну транзакцию, что замаскировало бы логические race-ошибки. Файловый SQLite даёт каждой сессии собственное соединение (`timeout=30s` для `SQLITE_BUSY`).
+- **`pyproject.toml`** — зарегистрирован новый pytest-маркер `slow` для нагрузочных сценариев (`--strict-markers` иначе бы сломался).
+- **`bot/handlers/top.py`** — удалены неиспользуемые `import logging`, `from typing import Final` и заглушка `_LOGGER`. Поведение не изменилось; чисто косметический рефакторинг по итогам 1.4.C.
+- **CI**: `make ci` локально — **913 passed, 1 skipped, 96.97%** покрытие.
+
+Результат / артефакты:
+- `tests/integration/load/{__init__,conftest,test_forest_concurrent}.py` (новый пакет тестов).
+- `pyproject.toml` (новый маркер `slow`).
+- `src/pipirik_wars/bot/handlers/top.py` (чистка импортов).
+
+Заметки / решения:
+- **Почему файловая SQLite, а не `:memory:` + `StaticPool`.** `StaticPool` гарантирует ОДНО соединение для всего движка. Для async-кода это означает, что все 100 «параллельных» сессий жмутся в одну транзакцию — в итоге даже если бы lock-механика была сломана, тест бы прошёл (ошибки замаскировались бы блокировкой одного соединения). Файловая SQLite в `tmp_path` даёт нормальное соединение на сессию: каждая `SqlAlchemyUnitOfWork` открывает свой `BEGIN/COMMIT`, и серилизуется через файловый лок самого SQLite — это близко к Postgres-семантике.
+- **Почему `slow`-маркер, но без `pytest -m "not slow"` в `make ci`.** В моменте 1.4.D есть всего 2 нагрузочных теста по ~1с каждый, общий прирост к CI пренебрежим. Маркер регистрируем заранее, чтобы будущим Sprint 4.1.5 («нагрузочный тест 10× MVP») было куда вешать тяжёлую нагрузку, не ломая текущий зелёный pipeline.
+- **Полировка вместо контентной разработки.** Все презентеры просмотрены на typo — критических ошибок не найдено. `display_name` / `PlayerName` / `Title` приходят из контролируемых источников (`balance.yaml`, hardcoded enum), HTML-инъекций через них быть не может; явное HTML-экранирование можно добавить в Спринте 1.5 при подключении Telegram first_name (i18n).
+- **DOD MVP-чек-лист.** Спринты 1.1–1.4 закрыли: регистрация ✅, `/profile` ✅, `/forest` + дроп ✅, прокачка толщины ✅, `/oracle` ✅, `/top` ✅, DAU Gate ✅, Activity Lock под нагрузкой ✅. Остаётся для DoD MVP: i18n RU+EN (Спринт 1.5.1–1.5.2), деплой (1.5.7).
+
+---
+
 ## 2026-05-05 — Спринт 1.4.C: топ игроков (`/top` + in-memory TTL=60s кэш)
 
 **Автор:** Devin (по запросу persisyellow)
