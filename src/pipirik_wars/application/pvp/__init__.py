@@ -44,6 +44,7 @@ from pipirik_wars.application.pvp.expire_lobby_entry import (
     LobbyEntryExpirationSkipped,
     LobbyEntryExpired,
 )
+from pipirik_wars.application.pvp.log_templates import IDuelLogTemplateProvider
 from pipirik_wars.application.pvp.match_from_lobby import (
     DuelMatched,
     EmptyLobby,
@@ -72,6 +73,7 @@ __all__ = [
     "EscalateChatToGlobal",
     "ExpireLobbyEntry",
     "GlobalDuelEnqueued",
+    "IDuelLogTemplateProvider",
     "InvalidLobbyEnqueueError",
     "LobbyEntryExpirationSkipped",
     "LobbyEntryExpired",
