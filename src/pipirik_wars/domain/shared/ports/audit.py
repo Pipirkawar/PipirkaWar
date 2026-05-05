@@ -47,6 +47,7 @@ class AuditAction(str, enum.Enum):
     DAU_THRESHOLD_REACHED = "dau_threshold_reached"
     PLAYER_QUEUED = "player_queued"
     PLAYER_PROMOTED = "player_promoted"
+    PLAYER_LOCALE_SET = "player_locale_set"
     FOREST_RUN_STARTED = "forest_run_started"
     ADMIN_COMMAND = "admin_command"
 

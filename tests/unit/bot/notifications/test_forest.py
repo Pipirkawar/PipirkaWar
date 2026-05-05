@@ -41,7 +41,11 @@ from pipirik_wars.domain.player import (
 )
 from pipirik_wars.domain.shared.ports import IUnitOfWork
 from pipirik_wars.infrastructure.i18n import FluentMessageBundle
-from tests.fakes import FakeMessageBundle, FakePlayerRepository
+from tests.fakes import (
+    FakeMessageBundle,
+    FakePlayerLocaleResolver,
+    FakePlayerRepository,
+)
 
 _NOW = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
 
@@ -177,25 +181,21 @@ def _make_notifier(
     logger: logging.Logger | None = None,
     default_locale: Locale | None = None,
     bundle: IMessageBundle | None = None,
+    locale_resolver: FakePlayerLocaleResolver | None = None,
 ) -> TelegramForestFinishNotifier:
-    if default_locale is None:
-        return TelegramForestFinishNotifier(
-            bot=cast(Bot, bot),
-            players=FakePlayerRepository(),
-            balance=balance if balance is not None else _FakeBalanceConfig(),
-            uow=_FakeUnitOfWork(),
-            bundle=bundle if bundle is not None else _fluent_bundle(),
-            logger=logger,
-        )
-    return TelegramForestFinishNotifier(
-        bot=cast(Bot, bot),
-        players=FakePlayerRepository(),
-        balance=balance if balance is not None else _FakeBalanceConfig(),
-        uow=_FakeUnitOfWork(),
-        bundle=bundle if bundle is not None else _fluent_bundle(),
-        default_locale=default_locale,
-        logger=logger,
-    )
+    kwargs: dict[str, Any] = {
+        "bot": cast(Bot, bot),
+        "players": FakePlayerRepository(),
+        "balance": balance if balance is not None else _FakeBalanceConfig(),
+        "uow": _FakeUnitOfWork(),
+        "bundle": bundle if bundle is not None else _fluent_bundle(),
+        "logger": logger,
+    }
+    if default_locale is not None:
+        kwargs["default_locale"] = default_locale
+    if locale_resolver is not None:
+        kwargs["locale_resolver"] = locale_resolver
+    return TelegramForestFinishNotifier(**kwargs)
 
 
 # ----------------------- Тесты -----------------------
@@ -348,3 +348,77 @@ async def test_uses_default_logger_when_none_provided() -> None:
     # Конструктор не падает без logger; notify работает.
     await notifier.notify(_result())
     assert len(bot.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_locale_resolver_renders_in_player_locale_ru() -> None:
+    """1.5.F: если у игрока locale_override='ru', нотификатор шлёт RU
+    даже если default_locale=EN."""
+    bot = _FakeBot()
+    resolver = FakePlayerLocaleResolver()
+    resolver.set_override(1001, Locale("ru"))
+    notifier = _make_notifier(
+        bot=bot,
+        balance=_FakeBalanceConfig(display_name="Пипирик"),
+        default_locale=Locale("en"),
+        locale_resolver=resolver,
+    )
+    await notifier.notify(_result(drop=NoDrop()))
+    call = bot.calls[0]
+    assert "вернулся из леса" in call.text
+    assert resolver.calls == [1001]
+
+
+@pytest.mark.asyncio
+async def test_locale_resolver_renders_in_player_locale_en() -> None:
+    bot = _FakeBot()
+    resolver = FakePlayerLocaleResolver()
+    resolver.set_override(1001, Locale("en"))
+    notifier = _make_notifier(
+        bot=bot,
+        balance=_FakeBalanceConfig(display_name="Pipirik"),
+        default_locale=Locale("ru"),
+        locale_resolver=resolver,
+    )
+    await notifier.notify(_result(drop=NoDrop()))
+    call = bot.calls[0]
+    assert "returned from the forest" in call.text
+
+
+@pytest.mark.asyncio
+async def test_locale_resolver_none_falls_back_to_default() -> None:
+    """Игрок не выбирал /lang — резолвер вернёт None, фолбэк на default_locale."""
+    bot = _FakeBot()
+    resolver = FakePlayerLocaleResolver()  # без overrides
+    notifier = _make_notifier(
+        bot=bot,
+        balance=_FakeBalanceConfig(display_name="Пипирик"),
+        default_locale=Locale("ru"),
+        locale_resolver=resolver,
+    )
+    await notifier.notify(_result(drop=NoDrop()))
+    call = bot.calls[0]
+    assert "вернулся из леса" in call.text
+
+
+@pytest.mark.asyncio
+async def test_locale_resolver_swallows_errors() -> None:
+    """Если резолвер упал — фолбэк на default_locale, ничего не падает."""
+    bot = _FakeBot()
+
+    @dataclass
+    class _BoomResolver:
+        async def resolve_for_tg_id(self, tg_id: int) -> Locale | None:
+            raise RuntimeError("db down")
+
+    notifier = _make_notifier(
+        bot=bot,
+        balance=_FakeBalanceConfig(display_name="Pipirik"),
+        default_locale=Locale("en"),
+        locale_resolver=cast(Any, _BoomResolver()),
+    )
+    await notifier.notify(_result(drop=NoDrop()))
+    # Сообщение всё равно ушло — нотификатор не должен спамить ошибки
+    # пользователю.
+    assert len(bot.calls) == 1
+    assert "returned from the forest" in bot.calls[0].text

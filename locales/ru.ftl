@@ -223,3 +223,25 @@ forest-toast-foreign-button = Эта кнопка не для тебя.
 forest-toast-run-not-found = Этот лес уже неактивен.
 forest-toast-drop-mismatch = Кнопка устарела.
 forest-toast-player-not-found = Сначала нажми /start.
+
+# ----------------------------- /lang -----------------------------
+# Команда `/lang ru|en` — выбор языка интерфейса (Спринт 1.5.F).
+
+# Команда вызвана не в ЛС.
+lang-group = Команда `/lang` доступна только в личке. Зайди в ЛС.
+
+# Команда вызвана не от Telegram-пользователя (например, из канала).
+lang-other = Команда `/lang` доступна только обычным пользователям.
+
+# Игрок не зарегистрирован.
+lang-not-registered = Сначала нажми /start, потом — /lang ru|en.
+
+# Использование: показать справку, если аргументы не валидны.
+lang-usage = Использование: /lang ru или /lang en.
+
+# Поддерживаемые языки в строке (для подсказки в lang-usage).
+lang-unsupported = Язык `{ $code }` не поддерживается. Доступно: ru, en.
+
+# Локаль установлена. `$code` — новый код локали.
+lang-set-ru = Язык интерфейса: русский. Все ответы и фоновые сообщения теперь на русском.
+lang-set-en = Interface language switched to English. All replies and background messages will be in English.

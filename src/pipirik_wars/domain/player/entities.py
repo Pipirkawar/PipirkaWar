@@ -67,6 +67,7 @@ class Player:
     status: PlayerStatus
     created_at: datetime
     updated_at: datetime
+    locale_override: str | None = None
 
     @classmethod
     def new(
@@ -147,3 +148,15 @@ class Player:
         if self.status is PlayerStatus.ACTIVE:
             return self
         return replace(self, status=PlayerStatus.ACTIVE, updated_at=now)
+
+    def with_locale_override(self, locale_override: str | None, *, now: datetime) -> Player:
+        """Переписать явный выбор языка игрока (Спринт 1.5.F, `/lang`).
+
+        `None` — сбросить override и вернуться к `tg.language_code → DEFAULT`.
+        Идемпотентно: если значение не меняется, возвращаем тот же инстанс (без буманого UPDATE-а).
+        Допускается и для frozen-игроков: выбор языка — это интерфейсная настройка,
+        а не игровое действие (они всё равно получают сообщение «аккаунт заморожен»).
+        """
+        if locale_override == self.locale_override:
+            return self
+        return replace(self, locale_override=locale_override, updated_at=now)

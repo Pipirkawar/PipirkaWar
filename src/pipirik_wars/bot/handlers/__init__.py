@@ -16,6 +16,7 @@ from aiogram import Dispatcher
 
 from pipirik_wars.bot.handlers.admin import router as admin_router
 from pipirik_wars.bot.handlers.forest import router as forest_router
+from pipirik_wars.bot.handlers.lang import router as lang_router
 from pipirik_wars.bot.handlers.oracle import router as oracle_router
 from pipirik_wars.bot.handlers.profile import router as profile_router
 from pipirik_wars.bot.handlers.registration import router as registration_router
@@ -28,6 +29,7 @@ def register_routers(dispatcher: Dispatcher) -> None:
     """Подключает все handler-router-ы к dispatcher-у."""
     dispatcher.include_router(start_router)
     dispatcher.include_router(profile_router)
+    dispatcher.include_router(lang_router)
     dispatcher.include_router(forest_router)
     dispatcher.include_router(upgrade_router)
     dispatcher.include_router(oracle_router)

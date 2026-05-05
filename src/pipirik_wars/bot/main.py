@@ -52,12 +52,16 @@ from pipirik_wars.application.forest import (
     IForestFinishNotifier,
     StartForestRun,
 )
-from pipirik_wars.application.i18n import IMessageBundle
+from pipirik_wars.application.i18n import IMessageBundle, IPlayerLocaleResolver
 from pipirik_wars.application.oracle import (
     InvokeOracle,
     IOracleTemplateProvider,
 )
-from pipirik_wars.application.player import GetProfile, RegisterPlayer
+from pipirik_wars.application.player import (
+    GetProfile,
+    RegisterPlayer,
+    SetPlayerLocale,
+)
 from pipirik_wars.application.progression import UpgradeThickness
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
@@ -106,7 +110,10 @@ from pipirik_wars.infrastructure.db.services import (
     SqlAlchemyIdempotencyService,
 )
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
-from pipirik_wars.infrastructure.i18n import FluentMessageBundle
+from pipirik_wars.infrastructure.i18n import (
+    FluentMessageBundle,
+    PlayerLocaleResolverDB,
+)
 from pipirik_wars.infrastructure.random import RealRandom
 from pipirik_wars.infrastructure.rate_limit import (
     InMemoryTokenBucketRateLimiter,
@@ -158,8 +165,11 @@ class Container:
     # Шаблоны (Спринт 1.4.B)
     oracle_templates: IOracleTemplateProvider
 
-    # i18n (Спринт 1.5.A → 1.5.B): локализованные сообщения для handler-ов.
+    # i18n (Спринт 1.5.A → 1.5.B → 1.5.F): локализованные
+    # сообщения для handler-ов + резолвер языка игрока для middleware
+    # и фоновых jobs.
     bundle: IMessageBundle
+    player_locale_resolver: IPlayerLocaleResolver
 
     # Запросы (Спринт 1.4.C)
     top_players_query: ITopPlayersQuery
@@ -180,6 +190,7 @@ class Container:
     freeze_clan: FreezeClan
     get_profile: GetProfile
     reload_balance: ReloadBalance
+    set_player_locale: SetPlayerLocale
     get_dau_stats: GetDauStats
     set_max_dau: SetMaxDau
     promote_from_queue: PromoteFromQueue
@@ -243,6 +254,7 @@ def build_container(
         templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
     )
     bundle = FluentMessageBundle(locales_dir=locales_dir or _DEFAULT_LOCALES_DIR)
+    player_locale_resolver = PlayerLocaleResolverDB(uow=uow)
     top_players_query = TopPlayersCache(
         uow=uow,
         players=players,
@@ -350,6 +362,7 @@ def build_container(
             balance=balance,
             uow=uow,
             bundle=bundle,
+            locale_resolver=player_locale_resolver,
         )
     delayed_jobs = APSchedulerDelayedJobScheduler(
         scheduler=AsyncIOScheduler(),
@@ -392,6 +405,12 @@ def build_container(
         clock=clock,
     )
     get_top_players = GetTopPlayers(query=top_players_query)
+    set_player_locale = SetPlayerLocale(
+        uow=uow,
+        players=players,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -412,6 +431,7 @@ def build_container(
         oracle_history=oracle_history,
         oracle_templates=oracle_templates,
         bundle=bundle,
+        player_locale_resolver=player_locale_resolver,
         top_players_query=top_players_query,
         delayed_jobs=delayed_jobs,
         dau_counter=dau_counter,
@@ -424,6 +444,7 @@ def build_container(
         freeze_clan=freeze_clan,
         get_profile=get_profile,
         reload_balance=reload_balance,
+        set_player_locale=set_player_locale,
         get_dau_stats=get_dau_stats,
         set_max_dau=set_max_dau,
         promote_from_queue=promote_from_queue,
@@ -444,7 +465,11 @@ def build_dispatcher(container: Container) -> Dispatcher:
     автоматически пробросит их в handler-ы по имени параметра.
     """
     dispatcher = Dispatcher()
-    register_middlewares(dispatcher, limiter=container.rate_limiter)
+    register_middlewares(
+        dispatcher,
+        limiter=container.rate_limiter,
+        player_locale_resolver=container.player_locale_resolver,
+    )
     register_routers(dispatcher)
     # Workflow-data DI: aiogram сам пробросит их в handler-ы по имени.
     dispatcher["register_player"] = container.register_player
@@ -467,6 +492,7 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["balance"] = container.balance
     dispatcher["clock"] = container.clock
     dispatcher["bundle"] = container.bundle
+    dispatcher["set_player_locale"] = container.set_player_locale
     return dispatcher
 
 
