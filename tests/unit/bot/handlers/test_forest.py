@@ -1,4 +1,4 @@
-"""Юнит-тесты `/forest`-handler-а и forest-callback-handler-ов (Спринт 1.3.D)."""
+"""Юнит-тесты `/forest`-handler-а и forest-callback-handler-ов (Спринт 1.3.D → 1.5.E)."""
 
 from __future__ import annotations
 
@@ -15,21 +15,9 @@ from pipirik_wars.application.forest import (
     ForestRunStarted,
     StartForestRun,
 )
+from pipirik_wars.application.i18n import IMessageBundle, Locale
 from pipirik_wars.application.player import GetProfile, ProfileView
 from pipirik_wars.bot.handlers.forest import (
-    REPLY_ALREADY_IN_FOREST_RU,
-    REPLY_GROUP_RU,
-    REPLY_NOT_REGISTERED_RU,
-    REPLY_OTHER_RU,
-    TOAST_DROP_MISMATCH,
-    TOAST_FOREIGN_BUTTON,
-    TOAST_ITEM_DROPPED,
-    TOAST_ITEM_EQUIPPED_PLACEHOLDER,
-    TOAST_NAME_ALREADY_APPLIED,
-    TOAST_NAME_APPLIED,
-    TOAST_NAME_DROPPED,
-    TOAST_PLAYER_NOT_FOUND,
-    TOAST_RUN_NOT_FOUND,
     handle_forest,
     handle_forest_callback,
 )
@@ -53,8 +41,15 @@ from pipirik_wars.domain.player import (
     Thickness,
     Username,
 )
+from tests.fakes import FakeMessageBundle
 
 _NOW = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
+_RU = Locale("ru")
+_EN = Locale("en")
+
+
+def _bundle() -> IMessageBundle:
+    return FakeMessageBundle()
 
 
 def _msg(chat_type: str = "private") -> MagicMock:
@@ -139,7 +134,7 @@ def _stub_apply_name_drop(
 
 @pytest.mark.asyncio
 class TestHandleForest:
-    async def test_private_success_sends_started_message(self) -> None:
+    async def test_private_success_sends_started_message_with_locale(self) -> None:
         msg = _msg("private")
         start = _stub_start()
         get_profile = _stub_profile()
@@ -149,15 +144,19 @@ class TestHandleForest:
             _identity("private", tg_user_id=100),
             cast(StartForestRun, start),
             cast(GetProfile, get_profile),
+            _bundle(),
+            _RU,
         )
 
         start.execute.assert_awaited_once()
         msg.answer.assert_awaited_once()
         sent = msg.answer.await_args.args[0]
-        assert "ушёл в лес на 15 минут" in sent
-        assert "Пипирик" in sent
+        # FakeMessageBundle: «ru:forest-started[cooldown_minutes=15,nick=Пипирик]»
+        assert "ru:forest-started" in sent
+        assert "cooldown_minutes=15" in sent
+        assert "nick=Пипирик" in sent
 
-    async def test_player_not_found(self) -> None:
+    async def test_player_not_found_uses_not_registered_key(self) -> None:
         msg = _msg("private")
         start = _stub_start(error=PlayerNotFoundError(tg_id=100))
 
@@ -166,11 +165,13 @@ class TestHandleForest:
             _identity("private"),
             cast(StartForestRun, start),
             cast(GetProfile, _stub_profile()),
+            _bundle(),
+            _RU,
         )
 
-        msg.answer.assert_awaited_once_with(REPLY_NOT_REGISTERED_RU)
+        msg.answer.assert_awaited_once_with("ru:forest-not-registered")
 
-    async def test_already_in_forest(self) -> None:
+    async def test_already_in_forest_uses_already_in_key(self) -> None:
         msg = _msg("private")
         start = _stub_start(error=AlreadyInForestError(player_id=1))
 
@@ -179,11 +180,13 @@ class TestHandleForest:
             _identity("private"),
             cast(StartForestRun, start),
             cast(GetProfile, _stub_profile()),
+            _bundle(),
+            _RU,
         )
 
-        msg.answer.assert_awaited_once_with(REPLY_ALREADY_IN_FOREST_RU)
+        msg.answer.assert_awaited_once_with("ru:forest-already-in")
 
-    async def test_group_replies_instructions(self) -> None:
+    async def test_group_uses_group_key(self) -> None:
         msg = _msg("group")
         start = _stub_start()
 
@@ -192,12 +195,14 @@ class TestHandleForest:
             _identity("group"),
             cast(StartForestRun, start),
             cast(GetProfile, _stub_profile()),
+            _bundle(),
+            _EN,
         )
 
         start.execute.assert_not_awaited()
-        msg.answer.assert_awaited_once_with(REPLY_GROUP_RU)
+        msg.answer.assert_awaited_once_with("en:forest-group")
 
-    async def test_supergroup_replies_instructions(self) -> None:
+    async def test_supergroup_uses_group_key(self) -> None:
         msg = _msg("supergroup")
         start = _stub_start()
 
@@ -206,12 +211,14 @@ class TestHandleForest:
             _identity("supergroup"),
             cast(StartForestRun, start),
             cast(GetProfile, _stub_profile()),
+            _bundle(),
+            _RU,
         )
 
         start.execute.assert_not_awaited()
-        msg.answer.assert_awaited_once_with(REPLY_GROUP_RU)
+        msg.answer.assert_awaited_once_with("ru:forest-group")
 
-    async def test_channel_replies_other(self) -> None:
+    async def test_channel_uses_other_key(self) -> None:
         msg = _msg("channel")
         start = _stub_start()
 
@@ -220,11 +227,13 @@ class TestHandleForest:
             _identity("channel"),
             cast(StartForestRun, start),
             cast(GetProfile, _stub_profile()),
+            _bundle(),
+            _RU,
         )
 
-        msg.answer.assert_awaited_once_with(REPLY_OTHER_RU)
+        msg.answer.assert_awaited_once_with("ru:forest-other")
 
-    async def test_private_no_identity_falls_back(self) -> None:
+    async def test_private_no_identity_falls_back_to_other(self) -> None:
         msg = _msg("private")
         start = _stub_start()
 
@@ -233,12 +242,30 @@ class TestHandleForest:
             None,
             cast(StartForestRun, start),
             cast(GetProfile, _stub_profile()),
+            _bundle(),
+            _RU,
         )
 
-        msg.answer.assert_awaited_once_with(REPLY_OTHER_RU)
+        msg.answer.assert_awaited_once_with("ru:forest-other")
         start.execute.assert_not_awaited()
 
-    async def test_profile_missing_after_start_falls_back(self) -> None:
+    async def test_locale_defaults_to_default_locale_when_none(self) -> None:
+        msg = _msg("group")
+        start = _stub_start()
+
+        await handle_forest(
+            cast(Message, msg),
+            _identity("group"),
+            cast(StartForestRun, start),
+            cast(GetProfile, _stub_profile()),
+            _bundle(),
+            None,
+        )
+
+        # DEFAULT_LOCALE = "en"
+        msg.answer.assert_awaited_once_with("en:forest-group")
+
+    async def test_profile_missing_after_start_falls_back_to_started_fallback(self) -> None:
         msg = _msg("private")
         start = _stub_start()
         # Профиль вернул None — handler должен прислать минимальный fallback.
@@ -250,11 +277,14 @@ class TestHandleForest:
             _identity("private"),
             cast(StartForestRun, start),
             cast(GetProfile, get_profile),
+            _bundle(),
+            _RU,
         )
 
         msg.answer.assert_awaited_once()
         sent = msg.answer.await_args.args[0]
-        assert "ушёл в лес на 15 минут" in sent
+        # Маркер FakeMessageBundle: «ru:forest-started-fallback[cooldown_minutes=15]»
+        assert sent == "ru:forest-started-fallback[cooldown_minutes=15]"
 
 
 def _callback(
@@ -277,45 +307,69 @@ def _callback(
 
 @pytest.mark.asyncio
 class TestForestCallback:
-    async def test_apply_name_success(self) -> None:
+    async def test_apply_name_success_uses_toast_name_applied(self) -> None:
         cb = _callback(data="forest:apply_name:11")
         use_case = _stub_apply_name_drop()
 
-        await handle_forest_callback(cb, _identity(), cast(ApplyForestNameDrop, use_case))
+        await handle_forest_callback(
+            cb,
+            _identity(),
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            _RU,
+        )
 
         use_case.execute.assert_awaited_once()
         cb.answer.assert_awaited_once()
         toast = cb.answer.await_args.args[0]
-        assert toast == TOAST_NAME_APPLIED
+        assert toast == "ru:forest-toast-name-applied"
         cb.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
 
     async def test_apply_name_already_applied(self) -> None:
         cb = _callback()
         use_case = _stub_apply_name_drop(was_already=True)
 
-        await handle_forest_callback(cb, _identity(), cast(ApplyForestNameDrop, use_case))
+        await handle_forest_callback(
+            cb,
+            _identity(),
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            _RU,
+        )
 
         toast = cb.answer.await_args.args[0]
-        assert toast == TOAST_NAME_ALREADY_APPLIED
+        assert toast == "ru:forest-toast-name-already-applied"
 
     async def test_apply_name_run_not_found(self) -> None:
         cb = _callback()
         use_case = _stub_apply_name_drop(error=ForestRunNotFoundError(run_id=11))
 
-        await handle_forest_callback(cb, _identity(), cast(ApplyForestNameDrop, use_case))
+        await handle_forest_callback(
+            cb,
+            _identity(),
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            _RU,
+        )
 
         toast = cb.answer.await_args.args[0]
-        assert toast == TOAST_RUN_NOT_FOUND
+        assert toast == "ru:forest-toast-run-not-found"
         cb.message.edit_reply_markup.assert_awaited_once()
 
     async def test_apply_name_player_not_found(self) -> None:
         cb = _callback()
         use_case = _stub_apply_name_drop(error=PlayerNotFoundError(tg_id=100))
 
-        await handle_forest_callback(cb, _identity(), cast(ApplyForestNameDrop, use_case))
+        await handle_forest_callback(
+            cb,
+            _identity(),
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            _RU,
+        )
 
         toast = cb.answer.await_args.args[0]
-        assert toast == TOAST_PLAYER_NOT_FOUND
+        assert toast == "ru:forest-toast-player-not-found"
         # При player_not_found клавиатуру не снимаем (юзер не зарегистрирован).
         cb.message.edit_reply_markup.assert_not_awaited()
 
@@ -325,11 +379,16 @@ class TestForestCallback:
             error=ForestRunOwnershipError(run_id=11, run_player_id=1, actor_player_id=2)
         )
 
-        await handle_forest_callback(cb, _identity(), cast(ApplyForestNameDrop, use_case))
+        await handle_forest_callback(
+            cb,
+            _identity(),
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            _RU,
+        )
 
         toast = cb.answer.await_args.args[0]
-        assert toast == TOAST_FOREIGN_BUTTON
-        # При чужой кнопке клавиатуру не трогаем — это сообщение чужое.
+        assert toast == "ru:forest-toast-foreign-button"
         cb.message.edit_reply_markup.assert_not_awaited()
 
     async def test_apply_name_drop_mismatch(self) -> None:
@@ -338,60 +397,95 @@ class TestForestCallback:
             error=ForestDropMismatchError(run_id=11, expected="name", got="ItemDrop")
         )
 
-        await handle_forest_callback(cb, _identity(), cast(ApplyForestNameDrop, use_case))
+        await handle_forest_callback(
+            cb,
+            _identity(),
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            _RU,
+        )
 
         toast = cb.answer.await_args.args[0]
-        assert toast == TOAST_DROP_MISMATCH
+        assert toast == "ru:forest-toast-drop-mismatch"
         cb.message.edit_reply_markup.assert_awaited_once()
 
-    async def test_drop_name_action_no_use_case_call(self) -> None:
+    async def test_drop_name_no_use_case_call(self) -> None:
         cb = _callback(data="forest:drop_name:11")
         use_case = _stub_apply_name_drop()
 
-        await handle_forest_callback(cb, _identity(), cast(ApplyForestNameDrop, use_case))
+        await handle_forest_callback(
+            cb,
+            _identity(),
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            _RU,
+        )
 
-        # `drop_name` — audit-only no-op; use-case не зовётся.
         use_case.execute.assert_not_awaited()
         toast = cb.answer.await_args.args[0]
-        assert toast == TOAST_NAME_DROPPED
+        assert toast == "ru:forest-toast-name-dropped"
         cb.message.edit_reply_markup.assert_awaited_once()
 
     async def test_equip_item_action(self) -> None:
         cb = _callback(data="forest:equip_item:11")
         use_case = _stub_apply_name_drop()
 
-        await handle_forest_callback(cb, _identity(), cast(ApplyForestNameDrop, use_case))
+        await handle_forest_callback(
+            cb,
+            _identity(),
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            _RU,
+        )
 
         use_case.execute.assert_not_awaited()
         toast = cb.answer.await_args.args[0]
-        assert toast == TOAST_ITEM_EQUIPPED_PLACEHOLDER
+        assert toast == "ru:forest-toast-item-equipped-placeholder"
 
     async def test_drop_item_action(self) -> None:
         cb = _callback(data="forest:drop_item:11")
         use_case = _stub_apply_name_drop()
 
-        await handle_forest_callback(cb, _identity(), cast(ApplyForestNameDrop, use_case))
+        await handle_forest_callback(
+            cb,
+            _identity(),
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            _RU,
+        )
 
         use_case.execute.assert_not_awaited()
         toast = cb.answer.await_args.args[0]
-        assert toast == TOAST_ITEM_DROPPED
+        assert toast == "ru:forest-toast-item-dropped"
 
-    async def test_invalid_callback_data_silenced(self) -> None:
+    async def test_invalid_callback_data_silenced_with_drop_mismatch_toast(self) -> None:
         cb = _callback(data="not:forest:data")
         use_case = _stub_apply_name_drop()
 
-        await handle_forest_callback(cb, _identity(), cast(ApplyForestNameDrop, use_case))
+        await handle_forest_callback(
+            cb,
+            _identity(),
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            _RU,
+        )
 
         use_case.execute.assert_not_awaited()
         cb.answer.assert_awaited_once()
         toast = cb.answer.await_args.args[0]
-        assert toast == TOAST_DROP_MISMATCH
+        assert toast == "ru:forest-toast-drop-mismatch"
 
     async def test_no_identity_returns_silently(self) -> None:
         cb = _callback()
         use_case = _stub_apply_name_drop()
 
-        await handle_forest_callback(cb, None, cast(ApplyForestNameDrop, use_case))
+        await handle_forest_callback(
+            cb,
+            None,
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            _RU,
+        )
 
         use_case.execute.assert_not_awaited()
         cb.answer.assert_not_awaited()
@@ -400,7 +494,13 @@ class TestForestCallback:
         cb = _callback(data=None)
         use_case = _stub_apply_name_drop()
 
-        await handle_forest_callback(cb, _identity(), cast(ApplyForestNameDrop, use_case))
+        await handle_forest_callback(
+            cb,
+            _identity(),
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            _RU,
+        )
 
         use_case.execute.assert_not_awaited()
         cb.answer.assert_not_awaited()
@@ -410,8 +510,27 @@ class TestForestCallback:
         cb.message.edit_reply_markup = AsyncMock(side_effect=RuntimeError("too old"))
         use_case = _stub_apply_name_drop()
 
-        # Не должно бросать наружу — edit_reply_markup — best-effort.
-        await handle_forest_callback(cb, _identity(), cast(ApplyForestNameDrop, use_case))
+        # Не должно бросить — `_strip_keyboard` поглощает любые ошибки.
+        await handle_forest_callback(
+            cb,
+            _identity(),
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            _RU,
+        )
+        cb.answer.assert_awaited_once()
+
+    async def test_locale_defaults_when_none(self) -> None:
+        cb = _callback(data="forest:drop_item:11")
+        use_case = _stub_apply_name_drop()
+
+        await handle_forest_callback(
+            cb,
+            _identity(),
+            cast(ApplyForestNameDrop, use_case),
+            _bundle(),
+            None,
+        )
 
         toast = cb.answer.await_args.args[0]
-        assert toast == TOAST_NAME_APPLIED
+        assert toast == "en:forest-toast-item-dropped"

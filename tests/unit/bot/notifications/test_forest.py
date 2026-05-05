@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -14,6 +15,7 @@ from aiogram.methods import SendMessage
 from aiogram.types import InlineKeyboardMarkup
 
 from pipirik_wars.application.forest import ForestRunFinished
+from pipirik_wars.application.i18n import IMessageBundle, Locale
 from pipirik_wars.bot.notifications import TelegramForestFinishNotifier
 from pipirik_wars.domain.balance.config import BalanceConfig
 from pipirik_wars.domain.balance.ports import IBalanceConfig
@@ -38,7 +40,8 @@ from pipirik_wars.domain.player import (
     Username,
 )
 from pipirik_wars.domain.shared.ports import IUnitOfWork
-from tests.fakes import FakePlayerRepository
+from pipirik_wars.infrastructure.i18n import FluentMessageBundle
+from tests.fakes import FakeMessageBundle, FakePlayerRepository
 
 _NOW = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
 
@@ -162,17 +165,35 @@ def _result(
     )
 
 
+def _fluent_bundle() -> IMessageBundle:
+    """Реальный `FluentMessageBundle` поверх `locales/{ru,en}.ftl`."""
+    return FluentMessageBundle(locales_dir=Path(__file__).resolve().parents[4] / "locales")
+
+
 def _make_notifier(
     *,
     bot: _FakeBot,
     balance: _FakeBalanceConfig | None = None,
     logger: logging.Logger | None = None,
+    default_locale: Locale | None = None,
+    bundle: IMessageBundle | None = None,
 ) -> TelegramForestFinishNotifier:
+    if default_locale is None:
+        return TelegramForestFinishNotifier(
+            bot=cast(Bot, bot),
+            players=FakePlayerRepository(),
+            balance=balance if balance is not None else _FakeBalanceConfig(),
+            uow=_FakeUnitOfWork(),
+            bundle=bundle if bundle is not None else _fluent_bundle(),
+            logger=logger,
+        )
     return TelegramForestFinishNotifier(
         bot=cast(Bot, bot),
         players=FakePlayerRepository(),
         balance=balance if balance is not None else _FakeBalanceConfig(),
         uow=_FakeUnitOfWork(),
+        bundle=bundle if bundle is not None else _fluent_bundle(),
+        default_locale=default_locale,
         logger=logger,
     )
 
@@ -189,9 +210,13 @@ async def test_skips_when_was_already_finished() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sends_message_with_text_and_no_keyboard_for_no_drop() -> None:
+async def test_sends_message_with_text_and_no_keyboard_for_no_drop_ru() -> None:
     bot = _FakeBot()
-    notifier = _make_notifier(bot=bot, balance=_FakeBalanceConfig(display_name="Пипирик"))
+    notifier = _make_notifier(
+        bot=bot,
+        balance=_FakeBalanceConfig(display_name="Пипирик"),
+        default_locale=Locale("ru"),
+    )
     await notifier.notify(_result(drop=NoDrop()))
     assert len(bot.calls) == 1
     call = bot.calls[0]
@@ -202,9 +227,23 @@ async def test_sends_message_with_text_and_no_keyboard_for_no_drop() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sends_message_with_keyboard_for_item_drop() -> None:
+async def test_sends_message_default_locale_en() -> None:
+    """`DEFAULT_LOCALE` без override = 'en'; нотификатор отправляет EN-текст."""
     bot = _FakeBot()
-    notifier = _make_notifier(bot=bot)
+    notifier = _make_notifier(bot=bot, balance=_FakeBalanceConfig(display_name="Pipirik"))
+    await notifier.notify(_result(drop=NoDrop()))
+    assert len(bot.calls) == 1
+    call = bot.calls[0]
+    assert "returned from the forest" in call.text
+    # Никаких кириллических букв в EN-выводе.
+    for ch in call.text:
+        assert not ("\u0400" <= ch <= "\u04ff"), f"unexpected cyrillic char {ch!r}"
+
+
+@pytest.mark.asyncio
+async def test_sends_message_with_keyboard_for_item_drop_ru() -> None:
+    bot = _FakeBot()
+    notifier = _make_notifier(bot=bot, default_locale=Locale("ru"))
     item = Item(
         id="item.hat.berserker",
         display_name="Шлем Берсерка",
@@ -215,12 +254,18 @@ async def test_sends_message_with_keyboard_for_item_drop() -> None:
     call = bot.calls[0]
     assert call.reply_markup is not None
     assert "Шлем Берсерка" in call.text
+    # Кнопки локализованы.
+    labels = [b.text for b in call.reply_markup.inline_keyboard[0]]
+    assert labels == ["Надеть", "Выбросить"]
+    # `callback_data` — invariant.
+    callbacks = [b.callback_data for b in call.reply_markup.inline_keyboard[0]]
+    assert callbacks == ["forest:equip_item:11", "forest:drop_item:11"]
 
 
 @pytest.mark.asyncio
-async def test_sends_message_with_keyboard_for_name_drop_replacement() -> None:
+async def test_sends_message_with_keyboard_for_name_drop_replacement_ru() -> None:
     bot = _FakeBot()
-    notifier = _make_notifier(bot=bot)
+    notifier = _make_notifier(bot=bot, default_locale=Locale("ru"))
     after_with_old_name = _player(length_cm=7, name=PlayerName(value="Старое"))
     result = _result(
         drop=NameDrop(name=Name(value="Новое")),
@@ -231,6 +276,21 @@ async def test_sends_message_with_keyboard_for_name_drop_replacement() -> None:
     call = bot.calls[0]
     assert call.reply_markup is not None
     assert "Нашёл имя: Новое" in call.text
+
+
+@pytest.mark.asyncio
+async def test_uses_fake_bundle_marker_for_finished_header() -> None:
+    """Маркерный bundle: проверяем, что нотификатор просит ключ `forest-finished-header`."""
+    bot = _FakeBot()
+    notifier = _make_notifier(
+        bot=bot,
+        bundle=FakeMessageBundle(),
+        default_locale=Locale("en"),
+    )
+    await notifier.notify(_result(drop=NoDrop()))
+    call = bot.calls[0]
+    assert "en:forest-finished-header" in call.text
+    assert "en:forest-finished-length" in call.text
 
 
 def _telegram_api_error() -> TelegramAPIError:
@@ -283,6 +343,7 @@ async def test_uses_default_logger_when_none_provided() -> None:
         players=FakePlayerRepository(),
         balance=_FakeBalanceConfig(),
         uow=_FakeUnitOfWork(),
+        bundle=FakeMessageBundle(),
     )
     # Конструктор не падает без logger; notify работает.
     await notifier.notify(_result())

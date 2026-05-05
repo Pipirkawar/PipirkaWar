@@ -1,11 +1,8 @@
-"""Юнит-тесты `bot/presenters/profile.py` (Спринт 1.1.E → 1.5.C, ГДД §2.1/§2.2).
+"""Юнит-тесты `bot/presenters/profile.py` (Спринт 1.1.E → 1.5.E, ГДД §2.1/§2.2).
 
 Покрываем:
 
-1. `render_full_nick` (legacy, ещё используется forest-презентером) —
-   все 4 сочетания «есть/нет титула × есть/нет имени» плюс новые-локализованные
-   титулы (`NEWBIE`).
-2. `ProfilePresenter`:
+1. `ProfilePresenter`:
    * `group()` / `other()` / `not_registered()` дают строки из `.ftl`,
      отличные между RU и EN (т.е. локализация реально работает);
    * `card()` — целостный рендер карточки: длина/толщина/секция «Экипировка»
@@ -13,7 +10,7 @@
      первой строке (вместо hardcoded RU «Новичок»);
    * `card()` для нового игрока без титула/имени → первая строка только
      `🏷 <display_name>` (Acceptance ГДД §2.2).
-3. `title_message_key(Title.X) == MessageKey("profile-title-x")` —
+2. `title_message_key(Title.X) == MessageKey("profile-title-x")` —
    контракт между презентером и `.ftl`. Если в `Title` появится новый
    член без соответствующего ключа в `.ftl`, `IMessageBundle.format`
    бросит `MessageKeyError` и тесты падут — это намеренный «безопасник».
@@ -29,7 +26,6 @@ from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
 from pipirik_wars.application.player import ProfileView
 from pipirik_wars.bot.presenters.profile import (
     ProfilePresenter,
-    render_full_nick,
     title_message_key,
 )
 from pipirik_wars.domain.player import (
@@ -75,40 +71,6 @@ def _fluent_bundle() -> IMessageBundle:
     `FakeMessageBundle` использован для проверки конкретных ключей.
     """
     return FluentMessageBundle(locales_dir=Path(__file__).resolve().parents[4] / "locales")
-
-
-class TestRenderFullNick:
-    def test_no_title_no_name_returns_only_display_name(self) -> None:
-        nick = render_full_nick(
-            title=None,
-            display_name=DisplayName(value="Пипирик"),
-            name=None,
-        )
-        assert nick == "Пипирик"
-
-    def test_with_title_no_name(self) -> None:
-        nick = render_full_nick(
-            title=Title.NEWBIE,
-            display_name=DisplayName(value="Пипирик"),
-            name=None,
-        )
-        assert nick == "Новичок Пипирик"
-
-    def test_no_title_with_name(self) -> None:
-        nick = render_full_nick(
-            title=None,
-            display_name=DisplayName(value="Бананчик"),
-            name=PlayerName(value="Иванушка"),
-        )
-        assert nick == "Бананчик Иванушка"
-
-    def test_with_title_and_name(self) -> None:
-        nick = render_full_nick(
-            title=Title.NEWBIE,
-            display_name=DisplayName(value="Бананчик"),
-            name=PlayerName(value="Коляндр"),
-        )
-        assert nick == "Новичок Бананчик Коляндр"
 
 
 class TestTitleMessageKey:

@@ -349,6 +349,7 @@ def build_container(
             players=players,
             balance=balance,
             uow=uow,
+            bundle=bundle,
         )
     delayed_jobs = APSchedulerDelayedJobScheduler(
         scheduler=AsyncIOScheduler(),

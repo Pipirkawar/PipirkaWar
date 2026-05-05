@@ -1,28 +1,25 @@
-"""Презентеры сообщений похода в лес (Спринт 1.3.D, ГДД §8.2).
+"""Презентеры команды `/forest` (Спринт 1.3.D → 1.5.E, ГДД §8.2).
 
-Тонкий слой между use-case-ами `StartForestRun` / `FinishForestRun` и
-Telegram-handler-ом / нотификатором. Здесь живут:
+С 1.5.E переехал на `IMessageBundle`: класс `ForestPresenter` собирает
+локализованные ответы handler-а (`/forest` и инлайн-кнопок) и нотификатора
+(«вернулся из леса»). Pure-функции для `callback_data` оставлены как
+есть — Telegram-`callback_data` не зависит от локали (см. ниже).
 
-- **`render_forest_started(...)`** — текст «🌲 N ушёл в лес на M минут»
-  для ответа на `/forest` (ПД §1.3.2 / ГДД §8.2).
-- **`render_forest_finished(...)`** — текст «🌲 N вернулся из леса» с
-  начислением длины и описанием находки (ПД §1.3.2 / ГДД §8.2).
-- **`build_finish_keyboard(...)`** — `InlineKeyboardMarkup` для дропа.
-  Только для случаев, когда у игрока есть выбор: `ItemDrop` (надеть/
-  выбросить) и `NameDrop` при уже имеющемся имени (заменить/выбросить).
-  `NoDrop` и `NameDrop`-auto-apply на новичке клавиатуры не получают.
-- **`forest_callback_data(...)`** / **`parse_forest_callback_data(...)`**
-  — кодирование/декодирование `callback_data` инлайн-кнопок. Формат:
-  `"forest:<action>:<run_id>"` ≤ 64 байт (Telegram-лимит). `action` —
-  один из `equip_item / drop_item / apply_name / drop_name`.
+Презентер отвечает за:
 
-Презентер не делает I/O и не зависит от инфраструктуры — берёт
-доменные сущности (`ForestRun` / `ForestRunFinished` / `Player` /
-`DisplayName`) и возвращает строки + клавиатуру, готовые к отправке.
+1. **Локализацию** через `IMessageBundle`: ключи `forest-*` в
+   `locales/{ru,en}.ftl`. Подписи кнопок, toast-ы, заголовки и
+   строки сообщений — всё проходит через bundle.
+2. **Сборку «полного ника»** (`[Локализованный титул] [Название] [Имя]`) —
+   локализованное имя титула берётся из bundle через
+   `profile.title_message_key(...)`, остальные части — из домена.
+3. **Сборку клавиатур** — `finish_keyboard(...)` отдаёт
+   `InlineKeyboardMarkup` с локализованными подписями. `callback_data`
+   стабилен и не зависит от локали (см. `forest_callback_data`).
 
-Полный ник `[Титул] [Название] [Имя]` берём из существующего
-`render_full_nick(...)` (Спринт 1.1.E) — тот же формат, что и в
-`/profile`-карточке.
+Pure-функции `forest_callback_data` / `parse_forest_callback_data` /
+`has_finish_keyboard` — без зависимостей от bundle, оставлены вне
+класса.
 """
 
 from __future__ import annotations
@@ -33,7 +30,8 @@ from typing import Final, Literal
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from pipirik_wars.application.forest import ForestRunFinished
-from pipirik_wars.bot.presenters.profile import render_full_nick
+from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
+from pipirik_wars.bot.presenters.profile import title_message_key
 from pipirik_wars.domain.forest import (
     Drop,
     ItemDrop,
@@ -41,7 +39,7 @@ from pipirik_wars.domain.forest import (
     NoDrop,
     Rarity,
 )
-from pipirik_wars.domain.player import DisplayName, Player
+from pipirik_wars.domain.player import DisplayName, Player, PlayerName, Title
 
 # Telegram callback_data hard-cap = 64 байта; наш формат вместе с самым
 # длинным action ("apply_name") и `int`-ом до 19 цифр умещается с запасом.
@@ -57,11 +55,41 @@ _VALID_ACTIONS: Final[frozenset[ForestCallbackAction]] = frozenset(
     {"equip_item", "drop_item", "apply_name", "drop_name"}
 )
 
-# Локализация редкостей для UI «Нашёл: <предмет> [<редкость>]» (ГДД §8.2).
-_RARITY_RU: Final[dict[Rarity, str]] = {
-    Rarity.COMMON: "обычный",
-    Rarity.RARE: "редкий",
-    Rarity.EPIC: "эпический",
+_KEY_GROUP: Final[MessageKey] = MessageKey("forest-group")
+_KEY_OTHER: Final[MessageKey] = MessageKey("forest-other")
+_KEY_NOT_REGISTERED: Final[MessageKey] = MessageKey("forest-not-registered")
+_KEY_ALREADY_IN: Final[MessageKey] = MessageKey("forest-already-in")
+_KEY_STARTED: Final[MessageKey] = MessageKey("forest-started")
+_KEY_STARTED_FALLBACK: Final[MessageKey] = MessageKey("forest-started-fallback")
+_KEY_FINISHED_HEADER: Final[MessageKey] = MessageKey("forest-finished-header")
+_KEY_FINISHED_LENGTH: Final[MessageKey] = MessageKey("forest-finished-length")
+_KEY_FINISHED_TITLE_GRANTED: Final[MessageKey] = MessageKey("forest-finished-title-granted")
+_KEY_FINISHED_ITEM_FOUND: Final[MessageKey] = MessageKey("forest-finished-item-found")
+_KEY_FINISHED_NAME_GRANTED: Final[MessageKey] = MessageKey("forest-finished-name-granted")
+_KEY_FINISHED_NAME_FOUND: Final[MessageKey] = MessageKey("forest-finished-name-found")
+
+_KEY_BUTTON_EQUIP: Final[MessageKey] = MessageKey("forest-button-equip")
+_KEY_BUTTON_DROP_ITEM: Final[MessageKey] = MessageKey("forest-button-drop-item")
+_KEY_BUTTON_REPLACE_NAME: Final[MessageKey] = MessageKey("forest-button-replace-name")
+_KEY_BUTTON_DROP_NAME: Final[MessageKey] = MessageKey("forest-button-drop-name")
+
+_KEY_TOAST_NAME_APPLIED: Final[MessageKey] = MessageKey("forest-toast-name-applied")
+_KEY_TOAST_NAME_ALREADY_APPLIED: Final[MessageKey] = MessageKey("forest-toast-name-already-applied")
+_KEY_TOAST_NAME_DROPPED: Final[MessageKey] = MessageKey("forest-toast-name-dropped")
+_KEY_TOAST_ITEM_DROPPED: Final[MessageKey] = MessageKey("forest-toast-item-dropped")
+_KEY_TOAST_ITEM_EQUIPPED_PLACEHOLDER: Final[MessageKey] = MessageKey(
+    "forest-toast-item-equipped-placeholder"
+)
+_KEY_TOAST_FOREIGN_BUTTON: Final[MessageKey] = MessageKey("forest-toast-foreign-button")
+_KEY_TOAST_RUN_NOT_FOUND: Final[MessageKey] = MessageKey("forest-toast-run-not-found")
+_KEY_TOAST_DROP_MISMATCH: Final[MessageKey] = MessageKey("forest-toast-drop-mismatch")
+_KEY_TOAST_PLAYER_NOT_FOUND: Final[MessageKey] = MessageKey("forest-toast-player-not-found")
+
+# Маппинг доменного `Rarity` → ключ `forest-rarity-*` в bundle.
+_RARITY_KEY: Final[dict[Rarity, MessageKey]] = {
+    Rarity.COMMON: MessageKey("forest-rarity-common"),
+    Rarity.RARE: MessageKey("forest-rarity-rare"),
+    Rarity.EPIC: MessageKey("forest-rarity-epic"),
 }
 
 
@@ -77,146 +105,245 @@ class ForestCallbackData:
     run_id: int
 
 
-def render_forest_started(
-    *,
-    player: Player,
-    display_name: DisplayName,
-    cooldown_minutes: int,
-) -> str:
-    """Сообщение «ушёл в лес» (ПД §1.3.2 / ГДД §8.2).
+class ForestPresenter:
+    """Локализованный рендер ответов `/forest` через `IMessageBundle`.
 
-    Формат:
-        🌲 <Полный ник> ушёл в лес на <N> минут...
-
-    Полный ник — `[Титул] [Название] [Имя]` с пропуском `None`-частей
-    (Спринт 1.1.E, см. `render_full_nick`). Для свежезарегистрированного
-    игрока получается «Пипирик» — это by design.
+    Используется и handler-ом (для немедленных ответов в чат на команду
+    `/forest` и инлайн-кнопки), и нотификатором (для отправки сообщения
+    «вернулся из леса» из background-job-а APScheduler-а).
     """
-    nick = render_full_nick(
-        title=player.title,
-        display_name=display_name,
-        name=player.name,
-    )
-    return f"🌲 {nick} ушёл в лес на {cooldown_minutes} минут..."
 
+    __slots__ = ("_bundle",)
 
-def render_forest_finished(
-    *,
-    result: ForestRunFinished,
-    display_name_after: DisplayName,
-) -> str:
-    """Сообщение «вернулся из леса» (ПД §1.3.2 / ГДД §8.2).
+    def __init__(self, *, bundle: IMessageBundle) -> None:
+        self._bundle = bundle
 
-    Формат:
-        🌲 <Полный ник> вернулся из леса!
-        📏 Длина: +5 см (было 47, стало 52)
-        🎩 Нашёл: <Имя предмета> [<редкость>]
-           → Надеть | Выбросить    (для ItemDrop)
+    # --- Команда `/forest` ---
 
-    `display_name_after` — пересчитанное название по новой длине игрока
-    (после применения `length_delta_cm`). Для `NameDrop`-auto-apply мы
-    также показываем выданное имя в строке-уведомлении.
-    """
-    after = result.player_after
-    before = result.player_before
-    nick = render_full_nick(
-        title=after.title,
-        display_name=display_name_after,
-        name=after.name,
-    )
-    lines: list[str] = [
-        f"🌲 {nick} вернулся из леса!",
-        (
-            f"📏 Длина: +{result.run.length_delta_cm} см "
-            f"(было {before.length.cm}, стало {after.length.cm})"
-        ),
-    ]
+    def group(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_GROUP, locale=locale)
 
-    if result.granted_title:
-        # ГДД §8.2: первое возвращение из леса → титул «Новичок».
-        lines.append("🎖 Получен титул: Новичок")
+    def other(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_OTHER, locale=locale)
 
-    drop = result.run.drop
-    if isinstance(drop, NoDrop):
-        # Лес ничего не подарил — длина уже учтена выше.
-        return "\n".join(lines)
-    if isinstance(drop, ItemDrop):
-        rarity_ru = _RARITY_RU[drop.item.rarity]
-        lines.append(f"🎩 Нашёл: {drop.item.display_name} [{rarity_ru}]")
-        return "\n".join(lines)
-    if isinstance(drop, NameDrop):
-        if result.granted_name:
-            # Имя выдано автоматически (новичок без имени, см. 1.3.C /
-            # `FinishForestRun`).
-            lines.append(f"🪪 Получено имя: {drop.name.value}")
-        else:
-            # У игрока уже есть имя — предлагаем заменить или выбросить.
-            lines.append(f"🪪 Нашёл имя: {drop.name.value}")
-        return "\n".join(lines)
-    # mypy --strict требует исчерпывающего раскрытия Drop.
-    raise AssertionError(f"unknown drop variant: {drop!r}")
+    def not_registered(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_NOT_REGISTERED, locale=locale)
 
+    def already_in(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_ALREADY_IN, locale=locale)
 
-def build_finish_keyboard(result: ForestRunFinished) -> InlineKeyboardMarkup | None:
-    """Инлайн-клавиатура для сообщения «вернулся из леса».
+    def started(
+        self,
+        *,
+        player: Player,
+        display_name: DisplayName,
+        cooldown_minutes: int,
+        locale: Locale,
+    ) -> str:
+        """Сообщение «ушёл в лес» (ГДД §8.2). Формат `[Титул] [Название] [Имя]`."""
+        nick = self._render_full_nick(
+            title=player.title,
+            display_name=display_name,
+            name=player.name,
+            locale=locale,
+        )
+        return self._bundle.format(
+            _KEY_STARTED,
+            locale=locale,
+            nick=nick,
+            cooldown_minutes=cooldown_minutes,
+        )
 
-    Возвращает:
-    - `None` — если кнопок не нужно (`NoDrop` или `NameDrop`-auto-apply
-      на новичке без имени).
-    - `InlineKeyboardMarkup` с парой кнопок «Надеть / Выбросить» — для
-      `ItemDrop` (1.3.6).
-    - `InlineKeyboardMarkup` с парой кнопок «Заменить / Выбросить» — для
-      `NameDrop`, когда `result.granted_name is False` (у игрока уже
-      есть имя; ГДД §2.5 / 1.3.7).
-    """
-    run = result.run
-    assert run.id is not None  # FinishForestRun возвращает запись с id
-    drop = run.drop
+    def started_fallback(self, *, cooldown_minutes: int, locale: Locale) -> str:
+        """Fallback на случай, когда `GetProfile` не нашёл игрока сразу
+        после `StartForestRun`. Без полного ника.
+        """
+        return self._bundle.format(
+            _KEY_STARTED_FALLBACK,
+            locale=locale,
+            cooldown_minutes=cooldown_minutes,
+        )
 
-    if isinstance(drop, NoDrop):
-        return None
-    if isinstance(drop, ItemDrop):
-        return _build_item_keyboard(run_id=run.id)
-    if isinstance(drop, NameDrop):
-        if result.granted_name:
-            # Имя уже применено автоматически — кнопок не нужно.
+    # --- Сообщение «вернулся из леса» ---
+
+    def finished(
+        self,
+        *,
+        result: ForestRunFinished,
+        display_name_after: DisplayName,
+        locale: Locale,
+    ) -> str:
+        """Полный текст сообщения «вернулся из леса» (ГДД §8.2).
+
+        Собирается построчно: заголовок + длина + (титул) + (находка).
+        """
+        after = result.player_after
+        before = result.player_before
+        nick = self._render_full_nick(
+            title=after.title,
+            display_name=display_name_after,
+            name=after.name,
+            locale=locale,
+        )
+        lines: list[str] = [
+            self._bundle.format(_KEY_FINISHED_HEADER, locale=locale, nick=nick),
+            self._bundle.format(
+                _KEY_FINISHED_LENGTH,
+                locale=locale,
+                length_delta_cm=result.run.length_delta_cm,
+                length_before_cm=before.length.cm,
+                length_after_cm=after.length.cm,
+            ),
+        ]
+        if result.granted_title:
+            lines.append(self._bundle.format(_KEY_FINISHED_TITLE_GRANTED, locale=locale))
+
+        drop = result.run.drop
+        if isinstance(drop, NoDrop):
+            return "\n".join(lines)
+        if isinstance(drop, ItemDrop):
+            rarity = self._bundle.format(_RARITY_KEY[drop.item.rarity], locale=locale)
+            lines.append(
+                self._bundle.format(
+                    _KEY_FINISHED_ITEM_FOUND,
+                    locale=locale,
+                    item_name=drop.item.display_name,
+                    rarity=rarity,
+                )
+            )
+            return "\n".join(lines)
+        if isinstance(drop, NameDrop):
+            if result.granted_name:
+                lines.append(
+                    self._bundle.format(
+                        _KEY_FINISHED_NAME_GRANTED,
+                        locale=locale,
+                        name=drop.name.value,
+                    )
+                )
+            else:
+                lines.append(
+                    self._bundle.format(
+                        _KEY_FINISHED_NAME_FOUND,
+                        locale=locale,
+                        name=drop.name.value,
+                    )
+                )
+            return "\n".join(lines)
+        # mypy --strict требует исчерпывающего раскрытия Drop.
+        raise AssertionError(f"unknown drop variant: {drop!r}")
+
+    def finish_keyboard(
+        self,
+        result: ForestRunFinished,
+        *,
+        locale: Locale,
+    ) -> InlineKeyboardMarkup | None:
+        """Инлайн-клавиатура для сообщения «вернулся из леса» с
+        локализованными подписями кнопок. `callback_data` — invariant.
+
+        Возвращает:
+        - `None` — если кнопок не нужно (`NoDrop` или `NameDrop`-auto-apply
+          на новичке без имени).
+        - `InlineKeyboardMarkup` с парой кнопок «Надеть / Выбросить» — для
+          `ItemDrop` (1.3.6).
+        - `InlineKeyboardMarkup` с парой кнопок «Заменить / Выбросить» — для
+          `NameDrop`, когда `result.granted_name is False`.
+        """
+        run = result.run
+        assert run.id is not None
+        drop = run.drop
+        if isinstance(drop, NoDrop):
             return None
-        return _build_name_replacement_keyboard(run_id=run.id)
-    raise AssertionError(f"unknown drop variant: {drop!r}")
+        if isinstance(drop, ItemDrop):
+            return InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=self._bundle.format(_KEY_BUTTON_EQUIP, locale=locale),
+                            callback_data=forest_callback_data("equip_item", run.id),
+                        ),
+                        InlineKeyboardButton(
+                            text=self._bundle.format(_KEY_BUTTON_DROP_ITEM, locale=locale),
+                            callback_data=forest_callback_data("drop_item", run.id),
+                        ),
+                    ],
+                ]
+            )
+        if isinstance(drop, NameDrop):
+            if result.granted_name:
+                return None
+            return InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=self._bundle.format(_KEY_BUTTON_REPLACE_NAME, locale=locale),
+                            callback_data=forest_callback_data("apply_name", run.id),
+                        ),
+                        InlineKeyboardButton(
+                            text=self._bundle.format(_KEY_BUTTON_DROP_NAME, locale=locale),
+                            callback_data=forest_callback_data("drop_name", run.id),
+                        ),
+                    ],
+                ]
+            )
+        raise AssertionError(f"unknown drop variant: {drop!r}")
 
+    # --- Toast-ы для callback-ответов ---
 
-def _build_item_keyboard(*, run_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="Надеть",
-                    callback_data=forest_callback_data("equip_item", run_id),
-                ),
-                InlineKeyboardButton(
-                    text="Выбросить",
-                    callback_data=forest_callback_data("drop_item", run_id),
-                ),
-            ],
-        ]
-    )
+    def toast_name_applied(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_NAME_APPLIED, locale=locale)
 
+    def toast_name_already_applied(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_NAME_ALREADY_APPLIED, locale=locale)
 
-def _build_name_replacement_keyboard(*, run_id: int) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="Заменить",
-                    callback_data=forest_callback_data("apply_name", run_id),
-                ),
-                InlineKeyboardButton(
-                    text="Выбросить",
-                    callback_data=forest_callback_data("drop_name", run_id),
-                ),
-            ],
-        ]
-    )
+    def toast_name_dropped(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_NAME_DROPPED, locale=locale)
+
+    def toast_item_dropped(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_ITEM_DROPPED, locale=locale)
+
+    def toast_item_equipped_placeholder(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_ITEM_EQUIPPED_PLACEHOLDER, locale=locale)
+
+    def toast_foreign_button(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_FOREIGN_BUTTON, locale=locale)
+
+    def toast_run_not_found(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_RUN_NOT_FOUND, locale=locale)
+
+    def toast_drop_mismatch(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_DROP_MISMATCH, locale=locale)
+
+    def toast_player_not_found(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_PLAYER_NOT_FOUND, locale=locale)
+
+    # --- Хелперы ---
+
+    def localized_rarity(self, rarity: Rarity, *, locale: Locale) -> str:
+        """Локализованная редкость для UI «Нашёл: <предмет> [<редкость>]»."""
+        return self._bundle.format(_RARITY_KEY[rarity], locale=locale)
+
+    def _render_full_nick(
+        self,
+        *,
+        title: Title | None,
+        display_name: DisplayName,
+        name: PlayerName | None,
+        locale: Locale,
+    ) -> str:
+        """Собрать «полный ник» с локализованным именем титула.
+
+        Формат `[Локализованный титул] [Название] [Имя]` с пропуском
+        `None`-частей. Для новичка без титула и имени → только название.
+        """
+        parts: list[str] = []
+        if title is not None:
+            parts.append(self._bundle.format(title_message_key(title), locale=locale))
+        parts.append(display_name.value)
+        if name is not None:
+            parts.append(name.value)
+        return " ".join(parts)
 
 
 def forest_callback_data(action: ForestCallbackAction, run_id: int) -> str:
@@ -224,7 +351,12 @@ def forest_callback_data(action: ForestCallbackAction, run_id: int) -> str:
 
     Формат: ``"forest:<action>:<run_id>"``. Telegram-лимит — 64 байта;
     самый длинный вариант (`forest:apply_name:<19digits>`) укладывается
-    в 33 байта.
+    в 33 байта. Не зависит от локали (см. ниже).
+
+    `callback_data` — invariant-формат: пользователь может переключить
+    локаль между показом сообщения и кликом, и handler всё равно должен
+    корректно распарсить нажатие. Локализуется только подпись кнопки
+    (`InlineKeyboardButton.text`), а сам `callback_data` стабилен.
     """
     if action not in _VALID_ACTIONS:
         raise ValueError(f"unknown forest callback action: {action!r}")
@@ -252,9 +384,6 @@ def parse_forest_callback_data(raw: str) -> ForestCallbackData:
         raise ValueError(f"invalid forest callback run_id: {run_id_raw!r}") from exc
     if run_id <= 0:
         raise ValueError(f"forest callback run_id must be positive, got {run_id}")
-    # mypy: после проверки `action_raw in _VALID_ACTIONS` мы знаем,
-    # что это именно `ForestCallbackAction`, но Literal-сужение через
-    # `in frozenset` mypy не делает — поэтому отдельная проверка ниже.
     return ForestCallbackData(
         action=_assert_action(action_raw),
         run_id=run_id,
@@ -274,11 +403,6 @@ def _assert_action(raw: str) -> ForestCallbackAction:
     raise AssertionError(f"unreachable: action {raw!r} not in _VALID_ACTIONS")
 
 
-def localized_rarity(rarity: Rarity) -> str:
-    """Маппинг доменного `Rarity` → русская строка для UI."""
-    return _RARITY_RU[rarity]
-
-
 def has_finish_keyboard(drop: Drop, *, granted_name: bool) -> bool:
     """Хелпер для тестов: ожидает ли клавиатуру при таком дропе?"""
     if isinstance(drop, NoDrop):
@@ -293,11 +417,8 @@ def has_finish_keyboard(drop: Drop, *, granted_name: bool) -> bool:
 __all__ = [
     "ForestCallbackAction",
     "ForestCallbackData",
-    "build_finish_keyboard",
+    "ForestPresenter",
     "forest_callback_data",
     "has_finish_keyboard",
-    "localized_rarity",
     "parse_forest_callback_data",
-    "render_forest_finished",
-    "render_forest_started",
 ]
