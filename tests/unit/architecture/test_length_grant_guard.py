@@ -43,6 +43,12 @@ _ALLOWED_FILES: frozenset[Path] = frozenset(
         # Approved-use-case: вычет стоимости при апгрейде толщины
         # (Спринт 1.4.A; не прибавка, cap-ы неприменимы).
         _SRC_ROOT / "application" / "progression" / "upgrade_thickness.py",
+        # Approved-use-case: списание длины проигравшему PvP-дуэли
+        # (Спринт 2.1.D, ГДД §7.1). Прибавка победителю — через
+        # `ILengthGranter.grant(source=PVP_REWARD)`; вычет проигравшему
+        # — прямой `with_length`, как в `UpgradeThickness`. Cap-ы 1.6
+        # к вычету не применимы.
+        _SRC_ROOT / "application" / "pvp" / "apply_outcome.py",
     }
 )
 

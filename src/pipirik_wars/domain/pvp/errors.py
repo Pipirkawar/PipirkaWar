@@ -27,6 +27,7 @@ from __future__ import annotations
 from pipirik_wars.shared.errors import DomainError
 
 __all__ = [
+    "DuelNotFoundError",
     "InvalidDuelStateError",
     "InvalidLengthError",
     "InvalidRoundCountError",
@@ -34,6 +35,7 @@ __all__ = [
     "NoMissingMovesError",
     "NotADuelParticipantError",
     "PvpError",
+    "PvpRequirementsNotMetError",
     "SelfChallengeError",
 ]
 
@@ -140,3 +142,48 @@ class NoMissingMovesError(PvpError):
             f"round {round_num} has no missing moves to force-complete",
         )
         self.round_num = round_num
+
+
+class DuelNotFoundError(PvpError):
+    """`Duel` с указанным `id` не найден в БД.
+
+    Возникает, когда use-case (`AcceptDuel` / `CancelDuel` / `SubmitMove` /
+    `ResolveAfkRound`) пытается загрузить дуэль по `duel_id`, но запись
+    отсутствует. Use-case 2.1.E конвертит в локализованное «дуэль не
+    найдена» (например, истёк TTL и запись удалена в фоне).
+    """
+
+    def __init__(self, *, duel_id: int) -> None:
+        super().__init__(f"duel id={duel_id} not found")
+        self.duel_id = duel_id
+
+
+class PvpRequirementsNotMetError(PvpError):
+    """Игрок не соответствует требованиям входа в PvP (ГДД §7.1).
+
+    Проверяется в `ChallengeDuel` / `AcceptDuel`:
+
+    * длина ≥ `pvp.duel_1v1.min_length_cm` (по умолчанию `20` см);
+    * толщина ≥ `pvp.duel_1v1.min_thickness_level` (по умолчанию `2`).
+
+    Поле `requirement` — машинное имя нарушенного инварианта
+    (`"length"` / `"thickness"`); `required` / `actual` — числа для
+    сообщения вида «нужна длина ≥ 20 см, у вас 12 см».
+    """
+
+    def __init__(
+        self,
+        *,
+        tg_id: int,
+        requirement: str,
+        required: int,
+        actual: int,
+    ) -> None:
+        super().__init__(
+            f"player tg_id={tg_id} does not meet PvP {requirement} requirement: "
+            f"required {required}, actual {actual}",
+        )
+        self.tg_id = tg_id
+        self.requirement = requirement
+        self.required = required
+        self.actual = actual

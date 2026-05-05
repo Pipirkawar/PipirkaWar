@@ -7,9 +7,9 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # В геймплее tg_id всегда положительный; ботов и каналов мы здесь не валидируем.
 PositiveTgId = int
@@ -165,6 +165,110 @@ class UpgradeThicknessInput(_StrictBase):
         default=None,
         gt=0,
         description="Стоимость, которую UI показал пользователю; для защиты от race",
+    )
+
+
+class ChallengeDuelInput(_StrictBase):
+    """Создание PvP-вызова 1×1 (Спринт 2.1.D, ГДД §7.1).
+
+    `mode` — режим вызова из ГДД §7.1:
+
+    * `chat_only` — только в чате клана (адресный, требует `challenged_tg_id`);
+    * `chat_then_global` — сначала в чате клана, через 3 минуты «уплывает»
+      в глобальное лобби (адресный на старте; перевод в `GLOBAL_ONLY`
+      делает фоновый use-case 2.1.F);
+    * `global_only` — сразу в глобальное лобби (без `challenged_tg_id`).
+
+    `challenged_tg_id` обязателен для `chat_only` / `chat_then_global` и
+    запрещён для `global_only` (доменный валидатор `Duel.create_challenge`
+    дублирует это, но валидируем рано — до загрузки игроков).
+    """
+
+    challenger_tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id игрока, бросающего вызов",
+    )
+    challenged_tg_id: PositiveTgId | None = Field(
+        default=None,
+        gt=0,
+        description="Telegram user_id адресата (None для global_only)",
+    )
+    mode: Literal["chat_only", "chat_then_global", "global_only"] = Field(
+        description="Режим вызова (см. ГДД §7.1)",
+    )
+
+    @model_validator(mode="after")
+    def _validate_mode_consistency(self) -> Self:
+        if self.mode == "global_only" and self.challenged_tg_id is not None:
+            raise ValueError(
+                "challenged_tg_id must be None for mode='global_only'",
+            )
+        if self.mode != "global_only" and self.challenged_tg_id is None:
+            raise ValueError(
+                f"challenged_tg_id is required for mode={self.mode!r}",
+            )
+        return self
+
+
+class AcceptDuelInput(_StrictBase):
+    """Приём PvP-вызова (Спринт 2.1.D).
+
+    `tg_id` сверяется с `Duel.challenged_id` (для адресных режимов) или
+    становится новым `challenged_id` (для `GLOBAL_ONLY` — кто первым
+    нажал «принять», тот и стал оппонентом).
+    """
+
+    duel_id: int = Field(gt=0, description="pvp_duels.id")
+    tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id принимающего вызов",
+    )
+
+
+class CancelDuelInput(_StrictBase):
+    """Отмена PvP-вызова до его принятия (Спринт 2.1.D).
+
+    Отменить может только `challenger`. После принятия (`IN_PROGRESS`)
+    отмена запрещена — `Duel.cancel` бросит `InvalidDuelStateError`.
+    """
+
+    duel_id: int = Field(gt=0, description="pvp_duels.id")
+    tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id игрока, отменяющего вызов",
+    )
+
+
+class SubmitMoveInput(_StrictBase):
+    """Отправка хода (атака+блок) в активной дуэли (Спринт 2.1.D).
+
+    Use-case `SubmitMove` сам решает, нужно ли авторазрешать раунд (если
+    оба выбора получены) и/или применить ±длины (если это последний раунд).
+    """
+
+    duel_id: int = Field(gt=0, description="pvp_duels.id")
+    tg_id: PositiveTgId = Field(gt=0, description="Telegram user_id ходящего")
+    attack: Literal["high", "mid", "low"] = Field(
+        description="Куда бьёт игрок",
+    )
+    block: Literal["high", "mid", "low"] = Field(
+        description="Какую зону защищает",
+    )
+
+
+class ResolveAfkRoundInput(_StrictBase):
+    """AFK-фоллбэк раунда (Спринт 2.1.D, ГДД §7.1).
+
+    Шедулер раунд-таймера (Спринт 2.1.G) дёргает use-case по истечении
+    30–60 секунд: за каждого молчаливого игрока выбирается случайная
+    атака+блок через `IRandom`, раунд авторазрешается. Если после
+    этого дуэль завершена — применяются ±длины (как в `SubmitMove`).
+    """
+
+    duel_id: int = Field(gt=0, description="pvp_duels.id")
+    round_num: int = Field(
+        gt=0,
+        description="Номер раунда, по которому истёк таймер",
     )
 
 
