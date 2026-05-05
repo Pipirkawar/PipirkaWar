@@ -23,6 +23,74 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.1.B: доменный агрегат `Duel` (lifecycle state machine)
+
+**Автор:** Devin (по запросу persisyellow)
+**Тип:** feature (domain)
+**Связано:** `current_tasks.md` Спринт 2.1.B, ПД 2.1.6 (`development_plan.md §5`), ГДД §7.1.
+
+Второй саб-спринт PvP-эпика 2.1. Поверх чистого боевого движка из 2.1.A появляется доменный агрегат `Duel` — жизненный цикл боя от вызова до итоговой `DuelOutcome`. Persistence (миграция + ORM + репо) и use-cases — отдельные саб-спринты 2.1.C–D.
+
+Что сделано:
+
+- **`src/pipirik_wars/domain/pvp/duel.py`** (новый файл, 487 строк):
+    - `DuelState(StrEnum)`: `PENDING_ACCEPT` / `IN_PROGRESS` / `COMPLETED` / `CANCELLED`. Графы переходов: `PENDING_ACCEPT → IN_PROGRESS` (через `accept`) или `CANCELLED` (через `cancel` / TTL-истечение). `IN_PROGRESS → COMPLETED` после `expected_rounds` раундов через `submit_move` или `force_complete_round`. Терминальные — `COMPLETED` и `CANCELLED`.
+    - `DuelMode(StrEnum)`: `CHAT_THEN_GLOBAL` (по умолчанию — вызов в чат, через 3 мин авто-промоут в global-лобби; логика 2.1.F), `CHAT_ONLY` (только чат, без авто-промоута), `GLOBAL_ONLY` (сразу в лобби, `challenged_id is None` до accept-а).
+    - `PendingRound(@dataclass(frozen=True, slots=True))`: текущий раунд — `round_num: int` (1-based), `p1_choice: RoundChoice | None`, `p2_choice: RoundChoice | None`. Свойства `is_complete` (оба `not None`) и `has_any_move` (хотя бы один).
+    - `Duel(@dataclass(frozen=True, slots=True))` — корневой агрегат. Поля: `id` (`None` до persistence) / `challenger_id` / `challenged_id` (`None` для `GLOBAL_ONLY` до accept-а) / `mode` / `state` / `hit_pct` / `expected_rounds` (баланс на старте) / `created_at` / `accepted_at` / `completed_at` / `cancelled_at` / `p1_initial_length_cm` / `p2_initial_length_cm` (длины на момент accept-а) / `completed_rounds: tuple[RoundOutcome, ...]` / `pending_round: PendingRound | None` / `final_outcome: DuelOutcome | None`.
+- **Lifecycle-методы агрегата** (frozen → возвращают новый `Duel` через `dataclasses.replace`):
+    - `Duel.create_challenge(*, challenger_id, challenged_id, mode, hit_pct, expected_rounds, now)` — pending-вызов. Валидация: self-challenge (`SelfChallengeError`), границы `expected_rounds` и `hit_pct` (`ValueError`), соответствие `mode` ↔ `challenged_id` (`GLOBAL_ONLY` без, остальные — с).
+    - `Duel.accept(*, accepter_id, p1_length_cm, p2_length_cm, now)` — снапшот длин, перевод `PENDING_ACCEPT → IN_PROGRESS`, старт первого раунда. Для `GLOBAL_ONLY` устанавливает `challenged_id = accepter_id` (с защитой от self-challenge — `accepter_id == challenger_id` ⇒ `NotADuelParticipantError`). Для `CHAT_*` `accepter_id` обязан совпадать с `challenged_id`.
+    - `Duel.cancel(*, now)` — `PENDING_ACCEPT → CANCELLED`. Идемпотентен на уже отменённой дуэли (no-op). Из `IN_PROGRESS` / `COMPLETED` блокируется (`InvalidDuelStateError`).
+    - `Duel.submit_move(*, player_id, choice, now)` — отправить выбор атаки/блока на `pending_round.round_num`. Валидация участника (`NotADuelParticipantError`), повторного сабмишена (`MoveAlreadySubmittedError`), состояния (`InvalidDuelStateError`). Если этим вызовом раунд закрылся — авторазрешение через `resolve_round` (импорт из 2.1.A) и переход к следующему раунду или в `COMPLETED` (через `resolve_duel`).
+    - `Duel.force_complete_round(*, p1_fallback, p2_fallback, now)` — AFK-фоллбэк. Use-case 2.1.G возьмёт случайные `Position` через `IRandom` и соберёт `RoundChoice`-ы для пропустивших; этот метод их применит. Защита: `NoMissingMovesError` если все уже выбрали; `MoveAlreadySubmittedError` если фоллбэк передан для того, кто уже выбрал; `InvalidDuelStateError` из не-`IN_PROGRESS`.
+- **Доменные ошибки** (`domain/pvp/errors.py`, +5 классов):
+    - `InvalidDuelStateError(*, expected, actual, op)` — операция из неподходящего состояния (метод `op`, ожидалось `expected`, было `actual`). Use-case конвертирует в локализованное «бой ещё не начался» / «бой уже завершён».
+    - `NotADuelParticipantError(*, player_id)` — `player_id` не челленджер и не оппонент. Локализация: «вы не участник этого боя».
+    - `SelfChallengeError(*, player_id)` — `challenger_id == challenged_id` при `create_challenge`. Локализация: «нельзя вызвать самого себя».
+    - `MoveAlreadySubmittedError(*, player_id, round_num)` — повторный `submit_move` от того же игрока. Локализация: «вы уже выбрали в этом раунде».
+    - `NoMissingMovesError(*, round_num)` — `force_complete_round` без пропущенных выборов (баг в use-case-е 2.1.G — таймер сработал после того, как оба выбрали).
+- **Юнит-тесты** (76 новых):
+    - `tests/unit/domain/pvp/test_duel_lifecycle.py` (47 тестов):
+        - `TestCreateChallenge` (16): валидный chat-вызов, валидный global-вызов без `challenged_id`, обязательность `challenged_id` для `CHAT_ONLY` / `CHAT_THEN_GLOBAL` (`ValueError`), запрет `challenged_id` для `GLOBAL_ONLY` (`ValueError`), self-challenge запрет (chat и chat_then_global; в global self-challenge ловится только в accept-е), границы `expected_rounds` ([1, 3, 5, 10] валидно; [0, -1, -100] ⇒ `ValueError`), границы `hit_pct` ([0, 1, 50, 100] валидно; [-1, 101, 200, -50] ⇒ `ValueError`).
+        - `TestAccept` (10): chat-accept с переходом в `IN_PROGRESS` и стартом первого раунда; global-accept устанавливает `challenged_id`; global self-challenge блокируется в accept-е (`NotADuelParticipantError`); accept от не-участника / от челленджера; отрицательная длина p1 / p2 (`InvalidLengthError`); нулевые длины разрешены; повторный accept (`InvalidDuelStateError`); accept после cancel.
+        - `TestCancel` (3): cancel pending → `CANCELLED`; идемпотентность на cancelled (та же ссылка); cancel в `IN_PROGRESS` блокируется.
+        - `TestProperties` (8): `is_pending` / `is_in_progress` / `is_completed` / `is_cancelled` / `is_terminal` / `is_participant` для chat и global (до и после accept).
+        - `TestImmutability` (3): frozen-датакласс (`FrozenInstanceError` при попытке мутировать `state`); `accept` и `cancel` возвращают новый инстанс, оригинал не меняется.
+    - `tests/unit/domain/pvp/test_duel_moves.py` (29 тестов):
+        - `TestSubmitMoveSingleRound` (5): первый ход p1 / p2 (только своя сторона `pending_round` обновляется); авторазрешение раунда с пробитием обеих сторон; авторазрешение с симметричным блоком (нулевой урон); порядок сабмишена не влияет на исход (`d_a.completed_rounds == d_b.completed_rounds`).
+        - `TestSubmitMoveErrors` (6): submit в `PENDING_ACCEPT`, после `cancel`, не-участником, повторный сабмит p1 / p2, submit после `COMPLETED` — все с правильными типами ошибок.
+        - `TestFullDuelFlow` (5): полная победа p1 за 3 раунда (`p1_total_dealt=30`, `p2_total_dealt=0`, `winner=P1`, дельты ±30); ничья (симметричные раунды → нулевые дельты, `winner=DRAW`); path-independence (p2=20cm, 3 раунда пробития → `p1_total_dealt=6`; если бы было path-dependent, было бы `2+1+1=4`); короткий бой `expected_rounds=1`; длинный бой `expected_rounds=5`.
+        - `TestForceCompleteRound` (10): фоллбэк только p1 / только p2 / обоих; `MoveAlreadySubmittedError` при попытке передать фоллбэк для уже выбравшего (p1 и p2); `NoMissingMovesError` если фоллбэков не хватило; `InvalidDuelStateError` из `PENDING_ACCEPT` и `COMPLETED`; переход к следующему раунду; завершение боя через `force_complete_round` на последнем раунде.
+        - `TestPendingRound` (3): `is_complete` / `has_any_move` для всех 4 комбинаций (оба, только p1, ни одного).
+- **Регистрация символов** в `src/pipirik_wars/domain/pvp/__init__.py`: добавлены `Duel`, `DuelMode`, `DuelState`, `PendingRound`, плюс новые ошибки. Сохранён alphabetical order в `__all__`.
+
+Результат / артефакты:
+
+- Коммиты:
+    - `feat(pvp): Duel aggregate — lifecycle state machine (Sprint 2.1.B 1/2)` — агрегат + 5 ошибок + регистрация в `__init__.py` (612 insertions, 8 deletions).
+    - `test(pvp): Duel lifecycle + moves + AFK fallback (Sprint 2.1.B 2/2)` — 76 тестов в 2 файлах (738 insertions).
+- Тесты: `make ci` зелёный — `1607 passed, 1 skipped`. Покрытие нового модуля `domain/pvp/duel.py` — 100%. Layered-architecture контракты (3) — KEPT.
+- ruff + mypy + import-linter — ✅. pre-commit на каждом коммите — ✅.
+
+Заметки / решения:
+
+- **Снэпшоты на старте.** `hit_pct` и `expected_rounds` фиксируются в момент `create_challenge` (баланс), `pX_initial_length_cm` — в момент `accept` (длины игроков). Это устойчиво к двум ситуациям: (1) `/balance_reload` посреди боя не сбивает экономику текущей дуэли; (2) параллельные `/forest` или другие начисления длины не влияют на урон в текущей дуэли (path-independent резолв). Альтернатива «читать из репозитория игрока на каждом раунде» нестабильна и сложно тестируется.
+- **Единая `pending_round` vs очередь раундов.** Альтернативой был `list[PendingRound]` с одним записимым в конце — но это избыточно, так как в любой момент времени есть ровно один pending-раунд (или ни одного при `COMPLETED`/`CANCELLED`). Завершённые раунды лежат в `completed_rounds: tuple[RoundOutcome, ...]` — иммутабельный список с уже разрешёнными исходами (включая `RoundChoice`-ы обоих игроков). Persistence-слой 2.1.C десериализует `completed_rounds` как `pvp_duel_rounds` table (1:N).
+- **`force_complete_round` отдельно от `submit_move`.** Можно было бы реализовать AFK как «два `submit_move` подряд от внешнего инжектора», но такой API нечестно отражает доменную семантику — фоллбэк это **одна транзакция замены пропущенных ходов**, а не последовательный сабмишен. Также `force_complete_round` явно валидирует, что фоллбэки приходят только для тех, кто действительно AFK (и не приходят для тех, кто успел отправить ход). Если бы это были два `submit_move`, защита от race условия (игрок и фоллбэк-таймер сабмитят одновременно) была бы менее строгой.
+- **`assert` вместо публичных проверок.** Внутренние инварианты (`pending.p1_choice is not None` в `_resolve_pending_round`) проверяются через `assert`, а не через `if … raise`. Это намеренно: они выполняются автоматически, если публичные методы (`accept` → `pending_round` всегда задан, `submit_move` → не закрывает раунд без обоих выборов) написаны корректно. Если `assert` сработает в продакшене — это баг, а не нормальная ошибка приложения. ruff и mypy на это не жалуются (`S101` отключён в проекте).
+- **`InvalidDuelStateError.expected/actual` — `object`, а не `DuelState`.** Поле `expected` хранит ожидаемое значение (обычно `DuelState`), но в будущем может быть, например, кортежем валидных состояний. Тип `object` покрывает оба случая без выделения generic-параметра. Use-case-уровень всё равно конвертирует ошибку в локализованную строку и не работает с типом напрямую.
+- **Себя-кейс в `GLOBAL_ONLY`.** Self-challenge в `CHAT_*` ловится в `create_challenge` (`challenger_id == challenged_id` ⇒ `SelfChallengeError`). В `GLOBAL_ONLY` `challenged_id is None` при создании, и self-challenge возможен только в момент accept-а — там он ловится уже как `NotADuelParticipantError(player_id=challenger_id)` (тот же игрок принимает свой же вызов). Use-case 2.1.D переведёт оба в одинаковое локализованное «нельзя вызвать самого себя».
+- **Что не вошло (для следующих саб-спринтов):**
+    - Persistence (миграция `0009_pvp_duels` + ORM + порт `IDuelRepository` + реализация) → 2.1.C.
+    - Use-cases `ChallengeDuel` / `AcceptDuel` / `SubmitMove` / `ResolveDuel` (с activity-lock-ом, `IRandom` для AFK, `progression.add_length(source=PVP_REWARD)` с anti-cheat-cap-ом) → 2.1.D.
+    - Bot-handler-ы и presenter-ы (`/duel`, inline-кнопки, локали) → 2.1.E.
+    - Глобальное лобби FIFO + auto-promote через 3 мин → 2.1.F.
+    - Раунд-таймер 30–60s через APScheduler + AFK-job → 2.1.G.
+    - 50+ JSON-шаблонов забавных раунд-логов + presenter-карточка + кнопка «Поделиться» → 2.1.H.
+
+---
+
 ## 2026-05-05 — Спринт 2.1.A: чистый доменный движок боя PvP 1×1
 
 **Автор:** Devin (по запросу persisyellow)
