@@ -28,6 +28,9 @@ from pipirik_wars.shared.errors import IntegrityError as DomainIntegrityError
 def _row_to_entity(row: UserORM) -> Player:
     created_at: datetime = ensure_utc(row.created_at)
     updated_at: datetime = ensure_utc(row.updated_at)
+    anticheat_ban_until: datetime | None = (
+        ensure_utc(row.anticheat_ban_until) if row.anticheat_ban_until is not None else None
+    )
     return Player(
         id=row.id,
         tg_id=row.tg_id,
@@ -40,6 +43,7 @@ def _row_to_entity(row: UserORM) -> Player:
         created_at=created_at,
         updated_at=updated_at,
         locale_override=row.locale_override,
+        anticheat_ban_until=anticheat_ban_until,
     )
 
 
@@ -79,6 +83,7 @@ class SqlAlchemyPlayerRepository(IPlayerRepository):
             name=player.name.value if player.name is not None else None,
             status=player.status.value,
             locale_override=player.locale_override,
+            anticheat_ban_until=player.anticheat_ban_until,
             created_at=player.created_at,
             updated_at=player.updated_at,
         )
@@ -104,6 +109,7 @@ class SqlAlchemyPlayerRepository(IPlayerRepository):
         row.name = player.name.value if player.name is not None else None
         row.status = player.status.value
         row.locale_override = player.locale_override
+        row.anticheat_ban_until = player.anticheat_ban_until
         row.updated_at = player.updated_at
         # `created_at` намеренно не трогаем — он immutable после INSERT.
         await self._uow.session.flush()

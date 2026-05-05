@@ -9,6 +9,7 @@
 from pipirik_wars.domain.shared.ports.audit import (
     AuditAction,
     AuditEntry,
+    AuditSource,
     IAuditLogger,
 )
 from pipirik_wars.domain.shared.ports.clock import IClock
@@ -20,6 +21,7 @@ from pipirik_wars.domain.shared.ports.uow import IUnitOfWork
 __all__ = [
     "AuditAction",
     "AuditEntry",
+    "AuditSource",
     "IAuditLogger",
     "IClock",
     "IDelayedJobScheduler",

@@ -211,3 +211,91 @@ class TestFrozenPlayerCannotBeMutated:
         assert f2 is f
         f3 = f.unfreeze(now=LATER)
         assert not f3.is_frozen
+
+
+class TestAnticheatBan:
+    """Anti-cheat soft-ban (Спринт 1.6.A)."""
+
+    def test_new_player_is_not_banned(self) -> None:
+        p = Player.new(tg_id=42, username=None, now=NOW)
+        assert p.anticheat_ban_until is None
+        assert not p.is_anticheat_banned(now=NOW)
+
+    def test_with_anticheat_ban_sets_until(self) -> None:
+        p = Player.new(tg_id=42, username=None, now=NOW)
+        until = NOW + timedelta(days=14)
+        banned = p.with_anticheat_ban(until=until, now=NOW)
+
+        assert banned is not p
+        assert banned.anticheat_ban_until == until
+        assert banned.is_anticheat_banned(now=NOW)
+        assert banned.updated_at == NOW
+
+    def test_is_anticheat_banned_false_after_until(self) -> None:
+        p = Player.new(tg_id=42, username=None, now=NOW)
+        until = NOW + timedelta(days=14)
+        banned = p.with_anticheat_ban(until=until, now=NOW)
+        future = until + timedelta(seconds=1)
+        assert not banned.is_anticheat_banned(now=future)
+
+    def test_is_anticheat_banned_at_until_is_false(self) -> None:
+        # Граничный кейс: в момент `until` бан уже снят (строгое <).
+        p = Player.new(tg_id=42, username=None, now=NOW)
+        until = NOW + timedelta(days=14)
+        banned = p.with_anticheat_ban(until=until, now=NOW)
+        assert not banned.is_anticheat_banned(now=until)
+
+    def test_ban_extends_monotonically(self) -> None:
+        """Trip-wire может стрельнуть несколько раз; продлеваем только вверх."""
+        p = Player.new(tg_id=42, username=None, now=NOW)
+        first = p.with_anticheat_ban(until=NOW + timedelta(days=14), now=NOW)
+        second = first.with_anticheat_ban(until=NOW + timedelta(days=7), now=LATER)
+        # Меньшее `until` → не сокращаем (защита от случайного укорочения).
+        assert second is first
+        third = first.with_anticheat_ban(until=NOW + timedelta(days=21), now=LATER)
+        assert third.anticheat_ban_until == NOW + timedelta(days=21)
+        assert third.updated_at == LATER
+
+    def test_ban_until_must_be_timezone_aware(self) -> None:
+        p = Player.new(tg_id=42, username=None, now=NOW)
+        naive = datetime(2026, 5, 5, 10, 0, 0)
+        with pytest.raises(ValueError, match="timezone-aware"):
+            p.with_anticheat_ban(until=naive, now=NOW)
+
+    def test_ban_until_must_be_in_future(self) -> None:
+        p = Player.new(tg_id=42, username=None, now=NOW)
+        with pytest.raises(ValueError, match="in the future"):
+            p.with_anticheat_ban(until=NOW, now=NOW)
+        with pytest.raises(ValueError, match="in the future"):
+            p.with_anticheat_ban(until=NOW - timedelta(days=1), now=NOW)
+
+    def test_with_anticheat_ban_lifted(self) -> None:
+        p = Player.new(tg_id=42, username=None, now=NOW)
+        banned = p.with_anticheat_ban(until=NOW + timedelta(days=14), now=NOW)
+        lifted = banned.with_anticheat_ban_lifted(now=LATER)
+
+        assert lifted is not banned
+        assert lifted.anticheat_ban_until is None
+        assert not lifted.is_anticheat_banned(now=LATER)
+        assert lifted.updated_at == LATER
+
+    def test_lifting_already_clear_is_noop(self) -> None:
+        p = Player.new(tg_id=42, username=None, now=NOW)
+        same = p.with_anticheat_ban_lifted(now=LATER)
+        assert same is p
+
+    def test_ban_works_on_frozen_player(self) -> None:
+        # Сервисное состояние не зависит от ACTIVE/FROZEN.
+        p = Player.new(tg_id=42, username=None, now=NOW).freeze(now=NOW)
+        banned = p.with_anticheat_ban(until=NOW + timedelta(days=14), now=NOW)
+        assert banned.is_anticheat_banned(now=NOW)
+        assert banned.is_frozen
+
+    def test_ban_does_not_modify_other_fields(self) -> None:
+        p = Player.new(tg_id=42, username=Username(value="ivan"), now=NOW).with_length(
+            Length(cm=50), now=NOW
+        )
+        banned = p.with_anticheat_ban(until=NOW + timedelta(days=14), now=NOW)
+        assert banned.length == Length(cm=50)
+        assert banned.username == Username(value="ivan")
+        assert banned.tg_id == 42

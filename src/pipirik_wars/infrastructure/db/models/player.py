@@ -46,6 +46,13 @@ class UserORM(Base):
         server_default="active",
     )
     locale_override: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # ── Спринт 1.6.A (anti-cheat hardcap) ──
+    # NULL = бан не активен; конкретное `datetime` = до этой точки игрок
+    # в soft-ban (нельзя получать длину/толщину). Гейт `AnticheatGuard`
+    # сравнивает с `now()` (см. Спринт 1.6.D/1.6.E).
+    anticheat_ban_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

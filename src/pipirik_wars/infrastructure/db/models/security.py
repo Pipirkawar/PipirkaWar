@@ -12,6 +12,7 @@ from datetime import datetime
 from sqlalchemy import (
     JSON,
     BigInteger,
+    CheckConstraint,
     DateTime,
     Index,
     Integer,
@@ -77,10 +78,30 @@ class AuditLogORM(Base):
     after: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # ── Спринт 1.6.A (anti-cheat hardcap) ──
+    # `source` — whitelist в БД (CHECK) дублирует `AuditSource` в домене,
+    # чтобы случайная опечатка в `source="forst"` не выпала из
+    # агрегации anti-cheat-окна. Backfill для старых строк = 'unknown'.
+    source: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        server_default="unknown",
+        index=True,
+    )
+    # `clamped_from` — None, если дельта не клампилась; число (исходная
+    # запрошенная дельта в см), если progression.add_length подрезал её
+    # под daily_cap_cm/weekly_cap_cm (Спринт 1.6.D).
+    clamped_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
         Index("ix_audit_log_target_kind_target_id", "target_kind", "target_id"),
         Index("ix_audit_log_action", "action"),
+        CheckConstraint(
+            "source IN ('forest', 'oracle', 'referral_signup', 'referral_thickness', "
+            "'pvp_reward', 'caravan_reward', 'raid_reward', 'admin_grant', "
+            "'admin_refund', 'stars_payment', 'ton_payment', 'usdt_payment', 'unknown')",
+            name="audit_log_source_whitelist",
+        ),
     )
 
 

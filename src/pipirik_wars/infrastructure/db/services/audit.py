@@ -31,6 +31,8 @@ class SqlAlchemyAuditLogger(IAuditLogger):
             after=entry.after,
             reason=entry.reason,
             idempotency_key=entry.idempotency_key,
+            source=entry.source.value,
+            clamped_from=entry.clamped_from,
         )
         self._uow.session.add(row)
         await self._uow.session.flush()

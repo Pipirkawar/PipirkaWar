@@ -91,6 +91,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0006 is not None
         assert rev_0006.down_revision == "0005_oracle_invocations"
 
+    def test_0007_descends_from_0006(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0007 = script.get_revision("0007_anticheat_foundation")
+        assert rev_0007 is not None
+        assert rev_0007.down_revision == "0006_users_locale_override"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -101,6 +108,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260504_0004_forest_runs.py",
             "20260505_0005_oracle_invocations.py",
             "20260505_0006_users_locale_override.py",
+            "20260505_0007_anticheat_foundation.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -146,6 +154,32 @@ class TestAlembicMigrationsApplyCleanly:
             "oracle_invocations",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
+
+    def test_0007_adds_anticheat_columns(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Спринт 1.6.A: миграция добавляет нужные колонки + источники в whitelist."""
+        db_path = tmp_path / "alembic_0007.sqlite"
+        async_url = f"sqlite+aiosqlite:///{db_path}"
+        monkeypatch.setenv("DATABASE_URL", async_url)
+
+        cfg = _alembic_config(async_url)
+        command.upgrade(cfg, "head")
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                inspector = inspect(conn)
+                user_cols = {c["name"] for c in inspector.get_columns("users")}
+                audit_cols = {c["name"] for c in inspector.get_columns("audit_log")}
+        finally:
+            engine.dispose()
+
+        assert "anticheat_ban_until" in user_cols
+        assert "source" in audit_cols
+        assert "clamped_from" in audit_cols
 
     def test_downgrade_then_upgrade_round_trips(
         self,
