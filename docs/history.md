@@ -23,6 +23,70 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.1.D: PvP use-cases (ChallengeDuel/AcceptDuel/CancelDuel/SubmitMove/ResolveAfkRound)
+
+**Автор:** Devin (по запросу 521sophie)
+**Тип:** feature (application use-cases + DTO + helpers + tests)
+**Связано:** `current_tasks.md` Спринт 2.1.D, ПД 2.1.6 + 2.1.5 (`development_plan.md §5`), ГДД §7.1 + §3.2.
+
+Четвёртый саб-спринт PvP-эпика 2.1. Поверх доменного агрегата `Duel` (2.1.B) и persistence-слоя (2.1.C) появляются 5 use-cases на ambient UoW + activity-lock + anti-cheat-gate, объединяющие домен с инфраструктурой и завершающие application-уровень PvP. Bot-handler-ы и шедулинг — отдельные саб-спринты 2.1.E–H.
+
+Что сделано:
+
+- **5 use-cases** в `src/pipirik_wars/application/pvp/`:
+    - `ChallengeDuel`: создаёт `Duel.create_challenge(...)` с снэпшотом баланса (`hit_pct=10`, `expected_rounds=3`); валидирует PvP-требования (`balance.pvp.duel_1v1.min_length_cm`, `min_thickness_level`) и `AnticheatGuard.require_unlocked` для челленджера; берёт activity-lock `reason=PVP, ttl=30 мин`; пишет audit `PVP_DUEL_CREATED` с `idempotency_key=pvp_duel_created:{duel.id}`.
+    - `AcceptDuel`: загружает дуэль и оппонента; валидирует PvP-требования и anti-cheat для оппонента; берёт lock на оппонента; вызывает `Duel.accept(accepter_id, p1_length_cm, p2_length_cm, now)` (path-independent резолв через снэпшот длин на старте); audit `PVP_DUEL_ACCEPTED`.
+    - `CancelDuel`: только челленджер может отменить; идемпотентен на `state=CANCELLED` (no-op без audit); снимает lock с челленджера; audit `PVP_DUEL_CANCELLED`.
+    - `SubmitMove`: преобразует `attack/block` строки → `Position`-enum → `RoundChoice`; вызывает `Duel.submit_move(...)`; если домен сам авто-завершил дуэль (3 раунда сыграны) — вызывает `apply_duel_outcome(...)`, снимает оба lock-а, audit `PVP_DUEL_COMPLETED`.
+    - `ResolveAfkRound`: idempotent на already-resolved (`pending_round.round_num != input.round_num` или `state != IN_PROGRESS`); для отсутствующих игроков прокатывает `IRandom.choice` × 2 (атака + блок); вызывает `Duel.force_complete_round(...)` со fallback-выборами; та же финализация дуэли что и в `SubmitMove`.
+- **Pure-helper** `application/pvp/apply_outcome.py`: единая точка применения `DuelOutcome.pX_delta_cm` к игрокам:
+    - delta > 0 (победитель) → `length_granter.grant(source=AuditSource.PVP_REWARD, idempotency_key=add_length:pvp_duel:{id}:{side})` — проходит через anti-cheat cap из 1.6.B (organic-whitelist уже включает `pvp_reward`).
+    - delta < 0 (проигравший) → `Player.with_length(...)` напрямую (это spend, не grant; cap'у не подлежит) + audit `LENGTH_REVOKE` с `idempotency_key=pvp_duel_loss_revoke:{id}:{side}`.
+    - delta == 0 (ничья) → no-op, audit не пишется.
+    - Файл добавлен в `_ALLOWED_FILES` `tests/unit/architecture/test_length_grant_guard.py` (4-й разрешённый callsite `Player.with_length`).
+- **Новые `AuditAction`** в `domain/shared/ports/audit.py`: `PVP_DUEL_CREATED` / `PVP_DUEL_ACCEPTED` / `PVP_DUEL_CANCELLED` / `PVP_DUEL_COMPLETED`.
+- **DTO** в `application/dto/inputs.py` (5 классов с `model_validator`-ами): `ChallengeDuelInput` (`mode='global_only'` ↔ `challenged_tg_id is None`), `AcceptDuelInput`, `CancelDuelInput`, `SubmitMoveInput` (с `Literal['high','mid','low']` для `attack`/`block`), `ResolveAfkRoundInput`.
+- **`FakeDuelRepository`** в `tests/fakes/duel_repo.py` (повторяет паттерн `FakeForestRunRepository`): in-memory storage с auto-id на `add()`, `get_by_id`, `save` (с `IntegrityError` на duel-without-id и duel-id-not-exists). Зарегистрирован в `tests/fakes/__init__.py`.
+- **48 unit-тестов** на use-cases в `tests/unit/application/pvp/`:
+    - `test_challenge_duel.py` (13): happy chat_only/chat_then_global/global_only, DTO-валидатор отбивает несовместимые mode×target, PvpRequirementsNotMetError на length/thickness ниже порога, AnticheatSoftBanError, LockAlreadyHeldError при чужом lock-е (FOREST), edge: длина ровно min_length_cm.
+    - `test_accept_duel.py` (12): happy targeted (CHAT_ONLY) + global (GLOBAL_ONLY с авто-set `challenged_id`), lock-acquire на оппонента, DuelNotFoundError, PlayerNotFoundError для accepter и challenger (FK-disappear), PvP-requirements / anticheat / lock-conflict для оппонента, NotADuelParticipantError (третий лишний и self-accept в global_only), InvalidDuelStateError на CANCELLED.
+    - `test_cancel_duel.py` (6): happy (releases lock), idempotency на already-cancelled (no audit, no mutations), DuelNotFoundError, PlayerNotFoundError, NotADuelParticipantError (не-челленджер пытается), InvalidDuelStateError на IN_PROGRESS.
+    - `test_submit_move.py` (9): partial round (round_num не сменился), round closes (round_num=2 открылся, длины НЕ применены), duel completes на 3-ем раунде → zero-sum applied, draw → нет LENGTH_*-аудитов, DuelNotFoundError, PlayerNotFoundError, NotADuelParticipantError, MoveAlreadySubmittedError, InvalidDuelStateError на PENDING_ACCEPT.
+    - `test_resolve_afk_round.py` (8): оба AFK → оба rolled, p1-picked p2-AFK → только p2 rolled, completes finals → zero-sum + locks released + `afk_fallback=True` в audit, deterministic seed-rerun даёт идентичные выборы, idempotency на already-resolved (round 2 идёт, таймер 1 опоздал) и terminal (CANCELLED), DuelNotFoundError.
+- **Документация:** `current_tasks.md` Спринт 2.1.D переведён в «🟡 готово к ревью» с подробным резюме; обновлён этот журнал.
+
+Результат / артефакты:
+
+- Новые исходники:
+    - `src/pipirik_wars/application/pvp/__init__.py`, `challenge_duel.py`, `accept_duel.py`, `cancel_duel.py`, `submit_move.py`, `resolve_afk_round.py`, `apply_outcome.py`.
+    - `tests/fakes/duel_repo.py`.
+    - `tests/unit/application/pvp/__init__.py`, `_helpers.py`, `test_challenge_duel.py`, `test_accept_duel.py`, `test_cancel_duel.py`, `test_submit_move.py`, `test_resolve_afk_round.py`.
+- Изменённые файлы: `application/dto/inputs.py` (+5 DTO + `model_validator` для `ChallengeDuelInput`), `domain/shared/ports/audit.py` (+4 `AuditAction`), `domain/pvp/__init__.py` (re-export `DuelNotFoundError` / `PvpRequirementsNotMetError`), `tests/fakes/__init__.py`, `tests/unit/architecture/test_length_grant_guard.py` (allowed-list +`apply_outcome.py`).
+- Метрики:
+    - Вся локальная сюита: **1680 passed, 1 skipped** (+54 = 48 PvP unit + 6 архитектурных за счёт расширенного allowed-list / нового модуля; baseline до спринта — 1626).
+    - Coverage: **96.86%** (выше требуемых 80%).
+    - Новые PvP-модули: 90–97% покрытия (defensive `RuntimeError` на `player.id is None` и `PlayerNotFoundError` на FK-disappear не покрыты — это страховые ветки, недостижимые с текущими fake-реализациями).
+- Все артефакты `make ci` зелёные локально: `ruff format` / `ruff check` / `mypy` (234 файла, no issues) / `lint-imports` (3 contracts kept).
+
+Заметки / решения:
+
+- **`apply_outcome` как отдельный pure-helper, а не два отдельных use-case-а.** Два разных use-case-а (`SubmitMove` + `ResolveAfkRound`) приводят к одному и тому же завершению дуэли и одной и той же логике применения дельты. Вынос в чистый helper (без `IUnitOfWork` — вызывается ВНУТРИ уже открытой транзакции родителем) даёт one-and-only-one source of truth для zero-sum-обмена и одинаковые idempotency-ключи. Альтернатива (общий базовый класс или метод-прим в `Duel`) ломает чистоту домена (он не должен знать про `ILengthGranter` / audit).
+- **Idempotency-ключи победителя через `add_length:pvp_duel:{id}:{side}`.** Префикс `add_length:` обязателен (валидируется `FakeIdempotencyKey.mark` и реальной БД-таблицей `idempotency_keys` namespace=`add_length`). `pvp_duel:{id}:{side}` — детерминирован и уникален на пару (бой, сторона). Для проигравшего идём отдельным путём (`pvp_duel_loss_revoke:{id}:{side}`) — он НЕ через `AddLength`, потому что cap'у `LENGTH_REVOKE` не подлежит (это spend), но запись в audit нужна.
+- **`Player.with_length()` для проигравшего, не `progression.subtract_length`.** На 1.6 нет use-case-а `SubtractLength`/`RevokeLength` — это намеренный дизайн (anti-cheat в 1.6.B защищает только GAINS, а LOSSES — это honest debit). Прямой `with_length()` оправдан и в `UpgradeThickness` (1.4.A: spend на улучшение). Архитектурный гард `test_length_grant_guard.py` теперь явно разрешает это в `apply_outcome.py` (4-й callsite после `domain/player/entities.py` / `application/progression/{add_length,upgrade_thickness}.py`).
+- **`model_validator` в `ChallengeDuelInput` ловит несовместимые `mode×challenged_tg_id`** ещё до загрузки игроков (early-fail). Доменный `Duel.create_challenge(...)` дублирует ту же проверку — bot-handler в 2.1.E может полагаться на неё; use-case упрощается (нет `if mode == GLOBAL_ONLY: ...`).
+- **`ResolveAfkRound` идемпотентен на 2 уровнях.** (1) Если `state != IN_PROGRESS` → no-op (дуэль завершена/отменена прежде чем шедулер сработал). (2) Если `pending_round is None or pending_round.round_num != input.round_num` → no-op (раунд закрыт реальными ходами, шедулер опоздал). Обе ветки возвращают `was_already_resolved=True` без audit-записей.
+- **`afk_fallback` в audit-record `PVP_DUEL_COMPLETED`.** Различает «дуэль завершилась нормально» от «дуэль завершилась через AFK-таймаут хотя бы в одном раунде». Полезно для аналитики/anti-cheat (массовое AFK = подозрительно), хотя hard-cap не накладываем.
+- **Нет интеграционных тестов с реальной БД.** Use-cases работают через fakes (FakeDuelRepository, FakePlayerRepository, etc.). Реальный SQLAlchemy-репо `Duel` уже покрыт в 2.1.C (15 интеграционных тестов). Дублировать смысла нет — use-cases только координируют, persistence-логика в репо.
+
+Что дальше:
+
+- 2.1.E: bot-handler-ы (`/duel <opponent>` + 6 inline-кнопок + presenter с локалями), DI use-cases в `bot/main.py`.
+- 2.1.F: глобальное лобби FIFO + APScheduler-job для авто-перехода `chat → global` через 3 мин.
+- 2.1.G: раунд-таймер 30–60 сек через `ILongPollTimer` / APScheduler, который вызывает `ResolveAfkRound`.
+- 2.1.H: 50+ JSON-шаблонов забавных раунд-логов (RU/EN), `JsonDuelLogTemplateProvider`, карточка результата.
+
+---
+
 ## 2026-05-05 — Спринт 2.1.C: persistence-фундамент агрегата `Duel`
 
 **Автор:** Devin (по запросу persisyellow)
