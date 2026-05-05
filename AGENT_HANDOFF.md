@@ -195,14 +195,16 @@
 - [x] Прочитал docs/current_tasks.md и docs/development_plan.md
 - [x] Создал ветку `devin/<ts>-sprint-2-2-a-clantop` от свежего main
 - [x] Создал AGENT_HANDOFF.md (этот файл)
-- [ ] Шаг 1 (domain ClanTopEntry) — TODO
-- [ ] Шаг 2 (application port + use-case) — TODO
-- [ ] Шаг 3+4 (domain port + SQL repo) — TODO
-- [ ] Шаг 5 (cache) — TODO
-- [ ] Шаг 6 (bot handler + presenter + locales) — TODO
-- [ ] Шаг 7 (DI) — TODO
-- [ ] Шаг 8 (tests for handler/presenter) — TODO
-- [ ] Шаг 9 (make ci + PR + CI green)
+- [x] Шаг 1 (domain ClanTopEntry + tests) — DONE
+- [x] Шаг 3 (порт `IClanRepository.list_top_by_total_length`) — DONE
+- [x] Шаг 4 (SqlAlchemyClanRepository SQL-агрегация) — DONE
+- [x] Шаг 2 (application port `IClanTopQuery` + use-case `GetTopClans` + tests) — DONE
+- [ ] Шаг 5 (in-memory cache `ClanTopCache` TTL=60s) — TODO
+- [ ] Шаг 6 (bot handler `/clantop` + presenter + locales) — TODO
+- [ ] Шаг 7 (DI wiring `bot/main.py::Container/build_dispatcher`) — TODO
+- [ ] Шаг 8 (тесты handler-а + presenter-а + composition-root) — TODO
+- [ ] Шаг 9 (`make ci` + PR + CI green)
+- [ ] (Опц.) интеграционный тест `tests/integration/db/test_clan_repository.py::list_top_by_total_length`
 
 ## Полезные ссылки в коде (для копирования паттернов)
 
