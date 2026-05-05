@@ -31,6 +31,7 @@ from tests.fakes.oracle import (
 from tests.fakes.player_repo import FakePlayerRepository
 from tests.fakes.random import FakeRandom
 from tests.fakes.signup_queue import FakeSignupQueueRepository
+from tests.fakes.top_players import FakeTopPlayersQuery
 from tests.fakes.uow import FakeUnitOfWork
 
 __all__ = [
@@ -53,6 +54,7 @@ __all__ = [
     "FakePlayerRepository",
     "FakeRandom",
     "FakeSignupQueueRepository",
+    "FakeTopPlayersQuery",
     "FakeUnitOfWork",
     "ScheduledFinish",
 ]
