@@ -54,6 +54,11 @@ class AuditAction(str, enum.Enum):
     ANTICHEAT_DAILY_CAP_EXCEEDED = "anticheat_daily_cap_exceeded"
     ANTICHEAT_WEEKLY_CAP_EXCEEDED = "anticheat_weekly_cap_exceeded"
     ANTICHEAT_BAN_LIFTED = "anticheat_ban_lifted"
+    # ── Спринт 2.1 (PvP 1×1, ГДД §7.1) ──
+    PVP_DUEL_CREATED = "pvp_duel_created"
+    PVP_DUEL_ACCEPTED = "pvp_duel_accepted"
+    PVP_DUEL_CANCELLED = "pvp_duel_cancelled"
+    PVP_DUEL_COMPLETED = "pvp_duel_completed"
 
 
 class AuditSource(str, enum.Enum):

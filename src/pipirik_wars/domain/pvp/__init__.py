@@ -35,6 +35,7 @@ from pipirik_wars.domain.pvp.entities import (
     RoundOutcome,
 )
 from pipirik_wars.domain.pvp.errors import (
+    DuelNotFoundError,
     InvalidDuelStateError,
     InvalidLengthError,
     InvalidRoundCountError,
@@ -42,6 +43,7 @@ from pipirik_wars.domain.pvp.errors import (
     NoMissingMovesError,
     NotADuelParticipantError,
     PvpError,
+    PvpRequirementsNotMetError,
     SelfChallengeError,
 )
 from pipirik_wars.domain.pvp.repositories import IDuelRepository
@@ -55,6 +57,7 @@ __all__ = [
     "DEFAULT_DUEL_ROUNDS",
     "Duel",
     "DuelMode",
+    "DuelNotFoundError",
     "DuelOutcome",
     "DuelState",
     "DuelWinner",
@@ -68,6 +71,7 @@ __all__ = [
     "PendingRound",
     "Position",
     "PvpError",
+    "PvpRequirementsNotMetError",
     "RoundChoice",
     "RoundOutcome",
     "SelfChallengeError",
