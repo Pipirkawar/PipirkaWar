@@ -64,6 +64,13 @@ from pipirik_wars.application.player import (
     SetPlayerLocale,
 )
 from pipirik_wars.application.progression import AddLength, UpgradeThickness
+from pipirik_wars.application.pvp import (
+    AcceptDuel,
+    CancelDuel,
+    ChallengeDuel,
+    ResolveAfkRound,
+    SubmitMove,
+)
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.application.top import GetTopPlayers, ITopPlayersQuery
@@ -79,6 +86,7 @@ from pipirik_wars.domain.forest import IForestRunRepository
 from pipirik_wars.domain.oracle import IOracleHistoryRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.progression import ILengthGranter
+from pipirik_wars.domain.pvp import IDuelRepository
 from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import (
     IAuditLogger,
@@ -105,6 +113,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyAnticheatRepository,
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
+    SqlAlchemyDuelRepository,
     SqlAlchemyForestRunRepository,
     SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPlayerRepository,
@@ -169,6 +178,7 @@ class Container:
     activity_locks: IActivityLockRepository
     forest_runs: IForestRunRepository
     oracle_history: IOracleHistoryRepository
+    duels: IDuelRepository
     anticheat: IAnticheatRepository
     anticheat_admin_alerter: IAnticheatAdminAlerter
 
@@ -213,6 +223,13 @@ class Container:
     get_top_players: GetTopPlayers
     add_length: ILengthGranter
     lift_anticheat_ban: LiftAnticheatBan
+
+    # PvP 1×1 (Спринт 2.1.E)
+    challenge_duel: ChallengeDuel
+    accept_duel: AcceptDuel
+    cancel_duel: CancelDuel
+    submit_move: SubmitMove
+    resolve_afk_round: ResolveAfkRound
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -262,6 +279,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     activity_locks = SqlAlchemyActivityLockRepository(uow=uow)
     forest_runs = SqlAlchemyForestRunRepository(uow=uow, balance=balance)
     oracle_history = SqlAlchemyOracleHistoryRepository(uow=uow)
+    duels = SqlAlchemyDuelRepository(uow=uow)
     anticheat = SqlAlchemyAnticheatRepository(uow=uow)
     anticheat_admin_alerter = StructlogAnticheatAdminAlerter()
     oracle_templates = JsonOracleTemplateProvider(
@@ -452,6 +470,52 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=audit,
         clock=clock,
     )
+    # PvP 1×1 use-cases (Спринт 2.1.D, ГДД §7.1)
+    challenge_duel = ChallengeDuel(
+        uow=uow,
+        players=players,
+        duels=duels,
+        locks=activity_lock_service,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    accept_duel = AcceptDuel(
+        uow=uow,
+        players=players,
+        duels=duels,
+        locks=activity_lock_service,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    cancel_duel = CancelDuel(
+        uow=uow,
+        players=players,
+        duels=duels,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+    )
+    submit_move = SubmitMove(
+        uow=uow,
+        players=players,
+        duels=duels,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        audit=audit,
+        clock=clock,
+    )
+    resolve_afk_round = ResolveAfkRound(
+        uow=uow,
+        players=players,
+        duels=duels,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        random=RealRandom(),
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -470,6 +534,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         activity_locks=activity_locks,
         forest_runs=forest_runs,
         oracle_history=oracle_history,
+        duels=duels,
         anticheat=anticheat,
         anticheat_admin_alerter=anticheat_admin_alerter,
         oracle_templates=oracle_templates,
@@ -500,6 +565,11 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         get_top_players=get_top_players,
         add_length=add_length,
         lift_anticheat_ban=lift_anticheat_ban,
+        challenge_duel=challenge_duel,
+        accept_duel=accept_duel,
+        cancel_duel=cancel_duel,
+        submit_move=submit_move,
+        resolve_afk_round=resolve_afk_round,
     )
 
 
@@ -539,6 +609,14 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["bundle"] = container.bundle
     dispatcher["set_player_locale"] = container.set_player_locale
     dispatcher["lift_anticheat_ban"] = container.lift_anticheat_ban
+    # PvP 1×1 (Спринт 2.1.E) — use-cases + репо/резолвер для handler-ов.
+    dispatcher["challenge_duel"] = container.challenge_duel
+    dispatcher["accept_duel"] = container.accept_duel
+    dispatcher["cancel_duel"] = container.cancel_duel
+    dispatcher["submit_move"] = container.submit_move
+    dispatcher["resolve_afk_round"] = container.resolve_afk_round
+    dispatcher["players"] = container.players
+    dispatcher["player_locale_resolver"] = container.player_locale_resolver
     return dispatcher
 
 
