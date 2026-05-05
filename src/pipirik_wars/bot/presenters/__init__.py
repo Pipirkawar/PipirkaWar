@@ -10,6 +10,21 @@
 `forest_callback_data` / `upgrade_callback_data`).
 """
 
+from pipirik_wars.bot.presenters.duel import (
+    AcceptCallbackData,
+    AttackCallbackData,
+    BlockCallbackData,
+    DuelPresenter,
+    RejectCallbackData,
+    accept_callback_data,
+    attack_callback_data,
+    block_callback_data,
+    parse_accept_callback_data,
+    parse_attack_callback_data,
+    parse_block_callback_data,
+    parse_reject_callback_data,
+    reject_callback_data,
+)
 from pipirik_wars.bot.presenters.forest import (
     ForestCallbackAction,
     ForestCallbackData,
@@ -29,17 +44,30 @@ from pipirik_wars.bot.presenters.upgrade import (
 )
 
 __all__ = [
+    "AcceptCallbackData",
+    "AttackCallbackData",
+    "BlockCallbackData",
+    "DuelPresenter",
     "ForestCallbackAction",
     "ForestCallbackData",
     "ForestPresenter",
     "OraclePresenter",
     "ProfilePresenter",
+    "RejectCallbackData",
     "TopPresenter",
     "UpgradeCallbackAction",
     "UpgradeCallbackData",
     "UpgradePresenter",
+    "accept_callback_data",
+    "attack_callback_data",
+    "block_callback_data",
     "forest_callback_data",
+    "parse_accept_callback_data",
+    "parse_attack_callback_data",
+    "parse_block_callback_data",
     "parse_forest_callback_data",
+    "parse_reject_callback_data",
     "parse_upgrade_callback_data",
+    "reject_callback_data",
     "upgrade_callback_data",
 ]
