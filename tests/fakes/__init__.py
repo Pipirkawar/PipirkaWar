@@ -7,6 +7,10 @@
 """
 
 from tests.fakes.admin_repo import FakeAdminRepository
+from tests.fakes.anticheat_admin_alerter import (
+    AnticheatAdminAlertEvent,
+    FakeAnticheatAdminAlerter,
+)
 from tests.fakes.anticheat_repo import FakeAnticheatRepository
 from tests.fakes.audit import FakeAuditLogger
 from tests.fakes.balance import FakeBalanceConfig
@@ -38,9 +42,11 @@ from tests.fakes.top_players import FakeTopPlayersQuery
 from tests.fakes.uow import FakeUnitOfWork
 
 __all__ = [
+    "AnticheatAdminAlertEvent",
     "DauAlertEvent",
     "FakeActivityLockRepository",
     "FakeAdminRepository",
+    "FakeAnticheatAdminAlerter",
     "FakeAnticheatRepository",
     "FakeAuditLogger",
     "FakeBalanceConfig",

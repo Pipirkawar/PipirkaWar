@@ -250,3 +250,16 @@ lang-unsupported = Language `{ $code }` is not supported. Available: ru, en.
 # Locale switched successfully.
 lang-set-ru = Язык интерфейса: русский. Все ответы и фоновые сообщения теперь на русском.
 lang-set-en = Interface language switched to English. All replies and background messages will be in English.
+
+
+# Anti-cheat hardcap (Sprint 1.6.D, GDD §3.3).
+# Player attempted a length-granting action but is in a soft-ban.
+# `$banned-until` — ISO string of ban expiration moment (UTC, tz-aware).
+anticheat-soft-ban-active = Anti-cheat verification is active until { $banned-until }. Length growth is temporarily frozen.
+
+# Part of the requested delta was clamped by the daily cap.
+# `$applied` — actually applied cm; `$requested` — originally requested.
+anticheat-cap-clamped-daily = Daily growth cap nearly reached. Applied { NUMBER($applied, useGrouping: 0) } cm out of { NUMBER($requested, useGrouping: 0) } cm.
+
+# Part of the requested delta was clamped by the weekly cap.
+anticheat-cap-clamped-weekly = Weekly growth cap nearly reached. Applied { NUMBER($applied, useGrouping: 0) } cm out of { NUMBER($requested, useGrouping: 0) } cm.

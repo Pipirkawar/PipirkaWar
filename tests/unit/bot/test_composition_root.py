@@ -38,7 +38,7 @@ from pipirik_wars.application.player import (
     RegisterPlayer,
     SetPlayerLocale,
 )
-from pipirik_wars.application.progression import UpgradeThickness
+from pipirik_wars.application.progression import AddLength, UpgradeThickness
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.application.top import GetTopPlayers
@@ -50,6 +50,7 @@ from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
+from pipirik_wars.infrastructure.anticheat import StructlogAnticheatAdminAlerter
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
 from pipirik_wars.infrastructure.dau import (
@@ -87,6 +88,7 @@ from pipirik_wars.infrastructure.settings import (
 from tests.fakes import (
     FakeActivityLockRepository,
     FakeAdminRepository,
+    FakeAnticheatAdminAlerter,
     FakeAnticheatRepository,
     FakeAuditLogger,
     FakeBalanceConfig,
@@ -172,6 +174,7 @@ def _container_with_fakes() -> Container:
     )
     oracle_history = FakeOracleHistoryRepository()
     anticheat = FakeAnticheatRepository()
+    anticheat_admin_alerter = FakeAnticheatAdminAlerter()
     oracle_templates = FakeOracleTemplateProvider()
     top_players_query = FakeTopPlayersQuery()
     bundle: IMessageBundle = FakeMessageBundle()
@@ -286,6 +289,7 @@ def _container_with_fakes() -> Container:
         ),
         oracle_history=oracle_history,
         anticheat=anticheat,
+        anticheat_admin_alerter=anticheat_admin_alerter,
         oracle_templates=oracle_templates,
         invoke_oracle=InvokeOracle(
             uow=uow,
@@ -306,6 +310,16 @@ def _container_with_fakes() -> Container:
             players=players,
             audit=audit,
             clock=clock,
+        ),
+        add_length=AddLength(
+            uow=uow,
+            players=players,
+            anticheat=anticheat,
+            audit=audit,
+            balance=balance,
+            clock=clock,
+            idempotency=idempotency,
+            admin_alerter=anticheat_admin_alerter,
         ),
     )
 
@@ -354,6 +368,9 @@ class TestContainer:
         assert isinstance(c.upgrade_thickness, UpgradeThickness)
         # i18n bundle (Спринт 1.5.A → 1.5.B).
         assert isinstance(c.bundle, FakeMessageBundle)
+        # Anticheat add_length (Спринт 1.6.D).
+        assert isinstance(c.anticheat_admin_alerter, FakeAnticheatAdminAlerter)
+        assert isinstance(c.add_length, AddLength)
 
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
@@ -404,6 +421,9 @@ class TestBuildContainer:
         assert isinstance(c.upgrade_thickness, UpgradeThickness)
         # i18n bundle (Спринт 1.5.A → 1.5.B): реальный FluentMessageBundle.
         assert isinstance(c.bundle, FluentMessageBundle)
+        # Anticheat add_length (Спринт 1.6.D).
+        assert isinstance(c.anticheat_admin_alerter, StructlogAnticheatAdminAlerter)
+        assert isinstance(c.add_length, AddLength)
 
 
 class TestBuildDispatcher:

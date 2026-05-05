@@ -7,10 +7,12 @@
 и решает, клампить или пускать дельту насквозь.
 """
 
+from pipirik_wars.domain.anticheat.admin_alerter import IAnticheatAdminAlerter
 from pipirik_wars.domain.anticheat.entities import AnticheatWindow
 from pipirik_wars.domain.anticheat.repositories import IAnticheatRepository
 
 __all__ = [
     "AnticheatWindow",
+    "IAnticheatAdminAlerter",
     "IAnticheatRepository",
 ]
