@@ -14,18 +14,27 @@
   `require_spend(...)` со своим `cost_cm`.
 """
 
-from pipirik_wars.domain.progression.errors import InsufficientLengthError
+from pipirik_wars.domain.progression.errors import ActivityLockedError, InsufficientLengthError
 from pipirik_wars.domain.progression.spend import (
     MIN_LENGTH_AFTER_SPEND_CM,
     SpendAction,
     can_spend,
     require_spend,
 )
+from pipirik_wars.domain.progression.thickness import (
+    cost_for_upgrade,
+    is_activity_unlocked,
+    require_unlocked,
+)
 
 __all__ = [
     "MIN_LENGTH_AFTER_SPEND_CM",
+    "ActivityLockedError",
     "InsufficientLengthError",
     "SpendAction",
     "can_spend",
+    "cost_for_upgrade",
+    "is_activity_unlocked",
     "require_spend",
+    "require_unlocked",
 ]

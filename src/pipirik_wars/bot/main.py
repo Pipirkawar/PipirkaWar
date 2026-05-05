@@ -53,6 +53,7 @@ from pipirik_wars.application.forest import (
     StartForestRun,
 )
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
+from pipirik_wars.application.progression import UpgradeThickness
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.bot.handlers import register_routers
@@ -156,6 +157,7 @@ class Container:
     start_forest_run: StartForestRun
     finish_forest_run: FinishForestRun
     apply_forest_name_drop: ApplyForestNameDrop
+    upgrade_thickness: UpgradeThickness
 
 
 def build_container(
@@ -325,6 +327,13 @@ def build_container(
         audit=audit,
         clock=clock,
     )
+    upgrade_thickness = UpgradeThickness(
+        uow=uow,
+        players=players,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -360,6 +369,7 @@ def build_container(
         start_forest_run=start_forest_run,
         finish_forest_run=finish_forest_run,
         apply_forest_name_drop=apply_forest_name_drop,
+        upgrade_thickness=upgrade_thickness,
     )
 
 
@@ -387,6 +397,8 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["start_forest_run"] = container.start_forest_run
     dispatcher["finish_forest_run"] = container.finish_forest_run
     dispatcher["apply_forest_name_drop"] = container.apply_forest_name_drop
+    dispatcher["upgrade_thickness"] = container.upgrade_thickness
+    dispatcher["balance"] = container.balance
     return dispatcher
 
 

@@ -16,18 +16,35 @@
 
 ---
 
-## 🟢 В работе — Спринт 1.3 (Поход в лес + дроп шмота)
+## 🟢 В работе — Спринт 1.4 (Прокачка толщины + предсказатель + топ)
 
-Спринт большой (9 задач из §3 / Спринт 1.3 ПД), поэтому режется на 4 PR-а:
+7 задач из §3 / Спринт 1.4 ПД режутся на 4 PR-а (по тому же принципу, что 1.1–1.3):
+
+| PR | Содержимое | Статус | Задачи из `development_plan.md` §3 |
+|---|---|---|---|
+| **1.4.A** | Domain `progression/thickness.py`: `cost_for_upgrade(current_thickness, *, cost_base, cost_exponent)` (формула `n²·base`, `n` — целевой уровень) + `is_activity_unlocked(thickness, activity, unlock_levels)` (table-driven, ГДД §3.3) + ошибка `ActivityLockedError`. Use-case `UpgradeThickness` (списание длины через `require_spend(THICKNESS_UPGRADE)`, `with_thickness(level+1)`, audit `THICKNESS_UPGRADE` с `idempotency_key=f"thickness_upgrade:{player_id}:{new_level}"`). Bot-handler `/upgrade` с inline-подтверждением «Подтвердить ХХХХ см / Отменить» + презентер. Композиционный root + полный набор тестов. | 🟢 готово к ревью (PR ожидает CI) | 1.4.1 (формула n²·base), 1.4.2 (`/upgrade` с подтверждением), 1.4.3 (unlock-таблица для unlock-проверок будущих активностей) |
+| **1.4.B** | Domain `oracle/`: иммутабельный `OracleResult` (бонус-cm + темплейт-id) + чистая функция `roll_oracle(*, balance, random, templates)`. Application `IOracleHistoryRepository` (запись «последний `/oracle`-вызов на игрока в Moscow-day»). Миграция `oracle_invocations` (unique по `(player_id, moscow_date)`). Use-case `InvokeOracle` (cooldown_check → roll → длина-grant → audit `LENGTH_GRANT/oracle`). 200+ темплейтов в `templates/oracle_ru.json` + `oracle_en.json` (i18n будет в 1.5). Bot-handler `/oracle`. | ⚪ бэклог | 1.4.4 (Moscow-TZ кулдаун + uniform(1,20)), 1.4.5 (200+ темплейтов) |
+| **1.4.C** | Application `IPlayerRepository.list_top_by_length(limit)` + `SqlAlchemyPlayerRepository.list_top_by_length`. In-memory кэш `TopPlayersCache(ttl=60s)` (порт `ITopPlayersQuery`, реализация поверх IPlayerRepository). Use-case / query `GetTopPlayers(limit=100)`. Bot-handler `/top` + презентер «Титул Название Имя — N см». | ⚪ бэклог | 1.4.6 (топ-100, кэш 60 с) |
+| **1.4.D** | Мини-нагрузочный тест: 100 параллельных `/forest` без потери лока (через `pytest-asyncio` + реальный SqlAlchemy testcontainer). Финальный полировочный round: typo-фикс презентеров, ПД-чек-лист «всё ли DOD MVP покрыто». | ⚪ бэклог | 1.4.7 |
+
+> **Дизайн-решение по 1.4.A:** unlock-таблица храним в `balance.yaml::thickness.unlock_levels` (там она и есть с 1.3.A). Но проверка «можно ли войти в активность» — **доменное правило**, поэтому домен принимает её как аргумент (`Mapping[str, int]`), а не лезет в `IBalanceConfig` напрямую. Use-case-ы получают snapshot и зовут `is_activity_unlocked(thickness, activity, unlock_levels=balance.thickness.unlock_levels)`. Это сохраняет чистоту домена и упрощает тесты.
+
+---
+
+## ✅ Завершено (Спринт 1.3 — Поход в лес + дроп шмота)
+
+9 задач из §3 / Спринт 1.3 ПД, разрезано на 4 PR-а. Спринт закрыт.
 
 | PR | Содержимое | Статус | Задачи из `development_plan.md` §3 |
 |---|---|---|---|
 | **1.3.A** | `balance.yaml`: `forest.drop` (probability/name_share/rarity 70/25/5), `items_catalog` ≥ 30 предметов на 6 слотов, `names_catalog` ≥ 30 имён + pydantic-схемы `ForestDropConfig` / `ForestRarityWeights` / `ItemEntry` (валидация ID-уникальности и покрытия редкостей) + `domain/forest/`: `Slot` / `Rarity` / `Item` / `Name` / `OutcomeBranch` + ADT `Drop = NoDrop \| ItemDrop \| NameDrop` + `compute_forest_outcome(*, balance, random)` (чистая функция через `IRandom`) | ✅ смержено (PR #17) | 1.3.4 (расчёт исхода), 1.3.5 (каталоги предметов/имён, веса редкости) |
 | **1.3.B** | Миграция `forest_runs` (partial unique-индекс одна `IN_PROGRESS`-запись на игрока) + `domain/forest/ForestRun` (frozen, `starting()`/`mark_finished()`) + `IForestRunRepository` + `SqlAlchemyForestRunRepository` (`add` / `get_active_by_player` / `save`) + use-case `StartForestRun` (rolled cooldown ∈ [10, 20], `ActivityLockService`, audit `FOREST_RUN_STARTED`) + DI в `bot/main.py::build_container` + полный набор unit/integration-тестов | ✅ смержено (PR #18) | 1.3.9 (activity_lock на /forest) |
 | **1.3.C** | Use-case `FinishForestRun` (длина + дроп 0–1, включая имя), титул «Новичок» (идемпотентный, 1.3.8), APScheduler-job (`IDelayedJobScheduler` порт + `APSchedulerDelayedJobScheduler` адаптер), `IPlayerRepository.get_by_id` / `IForestRunRepository.get_by_id`, `StartForestRun` теперь планирует finish-job на `ends_at` | ✅ смержено (PR #19) | 1.3.3, 1.3.7 (смена/дроп имени), 1.3.8 (титул), частично 1.3.5 (применение дропа) |
-| **1.3.D** | bot-handler `/forest` (private only, `PlayerNotFoundError`/`AlreadyInForestError` → инструкция/«вы заняты»), `bot/presenters/forest.py` (рендер «ушёл в лес»/«вернулся из леса» + сборка `InlineKeyboardMarkup`), `TelegramForestFinishNotifier` (`IForestFinishNotifier`-порт, отправка post-commit, best-effort), `ApplyForestNameDrop` use-case + callback-handlers `forest:apply_name`/`drop_name`/`equip_item`/`drop_item` | 🟢 в работе (PR open) | 1.3.1, 1.3.2, 1.3.6 (применение/выбрасывание дропа) |
+| **1.3.D** | bot-handler `/forest` (private only, `PlayerNotFoundError`/`AlreadyInForestError` → инструкция/«вы заняты»), `bot/presenters/forest.py` (рендер «ушёл в лес»/«вернулся из леса» + сборка `InlineKeyboardMarkup`), `TelegramForestFinishNotifier` (`IForestFinishNotifier`-порт, отправка post-commit, best-effort), `ApplyForestNameDrop` use-case + callback-handlers `forest:apply_name`/`drop_name`/`equip_item`/`drop_item` | ✅ смержено (PR #20) | 1.3.1, 1.3.2, 1.3.6 (применение/выбрасывание дропа) |
 
 > **Дизайн-решение:** Slot/Rarity вынесены в `domain/balance/config.py` (а не в `domain/forest/`), потому что ими типизирован сам каталог `items_catalog`. `domain/forest/entities.py` реэкспортирует их для удобства. Когда подключим горы / данжон (Спринт 3.x) — те же 6 слотов / 3 редкости останутся источником правды.
+
+> **Долг от 1.3.D:** `equip_item` / `drop_item` / `drop_name` — placeholder-toast. Полная реализация (запись в инвентарь / удаление имени) появится в Спринте 1.5+ после ввода предметов как доменной сущности (`InventoryItem`).
 
 ---
 

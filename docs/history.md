@@ -23,6 +23,42 @@
 
 ---
 
+## 2026-05-04 — Спринт 1.4.A: прокачка толщины (`/upgrade` + use-case + table-driven unlock)
+
+**Автор:** Devin (по запросу azurehannah)
+**Тип:** feature (domain + application use-case + bot-handler + DI)
+**Связано:** Текущий PR (Спринт 1.4.A), [development_plan.md §3 / Спринт 1.4, задачи 1.4.1 / 1.4.2 / 1.4.3](development_plan.md), [current_tasks.md Спринт 1.4 → 1.4.A](current_tasks.md). Открывает Спринт 1.4 (после закрытия 1.3 в PR #20).
+
+Узкий PR: пользовательская команда прокачки толщины — игрок вызывает `/upgrade`, получает карточку «прокачать с N до N+1, стоимость XXXX см», подтверждает inline-кнопкой, длина списывается, толщина растёт. Параллельно вводим table-driven unlock-функцию для будущих активностей (forest/pvp/mountains/raid/...).
+
+Что сделано:
+- **Domain (`domain/progression/thickness.py`)** — три чистые функции: `cost_for_upgrade(*, current_thickness, cost_base, cost_exponent)` по формуле `cost(n→n+1) = cost_base · (n+1)^cost_exponent` (acceptance §3 / 1.4.1: `cost(1→2)=4000`, `cost(9→10)=100000`, `cost(15→16)=256000`, `cost(19→20)=400000`). `is_activity_unlocked(*, thickness, activity, unlock_levels: Mapping[str, int])` — table-driven, домен принимает unlock-таблицу как аргумент (use-case передаёт snapshot из `balance.thickness.unlock_levels`), это сохраняет домен чистым и упрощает тестирование. `require_unlocked(...)` бросает `ActivityLockedError(activity, current_thickness, required_thickness)`.
+- **Application (`application/progression/upgrade_thickness.py`)** — use-case `UpgradeThickness` с DTO `UpgradeThicknessInput(tg_id, expected_cost_cm: int | None)`. Workflow: загрузка игрока → `cost_for_upgrade(...)` → optional contract-check `expected_cost_cm` (бросает `ConcurrencyError` при расхождении — защита от race «balance.yaml перегружен между показом и нажатием Подтвердить») → `require_spend(action=THICKNESS_UPGRADE)` (правило 20 см из 1.2.1) → двойная мутация `with_length` + `with_thickness` → атомарный `save` → **два** audit-события: `LENGTH_REVOKE` (для трекинга траты длины) и `THICKNESS_UPGRADE` с `idempotency_key=f"thickness_upgrade:{player_id}:{new_level}"` (для трекинга прогрессии и защиты от двойной прокачки на одном уровне). Возврат — frozen dataclass `ThicknessUpgraded(player_before, player_after, cost_cm, new_thickness)`.
+- **Bot-presenter (`bot/presenters/upgrade.py`)** — четыре чистые функции: `render_upgrade_proposal(...)` (карточка перед подтверждением: текущий/целевой уровень, стоимость, остаток после списания, минимум по правилу 20 см), `render_upgrade_success(...)`, `render_upgrade_insufficient(...)`. Кодек callback_data: `upgrade_callback_data(action, expected_cost_cm)` / `parse_upgrade_callback_data(raw)` с форматом `"upgrade:<action>:<expected_cost_cm>"` (≤ 64 байта Telegram-лимита). `expected_cost_cm` зашит в callback_data — handler передаёт его обратно в use-case, чтобы поймать «balance hot-reloaded между показом и нажатием». `build_upgrade_proposal_keyboard(*, expected_cost_cm)` собирает inline-пару `[Подтвердить (XXXX см)] [Отменить]`.
+- **Bot-handler (`bot/handlers/upgrade.py`)** — два handler-а. `handle_upgrade` (`/upgrade` в ЛС): группа/супергруппа → инструкция «открой ЛС»; не зарегистрирован → инструкция нажать `/start`; недостаточно длины (по правилу 20 см) → текст «не хватает N см» **без** клавиатуры; иначе → карточка-proposal + inline-пара кнопок. `handle_upgrade_callback` (callback под `upgrade:*`): `cancel` → snять клавиатуру + заменить текст на «Прокачка отменена»; `confirm` → `UpgradeThickness.execute(input_dto)`, обработка `PlayerNotFoundError` / `InsufficientLengthError` (race-кейс) / `ConcurrencyError` (balance hot-reloaded), при успехе → `render_upgrade_success(...)`. Идемпотентность повторного нажатия: после первого клика handler делает `edit_reply_markup(reply_markup=None)` — кнопок больше нет, второй клик невозможен.
+- **Composition root (`bot/main.py`)** — `UpgradeThickness` собирается в `build_container(...)`, прокидывается в `Container.upgrade_thickness`, прокидывается в `dispatcher["upgrade_thickness"]` + `dispatcher["balance"]` для aiogram-DI. Новый `upgrade_router` зарегистрирован в `register_routers(...)` после `forest_router`.
+- **Тесты** — три новых файла:
+  - `tests/unit/domain/progression/test_thickness.py` — 38 passed + 1 skipped (acceptance-значения по ГДД, все 8 unlock-уровней по умолчанию, ошибка `ActivityLockedError`).
+  - `tests/unit/application/progression/test_upgrade_thickness.py` — 9 кейсов: success-path с проверкой обоих audit-событий и `idempotency_key`, expected_cost contract-check (pass/fail), `PlayerNotFoundError`, `InsufficientLengthError` с граничными значениями (4019/4020), `ConcurrencyError` без мутации.
+  - `tests/unit/bot/handlers/test_upgrade.py` (15 кейсов: handler + callback) и `tests/unit/bot/presenters/test_upgrade.py` (11 кейсов: рендеры + кодек callback_data round-trip).
+  - `tests/unit/bot/test_composition_root.py` — добавлены проверки `upgrade_thickness` в Container + dispatcher + наличие `upgrade`-router.
+
+Результат / артефакты:
+- Домен: <code>src/pipirik_wars/domain/progression/thickness.py</code>, <code>src/pipirik_wars/domain/progression/errors.py</code> (новый класс), `__init__.py`.
+- Application: <code>src/pipirik_wars/application/progression/upgrade_thickness.py</code>, <code>src/pipirik_wars/application/dto/inputs.py</code> (новый DTO), `__init__.py`.
+- Bot: <code>src/pipirik_wars/bot/presenters/upgrade.py</code>, <code>src/pipirik_wars/bot/handlers/upgrade.py</code>, `__init__.py` обоих, `bot/main.py` (DI).
+- Тесты: 4 новых файла, 73 новых кейса; всего по проекту **814 passed + 1 skipped, coverage 96.59%** (требование ≥ 80% выполнено с большим запасом).
+- Lint/typecheck/imports: `ruff check` / `ruff format --check` / `mypy --strict` / `lint-imports` — все чисто, 3 contracts kept.
+
+Заметки / решения:
+- **Почему unlock-таблица как аргумент, а не через `IBalanceConfig`?** Домен не должен зависеть от прикладных портов (DIP). Use-case-ы получают snapshot `balance.get().thickness.unlock_levels` и передают его в `is_activity_unlocked(...)`. Это держит домен чистым (не нужно мокать `IBalanceConfig` в его тестах) и упрощает повторное использование функции в любом use-case-е.
+- **Почему два audit-события (`LENGTH_REVOKE` + `THICKNESS_UPGRADE`)?** `LENGTH_REVOKE` нужен для трекинга списания длины (как в любой другой spend-операции — единый формат для отчётов и анти-фрода). `THICKNESS_UPGRADE` нужен для трекинга прогрессии и идемпотентности — `idempotency_key=f"thickness_upgrade:{player_id}:{new_level}"` гарантирует, что повторная прокачка на тот же уровень не прошла бы (если бы база её допустила).
+- **Почему `expected_cost_cm` в callback_data?** Между показом proposal и нажатием «Подтвердить» админ может перегрузить `balance.yaml` через `/balance_reload` (1.1.E). Если новые `cost_base/cost_exponent` дают другую цифру — игрок видит одну сумму, а заплатит другую. Клиент-side контракт через `expected_cost_cm` ловит это: use-case бросит `ConcurrencyError`, handler покажет «Стоимость изменилась — открой /upgrade ещё раз».
+- **Почему `InsufficientLengthError` обрабатывается в callback тоже?** Между показом proposal и нажатием «Подтвердить» игрок мог потратить длину в другой активности (race с асинхронным `/forest`-finish-ом, например). Handler корректно шлёт «Недостаточно длины» с deficit-ом из исключения, а не ронит callback.
+- **Граница 20 см правила траты:** acceptance — 4019 см (cost=4000) даёт остаток 19 < 20 → отказ; 4020 см → остаток 20 = MIN → проходит. Зафиксировано в тестах `test_insufficient_at_exact_boundary` / `test_passes_at_exact_boundary_plus_1`.
+
+---
+
 ## 2026-05-04 — Спринт 1.3.D: bot-handler `/forest` + finish-нотификация + inline-кнопки
 
 **Автор:** Devin (по запросу azurehannah)

@@ -18,15 +18,37 @@ from pipirik_wars.bot.presenters.profile import (
     render_full_nick,
     render_profile_card,
 )
+from pipirik_wars.bot.presenters.upgrade import (
+    RENDER_UPGRADE_CANCELLED,
+    RENDER_UPGRADE_RACE_RU,
+    UpgradeCallbackAction,
+    UpgradeCallbackData,
+    build_upgrade_proposal_keyboard,
+    parse_upgrade_callback_data,
+    render_upgrade_insufficient,
+    render_upgrade_proposal,
+    render_upgrade_success,
+    upgrade_callback_data,
+)
 
 __all__ = [
+    "RENDER_UPGRADE_CANCELLED",
+    "RENDER_UPGRADE_RACE_RU",
     "ForestCallbackAction",
     "ForestCallbackData",
+    "UpgradeCallbackAction",
+    "UpgradeCallbackData",
     "build_finish_keyboard",
+    "build_upgrade_proposal_keyboard",
     "forest_callback_data",
     "parse_forest_callback_data",
+    "parse_upgrade_callback_data",
     "render_forest_finished",
     "render_forest_started",
     "render_full_nick",
     "render_profile_card",
+    "render_upgrade_insufficient",
+    "render_upgrade_proposal",
+    "render_upgrade_success",
+    "upgrade_callback_data",
 ]

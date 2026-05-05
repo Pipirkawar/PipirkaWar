@@ -50,3 +50,33 @@ class InsufficientLengthError(DomainError):
         """
         deficit = self.min_after_spend_cm - (self.length_cm - self.cost_cm)
         return max(deficit, 1)
+
+
+class ActivityLockedError(DomainError):
+    """Активность заблокирована: текущая толщина ниже требуемой (ГДД §3.3).
+
+    Бросается из `progression.require_unlocked(...)`. На уровне bot/admin
+    маппится на сообщение «нужна толщина ≥ N для входа в активность».
+
+    Поля:
+    - `activity` — строковый ключ активности (ключ из `balance.yaml::thickness.unlock_levels`).
+    - `current_thickness` — текущий уровень игрока (>= 1).
+    - `required_thickness` — минимальный уровень для входа (>= 1).
+    """
+
+    __slots__ = ("activity", "current_thickness", "required_thickness")
+
+    def __init__(
+        self,
+        *,
+        activity: str,
+        current_thickness: int,
+        required_thickness: int,
+    ) -> None:
+        super().__init__(
+            f"activity {activity!r} requires thickness >= {required_thickness}, "
+            f"got {current_thickness}",
+        )
+        self.activity = activity
+        self.current_thickness = current_thickness
+        self.required_thickness = required_thickness
