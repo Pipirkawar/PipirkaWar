@@ -30,6 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pipirik_wars.application.dto.inputs import UpgradeThicknessInput
+from pipirik_wars.domain.anticheat import AnticheatGuard
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.player import (
     IPlayerRepository,
@@ -98,6 +99,7 @@ class UpgradeThickness:
         """Прокачать толщину. Бросает:
 
         - `PlayerNotFoundError` — игрока с таким `tg_id` нет;
+        - `AnticheatSoftBanError` — игрок в активном soft-ban-е (Спринт 1.6.E);
         - `InsufficientLengthError` — не хватает длины (после списания < 20 см);
         - `ConcurrencyError` — `expected_cost_cm` не совпал с актуальной
           стоимостью (баланс перегружен).
@@ -107,6 +109,12 @@ class UpgradeThickness:
             if player is None:
                 raise PlayerNotFoundError(tg_id=input_dto.tg_id)
             assert player.id is not None  # repo гарантирует id
+
+            # Anti-cheat soft-ban gate (Спринт 1.6.E, ГДД §3.3.5):
+            # пока активен soft-ban — нельзя ни получать длину (1.6.D),
+            # ни тратить её (этот гейт здесь). Иначе читер мог бы
+            # быстро спустить накопленное и обойти проверку.
+            AnticheatGuard.require_unlocked(player, now=self._clock.now())
 
             cfg = self._balance.get()
             cost_cm = cost_for_upgrade(

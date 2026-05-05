@@ -151,6 +151,12 @@ upgrade-toast-insufficient = Недостаточно длины.
 
 upgrade-toast-race = Стоимость изменилась.
 
+# Anti-cheat soft-ban-гейт на /upgrade (Спринт 1.6.E, ГДД §3.3.5).
+# `$banned-until` — ISO-строка момента истечения бана (UTC, tz-aware).
+upgrade-anticheat-blocked = Прокачка временно заморожена. Антибот-проверка активна до { $banned-until }.
+
+upgrade-toast-anticheat-blocked = Антибот-проверка активна.
+
 # Сжатый «Недостаточно длины» для замены текста сообщения после
 # callback-нажатия (без полной карточки — handler знает, что мог
 # измениться thickness между показом и нажатием).

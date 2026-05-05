@@ -77,12 +77,13 @@ class AnticheatGuard:
 | Шаг | Статус |
 |---|---|
 | Pull main, create branch | ✅ done (`devin/1777987131-sprint-1-6e-anticheat-guard`) |
-| HANDOFF scaffold + commit | 🟡 в процессе |
-| Прочитать UpgradeThickness | ⚪ |
-| Domain `AnticheatGuard` | ⚪ |
-| Wire в `UpgradeThickness` | ⚪ |
-| Локали `anticheat-guard-blocked` | ⚪ |
-| Тесты ≥5 кейсов | ⚪ |
+| HANDOFF scaffold + commit | ✅ |
+| Прочитать UpgradeThickness | ✅ |
+| Domain `AnticheatGuard` | ✅ (`src/pipirik_wars/domain/anticheat/guard.py`) |
+| Wire в `UpgradeThickness` | ✅ (`upgrade_thickness.py:111` — после load player, до cost) |
+| Локали `upgrade-anticheat-blocked` + toast | ✅ (RU+EN) |
+| Presenter + handler-ветка | ✅ (`UpgradePresenter.anticheat_blocked` + handler `except AnticheatSoftBanError`) |
+| Тесты ≥5 кейсов | 🟡 в процессе |
 | `make ci` | ⚪ |
 | PR | ⚪ |
 | Удалить HANDOFF.md | ⚪ |

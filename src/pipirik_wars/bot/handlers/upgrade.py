@@ -48,6 +48,7 @@ from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.player import PlayerNotFoundError
 from pipirik_wars.domain.progression import (
     MIN_LENGTH_AFTER_SPEND_CM,
+    AnticheatSoftBanError,
     InsufficientLengthError,
     cost_for_upgrade,
 )
@@ -122,7 +123,7 @@ async def handle_upgrade(
 
 
 @router.callback_query(F.data.startswith("upgrade:"))
-async def handle_upgrade_callback(
+async def handle_upgrade_callback(  # noqa: PLR0911 — каждая ветка возврата = отдельная ошибка use-case-а, плоский switch уместен
     callback: CallbackQuery,
     tg_identity: TgIdentity | None,
     upgrade_thickness: UpgradeThickness,
@@ -203,6 +204,20 @@ async def handle_upgrade_callback(
         )
         await _strip_keyboard(callback)
         await _set_message_text(callback, presenter.race(locale=effective_locale))
+        return
+    except AnticheatSoftBanError as exc:
+        await callback.answer(
+            presenter.toast_anticheat_blocked(locale=effective_locale),
+            show_alert=True,
+        )
+        await _strip_keyboard(callback)
+        await _set_message_text(
+            callback,
+            presenter.anticheat_blocked(
+                banned_until=exc.banned_until.isoformat(),
+                locale=effective_locale,
+            ),
+        )
         return
 
     await callback.answer(
