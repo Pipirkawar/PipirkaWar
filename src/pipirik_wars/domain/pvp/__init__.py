@@ -2,19 +2,28 @@
 
 Содержит чистый движок боя 1×1 (Спринт 2.1.A): value-objects
 `Position` / `RoundChoice` / `RoundOutcome` / `DuelOutcome` и
-функции-резолверы `resolve_round(...)` / `resolve_duel(...)`. Любая
-инфраструктура (БД, AFK-таймер, инлайн-кнопки) лежит выше доменного
-слоя.
+функции-резолверы `resolve_round(...)` / `resolve_duel(...)`.
 
-Будущие расширения (Спринты 2.1.B–F, 2.2):
+Спринт 2.1.B добавляет агрегат `Duel` — жизненный цикл боя
+(PENDING_ACCEPT → IN_PROGRESS → COMPLETED/CANCELLED) с lifecycle-
+методами `accept` / `cancel` / `submit_move` / `force_complete_round`,
+а также сопутствующие enum-ы `DuelState` / `DuelMode` и value-object
+`PendingRound`. Любая инфраструктура (БД, AFK-таймер, инлайн-кнопки)
+лежит выше доменного слоя.
 
-* `entities.py` — добавятся агрегаты вызова (`DuelChallenge`) и боя
-  (`Duel`) для persistence-слоя.
+Будущие расширения (Спринты 2.1.C–F, 2.2):
+
 * `repositories.py` — порт `IDuelRepository`.
-* `services.py` — `pick_random_choice` (AFK-фоллбэк) и `mass_pvp_resolver`
-  для клановых N×M-битв.
+* Дополнительные сервисы — `pick_random_choice` (AFK-фоллбэк) и
+  `mass_pvp_resolver` для клановых N×M-битв.
 """
 
+from pipirik_wars.domain.pvp.duel import (
+    Duel,
+    DuelMode,
+    DuelState,
+    PendingRound,
+)
 from pipirik_wars.domain.pvp.entities import (
     DuelOutcome,
     DuelWinner,
@@ -23,9 +32,14 @@ from pipirik_wars.domain.pvp.entities import (
     RoundOutcome,
 )
 from pipirik_wars.domain.pvp.errors import (
+    InvalidDuelStateError,
     InvalidLengthError,
     InvalidRoundCountError,
+    MoveAlreadySubmittedError,
+    NoMissingMovesError,
+    NotADuelParticipantError,
     PvpError,
+    SelfChallengeError,
 )
 from pipirik_wars.domain.pvp.services import (
     DEFAULT_DUEL_ROUNDS,
@@ -35,14 +49,23 @@ from pipirik_wars.domain.pvp.services import (
 
 __all__ = [
     "DEFAULT_DUEL_ROUNDS",
+    "Duel",
+    "DuelMode",
     "DuelOutcome",
+    "DuelState",
     "DuelWinner",
+    "InvalidDuelStateError",
     "InvalidLengthError",
     "InvalidRoundCountError",
+    "MoveAlreadySubmittedError",
+    "NoMissingMovesError",
+    "NotADuelParticipantError",
+    "PendingRound",
     "Position",
     "PvpError",
     "RoundChoice",
     "RoundOutcome",
+    "SelfChallengeError",
     "resolve_duel",
     "resolve_round",
 ]
