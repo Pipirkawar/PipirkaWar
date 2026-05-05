@@ -21,8 +21,8 @@ from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.domain.admin import AdminRole
 from pipirik_wars.domain.player import Player, PlayerStatus
-from pipirik_wars.domain.player.entities import Length, Thickness, Username
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
+from pipirik_wars.domain.player.value_objects import Length, Thickness, Username
 from pipirik_wars.domain.shared.ports import AuditAction
 from tests.fakes import (
     FakeAdminRepository,
