@@ -10,6 +10,7 @@ from pipirik_wars.domain.clan.repositories import (
     IClanMembershipRepository,
     IClanRepository,
 )
+from pipirik_wars.domain.clan.top_entry import ClanTopEntry
 from pipirik_wars.domain.clan.value_objects import (
     ChatKind,
     ClanStatus,
@@ -26,6 +27,7 @@ __all__ = [
     "ClanMembershipExistsError",
     "ClanStatus",
     "ClanTitle",
+    "ClanTopEntry",
     "IClanMembershipRepository",
     "IClanRepository",
 ]
