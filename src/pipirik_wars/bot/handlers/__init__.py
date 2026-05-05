@@ -1,15 +1,15 @@
 """bot/handlers package.
 
 `register_routers(dispatcher)` подключает все роутеры в правильном
-порядке. На 1.4.B — `start` (ЛС, /start → RegisterPlayer),
+порядке. На 1.4.C — `start` (ЛС, /start → RegisterPlayer),
 `registration` (`my_chat_member`/`chat_member`/`migrate_to` →
 RegisterClan/FreezeClan/JoinClan/MigrateClanChatId), `profile`
 (/profile → GetProfile + рендер карточки), `admin`
 (/balance_reload → ReloadBalance, super_admin/economist), `forest`
 (/forest → StartForestRun + callback-кнопки результата леса),
 `upgrade` (Спринт 1.4.A: /upgrade → UpgradeThickness +
-callback-подтверждение) и `oracle` (Спринт 1.4.B: /oracle →
-InvokeOracle).
+callback-подтверждение), `oracle` (Спринт 1.4.B: /oracle →
+InvokeOracle) и `top` (Спринт 1.4.C: /top → GetTopPlayers с TTL-кэшем).
 """
 
 from aiogram import Dispatcher
@@ -20,6 +20,7 @@ from pipirik_wars.bot.handlers.oracle import router as oracle_router
 from pipirik_wars.bot.handlers.profile import router as profile_router
 from pipirik_wars.bot.handlers.registration import router as registration_router
 from pipirik_wars.bot.handlers.start import router as start_router
+from pipirik_wars.bot.handlers.top import router as top_router
 from pipirik_wars.bot.handlers.upgrade import router as upgrade_router
 
 
@@ -30,6 +31,7 @@ def register_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(forest_router)
     dispatcher.include_router(upgrade_router)
     dispatcher.include_router(oracle_router)
+    dispatcher.include_router(top_router)
     dispatcher.include_router(admin_router)
     dispatcher.include_router(registration_router)
 

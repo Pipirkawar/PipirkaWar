@@ -60,6 +60,7 @@ from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.application.progression import UpgradeThickness
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
+from pipirik_wars.application.top import GetTopPlayers, ITopPlayersQuery
 from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import register_middlewares
 from pipirik_wars.bot.notifications import TelegramForestFinishNotifier
@@ -81,6 +82,7 @@ from pipirik_wars.domain.shared.ports import (
 )
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
+from pipirik_wars.infrastructure.cache import TopPlayersCache
 from pipirik_wars.infrastructure.clock import RealClock
 from pipirik_wars.infrastructure.dau import (
     InMemoryDauCounter,
@@ -150,6 +152,9 @@ class Container:
     # Шаблоны (Спринт 1.4.B)
     oracle_templates: IOracleTemplateProvider
 
+    # Запросы (Спринт 1.4.C)
+    top_players_query: ITopPlayersQuery
+
     # Планировщик отложенных задач (Спринт 1.3.C)
     delayed_jobs: IDelayedJobScheduler
 
@@ -175,6 +180,7 @@ class Container:
     apply_forest_name_drop: ApplyForestNameDrop
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
+    get_top_players: GetTopPlayers
 
 
 def build_container(
@@ -225,6 +231,13 @@ def build_container(
     oracle_history = SqlAlchemyOracleHistoryRepository(uow=uow)
     oracle_templates = JsonOracleTemplateProvider(
         templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
+    )
+    top_players_query = TopPlayersCache(
+        uow=uow,
+        players=players,
+        balance=balance,
+        clock=clock,
+        ttl_seconds=60,
     )
     dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=settings.bot.max_dau)
@@ -366,6 +379,7 @@ def build_container(
         audit=audit,
         clock=clock,
     )
+    get_top_players = GetTopPlayers(query=top_players_query)
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -385,6 +399,7 @@ def build_container(
         forest_runs=forest_runs,
         oracle_history=oracle_history,
         oracle_templates=oracle_templates,
+        top_players_query=top_players_query,
         delayed_jobs=delayed_jobs,
         dau_counter=dau_counter,
         dau_limit=dau_limit,
@@ -405,6 +420,7 @@ def build_container(
         apply_forest_name_drop=apply_forest_name_drop,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
+        get_top_players=get_top_players,
     )
 
 
@@ -434,6 +450,7 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["apply_forest_name_drop"] = container.apply_forest_name_drop
     dispatcher["upgrade_thickness"] = container.upgrade_thickness
     dispatcher["invoke_oracle"] = container.invoke_oracle
+    dispatcher["get_top_players"] = container.get_top_players
     dispatcher["balance"] = container.balance
     dispatcher["clock"] = container.clock
     return dispatcher
