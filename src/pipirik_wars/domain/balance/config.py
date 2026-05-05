@@ -342,6 +342,11 @@ class PvpDuel1v1Config(_Frozen):
     # «вечно зависших» вызовах при балансовом ляпе.
     global_lobby_ttl_minutes: int = Field(ge=1, le=60)
     chat_to_global_promotion_minutes: int = Field(ge=1, le=60)
+    # Спринт 2.1.G: AFK-таймер раунда. По ГДД §7.1 — 30..60 секунд:
+    # после `accept`-а / закрытия раунда даём игрокам ~minute на
+    # выбор атаки+блока, иначе шедулер вызывает `ResolveAfkRound`,
+    # который роллит случайные ходы за молчаливых через `IRandom`.
+    round_timer_seconds: int = Field(ge=30, le=60)
 
 
 class PvpConfig(_Frozen):

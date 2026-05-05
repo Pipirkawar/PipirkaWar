@@ -106,6 +106,7 @@ def _balance(
                     min_thickness_level=min_thickness_level,
                     global_lobby_ttl_minutes=global_lobby_ttl_minutes,
                     chat_to_global_promotion_minutes=chat_to_global_promotion_minutes,
+                    round_timer_seconds=45,
                 ),
             ),
         }

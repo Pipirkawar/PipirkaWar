@@ -33,6 +33,7 @@ from pipirik_wars.application.forest import (
     ForestRunFinished,
     IForestFinishNotifier,
 )
+from pipirik_wars.application.pvp import ResolveAfkRound
 from pipirik_wars.domain.forest import (
     ForestRun,
     ForestRunNotFoundError,
@@ -316,3 +317,133 @@ class TestNotifierIntegration:
         await adapter._run_finish_job(run_id=11)
 
         assert fake.calls == [FinishForestRunInput(run_id=11)]
+
+
+@dataclass
+class _FakeAfkUseCase:
+    """Stub `ResolveAfkRound`-use-case-а для тестов callback-а 2.1.G."""
+
+    calls: list[tuple[int, int]] = field(default_factory=list)
+    raise_exc: BaseException | None = None
+
+    async def execute(self, input_dto):  # type: ignore[no-untyped-def]
+        self.calls.append((input_dto.duel_id, input_dto.round_num))
+        if self.raise_exc is not None:
+            raise self.raise_exc
+
+
+class TestRoundAfkSchedule:
+    """2.1.G: schedule/cancel `pvp_round_afk:{duel_id}:{round_num}`-job."""
+
+    @pytest.mark.asyncio
+    async def test_schedule_uses_per_round_id(self) -> None:
+        adapter = _build_adapter(fake=_FakeFinishUseCase())
+        adapter.start()
+        try:
+            await adapter.schedule_round_afk_resolution(
+                duel_id=42,
+                round_num=2,
+                run_at=_NOW + timedelta(days=365),
+            )
+            jobs = adapter._scheduler.get_jobs()
+            assert len(jobs) == 1
+            assert jobs[0].id == "pvp_round_afk:42:2"
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_schedule_replaces_same_round(self) -> None:
+        adapter = _build_adapter(fake=_FakeFinishUseCase())
+        adapter.start()
+        try:
+            first_at = _NOW + timedelta(days=365)
+            second_at = _NOW + timedelta(days=730)
+            await adapter.schedule_round_afk_resolution(duel_id=42, round_num=1, run_at=first_at)
+            await adapter.schedule_round_afk_resolution(duel_id=42, round_num=1, run_at=second_at)
+            jobs = adapter._scheduler.get_jobs()
+            assert len(jobs) == 1
+            assert jobs[0].next_run_time.replace(tzinfo=UTC) == second_at
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_schedule_distinct_rounds_keep_separate_jobs(self) -> None:
+        adapter = _build_adapter(fake=_FakeFinishUseCase())
+        adapter.start()
+        try:
+            await adapter.schedule_round_afk_resolution(
+                duel_id=42, round_num=1, run_at=_NOW + timedelta(days=365)
+            )
+            await adapter.schedule_round_afk_resolution(
+                duel_id=42, round_num=2, run_at=_NOW + timedelta(days=365)
+            )
+            ids = sorted(j.id for j in adapter._scheduler.get_jobs())
+            assert ids == ["pvp_round_afk:42:1", "pvp_round_afk:42:2"]
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_cancel_removes_specific_round(self) -> None:
+        adapter = _build_adapter(fake=_FakeFinishUseCase())
+        adapter.start()
+        try:
+            await adapter.schedule_round_afk_resolution(
+                duel_id=42, round_num=1, run_at=_NOW + timedelta(days=365)
+            )
+            await adapter.schedule_round_afk_resolution(
+                duel_id=42, round_num=2, run_at=_NOW + timedelta(days=365)
+            )
+            await adapter.cancel_round_afk_resolution(duel_id=42, round_num=1)
+            ids = sorted(j.id for j in adapter._scheduler.get_jobs())
+            assert ids == ["pvp_round_afk:42:2"]
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_cancel_missing_is_noop(self) -> None:
+        adapter = _build_adapter(fake=_FakeFinishUseCase())
+        adapter.start()
+        try:
+            await adapter.cancel_round_afk_resolution(duel_id=999, round_num=1)
+            assert adapter._scheduler.get_jobs() == []
+        finally:
+            adapter.shutdown(wait=False)
+
+
+class TestRoundAfkCallback:
+    """`_run_round_afk_job` callback (2.1.G)."""
+
+    @pytest.mark.asyncio
+    async def test_callback_invokes_use_case(self) -> None:
+        fake = _FakeAfkUseCase()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            afk_resolution_factory=lambda: cast(ResolveAfkRound, fake),
+        )
+        await adapter._run_round_afk_job(duel_id=42, round_num=2)
+        assert fake.calls == [(42, 2)]
+
+    @pytest.mark.asyncio
+    async def test_callback_logs_when_factory_missing(self) -> None:
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            logger=logger,
+        )
+        await adapter._run_round_afk_job(duel_id=42, round_num=1)
+        assert logger.warning.called
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_unexpected_error(self) -> None:
+        fake = _FakeAfkUseCase(raise_exc=RuntimeError("kaboom"))
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            afk_resolution_factory=lambda: cast(ResolveAfkRound, fake),
+            logger=logger,
+        )
+        await adapter._run_round_afk_job(duel_id=42, round_num=1)
+        assert logger.exception.called

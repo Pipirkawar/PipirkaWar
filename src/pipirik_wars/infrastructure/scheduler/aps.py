@@ -27,13 +27,18 @@ from pipirik_wars.application.dto.inputs import (
     EscalateChatToGlobalInput,
     ExpireLobbyEntryInput,
     FinishForestRunInput,
+    ResolveAfkRoundInput,
 )
 from pipirik_wars.application.forest import (
     FinishForestRun,
     ForestRunFinished,
     IForestFinishNotifier,
 )
-from pipirik_wars.application.pvp import EscalateChatToGlobal, ExpireLobbyEntry
+from pipirik_wars.application.pvp import (
+    EscalateChatToGlobal,
+    ExpireLobbyEntry,
+    ResolveAfkRound,
+)
 from pipirik_wars.domain.forest import ForestRunNotFoundError
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
@@ -41,6 +46,7 @@ from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
 _FINISH_JOB_PREFIX: Final[str] = "forest_run_finish:"
 _ESCALATE_JOB_PREFIX: Final[str] = "pvp_chat_to_global:"
 _EXPIRE_JOB_PREFIX: Final[str] = "pvp_global_lobby_expire:"
+_ROUND_AFK_JOB_PREFIX: Final[str] = "pvp_round_afk:"
 
 
 def _job_id(run_id: int) -> str:
@@ -53,6 +59,10 @@ def _escalate_job_id(duel_id: int) -> str:
 
 def _expire_job_id(duel_id: int) -> str:
     return f"{_EXPIRE_JOB_PREFIX}{duel_id}"
+
+
+def _round_afk_job_id(duel_id: int, round_num: int) -> str:
+    return f"{_ROUND_AFK_JOB_PREFIX}{duel_id}:{round_num}"
 
 
 class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
@@ -75,9 +85,15 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
     регистрирует job в APScheduler (для recovery / тестов APScheduler-а
     самого по себе), но при срабатывании job-а callback логирует
     «factory not wired» и тихо выходит.
+
+    `afk_resolution_factory` (Спринт 2.1.G, опциональна) — фабрика
+    `ResolveAfkRound`-use-case-а; вызывается из job-callback-а
+    `_run_round_afk_job` для добивания pending-раунда случайными
+    выборами через `IRandom`. Если фабрика не подвязана — лог + skip.
     """
 
     __slots__ = (
+        "_afk_resolution_factory",
         "_escalate_factory",
         "_expire_factory",
         "_finish_factory",
@@ -94,6 +110,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         notifier: IForestFinishNotifier | None = None,
         escalate_factory: Callable[[], EscalateChatToGlobal] | None = None,
         expire_factory: Callable[[], ExpireLobbyEntry] | None = None,
+        afk_resolution_factory: Callable[[], ResolveAfkRound] | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._scheduler = scheduler
@@ -101,6 +118,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._notifier = notifier
         self._escalate_factory = escalate_factory
         self._expire_factory = expire_factory
+        self._afk_resolution_factory = afk_resolution_factory
         self._logger = logger or logging.getLogger(__name__)
 
     async def schedule_finish_forest_run(
@@ -168,6 +186,34 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
     async def cancel_global_lobby_expiration(self, *, duel_id: int) -> None:
         try:
             self._scheduler.remove_job(_expire_job_id(duel_id))
+        except Exception:
+            return
+
+    async def schedule_round_afk_resolution(
+        self,
+        *,
+        duel_id: int,
+        round_num: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_round_afk_job,
+            trigger="date",
+            run_date=run_at,
+            args=(duel_id, round_num),
+            id=_round_afk_job_id(duel_id, round_num),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_round_afk_resolution(
+        self,
+        *,
+        duel_id: int,
+        round_num: int,
+    ) -> None:
+        try:
+            self._scheduler.remove_job(_round_afk_job_id(duel_id, round_num))
         except Exception:
             return
 
@@ -257,6 +303,38 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
             self._logger.exception(
                 "pvp_global_lobby_expire: unexpected error",
                 extra={"duel_id": duel_id, "error": type(exc).__name__},
+            )
+            return
+
+    async def _run_round_afk_job(self, duel_id: int, round_num: int) -> None:
+        """Callback AFK-таймера раунда (Спринт 2.1.G).
+
+        Зовёт `ResolveAfkRound(duel_id=..., round_num=...)`. Если
+        фабрика не подвязана — лог + skip; любая другая ошибка
+        логируется (APScheduler иначе пометит job-у как failed).
+        Use-case сам проверяет, действителен ли таймер: если игрок
+        успел отправить ход и раунд закрылся — `ResolveAfkRound`
+        идёт через no-op-ветку с `was_already_resolved=True`.
+        """
+        if self._afk_resolution_factory is None:
+            self._logger.warning(
+                "pvp_round_afk: factory not wired",
+                extra={"duel_id": duel_id, "round_num": round_num},
+            )
+            return
+        try:
+            use_case = self._afk_resolution_factory()
+            await use_case.execute(
+                ResolveAfkRoundInput(duel_id=duel_id, round_num=round_num),
+            )
+        except Exception as exc:
+            self._logger.exception(
+                "pvp_round_afk: unexpected error",
+                extra={
+                    "duel_id": duel_id,
+                    "round_num": round_num,
+                    "error": type(exc).__name__,
+                },
             )
             return
 

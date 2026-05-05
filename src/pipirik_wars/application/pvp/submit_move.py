@@ -29,11 +29,12 @@ mutate-state.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from pipirik_wars.application.dto.inputs import SubmitMoveInput
 from pipirik_wars.application.pvp.apply_outcome import apply_duel_outcome
 from pipirik_wars.application.security import ActivityLockService
+from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.player import IPlayerRepository, Player
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from pipirik_wars.domain.progression.length_granter import ILengthGranter
@@ -49,6 +50,7 @@ from pipirik_wars.domain.shared.ports import (
     AuditEntry,
     IAuditLogger,
     IClock,
+    IDelayedJobScheduler,
     IUnitOfWork,
 )
 
@@ -66,11 +68,13 @@ class SubmitMove:
 
     __slots__ = (
         "_audit",
+        "_balance",
         "_clock",
         "_duels",
         "_length_granter",
         "_locks",
         "_players",
+        "_scheduler",
         "_uow",
     )
 
@@ -84,6 +88,8 @@ class SubmitMove:
         length_granter: ILengthGranter,
         audit: IAuditLogger,
         clock: IClock,
+        balance: IBalanceConfig | None = None,
+        scheduler: IDelayedJobScheduler | None = None,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -92,6 +98,8 @@ class SubmitMove:
         self._length_granter = length_granter
         self._audit = audit
         self._clock = clock
+        self._balance = balance
+        self._scheduler = scheduler
 
     async def execute(self, input_dto: SubmitMoveInput) -> MoveSubmitted:
         """Отправить ход. Бросает:
@@ -117,6 +125,11 @@ class SubmitMove:
                 attack=Position(input_dto.attack),
                 block=Position(input_dto.block),
             )
+            # Снимок `pending_round.round_num` до мутации: если этим
+            # вызовом раунд закрывается, нужно будет отменить AFK-таймер
+            # этого именно раунда (значение будет использовано снаружи UoW).
+            prev_round_num = duel.pending_round.round_num if duel.pending_round else None
+
             mutated = duel.submit_move(
                 player_id=self._require_id(mover),
                 choice=choice,
@@ -125,18 +138,42 @@ class SubmitMove:
             saved = await self._duels.save(mutated)
 
             if not saved.is_completed:
-                return MoveSubmitted(duel=saved, duel_completed=False)
+                duel_completed = False
+            else:
+                await apply_duel_outcome(
+                    duel=saved,
+                    players=self._players,
+                    length_granter=self._length_granter,
+                    audit=self._audit,
+                    now=now,
+                )
+                await self._release_locks(saved)
+                await self._audit_completed(duel=saved, now=now)
+                duel_completed = True
 
-            await apply_duel_outcome(
-                duel=saved,
-                players=self._players,
-                length_granter=self._length_granter,
-                audit=self._audit,
-                now=now,
-            )
-            await self._release_locks(saved)
-            await self._audit_completed(duel=saved, now=now)
-        return MoveSubmitted(duel=saved, duel_completed=True)
+        # AFK-таймер раунда — снаружи UoW (идемпотентные операции
+        # шедулера). Алгоритм (Спринт 2.1.G):
+        # * раунд не закрылся (тот же round_num после mutate) — nothing;
+        # * раунд закрылся, дуэль в IN_PROGRESS — cancel предыдущий + schedule новый;
+        # * раунд закрылся, дуэль COMPLETED — cancel предыдущий, больше ничего.
+        if self._scheduler is not None and prev_round_num is not None:
+            saved_round_num = saved.pending_round.round_num if saved.pending_round else None
+            round_closed = saved_round_num != prev_round_num
+            if round_closed:
+                assert saved.id is not None
+                await self._scheduler.cancel_round_afk_resolution(
+                    duel_id=saved.id,
+                    round_num=prev_round_num,
+                )
+                if not duel_completed and saved_round_num is not None:
+                    assert self._balance is not None  # scheduler+balance провязываются вместе
+                    cfg = self._balance.get().pvp.duel_1v1
+                    await self._scheduler.schedule_round_afk_resolution(
+                        duel_id=saved.id,
+                        round_num=saved_round_num,
+                        run_at=now + timedelta(seconds=cfg.round_timer_seconds),
+                    )
+        return MoveSubmitted(duel=saved, duel_completed=duel_completed)
 
     async def _release_locks(self, duel: Duel) -> None:
         # challenger всегда задан, challenged_id выставлен при `accept`-е

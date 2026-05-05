@@ -179,6 +179,7 @@ class AcceptDuel:
                 await self._lobby.remove(duel_id=duel_id_for_cleanup)
 
         # Снимаем scheduled-job-ы **снаружи** UoW (idempotent).
+        # Так же ставим AFK-таймер на pending-раунд (Спринт 2.1.G).
         if self._scheduler is not None:
             if mode_was_chat_then_global:
                 await self._scheduler.cancel_chat_to_global_escalation(
@@ -188,6 +189,12 @@ class AcceptDuel:
                 await self._scheduler.cancel_global_lobby_expiration(
                     duel_id=duel_id_for_cleanup,
                 )
+            assert saved.pending_round is not None  # IN_PROGRESS ⇒ pending exists
+            await self._scheduler.schedule_round_afk_resolution(
+                duel_id=duel_id_for_cleanup,
+                round_num=saved.pending_round.round_num,
+                run_at=now + timedelta(seconds=cfg.round_timer_seconds),
+            )
         return DuelAccepted(duel=saved)
 
     async def _fetch_player(self, *, tg_id: int) -> Player:

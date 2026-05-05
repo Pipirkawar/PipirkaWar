@@ -27,6 +27,7 @@ from tests.fakes import (
     FakeAuditLogger,
     FakeBalanceConfig,
     FakeClock,
+    FakeDelayedJobScheduler,
     FakeDuelRepository,
     FakeIdempotencyKey,
     FakePlayerRepository,
@@ -52,6 +53,23 @@ def _build(
     FakeActivityLockRepository,
     FakeRandom,
 ]:
+    use_case, players, duels, audit, uow, lock_repo, rng, _scheduler = _build_full(seed=seed)
+    return use_case, players, duels, audit, uow, lock_repo, rng
+
+
+def _build_full(
+    *,
+    seed: int = 12345,
+) -> tuple[
+    ResolveAfkRound,
+    FakePlayerRepository,
+    FakeDuelRepository,
+    FakeAuditLogger,
+    FakeUnitOfWork,
+    FakeActivityLockRepository,
+    FakeRandom,
+    FakeDelayedJobScheduler,
+]:
     uow = FakeUnitOfWork()
     players = FakePlayerRepository()
     duels = FakeDuelRepository()
@@ -61,6 +79,7 @@ def _build(
     locks = ActivityLockService(repository=lock_repo, clock=clock)
     balance = FakeBalanceConfig(build_valid_balance())
     rng = FakeRandom(seed=seed)
+    scheduler = FakeDelayedJobScheduler()
     length_granter = AddLength(
         uow=uow,
         players=players,
@@ -80,8 +99,10 @@ def _build(
         random=rng,
         audit=audit,
         clock=clock,
+        balance=balance,
+        scheduler=scheduler,
     )
-    return use_case, players, duels, audit, uow, lock_repo, rng
+    return use_case, players, duels, audit, uow, lock_repo, rng, scheduler
 
 
 async def _seed_in_progress_duel(
@@ -293,3 +314,114 @@ class TestErrors:
         with pytest.raises(DuelNotFoundError):
             await use_case.execute(ResolveAfkRoundInput(duel_id=999, round_num=1))
         assert uow.rollbacks == 1
+
+
+class TestRoundAfkTimerScheduling:
+    """Спринт 2.1.G: после force_complete_round планируется таймер
+    следующего раунда (если дуэль не завершилась)."""
+
+    @pytest.mark.asyncio
+    async def test_schedules_next_round_timer_when_duel_continues(self) -> None:
+        use_case, players, duels, _audit, _uow, _l, _rng, scheduler = _build_full()
+        p1 = await seed_pvp_eligible_player(players, tg_id=1)
+        p2 = await seed_pvp_eligible_player(players, tg_id=2, username="bob")
+        assert p1.id is not None
+        assert p2.id is not None
+        duel = await _seed_in_progress_duel(duels, challenger_id=p1.id, challenged_id=p2.id)
+        assert duel.id is not None
+
+        result = await use_case.execute(ResolveAfkRoundInput(duel_id=duel.id, round_num=1))
+
+        assert result.duel_completed is False
+        assert (duel.id, 2) in scheduler.scheduled_round_afk
+        scheduled = scheduler.scheduled_round_afk[(duel.id, 2)]
+        assert scheduled.round_num == 2
+        assert scheduled.run_at == _NOW + timedelta(seconds=45)
+
+    @pytest.mark.asyncio
+    async def test_no_schedule_when_duel_completed(self) -> None:
+        use_case, players, duels, _a, _u, lock_repo, _rng, scheduler = _build_full()
+        p1 = await seed_pvp_eligible_player(players, tg_id=1, length_cm=50)
+        p2 = await seed_pvp_eligible_player(players, tg_id=2, length_cm=40, username="bob")
+        assert p1.id is not None
+        assert p2.id is not None
+        duel = await _seed_in_progress_duel(
+            duels,
+            challenger_id=p1.id,
+            challenged_id=p2.id,
+            p1_length_cm=50,
+            p2_length_cm=40,
+        )
+        assert duel.id is not None
+        await _seed_locks(lock_repo, challenger_id=p1.id, challenged_id=p2.id)
+        # доигрываем 2 раунда вручную; на 3-м обоих afk-роллим
+        s1 = duel.submit_move(
+            player_id=p1.id,
+            choice=RoundChoice(attack=Position.HIGH, block=Position.LOW),
+            now=_EARLIER,
+        )
+        s2 = s1.submit_move(
+            player_id=p2.id,
+            choice=RoundChoice(attack=Position.HIGH, block=Position.LOW),
+            now=_EARLIER,
+        )
+        s3 = s2.submit_move(
+            player_id=p1.id,
+            choice=RoundChoice(attack=Position.HIGH, block=Position.LOW),
+            now=_EARLIER,
+        )
+        s4 = s3.submit_move(
+            player_id=p2.id,
+            choice=RoundChoice(attack=Position.HIGH, block=Position.LOW),
+            now=_EARLIER,
+        )
+        await duels.save(s4)
+        assert s4.pending_round is not None
+        assert s4.pending_round.round_num == 3
+
+        result = await use_case.execute(ResolveAfkRoundInput(duel_id=duel.id, round_num=3))
+
+        assert result.duel_completed is True
+        assert scheduler.scheduled_round_afk == {}
+
+    @pytest.mark.asyncio
+    async def test_stale_timer_no_op_does_not_reschedule(self) -> None:
+        """Если pending.round_num не совпал с input — без планирования (idempotent)."""
+        use_case, players, duels, _a, _u, _l, _rng, scheduler = _build_full()
+        p1 = await seed_pvp_eligible_player(players, tg_id=1)
+        p2 = await seed_pvp_eligible_player(players, tg_id=2, username="bob")
+        assert p1.id is not None
+        assert p2.id is not None
+        duel = await _seed_in_progress_duel(duels, challenger_id=p1.id, challenged_id=p2.id)
+        assert duel.id is not None
+
+        # Раунд 1 уже закрыт реальными ходами — input указывает на старый раунд.
+        s1 = duel.submit_move(
+            player_id=p1.id,
+            choice=RoundChoice(attack=Position.HIGH, block=Position.LOW),
+            now=_EARLIER,
+        )
+        s2 = s1.submit_move(
+            player_id=p2.id,
+            choice=RoundChoice(attack=Position.HIGH, block=Position.MID),
+            now=_EARLIER,
+        )
+        await duels.save(s2)
+
+        result = await use_case.execute(ResolveAfkRoundInput(duel_id=duel.id, round_num=1))
+        assert result.was_already_resolved is True
+        assert scheduler.scheduled_round_afk == {}
+
+    @pytest.mark.asyncio
+    async def test_no_scheduler_no_op(self) -> None:
+        """Без scheduler-а use-case работает (back-compat для теста D-spec)."""
+        use_case, players, duels, _a, _u, _l, _rng = _build()
+        p1 = await seed_pvp_eligible_player(players, tg_id=1)
+        p2 = await seed_pvp_eligible_player(players, tg_id=2, username="bob")
+        assert p1.id is not None
+        assert p2.id is not None
+        duel = await _seed_in_progress_duel(duels, challenger_id=p1.id, challenged_id=p2.id)
+        assert duel.id is not None
+
+        result = await use_case.execute(ResolveAfkRoundInput(duel_id=duel.id, round_num=1))
+        assert result.duel_completed is False

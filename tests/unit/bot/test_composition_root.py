@@ -248,6 +248,8 @@ def _container_with_fakes() -> Container:
         length_granter=add_length,
         audit=audit,
         clock=clock,
+        balance=balance,
+        scheduler=delayed_jobs,
     )
     resolve_afk_round = ResolveAfkRound(
         uow=uow,
@@ -258,6 +260,8 @@ def _container_with_fakes() -> Container:
         random=rng,
         audit=audit,
         clock=clock,
+        balance=balance,
+        scheduler=delayed_jobs,
     )
     enqueue_global_duel = EnqueueGlobalDuel(
         uow=uow,

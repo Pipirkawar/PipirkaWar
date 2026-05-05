@@ -123,6 +123,7 @@ def valid_balance_payload() -> dict[str, Any]:
                 "min_thickness_level": 2,
                 "global_lobby_ttl_minutes": 10,
                 "chat_to_global_promotion_minutes": 3,
+                "round_timer_seconds": 45,
             },
         },
         "content_policy": {

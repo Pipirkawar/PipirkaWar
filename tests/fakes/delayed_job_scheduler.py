@@ -24,6 +24,15 @@ class ScheduledLobbyJob:
     run_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class ScheduledRoundAfkJob:
+    """Запись «что и на когда» для AFK-таймера раунда (Спринт 2.1.G)."""
+
+    duel_id: int
+    round_num: int
+    run_at: datetime
+
+
 @dataclass
 class FakeDelayedJobScheduler(IDelayedJobScheduler):
     """Фиксирует все вызовы `schedule_*` / `cancel_*`."""
@@ -34,6 +43,12 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
     cancelled_escalations: list[int] = field(default_factory=list)
     scheduled_expirations: dict[int, ScheduledLobbyJob] = field(default_factory=dict)
     cancelled_expirations: list[int] = field(default_factory=list)
+    # 2.1.G: per-(duel_id, round_num) AFK-таймеры. Ключ — кортеж,
+    # т. к. в одной дуэли может быть несколько раундов, и cancel
+    # должен попадать в конкретный раунд (см. SubmitMove на смене
+    # раунда: cancel предыдущего + schedule нового).
+    scheduled_round_afk: dict[tuple[int, int], ScheduledRoundAfkJob] = field(default_factory=dict)
+    cancelled_round_afk: list[tuple[int, int]] = field(default_factory=list)
 
     async def schedule_finish_forest_run(
         self,
@@ -70,3 +85,25 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
     async def cancel_global_lobby_expiration(self, *, duel_id: int) -> None:
         self.cancelled_expirations.append(duel_id)
         self.scheduled_expirations.pop(duel_id, None)
+
+    async def schedule_round_afk_resolution(
+        self,
+        *,
+        duel_id: int,
+        round_num: int,
+        run_at: datetime,
+    ) -> None:
+        self.scheduled_round_afk[(duel_id, round_num)] = ScheduledRoundAfkJob(
+            duel_id=duel_id,
+            round_num=round_num,
+            run_at=run_at,
+        )
+
+    async def cancel_round_afk_resolution(
+        self,
+        *,
+        duel_id: int,
+        round_num: int,
+    ) -> None:
+        self.cancelled_round_afk.append((duel_id, round_num))
+        self.scheduled_round_afk.pop((duel_id, round_num), None)

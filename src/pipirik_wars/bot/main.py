@@ -439,6 +439,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         notifier=forest_notifier,
         escalate_factory=lambda: escalate_chat_to_global,
         expire_factory=lambda: expire_lobby_entry,
+        afk_resolution_factory=lambda: resolve_afk_round,
     )
     start_forest_run = StartForestRun(
         uow=uow,
@@ -533,6 +534,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         length_granter=add_length,
         audit=audit,
         clock=clock,
+        balance=balance,
+        scheduler=delayed_jobs,
     )
     resolve_afk_round = ResolveAfkRound(
         uow=uow,
@@ -543,6 +546,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         random=RealRandom(),
         audit=audit,
         clock=clock,
+        balance=balance,
+        scheduler=delayed_jobs,
     )
     # PvP global lobby use-cases (Спринт 2.1.F.2, ГДД §7.1).
     enqueue_global_duel = EnqueueGlobalDuel(
