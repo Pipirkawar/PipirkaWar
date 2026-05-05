@@ -292,11 +292,12 @@ anticheat-unban-success = ✅ Anti-cheat ban lifted (tg_id { $tg_id }, was banne
 # 1×1 PvP duel (Sprint 2.1.E, GDD §7.1).
 # ──────────────────────────────────────────────────────────────────────────
 
-# /duel in private chat without reply (no global lobby until 2.1.F).
-duel-private-needs-global = 🍆 To challenge someone, reply /duel to their message in your clan chat. Global pool opens in Phase 2.1.F.
+# /duel in private chat without reply — challenge is auto-queued to the global pool.
+# Kept as fallback for compatibility; the active flow uses duel-global-enqueued.
+duel-private-needs-global = 🍆 To challenge someone, reply /duel to their message in a group chat. Or wait — your `/duel` in private chat has already been sent to the global pool.
 
 # /duel without reply in a group, or with invalid arguments.
-duel-usage = 🍆 Usage: reply `/duel` to your opponent's message. Default mode is chat → global. For chat-only — `/duel chat`.
+duel-usage = 🍆 Usage: reply `/duel` to your opponent's message. Default mode is chat → global. For chat-only — `/duel chat`. In private chat, `/duel` without arguments enqueues you in the global pool.
 
 # Player (challenger) isn't registered yet.
 duel-not-registered = 🍆 You're not registered yet. Tap /start first.
@@ -317,7 +318,19 @@ duel-challenge-chat = ⚔️ { $challenger } challenges { $challenged } to a due
 duel-challenge-chat-then-global = ⚔️ { $challenger } challenges { $challenged } to a duel! If not accepted within 3 minutes, the challenge will move to the global pool.
 
 # Notification that challenge has been sent to the global pool (global_only).
-duel-challenge-global = ⚔️ { $challenger }, your challenge has been sent to the global pool (opening in 2.1.F).
+duel-challenge-global = ⚔️ { $challenger }, your challenge has been sent to the global pool — waiting up to { NUMBER($ttl_minutes, useGrouping: 0) } min.
+
+# Private-chat notification after `/duel` without args — enqueued in global pool.
+duel-global-enqueued = ⚔️ Challenge sent to the global pool. Waiting for someone to /duel_global. Expires in { NUMBER($ttl_minutes, useGrouping: 0) } min — cancel manually with /cancel_duel { $duel_id }.
+
+# Private-chat reply after `/duel_global` — successful match.
+duel-global-matched = ⚔️ Matched with { $challenger }! Fight started — watch for round prompts in private chat.
+
+# Private-chat reply after `/duel_global` — lobby empty (or race with self-challenge).
+duel-global-empty = 🪂 Global pool is empty. Try later or send a challenge via /duel.
+
+# `/duel_global` outside private chat — disallowed.
+duel-global-only-in-private = 🤖 `/duel_global` works only in private chat — opponents shouldn't be exposed publicly.
 
 # Replaces challenge card after accept.
 duel-chat-accepted = ✅ { $challenged } accepted { $challenger }'s challenge. Fight in progress (private).

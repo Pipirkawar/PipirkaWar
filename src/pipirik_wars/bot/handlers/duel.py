@@ -47,6 +47,7 @@ from pipirik_wars.application.dto.inputs import (
     AcceptDuelInput,
     CancelDuelInput,
     ChallengeDuelInput,
+    MatchFromLobbyInput,
     SubmitMoveInput,
 )
 from pipirik_wars.application.i18n import (
@@ -59,6 +60,10 @@ from pipirik_wars.application.pvp import (
     AcceptDuel,
     CancelDuel,
     ChallengeDuel,
+    DuelMatched,
+    EmptyLobby,
+    LobbyEntryStale,
+    MatchFromLobby,
     SubmitMove,
 )
 from pipirik_wars.bot.middlewares import TgIdentity
@@ -69,6 +74,7 @@ from pipirik_wars.bot.presenters import (
     parse_block_callback_data,
     parse_reject_callback_data,
 )
+from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.player import IPlayerRepository, PlayerNotFoundError
 from pipirik_wars.domain.progression import AnticheatSoftBanError
 from pipirik_wars.domain.pvp import (
@@ -96,6 +102,7 @@ async def handle_duel(  # noqa: PLR0911,PLR0912
     command: CommandObject,
     tg_identity: TgIdentity | None,
     challenge_duel: ChallengeDuel,
+    balance: IBalanceConfig,
     bundle: IMessageBundle,
     locale: Locale | None = None,
 ) -> None:
@@ -113,15 +120,21 @@ async def handle_duel(  # noqa: PLR0911,PLR0912
     requested_chat_only = mode_arg == "chat"
 
     if reply is None or reply.from_user is None:
-        # Без reply: в группе показываем usage; в ЛС — global_only-вариант.
+        # Без reply: в группе показываем usage; в ЛС — global_only-вариант (Спринт 2.1.F.3).
         if chat_kind in ("group", "supergroup"):
             await message.answer(presenter.usage(locale=effective_locale))
             return
         if chat_kind != "private":
             await message.answer(presenter.usage(locale=effective_locale))
             return
-        # ЛС без reply — пока нет глобал-лобби (2.1.F), просто подсказка.
-        await message.answer(presenter.private_needs_global(locale=effective_locale))
+        await _challenge_global_from_private(
+            message=message,
+            tg_identity=tg_identity,
+            challenge_duel=challenge_duel,
+            balance=balance,
+            presenter=presenter,
+            effective_locale=effective_locale,
+        )
         return
 
     # Reply на чьё-то сообщение. Допускаем только в группе/супергруппе.
@@ -209,6 +222,86 @@ async def handle_duel(  # noqa: PLR0911,PLR0912
             duel_id=duel_id,
             locale=effective_locale,
         ),
+    )
+
+
+# ---------------------------- /duel_global-команда ----------------------------
+
+
+@router.message(Command("duel_global"))
+async def handle_duel_global(  # noqa: PLR0911
+    message: Message,
+    bot: Bot,
+    tg_identity: TgIdentity | None,
+    match_from_lobby: MatchFromLobby,
+    players: IPlayerRepository,
+    bundle: IMessageBundle,
+    player_locale_resolver: IPlayerLocaleResolver,
+    locale: Locale | None = None,
+) -> None:
+    """Команда `/duel_global` — пикап вызова из глобального FIFO-лобби (Спринт 2.1.F.3).
+
+    Работает только в ЛС. В случае успеха разсылает attack-промпт обоим игрокам в их локали
+    (как `pvp-accept`-callback).
+    """
+    presenter = DuelPresenter(bundle=bundle)
+    effective_locale = locale or DEFAULT_LOCALE
+    if tg_identity is None:
+        return
+
+    if tg_identity.chat_kind != "private":
+        await message.answer(presenter.global_only_in_private(locale=effective_locale))
+        return
+
+    try:
+        result = await match_from_lobby.execute(
+            MatchFromLobbyInput(accepter_tg_id=tg_identity.tg_user_id),
+        )
+    except PlayerNotFoundError:
+        await message.answer(presenter.not_registered(locale=effective_locale))
+        return
+    except PvpRequirementsNotMetError as exc:
+        await message.answer(
+            presenter.requirements_not_met(
+                min_length_cm=exc.required if exc.requirement == "length" else 20,
+                min_thickness_level=exc.required if exc.requirement == "thickness" else 2,
+                locale=effective_locale,
+            )
+        )
+        return
+    except AnticheatSoftBanError as exc:
+        await message.answer(
+            presenter.anticheat_blocked(
+                banned_until=exc.banned_until.isoformat(),
+                locale=effective_locale,
+            )
+        )
+        return
+    except LockAlreadyHeldError:
+        await message.answer(presenter.lock_already_held(locale=effective_locale))
+        return
+
+    if isinstance(result, EmptyLobby | LobbyEntryStale):
+        await message.answer(presenter.global_empty(locale=effective_locale))
+        return
+
+    assert isinstance(result, DuelMatched)
+    duel = result.duel
+    challenger_username, _accepter_username = await _fetch_usernames(players=players, duel=duel)
+    await message.answer(
+        presenter.global_matched(
+            challenger_username=challenger_username,
+            locale=effective_locale,
+        )
+    )
+    await _broadcast_attack_prompt(
+        bot=bot,
+        players=players,
+        presenter=presenter,
+        duel=duel,
+        round_num=1,
+        locale_resolver=player_locale_resolver,
+        fallback_locale=effective_locale,
     )
 
 
@@ -575,6 +668,68 @@ def _format_username(username: str | None) -> str:
     return f"@{username}"
 
 
+async def _challenge_global_from_private(
+    *,
+    message: Message,
+    tg_identity: TgIdentity,
+    challenge_duel: ChallengeDuel,
+    balance: IBalanceConfig,
+    presenter: DuelPresenter,
+    effective_locale: Locale,
+) -> None:
+    """`/duel` в ЛС без аргументов — создаём global_only-вызов и сразу в лобби.
+
+    `ChallengeDuel(mode="global_only")` внутри сам вызывает `lobby.enqueue` +
+    `scheduler.schedule_global_lobby_expiration` — handler-у остаётся только отобразить
+    успех/ошибку.
+    """
+    try:
+        result = await challenge_duel.execute(
+            ChallengeDuelInput(
+                challenger_tg_id=tg_identity.tg_user_id,
+                challenged_tg_id=None,
+                mode="global_only",
+            )
+        )
+    except PlayerNotFoundError:
+        await message.answer(presenter.not_registered(locale=effective_locale))
+        return
+    except PvpRequirementsNotMetError as exc:
+        await message.answer(
+            presenter.requirements_not_met(
+                min_length_cm=exc.required if exc.requirement == "length" else 20,
+                min_thickness_level=exc.required if exc.requirement == "thickness" else 2,
+                locale=effective_locale,
+            )
+        )
+        return
+    except AnticheatSoftBanError as exc:
+        await message.answer(
+            presenter.anticheat_blocked(
+                banned_until=exc.banned_until.isoformat(),
+                locale=effective_locale,
+            )
+        )
+        return
+    except LockAlreadyHeldError:
+        await message.answer(presenter.lock_already_held(locale=effective_locale))
+        return
+
+    duel_id = result.duel.id
+    if duel_id is None:
+        _LOGGER.warning("duel.private_global: result.duel.id is None")
+        return
+
+    ttl_minutes = balance.get().pvp.duel_1v1.global_lobby_ttl_minutes
+    await message.answer(
+        presenter.global_enqueued(
+            duel_id=duel_id,
+            ttl_minutes=ttl_minutes,
+            locale=effective_locale,
+        )
+    )
+
+
 async def _fetch_usernames(
     *,
     players: IPlayerRepository,
@@ -725,6 +880,7 @@ async def _set_message_keyboard(callback: CallbackQuery, keyboard: object) -> No
 __all__ = [
     "handle_cancel_duel",
     "handle_duel",
+    "handle_duel_global",
     "handle_pvp_accept",
     "handle_pvp_attack",
     "handle_pvp_block",
