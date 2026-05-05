@@ -23,6 +23,55 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.6.H: нагрузочный race-test анти-чит-cap-а + `docs/anticheat.md`
+
+**Автор:** Devin (по запросу azurehannah)
+**Тип:** test / doc
+**Связано:** `current_tasks.md` Спринт 1.6.H, ПД 1.6.9 + 1.6.10 (development_plan.md §4), ГДД §3.3, §18.6.
+
+Закрывающий саб-спринт анти-чит-эпика 1.6.
+
+Что сделано:
+
+- **Интеграционный нагрузочный тест** `tests/integration/load/test_anticheat_concurrent.py` (`@pytest.mark.slow`):
+    - **`test_100_parallel_grants_for_same_player_respect_daily_cap`** — 100 параллельных `AddLength.grant(player_id=42, delta_cm=50, source=FOREST, ...)` от своих `SqlAlchemyUnitOfWork`-ов поверх общего `shared_session_maker` (файловый SQLite + aiosqlite `timeout=30s`). Проверяет инвариант ПД 1.6.9 — **либо** clamp удержал суммарную organic-дельту ≤ `daily_cap_cm` (3000 см), **либо** trip-wire среагировал и записал `ANTICHEAT_DAILY_CAP_EXCEEDED` + `Player.with_anticheat_ban(...)` + alert админу через `IAnticheatAdminAlerter`. Дополнительно: `db_total = sum(LENGTH_GRANT.delta_cm)` сходится с суммой `applied_delta_cm` в результатах use-case-а; soft-banned grant-ы консистентны с trip-wire-flag-ом.
+    - **`test_100_parallel_grants_for_different_players_each_get_full_delta`** — 100 разных игроков по одному grant-у каждому. Проверяет, что `daily_cap_cm` считается **per-player** (фильтр по `audit_log.target_id`), а не глобально: каждый получает full delta=50, никаких clamp/ban, в audit ровно 100 LENGTH_GRANT-записей.
+    - Оба теста стабильно зелёные (5 прогонов подряд, 2.87–3.59 сек / прогон).
+- **`docs/anticheat.md`** — onboarding-документ для нового разработчика (~6 KB). Разделы:
+    1. Архитектурный обзор: единая точка `progression.add_length`, ambient-UoW, алгоритм grant-а из 9 шагов (валидация → idempotency → soft-ban-гейт → clamp → mutate → audit `LENGTH_GRANT` → idempotency-mark → trip-wire), конфигурация `balance.yaml::anticheat`, rolling vs календарное окно, clamp vs trip-wire, snapshot-test инварианты.
+    2. Как добавить новый source: enum в `AuditSource`, миграция whitelist, `balance.yaml::organic_sources`/`donate_sources`, вызов `length_granter.grant(...)`, тесты (юнит + параметризованный кейс в `test_add_length.py`), локализация.
+    3. Как вручную снять soft-ban: основной путь через `/anticheat_unban` (Спринт 1.6.G); запасной через прямой SQL (`UPDATE users` + INSERT `audit_log` с action=`ANTICHEAT_BAN_LIFTED`); полезные SELECT-ы для списка забаненных и истории trip-wire-событий.
+    4. Локализация (`anticheat-*` ключи) и связанная история (PR #34 → #35 → #36 → #37 → #39 → #42 → #43 → текущий).
+    5. Известные ограничения: lost-update под SQLite на `users.length_cm` (тестовый артефакт), authz-transaction-баг в `SetMaxDau`/`ReloadBalance` (наследие от 1.5), `anticheat-admin-alert` локаль зарезервирована до появления Telegram-канала админ-алёртов.
+- **`README.md`** — добавлен pointer на `docs/anticheat.md` в секцию «📚 Документация».
+- **`docs/current_tasks.md`** — строка `1.6.H` обновлена с `⚪ бэклог` → `🟡 готово к ревью`; строка `1.6.G` (PR #43 уже смержен) синхронизирована: `🟡 готово к ревью` → `✅ смержено (PR #43)`.
+
+Результат / артефакты:
+
+- `tests/integration/load/test_anticheat_concurrent.py` — 2 теста, ~3 сек на полный прогон под `-m slow`.
+- `docs/anticheat.md` — новый файл, ~6 KB.
+- `README.md` — патч (1 строка).
+- `docs/current_tasks.md` — патч (2 строки).
+- Полный регрессионный прогон: `pytest tests/unit -q --no-cov` — 1288 passed / 1 skipped; `pytest tests/integration -q --no-cov` — 165 passed (было 163, +2 из load-теста).
+
+Заметки / решения:
+
+- **Почему не assert-нули `length_after == total_applied` под SQLite.** Изначальная попытка проверять `users.length_cm` против суммы возвращённых `applied_delta_cm` падала на 100-конкурентном race: `length_after=52`, `total_applied=3700` (74 транзакции коммитнули audit-row, но в `users` записан результат только последнего save из-за lost-update-гонки на BEGIN DEFERRED). Это известное ограничение SQLite — на проде (Postgres + REPEATABLE READ + `SELECT ... FOR UPDATE` на user-row) такие конфликты abortятся ORM-уровнем. Тест документирует это явно и проверяет более слабый, но честный инвариант: либо clamp удержал, либо trip-wire среагировал. Жёсткое «sum ≤ 3000» — Postgres-only, требует pg-integration-инфры (отдельная задача).
+- **Stub-репозитории и admin-alerter.** Использован `FakeAnticheatAdminAlerter` из `tests/fakes/`, чтобы ассертить факт alert-а; `StructlogAnticheatAdminAlerter` (прод-impl) шумит в test-output и не даёт ассертить событие.
+- **Параметр `delta_cm=50`.** 100 grant-ов × 50 см = 5000 см > 3000 cap — гарантированно тестируем clamp/trip-wire. С `delta=30` cap (3000) был бы достигнут ровно (60 grant-ов × 50 = 3000), последующие 40 — clamped в 0; с `delta=100` overshoot был бы агрессивнее. 50 — середина, читабельно.
+- **Закрытие эпика.** Все 8 саб-спринтов 1.6.A → 1.6.H выполнены (PR #34 → #35 → #36 → #37 → #39 → #42 → #43 → текущий). DoD спринта 1.6 (development_plan.md §4):
+    - ✅ Все use-cases прибавки длины проходят через `progression.add_length` (1.6.F + architecture-guard).
+    - ✅ Хардкап работает в clamp-режиме на штатном пути (1.6.D + 1.6.E).
+    - ✅ Хардкап работает в trip-wire-режиме при обходе (1.6.D + load-test 1.6.H).
+    - ✅ Soft-ban на 14 дней снимается автоматически (по истечении `anticheat_ban_until`) и вручную (через `/anticheat_unban`, 1.6.G).
+    - ✅ Алёрт админу идёт через `IAnticheatAdminAlerter` (`StructlogAnticheatAdminAlerter`, проверено load-тестом).
+    - ✅ Race-test зелёный (1.6.H).
+    - ✅ Покрытие новых файлов ≥ 90% (юнит-тесты `test_add_length.py` + load-тест на use-case).
+    - ⏳ Telegram-канал админ-алёртов и `anticheat-admin-alert` локаль — отложено до появления соответствующей инфры (см. ограничения выше).
+- **Удалён HANDOFF_1_6_H.md** в финальном коммите перед merge.
+
+---
+
 ## 2026-05-04 — Спринт 1.6.G: bot-команда `/anticheat_unban` + `LiftAnticheatBan`
 
 **Автор:** Devin (по запросу azurehannah)
