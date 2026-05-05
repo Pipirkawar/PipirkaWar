@@ -19,6 +19,10 @@
 
 Предсказатель (Спринт 1.4.B):
 - `OracleInvocationORM` — таблица `oracle_invocations`.
+
+PvP 1×1 (Спринт 2.1.C):
+- `PvpDuelORM` — таблица `pvp_duels`.
+- `PvpDuelRoundORM` — таблица `pvp_duel_rounds`.
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
@@ -26,6 +30,7 @@ from pipirik_wars.infrastructure.db.models.clan import ClanMemberORM, ClanORM
 from pipirik_wars.infrastructure.db.models.forest import ForestRunORM
 from pipirik_wars.infrastructure.db.models.oracle import OracleInvocationORM
 from pipirik_wars.infrastructure.db.models.player import UserORM
+from pipirik_wars.infrastructure.db.models.pvp import PvpDuelORM, PvpDuelRoundORM
 from pipirik_wars.infrastructure.db.models.security import (
     ActivityLockORM,
     AuditLogORM,
@@ -42,6 +47,8 @@ __all__ = [
     "ForestRunORM",
     "IdempotencyKeyORM",
     "OracleInvocationORM",
+    "PvpDuelORM",
+    "PvpDuelRoundORM",
     "SignupQueueORM",
     "UserORM",
 ]
