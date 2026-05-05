@@ -204,6 +204,10 @@ _KEY_CHALLENGE_CHAT: Final[MessageKey] = MessageKey("duel-challenge-chat")
 _KEY_CHALLENGE_CHAT_THEN_GLOBAL: Final[MessageKey] = MessageKey("duel-challenge-chat-then-global")
 # Подтверждение global_only (без чата).
 _KEY_CHALLENGE_GLOBAL: Final[MessageKey] = MessageKey("duel-challenge-global")
+_KEY_GLOBAL_ENQUEUED: Final[MessageKey] = MessageKey("duel-global-enqueued")
+_KEY_GLOBAL_MATCHED: Final[MessageKey] = MessageKey("duel-global-matched")
+_KEY_GLOBAL_EMPTY: Final[MessageKey] = MessageKey("duel-global-empty")
+_KEY_GLOBAL_ONLY_IN_PRIVATE: Final[MessageKey] = MessageKey("duel-global-only-in-private")
 
 # Кнопки.
 _KEY_BTN_ACCEPT: Final[MessageKey] = MessageKey("duel-button-accept")
@@ -316,6 +320,7 @@ class DuelPresenter:
         self,
         *,
         challenger_username: str,
+        ttl_minutes: int,
         locale: Locale,
     ) -> str:
         """Карточка `global_only`-вызова (отправляется в ЛС челленджеру)."""
@@ -323,7 +328,46 @@ class DuelPresenter:
             _KEY_CHALLENGE_GLOBAL,
             locale=locale,
             challenger=challenger_username,
+            ttl_minutes=ttl_minutes,
         )
+
+    # --- /duel_global и глобал-лобби (Спринт 2.1.F.3) -------------
+
+    def global_enqueued(
+        self,
+        *,
+        duel_id: int,
+        ttl_minutes: int,
+        locale: Locale,
+    ) -> str:
+        """Ответ в ЛС на `/duel` без аргументов — вызов поставлен в глобал-лобби."""
+        return self._bundle.format(
+            _KEY_GLOBAL_ENQUEUED,
+            locale=locale,
+            duel_id=duel_id,
+            ttl_minutes=ttl_minutes,
+        )
+
+    def global_matched(
+        self,
+        *,
+        challenger_username: str,
+        locale: Locale,
+    ) -> str:
+        """Ответ в ЛС на `/duel_global` — успешный матч с ждущим в лобби."""
+        return self._bundle.format(
+            _KEY_GLOBAL_MATCHED,
+            locale=locale,
+            challenger=challenger_username,
+        )
+
+    def global_empty(self, *, locale: Locale) -> str:
+        """Ответ в ЛС на `/duel_global` — лобби пусто (или race со своим вызовом)."""
+        return self._bundle.format(_KEY_GLOBAL_EMPTY, locale=locale)
+
+    def global_only_in_private(self, *, locale: Locale) -> str:
+        """`/duel_global` в групповом чате или супергруппе — нельзя."""
+        return self._bundle.format(_KEY_GLOBAL_ONLY_IN_PRIVATE, locale=locale)
 
     def chat_accepted(
         self,
