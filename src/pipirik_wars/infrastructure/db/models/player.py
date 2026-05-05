@@ -45,10 +45,15 @@ class UserORM(Base):
         nullable=False,
         server_default="active",
     )
+    locale_override: Mapped[str | None] = mapped_column(String(8), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
         CheckConstraint("length_cm >= 0", name="length_non_negative"),
         CheckConstraint("thickness_level >= 1", name="thickness_positive"),
+        CheckConstraint(
+            "locale_override IS NULL OR locale_override IN ('ru', 'en')",
+            name="users_locale_override_supported",
+        ),
     )

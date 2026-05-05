@@ -29,12 +29,14 @@ from pipirik_wars.application.i18n.locale import (
     LocaleResolver,
 )
 from pipirik_wars.application.i18n.message_bundle import IMessageBundle, MessageKey
+from pipirik_wars.application.i18n.player_locale import IPlayerLocaleResolver
 
 __all__ = [
     "DEFAULT_LOCALE",
     "SUPPORTED_LOCALES",
     "I18nError",
     "IMessageBundle",
+    "IPlayerLocaleResolver",
     "Locale",
     "LocaleResolver",
     "MessageKey",

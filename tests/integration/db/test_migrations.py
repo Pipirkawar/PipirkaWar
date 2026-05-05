@@ -45,7 +45,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert len(heads) == 1, f"expected single head, got {heads}"
 
     def test_expected_revisions_exist(self) -> None:
-        """0001..0005 должны быть зарегистрированы."""
+        """0001..0006 должны быть зарегистрированы."""
         cfg = _alembic_config("sqlite:///:memory:")
         script = ScriptDirectory.from_config(cfg)
         revisions = {rev.revision for rev in script.walk_revisions()}
@@ -54,6 +54,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0003_signup_queue" in revisions
         assert "0004_forest_runs" in revisions
         assert "0005_oracle_invocations" in revisions
+        assert "0006_users_locale_override" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -83,6 +84,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0005 is not None
         assert rev_0005.down_revision == "0004_forest_runs"
 
+    def test_0006_descends_from_0005(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0006 = script.get_revision("0006_users_locale_override")
+        assert rev_0006 is not None
+        assert rev_0006.down_revision == "0005_oracle_invocations"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -92,6 +100,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260504_0003_signup_queue.py",
             "20260504_0004_forest_runs.py",
             "20260505_0005_oracle_invocations.py",
+            "20260505_0006_users_locale_override.py",
         ]
 
     def test_upgrade_head_creates_all_tables(

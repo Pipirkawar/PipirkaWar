@@ -29,6 +29,7 @@ from tests.fakes.oracle import (
     FakeOracleHistoryRepository,
     FakeOracleTemplateProvider,
 )
+from tests.fakes.player_locale_resolver import FakePlayerLocaleResolver
 from tests.fakes.player_repo import FakePlayerRepository
 from tests.fakes.random import FakeRandom
 from tests.fakes.signup_queue import FakeSignupQueueRepository
@@ -53,6 +54,7 @@ __all__ = [
     "FakeMessageBundle",
     "FakeOracleHistoryRepository",
     "FakeOracleTemplateProvider",
+    "FakePlayerLocaleResolver",
     "FakePlayerRepository",
     "FakeRandom",
     "FakeSignupQueueRepository",

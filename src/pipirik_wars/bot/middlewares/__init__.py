@@ -14,7 +14,7 @@
 
 from aiogram import Dispatcher
 
-from pipirik_wars.application.i18n import LocaleResolver
+from pipirik_wars.application.i18n import IPlayerLocaleResolver, LocaleResolver
 from pipirik_wars.bot.middlewares.auth import AuthMiddleware, TgIdentity
 from pipirik_wars.bot.middlewares.error_handler import ErrorHandlerMiddleware
 from pipirik_wars.bot.middlewares.locale import LocaleMiddleware
@@ -27,6 +27,7 @@ def register_middlewares(
     *,
     limiter: IRateLimiter,
     locale_resolver: LocaleResolver | None = None,
+    player_locale_resolver: IPlayerLocaleResolver | None = None,
 ) -> None:
     """Подключает middleware-стек ко всем нужным observer-ам.
 
@@ -35,10 +36,16 @@ def register_middlewares(
 
     `locale_resolver` опциональный — если не передан, используется
     `LocaleResolver()` по дефолту (RU/EN + fallback EN).
+    `player_locale_resolver` (Спринт 1.5.F) опциональный: если передан,
+    `LocaleMiddleware` сначала спрашивает `users.locale_override` по
+    `tg_id` и только если его нет — фолбэчит на `tg.language_code`.
     """
     error = ErrorHandlerMiddleware()
     auth = AuthMiddleware()
-    locale = LocaleMiddleware(resolver=locale_resolver)
+    locale = LocaleMiddleware(
+        resolver=locale_resolver,
+        player_locale_resolver=player_locale_resolver,
+    )
     throttle = ThrottleMiddleware(limiter=limiter)
 
     for observer in (

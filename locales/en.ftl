@@ -222,3 +222,25 @@ forest-toast-foreign-button = This button isn't for you.
 forest-toast-run-not-found = This forest run is no longer active.
 forest-toast-drop-mismatch = Button is outdated.
 forest-toast-player-not-found = Tap /start first.
+
+# ----------------------------- /lang -----------------------------
+# `/lang ru|en` — interface language switcher (Sprint 1.5.F).
+
+# Command called outside a private chat.
+lang-group = `/lang` is private-chat only. Switch to DM.
+
+# Command called from a non-user (e.g., from a channel).
+lang-other = `/lang` is for regular users only.
+
+# Player is not registered yet.
+lang-not-registered = Tap /start first, then run /lang ru|en.
+
+# Usage hint when args are missing/invalid.
+lang-usage = Usage: /lang ru or /lang en.
+
+# Unsupported language code passed.
+lang-unsupported = Language `{ $code }` is not supported. Available: ru, en.
+
+# Locale switched successfully.
+lang-set-ru = Язык интерфейса: русский. Все ответы и фоновые сообщения теперь на русском.
+lang-set-en = Interface language switched to English. All replies and background messages will be in English.

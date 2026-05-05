@@ -1,4 +1,4 @@
-"""Use-cases подсистемы «Игрок» (Спринт 1.1 + 1.2.4)."""
+"""Use-cases подсистемы «Игрок» (Спринт 1.1 + 1.2.4 + 1.5.F)."""
 
 from pipirik_wars.application.player.get_profile import GetProfile, ProfileView
 from pipirik_wars.application.player.register import (
@@ -6,6 +6,10 @@ from pipirik_wars.application.player.register import (
     PlayerRegistered,
     RegisterPlayer,
     RegisterPlayerResult,
+)
+from pipirik_wars.application.player.set_locale import (
+    SetPlayerLocale,
+    SetPlayerLocaleResult,
 )
 
 __all__ = [
@@ -15,4 +19,6 @@ __all__ = [
     "ProfileView",
     "RegisterPlayer",
     "RegisterPlayerResult",
+    "SetPlayerLocale",
+    "SetPlayerLocaleResult",
 ]

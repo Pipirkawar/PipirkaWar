@@ -39,6 +39,7 @@ def _row_to_entity(row: UserORM) -> Player:
         status=PlayerStatus(row.status),
         created_at=created_at,
         updated_at=updated_at,
+        locale_override=row.locale_override,
     )
 
 
@@ -77,6 +78,7 @@ class SqlAlchemyPlayerRepository(IPlayerRepository):
             title=player.title.value if player.title is not None else None,
             name=player.name.value if player.name is not None else None,
             status=player.status.value,
+            locale_override=player.locale_override,
             created_at=player.created_at,
             updated_at=player.updated_at,
         )
@@ -101,6 +103,7 @@ class SqlAlchemyPlayerRepository(IPlayerRepository):
         row.title = player.title.value if player.title is not None else None
         row.name = player.name.value if player.name is not None else None
         row.status = player.status.value
+        row.locale_override = player.locale_override
         row.updated_at = player.updated_at
         # `created_at` намеренно не трогаем — он immutable после INSERT.
         await self._uow.session.flush()

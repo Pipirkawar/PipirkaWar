@@ -15,11 +15,11 @@ APScheduler-callback-ом (`infrastructure/scheduler/aps.py`) сразу
 `import-linter`-ом.
 
 С 1.5.E текст и подписи кнопок берутся из `IMessageBundle` через
-`ForestPresenter`. Локаль игрока в этом фоновом нотификаторе ещё не
-известна (нет `update.from_user` — событие пришло из APScheduler),
-поэтому используется `DEFAULT_LOCALE`. Когда в следующем PR
-1.5-серии появится `players.locale_override`, notifier получит
-`IPlayerLocaleResolver` и сможет резолвить per-player-локаль.
+`ForestPresenter`. С 1.5.F локаль резолвится через опциональный
+`IPlayerLocaleResolver` (`users.locale_override`). Если резолвер не
+передан или игрок не выбирал `/lang` — фолбэк на `default_locale`
+(по дефолту EN, см. ПД 1.5.2 «фоновые сообщения по дефолту
+английские, кроме игроков с явным выбором»).
 
 Контракт `IForestFinishNotifier.notify(...)`:
 - Если `result.was_already_finished is True` — no-op (повторный
@@ -35,7 +35,12 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 
 from pipirik_wars.application.forest import ForestRunFinished, IForestFinishNotifier
-from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
+from pipirik_wars.application.i18n import (
+    DEFAULT_LOCALE,
+    IMessageBundle,
+    IPlayerLocaleResolver,
+    Locale,
+)
 from pipirik_wars.bot.presenters.forest import ForestPresenter
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.player import DisplayName, IPlayerRepository
@@ -55,6 +60,7 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
         "_balance",
         "_bot",
         "_default_locale",
+        "_locale_resolver",
         "_logger",
         "_players",
         "_presenter",
@@ -69,6 +75,7 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
         balance: IBalanceConfig,
         uow: IUnitOfWork,
         bundle: IMessageBundle,
+        locale_resolver: IPlayerLocaleResolver | None = None,
         default_locale: Locale = DEFAULT_LOCALE,
         logger: logging.Logger | None = None,
     ) -> None:
@@ -77,6 +84,7 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
         self._balance = balance
         self._uow = uow
         self._presenter = ForestPresenter(bundle=bundle)
+        self._locale_resolver = locale_resolver
         self._default_locale = default_locale
         self._logger = logger or logging.getLogger(__name__)
 
@@ -97,12 +105,13 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
             )
             return
 
+        locale = await self._resolve_locale(player_after.tg_id)
         text = self._presenter.finished(
             result=result,
             display_name_after=display_name,
-            locale=self._default_locale,
+            locale=locale,
         )
-        keyboard = self._presenter.finish_keyboard(result, locale=self._default_locale)
+        keyboard = self._presenter.finish_keyboard(result, locale=locale)
 
         try:
             await self._bot.send_message(
@@ -129,6 +138,26 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
         Не открываем UoW: `IBalanceConfig` — read-only in-memory снимок.
         """
         return DisplayName(value=self._balance.get().display_name_for(length_cm))
+
+    async def _resolve_locale(self, tg_id: int) -> Locale:
+        """Резолв `Locale` для адресата.
+
+        Если `IPlayerLocaleResolver` передан и нашёл `users.locale_override` —
+        используем его. Иначе — `default_locale` (см. `__init__`).
+        Любые ошибки резолвера поглощаются — фоновые сообщения должны
+        быть best-effort и не падать из-за БД-проблем.
+        """
+        if self._locale_resolver is None:
+            return self._default_locale
+        try:
+            resolved = await self._locale_resolver.resolve_for_tg_id(tg_id)
+        except Exception:
+            self._logger.exception(
+                "forest_notifier: locale resolver failed",
+                extra={"tg_id": tg_id},
+            )
+            return self._default_locale
+        return resolved or self._default_locale
 
 
 __all__ = ["TelegramForestFinishNotifier"]

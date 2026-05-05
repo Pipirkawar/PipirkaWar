@@ -33,7 +33,11 @@ from pipirik_wars.application.forest import (
 )
 from pipirik_wars.application.i18n import IMessageBundle
 from pipirik_wars.application.oracle import InvokeOracle
-from pipirik_wars.application.player import GetProfile, RegisterPlayer
+from pipirik_wars.application.player import (
+    GetProfile,
+    RegisterPlayer,
+    SetPlayerLocale,
+)
 from pipirik_wars.application.progression import UpgradeThickness
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
@@ -95,6 +99,7 @@ from tests.fakes import (
     FakeMessageBundle,
     FakeOracleHistoryRepository,
     FakeOracleTemplateProvider,
+    FakePlayerLocaleResolver,
     FakePlayerRepository,
     FakeRandom,
     FakeSignupQueueRepository,
@@ -292,6 +297,13 @@ def _container_with_fakes() -> Container:
         top_players_query=top_players_query,
         get_top_players=GetTopPlayers(query=top_players_query),
         bundle=bundle,
+        player_locale_resolver=FakePlayerLocaleResolver(),
+        set_player_locale=SetPlayerLocale(
+            uow=uow,
+            players=players,
+            audit=audit,
+            clock=clock,
+        ),
     )
 
 
