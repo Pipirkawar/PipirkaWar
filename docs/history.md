@@ -23,6 +23,87 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.1.E: bot-handler-ы и presenter-ы PvP (UX боя в Telegram)
+
+**Автор:** Devin (предыдущий агент, PR #50; запись и housekeeping — Devin по запросу 612amaranth)
+**Тип:** feature (bot/presenters + bot/handlers + DI + locales)
+**Связано:** `current_tasks.md` Спринт 2.1.E, ПД 2.1.2 (`development_plan.md §5`), ГДД §7.1.
+
+Пятый саб-спринт PvP-эпика 2.1. Поверх готовых application-use-cases (2.1.D) появляется UX-слой `aiogram` 3.x: команды `/duel` / `/cancel_duel`, четыре callback-обработчика (accept/reject/attack/block), презентер с 35+ методами и 3 inline-keyboard-генератора, локализация на RU/EN. Это последний саб-спринт MVP боя 1×1 в части основного flow — асинхронные шедулинг-задачи (AFK-таймер раунда + авто-эскалация в global pool через 3 мин) едут в саб-спринтах 2.1.F и 2.1.G.
+
+Что сделано:
+
+- **`bot/presenters/duel.py`** (≈600 строк) — `DuelPresenter`:
+    - 4 dataclass-callback-payload-а: `AcceptCallbackData(duel_id)`, `RejectCallbackData(duel_id)`, `AttackCallbackData(duel_id, round_num, attack)`, `BlockCallbackData(duel_id, round_num, attack, block)` — все ≤ 64 байт (Telegram-лимит на `callback_data`).
+    - Сериализаторы/парсеры с whitelist-валидацией: `_parse_positive_int` / `_parse_position` (только `high`/`mid`/`low`); неконсистентные строки → `ValueError` (выбрасывается вверх как `Exception`, ловится в handler-е через middleware).
+    - 26 методов рендера локализованных текстов: usage / not-registered / target-not-registered / target-is-bot / self-challenge / challenge-chat / challenge-chat-then-global / challenge-global / chat-accepted / cancelled / cancel-usage / round-attack-prompt / round-block-prompt / round-waiting / result-victory / result-defeat / result-draw / requirements-not-met / anticheat-blocked / lock-already-held + 9 коротких toast-методов (для `callback.answer(text=...)`).
+    - 3 keyboard-фабрики: `challenge_keyboard(duel_id)` (Принять/Отклонить), `attack_keyboard(duel_id, round_num)` (3 кнопки атаки), `block_keyboard(duel_id, round_num, attack)` (3 кнопки блока — атака зашита в `callback_data`, чтобы handler `pvp-block` не зависел от состояния клиента).
+- **`bot/handlers/duel.py`** (≈733 строки) — 6 handler-ов (по паттерну `bot/handlers/upgrade.py`):
+    - `/duel` (`@router.message(Command("duel"))`): в ЛС без reply → `private_needs_global`; в группе/супергруппе без reply → `usage`; reply на бота → `target_is_bot`; reply на самого себя → `self_challenge`; reply на игрока с аргументом `chat` → `chat_only`-mode; без аргумента → `chat_then_global`-mode (default ГДД §7.1). Зовёт `ChallengeDuel.execute(...)`. Ловит `PlayerNotFoundError` (различает challenger vs challenged по `exc.tg_id`), `SelfChallengeError`, `PvpRequirementsNotMetError`, `AnticheatSoftBanError`, `LockAlreadyHeldError` и рендерит соответствующий локализованный текст.
+    - `/cancel_duel <id>` (`@router.message(Command("cancel_duel"))`): парсит ID; зовёт `CancelDuel.execute(...)`; ловит `DuelNotFoundError`, `NotADuelParticipantError`, `InvalidDuelStateError`.
+    - `pvp-accept:N` callback: парсит `AcceptCallbackData`; зовёт `AcceptDuel.execute(...)`; на успехе — `callback.answer(toast_accepted)`, `_strip_keyboard(callback)`, edit-message → `chat_accepted`, шлёт DM обоим игрокам с `attack_keyboard` (раунд 1).
+    - `pvp-reject:N` callback: только `toast_rejected` + `_strip_keyboard`. БЕЗ мутации состояния — pending duel останется до TTL-cleanup в 2.1.F.
+    - `pvp-attack:N:R:H` callback: БЕЗ вызова use-case — просто edit message → `round-block-prompt(attack)` + `block_keyboard`. (Атака сама по себе ничего не сабмитит — submit происходит при выборе блока.)
+    - `pvp-block:N:R:A:B` callback: парсит `BlockCallbackData`; зовёт `SubmitMove.execute(...)`; ловит `DuelNotFoundError`, `NotADuelParticipantError`, `InvalidDuelStateError`, `MoveAlreadySubmittedError`, `AnticheatSoftBanError`. На успехе:
+        - `result.duel.is_completed` → загружает обоих игроков (`IPlayerRepository.get_by_id`) и шлёт DM с `result_victory` / `result_defeat` / `result_draw` каждому (по `result.duel.final_outcome.winner`).
+        - Раунд продвинулся → DM `round_attack_prompt` обоим с новым `round_num`.
+        - Раунд НЕ закрыт (оппонент не походил) → edit message → `round_waiting`.
+- **`bot/main.py`** — расширение `Container` и `build_dispatcher`:
+    - 5 новых полей: `challenge_duel`, `accept_duel`, `cancel_duel`, `submit_move`, `resolve_afk_round` (последний пока нигде не вызывается, но регистрируется в DI заранее под 2.1.G AFK-таймер).
+    - Новый репо: `duels: SqlAlchemyDuelRepository` поверх существующей `session_factory`.
+    - `dispatcher["challenge_duel"]` / `accept_duel` / `cancel_duel` / `submit_move` / `resolve_afk_round` / `players` / `duels` — для aiogram-DI по имени параметра в handler-ах.
+- **Локализация** — 44 ключа в `locales/ru.ftl` и `locales/en.ftl`:
+    - `duel-private-needs-global` / `duel-usage` / `duel-not-registered` / `duel-target-not-registered` / `duel-target-is-bot` / `duel-self-challenge`
+    - `duel-challenge-chat` / `duel-challenge-chat-then-global` / `duel-challenge-global` / `duel-chat-accepted`
+    - `duel-button-accept` / `duel-button-reject` / `duel-button-attack-{high,mid,low}` / `duel-button-block-{high,mid,low}`
+    - `duel-round-attack-prompt` / `duel-round-block-prompt` / `duel-round-waiting`
+    - `duel-result-victory` / `duel-result-defeat` / `duel-result-draw`
+    - `duel-cancelled` / `duel-cancel-usage`
+    - 9 toast-ключей: `duel-toast-{accepted,rejected,cancelled,not-found,not-participant,foreign-button,invalid-state,already-submitted,outdated}`
+    - `duel-requirements-not-met` / `duel-anticheat-blocked` / `duel-lock-already-held`
+- **`bot/handlers/__init__.py`** — регистрация `duel_router` после `upgrade_router`.
+- **`bot/presenters/__init__.py`** — экспорт `DuelPresenter` + `Accept/Reject/Attack/BlockCallbackData` + парсеров.
+- **`.gitignore`** — `uv.lock` (попадал в коммиты по ошибке после `uv run`).
+
+Результат / артефакты:
+
+- PR #50 https://github.com/Pipirkawar/PipirkaWar/pull/50 (5 коммитов, +1964 LoC по 9 файлам).
+- 4 коммита внутри: `feat(pvp): DuelPresenter + callback_data parsers`, `feat(pvp): bot/handlers/duel.py + DI wiring`, `chore: untrack uv.lock`, `feat(pvp): RU+EN locales duel-*`.
+
+Заметки / решения:
+
+- **Атака зашита в `block_keyboard.callback_data`** — handler `pvp-block` берёт её оттуда, а не из БД. Это exact-once-семантика: одна и та же атака не может «съехать» при повторных нажатиях; и handler stateless относительно UI-состояния.
+- **`pvp-reject` не пишет в БД** — pending duel останется до TTL-cleanup в 2.1.F (FIFO глобальный пул + cleanup-job APScheduler-а). Решение даёт реджект как мгновенный UX без транзакции, ценой того что отказ не идемпотентен (повторный реджект тем же игроком не отличить от первого) — но это безвредно.
+- **`pvp-attack` не зовёт use-case** — это чисто UI-переход «выбрал атаку → показать блок-промпт». Реальная мутация (submit_move) случается только при выборе блока. Так UX в чате/ЛС выглядит как «два клика = ход».
+- **`bot.send_message(chat_id=tg_id)` для DM** — chat_id в личном чате равен tg_user_id; это паттерн aiogram, тот же что в `bot/notifications/forest.py`. Но для PvP отдельный notifier-класс не выделен — оба DM-а отправляются прямо из handler-а, что упрощает state-flow в линейный.
+- **Известный пробел: тесты handler-ов и presenter-а отсутствуют.** PR #50 был смержен только с domain/application/integration-тестами (предыдущие саб-спринты), но `tests/unit/bot/handlers/test_duel.py` и `tests/unit/bot/presenters/test_duel.py` не были добавлены. Coverage-gate (`--cov-fail-under=80`) не сработал, т.к. остальной код по проекту покрыт > 90%. Бэкфилл этих тестов запланирован как housekeeping-таск перед началом 2.1.F (либо в сам 2.1.F, чтобы избежать ребейзов).
+- **`AGENT_HANDOFF.md`** — файл-чеклист для in-progress-работы попал в PR #50 случайно (предыдущий агент завершил все шаги, но забыл удалить артефакт). Удаляется в этом housekeeping-PR.
+
+---
+
+## 2026-05-05 — Housekeeping: удалён `AGENT_HANDOFF.md` + актуализация `current_tasks.md` для 2.1.C/D/E
+
+**Автор:** Devin (по запросу 612amaranth)
+**Тип:** doc + chore
+**Связано:** PR #48, #49, #50; этот housekeeping-PR.
+
+После мерджа PR #48–50 (саб-спринты 2.1.C–E) предыдущий агент не успел синхронизировать `docs/current_tasks.md` (статусы остались на «🟡готово к ревью» / «⚪бэклог») и оставил в репо in-progress-чеклист `AGENT_HANDOFF.md` (был привязан к WIP-коммитам PR #50; все шаги в нём закрыты, но файл забыли удалить перед мерджем).
+
+Что сделано:
+
+- Удалён корневой `AGENT_HANDOFF.md` (356 строк, последний коммит-ссылка — `41d7577 feat(pvp): DuelPresenter + callback_data parsers (WIP Sprint 2.1.E)`).
+- В `docs/current_tasks.md` строки PR-таблицы Спринта 2.1:
+    - 2.1.C: 🟡готово к ревью → ✅смержено (PR #48)
+    - 2.1.D: 🟡готово к ревью → ✅смержено (PR #49)
+    - 2.1.E: ⚪бэклог → ✅смержено (PR #50)
+- Добавлена настоящая запись + полная запись Спринта 2.1.E в `docs/history.md` (записи добавляются сверху).
+
+Заметки / решения:
+
+- Записи в `history.md` про 2.1.C/D создавались внутри тех же PR-ов; для 2.1.E она пропустилась, поэтому делаем её здесь, по факту изученных коммитов и diff-а PR #50.
+
+---
+
 ## 2026-05-05 — Спринт 2.1.D: PvP use-cases (ChallengeDuel/AcceptDuel/CancelDuel/SubmitMove/ResolveAfkRound)
 
 **Автор:** Devin (по запросу 521sophie)

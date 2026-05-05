@@ -40,6 +40,13 @@ from pipirik_wars.application.player import (
     SetPlayerLocale,
 )
 from pipirik_wars.application.progression import AddLength, UpgradeThickness
+from pipirik_wars.application.pvp import (
+    AcceptDuel,
+    CancelDuel,
+    ChallengeDuel,
+    ResolveAfkRound,
+    SubmitMove,
+)
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.application.top import GetTopPlayers
@@ -48,6 +55,7 @@ from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.forest import IForestRunRepository
 from pipirik_wars.domain.player import IPlayerRepository
+from pipirik_wars.domain.pvp import IDuelRepository
 from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
@@ -64,6 +72,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyAdminRepository,
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
+    SqlAlchemyDuelRepository,
     SqlAlchemyForestRunRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemySignupQueueRepository,
@@ -98,6 +107,7 @@ from tests.fakes import (
     FakeClock,
     FakeDauThresholdAlerter,
     FakeDelayedJobScheduler,
+    FakeDuelRepository,
     FakeForestRunRepository,
     FakeIdempotencyKey,
     FakeMessageBundle,
@@ -138,6 +148,7 @@ def _container_with_fakes() -> Container:
     signup_queue: ISignupQueueRepository = FakeSignupQueueRepository()
     activity_locks: IActivityLockRepository = FakeActivityLockRepository()
     forest_runs: IForestRunRepository = FakeForestRunRepository()
+    duels: IDuelRepository = FakeDuelRepository()
     balance = FakeBalanceConfig(build_valid_balance())
     dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=200)
@@ -190,6 +201,51 @@ def _container_with_fakes() -> Container:
         audit=audit,
         clock=clock,
     )
+    challenge_duel = ChallengeDuel(
+        uow=uow,
+        players=players,
+        duels=duels,
+        locks=activity_lock_service,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    accept_duel = AcceptDuel(
+        uow=uow,
+        players=players,
+        duels=duels,
+        locks=activity_lock_service,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    cancel_duel = CancelDuel(
+        uow=uow,
+        players=players,
+        duels=duels,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+    )
+    submit_move = SubmitMove(
+        uow=uow,
+        players=players,
+        duels=duels,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        audit=audit,
+        clock=clock,
+    )
+    resolve_afk_round = ResolveAfkRound(
+        uow=uow,
+        players=players,
+        duels=duels,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        random=rng,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -207,6 +263,7 @@ def _container_with_fakes() -> Container:
         signup_queue=signup_queue,
         activity_locks=activity_locks,
         forest_runs=forest_runs,
+        duels=duels,
         delayed_jobs=delayed_jobs,
         register_player=RegisterPlayer(
             uow=uow,
@@ -331,6 +388,11 @@ def _container_with_fakes() -> Container:
             audit=audit,
             clock=clock,
         ),
+        challenge_duel=challenge_duel,
+        accept_duel=accept_duel,
+        cancel_duel=cancel_duel,
+        submit_move=submit_move,
+        resolve_afk_round=resolve_afk_round,
     )
 
 
@@ -381,6 +443,13 @@ class TestContainer:
         # Anticheat add_length (Спринт 1.6.D).
         assert isinstance(c.anticheat_admin_alerter, FakeAnticheatAdminAlerter)
         assert isinstance(c.add_length, AddLength)
+        # PvP 1×1 (Спринт 2.1.C → 2.1.E).
+        assert isinstance(c.duels, FakeDuelRepository)
+        assert isinstance(c.challenge_duel, ChallengeDuel)
+        assert isinstance(c.accept_duel, AcceptDuel)
+        assert isinstance(c.cancel_duel, CancelDuel)
+        assert isinstance(c.submit_move, SubmitMove)
+        assert isinstance(c.resolve_afk_round, ResolveAfkRound)
 
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
@@ -424,6 +493,13 @@ class TestBuildContainer:
         assert isinstance(c.activity_locks, SqlAlchemyActivityLockRepository)
         assert isinstance(c.forest_runs, SqlAlchemyForestRunRepository)
         assert isinstance(c.start_forest_run, StartForestRun)
+        # PvP 1×1 (Спринт 2.1.C → 2.1.E): реальный duel-репозиторий + use-cases.
+        assert isinstance(c.duels, SqlAlchemyDuelRepository)
+        assert isinstance(c.challenge_duel, ChallengeDuel)
+        assert isinstance(c.accept_duel, AcceptDuel)
+        assert isinstance(c.cancel_duel, CancelDuel)
+        assert isinstance(c.submit_move, SubmitMove)
+        assert isinstance(c.resolve_afk_round, ResolveAfkRound)
         # Forest finish + scheduler (Спринт 1.3.C).
         assert isinstance(c.delayed_jobs, APSchedulerDelayedJobScheduler)
         assert isinstance(c.finish_forest_run, FinishForestRun)
@@ -478,3 +554,10 @@ class TestBuildDispatcher:
         assert any(r.name == "upgrade" for r in dp.sub_routers)
         # Sprint 1.5.B: bundle прокинут в workflow-data для handler-ов.
         assert dp["bundle"] is c.bundle
+        # Sprint 2.1.E: новый router `duel` + use-case-ы PvP в workflow-data.
+        assert any(r.name == "duel" for r in dp.sub_routers)
+        assert dp["challenge_duel"] is c.challenge_duel
+        assert dp["accept_duel"] is c.accept_duel
+        assert dp["cancel_duel"] is c.cancel_duel
+        assert dp["submit_move"] is c.submit_move
+        assert dp["resolve_afk_round"] is c.resolve_afk_round
