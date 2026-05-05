@@ -270,3 +270,20 @@ anticheat-cap-clamped-daily = Дневной лимит роста почти и
 
 # Часть запрошенной дельты подрезана недельным cap-ом.
 anticheat-cap-clamped-weekly = Недельный лимит роста почти исчерпан. Применено { NUMBER($applied, useGrouping: 0) } см из { NUMBER($requested, useGrouping: 0) } см.
+
+
+# /anticheat_unban (Спринт 1.6.G, ГДД §3.3) — admin-команда.
+# Использование: показываем, когда формат команды некорректен.
+anticheat-unban-usage = ⚠️ Использование: `/anticheat_unban <tg_id> <причина>`. Причина обязательна.
+
+# Не из-под админа (или роль ниже super_admin).
+anticheat-unban-not-authorized = ❌ У тебя нет прав на эту команду. Снятие anti-cheat-бана доступно только активным super_admin.
+
+# Игрок с таким `tg_id` не зарегистрирован.
+anticheat-unban-player-not-found = ❌ Игрок с tg_id { $tg_id } не зарегистрирован.
+
+# Бан не активен (None или уже истёк) — идемпотентный no-op.
+anticheat-unban-not-banned = ℹ️ У игрока tg_id { $tg_id } нет активного anti-cheat-бана. Действие не требуется.
+
+# Бан успешно снят. `$banned-until-before` — ISO-строка прежнего срока бана.
+anticheat-unban-success = ✅ Anti-cheat-бан снят (tg_id { $tg_id }, бан до { $banned-until-before }). Причина: { $reason }.

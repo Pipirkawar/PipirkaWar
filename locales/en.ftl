@@ -269,3 +269,20 @@ anticheat-cap-clamped-daily = Daily growth cap nearly reached. Applied { NUMBER(
 
 # Part of the requested delta was clamped by the weekly cap.
 anticheat-cap-clamped-weekly = Weekly growth cap nearly reached. Applied { NUMBER($applied, useGrouping: 0) } cm out of { NUMBER($requested, useGrouping: 0) } cm.
+
+
+# /anticheat_unban (Sprint 1.6.G, GDD §3.3) — admin command.
+# Shown when command format is invalid.
+anticheat-unban-usage = ⚠️ Usage: `/anticheat_unban <tg_id> <reason>`. Reason is required.
+
+# Not an admin (or role below super_admin).
+anticheat-unban-not-authorized = ❌ You don't have permission for this command. Lifting an anti-cheat ban is available only to active super_admin.
+
+# Target player is not registered.
+anticheat-unban-player-not-found = ❌ Player with tg_id { $tg_id } is not registered.
+
+# Ban is not active (None or already expired) — idempotent no-op.
+anticheat-unban-not-banned = ℹ️ Player tg_id { $tg_id } has no active anti-cheat ban. No action needed.
+
+# Ban successfully lifted. `$banned-until-before` — ISO string of previous ban expiration.
+anticheat-unban-success = ✅ Anti-cheat ban lifted (tg_id { $tg_id }, was banned until { $banned-until-before }). Reason: { $reason }.

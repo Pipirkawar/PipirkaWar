@@ -14,6 +14,7 @@ import pytest
 from aiogram import Dispatcher
 from pydantic import SecretStr
 
+from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.clan import (
     FreezeClan,
@@ -323,6 +324,13 @@ def _container_with_fakes() -> Container:
             clock=clock,
         ),
         add_length=add_length,
+        lift_anticheat_ban=LiftAnticheatBan(
+            uow=uow,
+            admins=admins,
+            players=players,
+            audit=audit,
+            clock=clock,
+        ),
     )
 
 

@@ -61,3 +61,14 @@ class Admin:
         runtime-настройка под этим правом.
         """
         return self.is_active and self.role == AdminRole.SUPER_ADMIN
+
+    def can_lift_anticheat_ban(self) -> bool:
+        """Может ли снимать anti-cheat soft-ban через `/anticheat_unban`.
+
+        Спринт 1.6.G (ГДД §3.3): вручную снять бан имеет право только
+        активный `super_admin`. Это намеренно строже, чем `support`-уровень
+        — сценарий редкий (false-positive trip-wire-а), требует ручного
+        анализа `audit_log`-а перед действием, и должен оставлять чёткий
+        след в `audit_log` под именем конкретного супер-админа.
+        """
+        return self.is_active and self.role == AdminRole.SUPER_ADMIN
