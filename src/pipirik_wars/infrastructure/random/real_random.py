@@ -54,3 +54,10 @@ class RealRandom(IRandom):
             raise ValueError("modulo must be positive")
         digest = hashlib.sha256(seed.encode("utf-8")).digest()
         return int.from_bytes(digest[:8], "big") % modulo
+
+    def shuffle(self, items: Sequence[T]) -> tuple[T, ...]:
+        if not items:
+            raise ValueError("shuffle on empty sequence")
+        buffer = list(items)
+        self._rng.shuffle(buffer)
+        return tuple(buffer)

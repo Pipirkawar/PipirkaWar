@@ -18,8 +18,10 @@
 Спринт 2.2.B добавляет чистые value-objects массового PvP клан×клан
 (`MassRoundChoice` / `MassPairing` / `MassDamageEntry` /
 `MassRoundOutcome` / `MassDuelOutcome` / `MassDuelWinner`,
-см. `mass.py`); pairing-функция и `resolve_mass_*` будут добавлены в
-последующих шагах того же спринта.
+см. `mass.py`) и pure-функции движка
+(`pair_attackers` / `resolve_mass_round` / `resolve_mass_duel`,
+см. `mass_services.py`). RNG для pairing инжектится через
+:class:`IRandom.shuffle`.
 """
 
 from pipirik_wars.domain.pvp.duel import (
@@ -63,6 +65,11 @@ from pipirik_wars.domain.pvp.mass import (
     MassRoundChoice,
     MassRoundOutcome,
 )
+from pipirik_wars.domain.pvp.mass_services import (
+    pair_attackers,
+    resolve_mass_duel,
+    resolve_mass_round,
+)
 from pipirik_wars.domain.pvp.repositories import IDuelRepository
 from pipirik_wars.domain.pvp.services import (
     DEFAULT_DUEL_ROUNDS,
@@ -104,7 +111,10 @@ __all__ = [
     "RoundOutcomeKind",
     "SelfChallengeError",
     "classify_round_outcome",
+    "pair_attackers",
     "pick_duel_log_template",
     "resolve_duel",
+    "resolve_mass_duel",
+    "resolve_mass_round",
     "resolve_round",
 ]
