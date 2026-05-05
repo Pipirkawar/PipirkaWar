@@ -23,6 +23,73 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.6.D: `progression.add_length(...)` use-case + anti-cheat hardcap
+
+**Автор:** Devin (по запросу sandyemaroon)
+**Тип:** domain / application / infra / i18n
+**Связано:** `current_tasks.md` Спринт 1.6.D, ПД 1.6.4 (development_plan.md §4), ГДД §3.3.5–§3.3.6.
+
+Что сделано:
+- **Domain — `pipirik_wars.domain.progression`**:
+    - Порт `ILengthGranter` (`length_granter.py`) с единственным async-методом `grant(*, player_id, delta_cm, source, reason, idempotency_key=None) -> LengthGrantResult`. Будет единой точкой прибавки длины для всех use-cases в 1.6.F (`FinishForestRun`, `InvokeOracle`, `RegisterPlayer`-реферальный бонус, и в будущем PvP/караваны/рейды).
+    - `LengthGrantResult` — frozen dataclass с `applied_delta_cm: int`, `clamped_from: int | None`, `triggered_soft_ban: bool`, `new_length_cm: int`. `__post_init__` валидирует `new_length_cm >= 0` и `clamped_from >= applied_delta_cm`.
+    - `errors.AnticheatSoftBanError(*, tg_id, banned_until)` — игрок в активном soft-ban-е, прибавка запрещена, мутаций нет.
+    - `errors.LengthDeltaInvalidError(*, delta_cm, source, reason_code)` — четыре варианта `reason_code`: `"zero"`, `"negative_for_non_refund"`, `"positive_for_refund"`, `"unknown_source"`.
+- **Domain — `pipirik_wars.domain.anticheat`**:
+    - Порт `IAnticheatAdminAlerter.emit(*, player_id, cap_kind, cap_cm, observed_sum_cm, source, banned_until, occurred_at)` — алёрт админу при срабатывании trip-wire. Pattern скопирован с `IDauThresholdAlerter` (Спринт 1.2.D).
+- **Application — `pipirik_wars.application.progression.AddLength`** (реализация `ILengthGranter`):
+    - Алгоритм 9 шагов (всё внутри одной `IUnitOfWork`-транзакции, см. подробный docstring в `add_length.py`):
+        1. Валидация входа (вне транзакции — это инварианты вызова): `source != UNKNOWN`, `delta_cm != 0`, `delta_cm < 0` ⟹ `source == ADMIN_REFUND`, `delta_cm > 0` ⟹ `source != ADMIN_REFUND`.
+        2. Идемпотентность через `IIdempotencyKey`: повторный ключ → no-op (`applied_delta_cm=0`, `new_length_cm`=текущая).
+        3. `players.get_by_id(...)` → `PlayerNotFoundError`.
+        4. Soft-ban-гейт: `Player.is_anticheat_banned(now=clock.now())` → `AnticheatSoftBanError`.
+        5. Clamp для organic-источников: `remaining = min(daily.remaining_cap_cm, weekly.remaining_cap_cm)`, `applied = min(delta, remaining)`, `clamped_from = delta if applied < delta else None`. Donate / `admin_refund` — без clamp.
+        6. Mutate: `player.with_length(...)` → `players.save(...)` (только если `applied != 0`).
+        7. Audit `LENGTH_GRANT` с `source` / `delta_cm` / `clamped_from` / `idempotency_key`.
+        8. `IIdempotencyKey.mark(...)` если ключ передан.
+        9. Trip-wire (organic + `applied > 0`): рекомпьют `daily_after` / `weekly_after`. При пробитии — `with_anticheat_ban(...)` + audit `ANTICHEAT_*_CAP_EXCEEDED` + `IAnticheatAdminAlerter.emit(...)`. `triggered_soft_ban=True` в результате.
+    - Все `IAnticheatRepository.sum_organic_in_window`-вызовы внутри одной транзакции — это даёт гарантию (на `REPEATABLE READ` уровне Postgres), что параллельные `add_length` одного игрока не пробьют cap.
+- **Infrastructure — `pipirik_wars.infrastructure.anticheat.StructlogAnticheatAdminAlerter`** (реализация `IAnticheatAdminAlerter`): `log.warning("anticheat.trip_wire.fired", player_id, cap_kind, cap_cm, observed_sum_cm, overflow_cm, source, banned_until, occurred_at)`. Без локального состояния, тред-сэйф (boilerplate structlog).
+- **DI в `bot/main.py`**: `Container.add_length: ILengthGranter` + `Container.anticheat_admin_alerter: IAnticheatAdminAlerter`. `build_container()` инстанциирует `StructlogAnticheatAdminAlerter()` и `AddLength(uow, players, anticheat, audit, balance, clock, idempotency, admin_alerter)`. Тестовый сборщик `tests/unit/bot/test_composition_root.py` поднят на новые поля через `FakeAnticheatAdminAlerter()`.
+- **Локализация `locales/{ru,en}.ftl`**: ключи `anticheat-soft-ban-active` (с `$banned-until`), `anticheat-cap-clamped-daily` / `anticheat-cap-clamped-weekly` (с `$applied` / `$requested`). Числа через `NUMBER($x, useGrouping: 0)` (по соглашению, как в `upgrade-*` ключах). Реальный bot-handler / presenter под эти ключи добавится в Спринтах 1.6.E (Anti-cheat Guard на спендалках) / 1.6.F (миграция existing use-cases на `add_length`).
+- **`tests/fakes/anticheat_admin_alerter.py::FakeAnticheatAdminAlerter`** — in-memory `events: list[AnticheatAdminAlertEvent]` для assert-ов в unit-тестах.
+
+Тесты:
+- **`tests/unit/application/progression/test_add_length.py`** — 21 unit-кейс:
+    - **Happy-path**: organic ниже cap → `applied=delta`, без clamp/ban; audit-запись содержит `source`/`delta_cm`/`clamped_from=None`/`idempotency_key`.
+    - **Clamp**: по daily cap, по weekly cap (выбор `min`), полностью исчерпан (`applied=0`, `clamped_from=delta`, audit всё равно пишется).
+    - **Не-organic**: donate (`STARS_PAYMENT`) не клампится; `admin_refund` (отрицательная дельта) применяется без clamp.
+    - **Soft-ban-гейт**: активный бан → `AnticheatSoftBanError`; истёкший бан → проход (`Player.is_anticheat_banned(now)` сравнивает с `clock.now()`).
+    - **Валидация входа**: `delta_cm=0` / отрицательная для не-refund / положительная для refund / `UNKNOWN`-source — все 4 варианта `LengthDeltaInvalidError.reason_code`.
+    - **`PlayerNotFoundError`**: при отсутствии игрока с таким `player_id`.
+    - **Идемпотентность**: повторный ключ → no-op (Player не меняется, audit не пишется второй раз); первый вызов помечает ключ через `IIdempotencyKey.mark(...)`.
+    - **Trip-wire**: симуляция гонки через hooked `sum_organic_in_window` (тест-helper подкидывает «чужие» 200 см на третьем вызове, имитируя параллельную транзакцию). Daily вариант: `triggered_soft_ban=True`, `Player.anticheat_ban_until = now + 14 дней`, audit `ANTICHEAT_DAILY_CAP_EXCEEDED`, `admin_alerter.events == [{cap_kind="daily", cap_cm=3000, source=FOREST}]`. Weekly вариант — аналогично с `cap_cm=14000`. Donate / `admin_refund` — trip-wire НЕ срабатывает.
+    - **`_LinkedAuditLogger`** — тест-helper-адаптер: пишет в `FakeAuditLogger` И зеркалит `LENGTH_GRANT`-события в `FakeAnticheatRepository`, имитируя реальную связку `audit_log` ← `SqlAlchemyAnticheatRepository.sum_organic_in_window`. Без него trip-wire-recompute не видел бы только что записанную дельту.
+- **`tests/unit/domain/progression/test_length_granter.py`** — 6 unit-кейсов на инварианты `LengthGrantResult` (`__post_init__`).
+- **`tests/unit/bot/test_composition_root.py`** — 2 новые проверки на `Container.add_length` / `Container.anticheat_admin_alerter` в обеих сборках (`_container_with_fakes` + `build_container`).
+
+Решения:
+- **Идемпотентность как опциональный параметр use-case-а, а не отдельный декоратор/middleware** — потому что caller знает свой бизнес-смысл (для forest-run-finished — это `forest_run_id`, для админ-grant — `admin_command_id`, для оракула — `oracle_call_id`). Префикс `add_length:` обязателен (валидация в `IIdempotencyKey.mark(namespace="add_length")`).
+- **Trip-wire как отдельная фаза после save** (а не «угадать заранее по clamp-у»): даёт честную защиту от race condition — параллельные транзакции, не видевшие друг друга в момент clamp-а, всё равно поймаются на recompute. На уровне Postgres `REPEATABLE READ` это превращается в serialization-error и автоматический retry на уровне `IUnitOfWork` (для будущих implementations — пока fake `IUnitOfWork` это не моделирует, реальный SqlAlchemy-UoW в проекте сейчас тоже не делает явного retry, но при включении `REPEATABLE READ` Postgres сам бросит `serialization_failure` и SQLAlchemy переподнимет).
+- **`triggered_soft_ban` ровно один раз на бан**: повторные `add_length`-вызовы заблокированного игрока стопаются в шаге 4 (soft-ban-гейт), до alert-а. То есть `IAnticheatAdminAlerter.emit(...)` вызывается единожды — на момент перехода игрока из «не в бане» в «в бане». Идемпотентности «не алёртить дважды на тот же бан» в самом эмиттере нет (он тупой — задача его caller-а).
+- **Organic source whitelist в `balance.yaml::anticheat.organic_sources`**: использует `AuditSource`-enum-значения, не свободные строки. `unknown` явно запрещён в whitelist (валидируется в `AnticheatConfig.model_validate`, Спринт 1.6.B). `admin_refund` тоже не в whitelist — потому что только refund (отрицательная дельта), а не «прибавка длины».
+- **Старые use-cases (`FinishForestRun`, `InvokeOracle`, `RegisterPlayer`) пока не переведены** на `add_length` — это отдельный узкий PR в Спринте 1.6.F. Они продолжают работать через прямые `player.with_length(...)` + `repo.save(player)` + `audit.record(LENGTH_GRANT)`. До 1.6.F новый use-case стоит «в стороне» — `add_length` существует, но никто из старых use-cases его пока не зовёт. Это намеренно: 1.6.D вводит исключительно механизм, миграция точек вызова — следующим PR-ом.
+
+Не вошло в этот PR (явно, для будущих спринтов):
+- `AnticheatGuard`-гейт на спендалках длины (`/upgrade`, в будущем `/duel`/караваны/рейды) — Спринт 1.6.E (ПД 1.6.5).
+- Перевод существующих use-cases на `add_length(...)` через DI-порт `ILengthGranter` + `import-linter`-контракт «прибавка длины только через ILengthGranter» — Спринт 1.6.F (ПД 1.6.6).
+- Реальный handler / presenter под локали `anticheat-soft-ban-active` / `anticheat-cap-clamped-*` (рендер UX-сообщения) — появится в 1.6.E (gating UX) / 1.6.F (clamp UX) при подключении к реальным command-flow-ам.
+- Integration race-test (10×100 параллельных `add_length` через реальный SQL UoW + Postgres `REPEATABLE READ`) — текущие race-тесты сделаны на fake-уровне (hooked `sum_organic_in_window`, имитирует параллельный коммит). Реальная race-test-инфраструктура Postgres-а будет в Спринте 1.6.F вместе с `import-linter`-контрактом, чтобы заодно проверить, что переведённые use-cases корректно работают под нагрузкой.
+
+Документация:
+- `current_tasks.md`: 1.6.D переведён в `🟢 PR open` (после мержа этого PR-а уйдёт в `✅ смержено`).
+- `history.md`: эта запись.
+
+Удалены:
+- 9 устаревших файлов из abandoned 1.3.D-каркаса (другая ветка `devin/1777925966-sprint-1-3d-forest-handler` по PR #20 уже их закрыла, а на моей ветке они остались как мусор после восстановления): `application/forest/{discard_drop,equip_item,replace_name}.py`, `bot/notifiers/`, `infrastructure/db/migrations/versions/20260504_0005_forest_runs_drop_resolved_at.py`, `tests/unit/application/forest/test_{discard_drop,equip_item,notifier,replace_name}.py`.
+
+---
+
 ## 2026-05-05 — Спринт 1.6.C: `AnticheatWindow` + `IAnticheatRepository` + миграция `delta_cm`
 
 **Автор:** Devin (по запросу birgit865)

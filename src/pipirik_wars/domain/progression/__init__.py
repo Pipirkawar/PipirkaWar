@@ -14,7 +14,16 @@
   `require_spend(...)` со своим `cost_cm`.
 """
 
-from pipirik_wars.domain.progression.errors import ActivityLockedError, InsufficientLengthError
+from pipirik_wars.domain.progression.errors import (
+    ActivityLockedError,
+    AnticheatSoftBanError,
+    InsufficientLengthError,
+    LengthDeltaInvalidError,
+)
+from pipirik_wars.domain.progression.length_granter import (
+    ILengthGranter,
+    LengthGrantResult,
+)
 from pipirik_wars.domain.progression.spend import (
     MIN_LENGTH_AFTER_SPEND_CM,
     SpendAction,
@@ -30,7 +39,11 @@ from pipirik_wars.domain.progression.thickness import (
 __all__ = [
     "MIN_LENGTH_AFTER_SPEND_CM",
     "ActivityLockedError",
+    "AnticheatSoftBanError",
+    "ILengthGranter",
     "InsufficientLengthError",
+    "LengthDeltaInvalidError",
+    "LengthGrantResult",
     "SpendAction",
     "can_spend",
     "cost_for_upgrade",

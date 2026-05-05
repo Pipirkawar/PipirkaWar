@@ -62,7 +62,7 @@ from pipirik_wars.application.player import (
     RegisterPlayer,
     SetPlayerLocale,
 )
-from pipirik_wars.application.progression import UpgradeThickness
+from pipirik_wars.application.progression import AddLength, UpgradeThickness
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.application.top import GetTopPlayers, ITopPlayersQuery
@@ -70,13 +70,14 @@ from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import register_middlewares
 from pipirik_wars.bot.notifications import TelegramForestFinishNotifier
 from pipirik_wars.domain.admin import IAdminRepository
-from pipirik_wars.domain.anticheat import IAnticheatRepository
+from pipirik_wars.domain.anticheat import IAnticheatAdminAlerter, IAnticheatRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.dau import IDauCounter, IDauLimit, IDauThresholdAlerter
 from pipirik_wars.domain.forest import IForestRunRepository
 from pipirik_wars.domain.oracle import IOracleHistoryRepository
 from pipirik_wars.domain.player import IPlayerRepository
+from pipirik_wars.domain.progression import ILengthGranter
 from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import (
     IAuditLogger,
@@ -87,6 +88,7 @@ from pipirik_wars.domain.shared.ports import (
     IUnitOfWork,
 )
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
+from pipirik_wars.infrastructure.anticheat import StructlogAnticheatAdminAlerter
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.cache import TopPlayersCache
 from pipirik_wars.infrastructure.clock import RealClock
@@ -167,6 +169,7 @@ class Container:
     forest_runs: IForestRunRepository
     oracle_history: IOracleHistoryRepository
     anticheat: IAnticheatRepository
+    anticheat_admin_alerter: IAnticheatAdminAlerter
 
     # Шаблоны (Спринт 1.4.B)
     oracle_templates: IOracleTemplateProvider
@@ -207,9 +210,10 @@ class Container:
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
+    add_length: ILengthGranter
 
 
-def build_container(
+def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
     settings: Settings | None = None,
     *,
     balance_yaml_path: Path | None = None,
@@ -257,6 +261,7 @@ def build_container(
     forest_runs = SqlAlchemyForestRunRepository(uow=uow, balance=balance)
     oracle_history = SqlAlchemyOracleHistoryRepository(uow=uow)
     anticheat = SqlAlchemyAnticheatRepository(uow=uow)
+    anticheat_admin_alerter = StructlogAnticheatAdminAlerter()
     oracle_templates = JsonOracleTemplateProvider(
         templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
     )
@@ -423,6 +428,16 @@ def build_container(
         audit=audit,
         clock=clock,
     )
+    add_length = AddLength(
+        uow=uow,
+        players=players,
+        anticheat=anticheat,
+        audit=audit,
+        balance=balance,
+        clock=clock,
+        idempotency=idempotency,
+        admin_alerter=anticheat_admin_alerter,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -442,6 +457,7 @@ def build_container(
         forest_runs=forest_runs,
         oracle_history=oracle_history,
         anticheat=anticheat,
+        anticheat_admin_alerter=anticheat_admin_alerter,
         oracle_templates=oracle_templates,
         bundle=bundle,
         player_locale_resolver=player_locale_resolver,
@@ -468,6 +484,7 @@ def build_container(
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,
+        add_length=add_length,
     )
 
 
