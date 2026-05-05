@@ -1,10 +1,10 @@
-"""Middleware-стек aiogram (Спринт 1.1.C).
+"""Middleware-стек aiogram (Спринт 1.1.C → 1.5.A).
 
 Порядок регистрации (важен — outer first):
 
 1. `ErrorHandlerMiddleware` — ловит исключения всех нижних слоёв.
 2. `AuthMiddleware` — кладёт `TgIdentity` в `data`.
-3. `LocaleMiddleware` — выбирает локаль (пока всегда `"ru"`).
+3. `LocaleMiddleware` — резолвит `Locale` (`ru`/`en`, fallback EN — ПД 1.5.2).
 4. `ThrottleMiddleware` — общий token-bucket rate-limit.
 
 Дальше идёт сам handler. Каждое из этих middleware-ов навешивается на
@@ -14,6 +14,7 @@
 
 from aiogram import Dispatcher
 
+from pipirik_wars.application.i18n import LocaleResolver
 from pipirik_wars.bot.middlewares.auth import AuthMiddleware, TgIdentity
 from pipirik_wars.bot.middlewares.error_handler import ErrorHandlerMiddleware
 from pipirik_wars.bot.middlewares.locale import LocaleMiddleware
@@ -25,15 +26,19 @@ def register_middlewares(
     dispatcher: Dispatcher,
     *,
     limiter: IRateLimiter,
+    locale_resolver: LocaleResolver | None = None,
 ) -> None:
     """Подключает middleware-стек ко всем нужным observer-ам.
 
     Вынесено в отдельную функцию, чтобы тесты могли собирать тот же
     стек на test-dispatcher-е без дублирования последовательности.
+
+    `locale_resolver` опциональный — если не передан, используется
+    `LocaleResolver()` по дефолту (RU/EN + fallback EN).
     """
     error = ErrorHandlerMiddleware()
     auth = AuthMiddleware()
-    locale = LocaleMiddleware()
+    locale = LocaleMiddleware(resolver=locale_resolver)
     throttle = ThrottleMiddleware(limiter=limiter)
 
     for observer in (
