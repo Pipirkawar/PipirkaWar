@@ -411,23 +411,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=audit,
         clock=clock,
     )
-    invoke_oracle = InvokeOracle(
-        uow=uow,
-        players=players,
-        history=oracle_history,
-        templates=oracle_templates,
-        balance=balance,
-        random=RealRandom(),
-        audit=audit,
-        clock=clock,
-    )
-    get_top_players = GetTopPlayers(query=top_players_query)
-    set_player_locale = SetPlayerLocale(
-        uow=uow,
-        players=players,
-        audit=audit,
-        clock=clock,
-    )
+    # AddLength — единая точка прибавки длины (Спринт 1.6.D / 1.6.F).
+    # Зависимости: anti-cheat repo, audit, balance, idempotency, admin alerter.
     add_length = AddLength(
         uow=uow,
         players=players,
@@ -437,6 +422,23 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clock=clock,
         idempotency=idempotency,
         admin_alerter=anticheat_admin_alerter,
+    )
+    invoke_oracle = InvokeOracle(
+        uow=uow,
+        players=players,
+        history=oracle_history,
+        templates=oracle_templates,
+        balance=balance,
+        random=RealRandom(),
+        length_granter=add_length,
+        clock=clock,
+    )
+    get_top_players = GetTopPlayers(query=top_players_query)
+    set_player_locale = SetPlayerLocale(
+        uow=uow,
+        players=players,
+        audit=audit,
+        clock=clock,
     )
     return Container(
         clock=clock,

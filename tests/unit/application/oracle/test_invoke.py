@@ -1,9 +1,10 @@
-"""Unit-тесты `InvokeOracle` (Спринт 1.4.B).
+"""Unit-тесты `InvokeOracle` (Спринт 1.4.B; миграция на ILengthGranter — 1.6.F).
 
 Покрывают acceptance ПД 1.4.4:
 - повторный `/oracle` в тот же московский день — отказ;
 - следующий день — успех;
-- успешный вызов прибавляет длину и пишет audit `LENGTH_GRANT`;
+- успешный вызов прибавляет длину и пишет audit `LENGTH_GRANT` (через
+  `ILengthGranter` / `AddLength`, а не напрямую — Спринт 1.6.F);
 - запись `oracle_invocations` сохраняется с правильным
   `(player_id, moscow_date, template_id)`.
 """
@@ -16,6 +17,7 @@ import pytest
 
 from pipirik_wars.application.dto.inputs import InvokeOracleInput
 from pipirik_wars.application.oracle import InvokeOracle
+from pipirik_wars.application.progression import AddLength
 from pipirik_wars.domain.oracle import OracleAlreadyUsedTodayError, OracleTemplate
 from pipirik_wars.domain.player import (
     Player,
@@ -25,10 +27,14 @@ from pipirik_wars.domain.player import (
 )
 from pipirik_wars.domain.player.value_objects import Length, Username
 from pipirik_wars.domain.shared.ports import AuditAction
+from pipirik_wars.domain.shared.ports.audit import AuditSource
 from tests.fakes import (
+    FakeAnticheatAdminAlerter,
+    FakeAnticheatRepository,
     FakeAuditLogger,
     FakeBalanceConfig,
     FakeClock,
+    FakeIdempotencyKey,
     FakeOracleHistoryRepository,
     FakeOracleTemplateProvider,
     FakePlayerRepository,
@@ -82,14 +88,27 @@ def _build_use_case(
     )
     audit = FakeAuditLogger()
     used_clock = clock or FakeClock(datetime(2026, 5, 5, 9, 0, tzinfo=UTC))  # 12:00 МСК
+    balance = FakeBalanceConfig(build_valid_balance())
+    # Прибавка длины — через ILengthGranter (Спринт 1.6.F). Все anti-cheat-
+    # зависимости мокаются фейками; cap (3000/14000) большой → клампа нет.
+    length_granter = AddLength(
+        uow=uow,
+        players=players,
+        anticheat=FakeAnticheatRepository(),
+        audit=audit,
+        balance=balance,
+        clock=used_clock,
+        idempotency=FakeIdempotencyKey(),
+        admin_alerter=FakeAnticheatAdminAlerter(),
+    )
     use_case = InvokeOracle(
         uow=uow,
         players=players,
         history=history,
         templates=templates,
-        balance=FakeBalanceConfig(build_valid_balance()),
+        balance=balance,
         random=FakeRandom(seed=seed),
-        audit=audit,
+        length_granter=length_granter,
         clock=used_clock,
     )
     return use_case, players, history, templates, audit, uow, used_clock
@@ -113,16 +132,19 @@ class TestInvokeOracleHappyPath:
         assert rec.player_id == seeded.id
         assert rec.bonus_cm == out.result.bonus_cm
         assert rec.template_id == out.result.template.id
-        # Audit-запись `LENGTH_GRANT` оформлена правильно.
+        # Audit-запись `LENGTH_GRANT` оформлена через AddLength (Спринт 1.6.F):
+        # `source=ORACLE`, `delta_cm=bonus`, `idempotency_key=add_length:oracle:...`.
         assert len(audit.entries) == 1
         ae = audit.entries[0]
         assert ae.action is AuditAction.LENGTH_GRANT
+        assert ae.source is AuditSource.ORACLE
+        assert ae.delta_cm == out.result.bonus_cm
         assert ae.actor_id == seeded.tg_id
         assert ae.target_kind == "player"
         assert ae.target_id == str(seeded.id)
         assert ae.reason == "oracle_invocation"
         assert ae.idempotency_key is not None
-        assert "oracle:" in ae.idempotency_key
+        assert ae.idempotency_key.startswith("add_length:oracle:")
         # Транзакция закрылась.
         assert uow.commits == 1
         assert uow.rollbacks == 0

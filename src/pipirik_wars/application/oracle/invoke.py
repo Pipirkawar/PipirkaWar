@@ -1,6 +1,6 @@
-"""Use-case `InvokeOracle` (Спринт 1.4.B, ГДД §11).
+"""Use-case `InvokeOracle` (Спринты 1.4.B, 1.6.F; ГДД §11, §3.3).
 
-Игрок отправляет `/oracle`. Use-case:
+Игрок отправляет `/oracle`. Use-case (всё внутри одного `IUnitOfWork`):
 
 1. Находит `Player` по `tg_id`. Нет — `PlayerNotFoundError`.
 2. Считает текущую московскую дату (`IClock.moscow_date()`).
@@ -11,22 +11,25 @@
    `IOracleTemplateProvider`.
 5. Зовёт чистую `roll_oracle(...)` — выпадает прибавка длины и
    шаблон предсказания.
-6. Прибавляет длину (`Player.with_length(length + bonus)`).
-7. Сохраняет игрока, добавляет запись в `oracle_invocations`
+6. Добавляет запись в `oracle_invocations`
    (UNIQUE-индекс по `(player_id, moscow_date)` — last-line race-защита).
-8. Пишет audit-запись `LENGTH_GRANT` с
-   ``idempotency_key=f"oracle:{player_id}:{moscow_date.isoformat()}"``.
-   Этот же ключ уникален по своей природе — повтор `/oracle` в тот
-   же день уже отбит на шаге 3 / шаге 7.
+7. Вызывает `ILengthGranter.grant(...)` (`source=ORACLE`,
+   `idempotency_key=f"add_length:oracle:{player_id}:{moscow_date}"`).
+   Сам `AddLength` проверяет anti-cheat soft-ban, клампит дельту
+   по cap-ам, пишет audit `LENGTH_GRANT`, взводит trip-wire при
+   превышении (Спринт 1.6.D — `add_length.py`).
 
-Транзакция: всё внутри одного `IUnitOfWork`. Любая ошибка откатывает
-все мутации (длина, запись истории, audit).
+Транзакция: всё внутри одного `IUnitOfWork` — «ритуал» (вставка в
+`oracle_invocations`) и «прибавка длины» атомарны. `AddLength.grant`
+работает в ambient-UoW режиме (Спринт 1.6.F): он не открывает свой
+контекст, а только проверяет `uow.is_active` и зовёт репозитории
+в сессии вызывающего.
 
 Idempotency-стратегия:
-- preflight (шаг 3) и БД-уникальность (шаг 7) защищают от race
+- preflight (шаг 3) и БД-уникальность (шаг 6) защищают от race
   «два `/oracle` одновременно»;
-- поле `idempotency_key` в audit отвечает за стабильную аналитику —
-  дубликата записи `LENGTH_GRANT/oracle` за день в логе не будет.
+- `idempotency_key` в `AddLength.grant(...)` отвечает за стабильную
+  аналитику — дубликата `LENGTH_GRANT` с одним ключом не будет.
 """
 
 from __future__ import annotations
@@ -46,18 +49,16 @@ from pipirik_wars.domain.oracle import (
 )
 from pipirik_wars.domain.player import (
     IPlayerRepository,
-    Length,
     Player,
 )
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
+from pipirik_wars.domain.progression.length_granter import ILengthGranter
 from pipirik_wars.domain.shared.ports import (
-    AuditAction,
-    AuditEntry,
-    IAuditLogger,
     IClock,
     IRandom,
     IUnitOfWork,
 )
+from pipirik_wars.domain.shared.ports.audit import AuditSource
 from pipirik_wars.shared.errors import IntegrityError
 
 
@@ -84,10 +85,10 @@ class InvokeOracle:
     """Use-case «получить предсказание и +1..20 см длины»."""
 
     __slots__ = (
-        "_audit",
         "_balance",
         "_clock",
         "_history",
+        "_length_granter",
         "_players",
         "_random",
         "_templates",
@@ -103,7 +104,7 @@ class InvokeOracle:
         templates: IOracleTemplateProvider,
         balance: IBalanceConfig,
         random: IRandom,
-        audit: IAuditLogger,
+        length_granter: ILengthGranter,
         clock: IClock,
     ) -> None:
         self._uow = uow
@@ -112,7 +113,7 @@ class InvokeOracle:
         self._templates = templates
         self._balance = balance
         self._random = random
-        self._audit = audit
+        self._length_granter = length_granter
         self._clock = clock
 
     async def execute(self, input_dto: InvokeOracleInput) -> OracleInvoked:
@@ -149,10 +150,10 @@ class InvokeOracle:
             )
 
             now = self._clock.now()
-            new_length = Length(cm=player.length.cm + result.bonus_cm)
-            updated = player.with_length(new_length, now=now)
-            saved = await self._players.save(updated)
 
+            # 1. Сначала вставка в `oracle_invocations` — last-line race-защита
+            # через UNIQUE-индекс; если здесь БД побила «два одновременных
+            # /oracle» — выбрасываем бизнес-ошибку, UoW откатывается.
             try:
                 await self._history.add(
                     OracleInvocation(
@@ -164,27 +165,25 @@ class InvokeOracle:
                     )
                 )
             except IntegrityError as exc:
-                # Race: между preflight и add-ом другой запрос успел
-                # вставить запись. БД-UNIQUE отбила вставку — это
-                # эквивалент `OracleAlreadyUsedTodayError`.
                 raise OracleAlreadyUsedTodayError(
                     player_id=player.id,
                     moscow_date=moscow_date,
                 ) from exc
 
-            await self._audit.record(
-                AuditEntry(
-                    action=AuditAction.LENGTH_GRANT,
-                    actor_id=player.tg_id,
-                    target_kind="player",
-                    target_id=str(player.id),
-                    before={"length_cm": player.length.cm},
-                    after={"length_cm": saved.length.cm},
-                    reason="oracle_invocation",
-                    idempotency_key=f"oracle:{player.id}:{moscow_date.isoformat()}",
-                    occurred_at=now,
-                )
+            # 2. Прибавка длины — через единый ILengthGranter (Спринт 1.6.F).
+            # `AddLength` в ambient-UoW режиме проверит anti-cheat soft-ban,
+            # клампнет по cap-ам, запишет audit `LENGTH_GRANT` и trip-wire.
+            await self._length_granter.grant(
+                player_id=player.id,
+                delta_cm=result.bonus_cm,
+                source=AuditSource.ORACLE,
+                reason="oracle_invocation",
+                idempotency_key=f"add_length:oracle:{player.id}:{moscow_date.isoformat()}",
             )
+
+            # 3. Перечитываем игрока, чтобы отдать handler-у финальный снапшот
+            # (с учётом клампа или полной прибавки).
+            saved = await self._players.get_by_id(player_id=player.id) or player
 
         return OracleInvoked(
             result=result,
