@@ -44,6 +44,10 @@ from pipirik_wars.application.pvp import (
     AcceptDuel,
     CancelDuel,
     ChallengeDuel,
+    EnqueueGlobalDuel,
+    EscalateChatToGlobal,
+    ExpireLobbyEntry,
+    MatchFromLobby,
     ResolveAfkRound,
     SubmitMove,
 )
@@ -74,6 +78,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyClanRepository,
     SqlAlchemyDuelRepository,
     SqlAlchemyForestRunRepository,
+    SqlAlchemyGlobalLobbyRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemySignupQueueRepository,
 )
@@ -109,6 +114,7 @@ from tests.fakes import (
     FakeDelayedJobScheduler,
     FakeDuelRepository,
     FakeForestRunRepository,
+    FakeGlobalLobbyRepository,
     FakeIdempotencyKey,
     FakeMessageBundle,
     FakeOracleHistoryRepository,
@@ -149,6 +155,7 @@ def _container_with_fakes() -> Container:
     activity_locks: IActivityLockRepository = FakeActivityLockRepository()
     forest_runs: IForestRunRepository = FakeForestRunRepository()
     duels: IDuelRepository = FakeDuelRepository()
+    global_lobby = FakeGlobalLobbyRepository()
     balance = FakeBalanceConfig(build_valid_balance())
     dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=200)
@@ -209,6 +216,8 @@ def _container_with_fakes() -> Container:
         balance=balance,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
+        lobby=global_lobby,
     )
     accept_duel = AcceptDuel(
         uow=uow,
@@ -218,6 +227,8 @@ def _container_with_fakes() -> Container:
         balance=balance,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
+        lobby=global_lobby,
     )
     cancel_duel = CancelDuel(
         uow=uow,
@@ -226,6 +237,8 @@ def _container_with_fakes() -> Container:
         locks=activity_lock_service,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
+        lobby=global_lobby,
     )
     submit_move = SubmitMove(
         uow=uow,
@@ -243,6 +256,43 @@ def _container_with_fakes() -> Container:
         locks=activity_lock_service,
         length_granter=add_length,
         random=rng,
+        audit=audit,
+        clock=clock,
+    )
+    enqueue_global_duel = EnqueueGlobalDuel(
+        uow=uow,
+        duels=duels,
+        lobby=global_lobby,
+        scheduler=delayed_jobs,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    match_from_lobby = MatchFromLobby(
+        uow=uow,
+        players=players,
+        duels=duels,
+        lobby=global_lobby,
+        locks=activity_lock_service,
+        scheduler=delayed_jobs,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    escalate_chat_to_global = EscalateChatToGlobal(
+        uow=uow,
+        duels=duels,
+        lobby=global_lobby,
+        scheduler=delayed_jobs,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    expire_lobby_entry = ExpireLobbyEntry(
+        uow=uow,
+        duels=duels,
+        lobby=global_lobby,
+        locks=activity_lock_service,
         audit=audit,
         clock=clock,
     )
@@ -264,6 +314,7 @@ def _container_with_fakes() -> Container:
         activity_locks=activity_locks,
         forest_runs=forest_runs,
         duels=duels,
+        global_lobby=global_lobby,
         delayed_jobs=delayed_jobs,
         register_player=RegisterPlayer(
             uow=uow,
@@ -393,6 +444,10 @@ def _container_with_fakes() -> Container:
         cancel_duel=cancel_duel,
         submit_move=submit_move,
         resolve_afk_round=resolve_afk_round,
+        enqueue_global_duel=enqueue_global_duel,
+        match_from_lobby=match_from_lobby,
+        escalate_chat_to_global=escalate_chat_to_global,
+        expire_lobby_entry=expire_lobby_entry,
     )
 
 
@@ -450,6 +505,13 @@ class TestContainer:
         assert isinstance(c.cancel_duel, CancelDuel)
         assert isinstance(c.submit_move, SubmitMove)
         assert isinstance(c.resolve_afk_round, ResolveAfkRound)
+        # PvP global lobby (Спринт 2.1.F.2): use-cases + lobby-репо
+        # в Container-е и выведены как отдельные поля.
+        assert isinstance(c.global_lobby, FakeGlobalLobbyRepository)
+        assert isinstance(c.enqueue_global_duel, EnqueueGlobalDuel)
+        assert isinstance(c.match_from_lobby, MatchFromLobby)
+        assert isinstance(c.escalate_chat_to_global, EscalateChatToGlobal)
+        assert isinstance(c.expire_lobby_entry, ExpireLobbyEntry)
 
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
@@ -500,6 +562,12 @@ class TestBuildContainer:
         assert isinstance(c.cancel_duel, CancelDuel)
         assert isinstance(c.submit_move, SubmitMove)
         assert isinstance(c.resolve_afk_round, ResolveAfkRound)
+        # PvP global lobby (Спринт 2.1.F.2): реальный lobby-репо + 4 use-cases.
+        assert isinstance(c.global_lobby, SqlAlchemyGlobalLobbyRepository)
+        assert isinstance(c.enqueue_global_duel, EnqueueGlobalDuel)
+        assert isinstance(c.match_from_lobby, MatchFromLobby)
+        assert isinstance(c.escalate_chat_to_global, EscalateChatToGlobal)
+        assert isinstance(c.expire_lobby_entry, ExpireLobbyEntry)
         # Forest finish + scheduler (Спринт 1.3.C).
         assert isinstance(c.delayed_jobs, APSchedulerDelayedJobScheduler)
         assert isinstance(c.finish_forest_run, FinishForestRun)
@@ -561,3 +629,6 @@ class TestBuildDispatcher:
         assert dp["cancel_duel"] is c.cancel_duel
         assert dp["submit_move"] is c.submit_move
         assert dp["resolve_afk_round"] is c.resolve_afk_round
+        # Sprint 2.1.F.2: PvP-lobby use-cases в workflow-data для handler-ов F.3.
+        assert dp["enqueue_global_duel"] is c.enqueue_global_duel
+        assert dp["match_from_lobby"] is c.match_from_lobby

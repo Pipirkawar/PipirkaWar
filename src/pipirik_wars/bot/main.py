@@ -68,6 +68,10 @@ from pipirik_wars.application.pvp import (
     AcceptDuel,
     CancelDuel,
     ChallengeDuel,
+    EnqueueGlobalDuel,
+    EscalateChatToGlobal,
+    ExpireLobbyEntry,
+    MatchFromLobby,
     ResolveAfkRound,
     SubmitMove,
 )
@@ -87,6 +91,7 @@ from pipirik_wars.domain.oracle import IOracleHistoryRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.progression import ILengthGranter
 from pipirik_wars.domain.pvp import IDuelRepository
+from pipirik_wars.domain.pvp.lobby import IGlobalLobbyRepository
 from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import (
     IAuditLogger,
@@ -115,6 +120,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyClanRepository,
     SqlAlchemyDuelRepository,
     SqlAlchemyForestRunRepository,
+    SqlAlchemyGlobalLobbyRepository,
     SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemySignupQueueRepository,
@@ -179,6 +185,7 @@ class Container:
     forest_runs: IForestRunRepository
     oracle_history: IOracleHistoryRepository
     duels: IDuelRepository
+    global_lobby: IGlobalLobbyRepository
     anticheat: IAnticheatRepository
     anticheat_admin_alerter: IAnticheatAdminAlerter
 
@@ -231,6 +238,12 @@ class Container:
     submit_move: SubmitMove
     resolve_afk_round: ResolveAfkRound
 
+    # PvP global lobby (Спринт 2.1.F.2)
+    enqueue_global_duel: EnqueueGlobalDuel
+    match_from_lobby: MatchFromLobby
+    escalate_chat_to_global: EscalateChatToGlobal
+    expire_lobby_entry: ExpireLobbyEntry
+
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
     settings: Settings | None = None,
@@ -280,6 +293,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     forest_runs = SqlAlchemyForestRunRepository(uow=uow, balance=balance)
     oracle_history = SqlAlchemyOracleHistoryRepository(uow=uow)
     duels = SqlAlchemyDuelRepository(uow=uow)
+    global_lobby = SqlAlchemyGlobalLobbyRepository(uow=uow)
     anticheat = SqlAlchemyAnticheatRepository(uow=uow)
     anticheat_admin_alerter = StructlogAnticheatAdminAlerter()
     oracle_templates = JsonOracleTemplateProvider(
@@ -415,10 +429,16 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
             random=RealRandom(),
             locale_resolver=player_locale_resolver,
         )
+    # Late-bound фабрики для PvP-lobby job-ов: scheduler нужен раньше,
+    # чем `escalate_chat_to_global` / `expire_lobby_entry`, поэтому передаём
+    # лямбды-замыкания, которые резолвятся при срабатывании job-а — после
+    # того, как `build_container` уже вернулся и Container собран.
     delayed_jobs = APSchedulerDelayedJobScheduler(
         scheduler=AsyncIOScheduler(),
         finish_factory=lambda: finish_forest_run,
         notifier=forest_notifier,
+        escalate_factory=lambda: escalate_chat_to_global,
+        expire_factory=lambda: expire_lobby_entry,
     )
     start_forest_run = StartForestRun(
         uow=uow,
@@ -471,6 +491,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clock=clock,
     )
     # PvP 1×1 use-cases (Спринт 2.1.D, ГДД §7.1)
+    # Спринт 2.1.F.2: в ChallengeDuel/AcceptDuel/CancelDuel дополнительно
+    # пробрасываем scheduler + lobby (эскалация / TTL / очистка лобби).
     challenge_duel = ChallengeDuel(
         uow=uow,
         players=players,
@@ -479,6 +501,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         balance=balance,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
+        lobby=global_lobby,
     )
     accept_duel = AcceptDuel(
         uow=uow,
@@ -488,6 +512,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         balance=balance,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
+        lobby=global_lobby,
     )
     cancel_duel = CancelDuel(
         uow=uow,
@@ -496,6 +522,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         locks=activity_lock_service,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
+        lobby=global_lobby,
     )
     submit_move = SubmitMove(
         uow=uow,
@@ -513,6 +541,44 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         locks=activity_lock_service,
         length_granter=add_length,
         random=RealRandom(),
+        audit=audit,
+        clock=clock,
+    )
+    # PvP global lobby use-cases (Спринт 2.1.F.2, ГДД §7.1).
+    enqueue_global_duel = EnqueueGlobalDuel(
+        uow=uow,
+        duels=duels,
+        lobby=global_lobby,
+        scheduler=delayed_jobs,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    match_from_lobby = MatchFromLobby(
+        uow=uow,
+        players=players,
+        duels=duels,
+        lobby=global_lobby,
+        locks=activity_lock_service,
+        scheduler=delayed_jobs,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    escalate_chat_to_global = EscalateChatToGlobal(
+        uow=uow,
+        duels=duels,
+        lobby=global_lobby,
+        scheduler=delayed_jobs,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    expire_lobby_entry = ExpireLobbyEntry(
+        uow=uow,
+        duels=duels,
+        lobby=global_lobby,
+        locks=activity_lock_service,
         audit=audit,
         clock=clock,
     )
@@ -535,6 +601,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         forest_runs=forest_runs,
         oracle_history=oracle_history,
         duels=duels,
+        global_lobby=global_lobby,
         anticheat=anticheat,
         anticheat_admin_alerter=anticheat_admin_alerter,
         oracle_templates=oracle_templates,
@@ -570,6 +637,10 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         cancel_duel=cancel_duel,
         submit_move=submit_move,
         resolve_afk_round=resolve_afk_round,
+        enqueue_global_duel=enqueue_global_duel,
+        match_from_lobby=match_from_lobby,
+        escalate_chat_to_global=escalate_chat_to_global,
+        expire_lobby_entry=expire_lobby_entry,
     )
 
 
@@ -615,6 +686,9 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["cancel_duel"] = container.cancel_duel
     dispatcher["submit_move"] = container.submit_move
     dispatcher["resolve_afk_round"] = container.resolve_afk_round
+    # PvP global lobby (Спринт 2.1.F.2) — use-cases для handler-ов F.3.
+    dispatcher["enqueue_global_duel"] = container.enqueue_global_duel
+    dispatcher["match_from_lobby"] = container.match_from_lobby
     dispatcher["players"] = container.players
     dispatcher["player_locale_resolver"] = container.player_locale_resolver
     return dispatcher

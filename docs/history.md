@@ -23,6 +23,60 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.1.F.2: глобальное лобби PvP — use-cases + scheduler + DI
+
+**Автор:** Devin (по запросу ambitious42, продолжает HANDOFF предыдущего агента)
+**Тип:** feature (application use-cases + infrastructure scheduler + DI wiring)
+**Связано:** `current_tasks.md` Спринт 2.1.F.2, ПД 2.1.3 (`development_plan.md §5`), ГДД §7.1.
+
+Второй саб-PR саб-спринта 2.1.F. На фундаменте F.1 (`IGlobalLobbyRepository` + `Duel.escalate_to_global` + persistence) добавляем 4 use-case-а PvP-лобби, расширяем порт планировщика и провязываем всё в composition root. Бот-handler-ы и `/duel_global` — в F.3.
+
+Что сделано:
+
+- **Расширение `IDelayedJobScheduler`** (`domain/shared/ports/scheduler.py`):
+    - 4 новых абстрактных метода: `schedule_chat_to_global_escalation(*, duel_id, run_at)` / `schedule_global_lobby_expiration(*, duel_id, run_at)` + `cancel_*`-парные. Все идемпотентны (повторный schedule на тот же `duel_id` перезаписывает run-at; cancel — no-op для отсутствующих).
+- **APScheduler-адаптер** (`infrastructure/scheduler/aps.py`):
+    - 4 новых метода поверх AsyncIOScheduler с `replace_existing=True` (job-id-ы `chat_to_global_escalation:{duel_id}` и `global_lobby_expiration:{duel_id}`).
+    - Late-bound фабрики `escalate_factory`/`expire_factory: Callable[[], EscalateChatToGlobal | ExpireLobbyEntry]` — позволяют построить scheduler **до** того, как соответствующие use-case-ы существуют (chicken-and-egg: use-case`-ам нужен сам scheduler). Фабрики разрешаются в момент срабатывания job-а через closure-cell composition root-а.
+    - Job-callback-и `_run_escalation_job` / `_run_expiration_job` обрабатывают `factory is None` graceful-но (logged warning, скип) — для прода фабрики обязаны быть, для unit-тестов scheduler-а можно без них.
+- **4 use-case-а** (`application/pvp/`):
+    - `EnqueueGlobalDuel` — публичный entrypoint для F.3 `/duel`-flow (private chat). Проверяет `mode=GLOBAL_ONLY`, ставит в очередь через `IGlobalLobbyRepository.enqueue` + ставит `schedule_global_lobby_expiration` на `now + global_lobby_ttl_minutes` минут. Audit `PVP_LOBBY_ENQUEUED`.
+    - `MatchFromLobby` — публичный entrypoint для F.3 `/duel_global`. Atomic FIFO-pop через `pop_oldest()` (на PG: `SELECT … FOR UPDATE SKIP LOCKED`); `Duel.accept` + lock на pop-ера; cancel pending expiration job-а; audit `PVP_LOBBY_MATCHED`. Self-challenge race (свой же вызов в начале очереди) → возвращает `LobbyEmpty` (UI попросит retry — это устраивает спецификацию F.2).
+    - `EscalateChatToGlobal` — внутренний; вызывается scheduler-job-ом через `escalate_factory`. Грузит `Duel`, проверяет `state=PENDING_ACCEPT ∧ mode=CHAT_THEN_GLOBAL`, домен `Duel.escalate_to_global` → `mode=GLOBAL_ONLY` + nullify `challenged_id`; enqueue в лобби; ставит expiration-job. Idempotent: если дуэль уже escalated/cancelled/accepted → лог + return без ошибок.
+    - `ExpireLobbyEntry` — внутренний; вызывается expiration-job-ом. Грузит `Duel`, идёт через доменный `Duel.cancel(now=...)`, удаляет из лобби (`remove(duel_id)`), снимает activity-lock челленджера. Idempotent на CANCELLED/COMPLETED/already-removed.
+- **Интеграция в `ChallengeDuel/AcceptDuel/CancelDuel`**:
+    - `ChallengeDuel`: для `mode=GLOBAL_ONLY` сразу enqueue + schedule expiration; для `mode=CHAT_THEN_GLOBAL` — schedule escalation на `now + chat_to_global_promotion_minutes` минут; `mode=CHAT_ONLY` без побочных scheduler-эффектов.
+    - `AcceptDuel`: cancel pending escalation job (для chat_then_global) ИЛИ cancel pending expiration job (для global_only) + удаление из лобби (`remove` идемпотентно). Cancel-операции вынесены **снаружи** UoW — scheduler не транзакционный, но idempotent.
+    - `CancelDuel`: симметрично — cancel jobs + remove из лобби.
+- **DI-провязка composition root** (`bot/main.py`):
+    - В `Container` (frozen+slots dataclass): новое поле `global_lobby: IGlobalLobbyRepository` + 4 новых use-case-поля (`enqueue_global_duel` / `match_from_lobby` / `escalate_chat_to_global` / `expire_lobby_entry`).
+    - В `build_container()`: инстанцируется `SqlAlchemyGlobalLobbyRepository(uow=uow)`; scheduler создаётся с late-bound `escalate_factory=lambda: escalate_chat_to_global` / `expire_factory=lambda: expire_lobby_entry` (Python-closure ловит local-cell, который заполнится через несколько строк); существующие `ChallengeDuel/AcceptDuel/CancelDuel` дополнены прокидкой `scheduler=delayed_jobs, lobby=global_lobby`; 4 новых use-case-а собираются с правильными зависимостями.
+    - В `build_dispatcher()`: `match_from_lobby` и `enqueue_global_duel` прокинуты в workflow-data для будущих handler-ов F.3 (`escalate_chat_to_global` / `expire_lobby_entry` остаются внутренними — их зовёт только scheduler).
+- **Тесты**:
+    - **+39 unit-тестов** на use-cases (`tests/unit/application/pvp/test_enqueue_global_duel.py` 7, `test_match_from_lobby.py` 8, `test_escalate_chat_to_global.py` 7, `test_expire_lobby_entry.py` 6, `test_lobby_integration.py` 11) — happy path + idempotency + race-conditions + scheduler-cancel paths через `FakeDelayedJobScheduler` (`scheduled` dict + `cancelled` list).
+    - Расширение `tests/unit/bot/test_composition_root.py` — `Container` собирается с фейками (нет real БД), все 5 новых полей проверены через `isinstance`-asserts; `build_container()` с реальными адаптерами тоже проверяет 5 новых полей.
+    - **`make ci` зелёный**: 1761 passed, coverage 90.97% (≥80% gate), mypy --strict без ошибок, ruff/import-linter clean.
+
+Результат / артефакты:
+
+- `src/pipirik_wars/application/pvp/{enqueue_global_duel,match_from_lobby,escalate_chat_to_global,expire_lobby_entry}.py`.
+- `src/pipirik_wars/domain/shared/ports/scheduler.py` — расширенный порт.
+- `src/pipirik_wars/infrastructure/scheduler/aps.py` — late-bound factories + 4 новых scheduler-метода.
+- `src/pipirik_wars/application/pvp/{challenge_duel,accept_duel,cancel_duel}.py` — scheduler/lobby integration.
+- `src/pipirik_wars/bot/main.py` — DI-провязка `Container` + `build_container` + `build_dispatcher`.
+- `tests/unit/application/pvp/test_{enqueue_global_duel,match_from_lobby,escalate_chat_to_global,expire_lobby_entry,lobby_integration}.py` — +1190 LoC unit-тестов.
+- `tests/unit/bot/test_composition_root.py` — расширение под 5 новых полей `Container`.
+
+Заметки / решения:
+
+- **Late-bound factories для scheduler-а**: alternative — split builder (сначала scheduler без factories → use-case-ы → setattr на scheduler), но closure-cell + `lambda` идиоматичнее и не требует mutable scheduler-а. Python-семантика: `lambda: escalate_chat_to_global` создаёт closure cell на `build_container`-local, cell заполняется через несколько строк — при срабатывании job-а (после возврата из `build_container`) cell уже содержит инстанс.
+- **Self-challenge race в `MatchFromLobby`**: если pop-ер достал собственный enqueued duel (single-user lobby), возвращаем `LobbyEmpty` без error-а. Спецификация F.2 это позволяет — UI в F.3 предложит retry. Гарантирует прогресс (нет infinite-loop-а).
+- **`AuditAction.PVP_LOBBY_ENQUEUED` / `PVP_LOBBY_MATCHED` / `PVP_LOBBY_ESCALATED` / `PVP_LOBBY_EXPIRED`**: уже добавлены в enum в F.1. Для F.2 они только используются.
+- **Транзакционность**: state-mutations всегда в `async with self._uow`; `scheduler.cancel_*` и `lobby.remove` (на cancel-path) — снаружи UoW (idempotent, не нужно rollback-ить scheduler при ошибке, потому что job всё равно проверит state в момент срабатывания).
+- **HANDOFF от предыдущего агента**: `AGENT_HANDOFF.md` (172 LoC) детально описал steps 1-4 (порт + APS-адаптер + 4 use-case-а + integration в существующие use-case-ы). Остаток — step 5: composition root + docs + PR. HANDOFF удалён отдельным коммитом перед PR.
+
+---
+
 ## 2026-05-05 — Спринт 2.1.F.1: глобальное лобби PvP — domain + persistence
 
 **Автор:** Devin (по запросу 612amaranth)
