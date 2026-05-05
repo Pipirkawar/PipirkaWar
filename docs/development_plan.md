@@ -46,6 +46,7 @@ admin/          ← FastAPI веб-панель (тонкий слой)
 - [ ] Никаких race-conditions (есть тест на параллельный запуск).
 - [ ] Секреты только из env, не логируются.
 - [ ] Антифрод-проверки применимы (рефералка, мульти-клик, мульти-аккаунт).
+- [ ] **Анти-чит хардкап** — все use-cases, начисляющие длину, проходят через `progression.add_length(...)` (clamp + trip-wire). Прямые `repo.save(player.with_length(...))` мимо use-case **запрещены** (см. ГДД §3.3).
 
 ### 0.4 CI gates
 
@@ -292,6 +293,25 @@ pipirik_wars/
 
 **Definition of Done MVP:** Игрок может зарегистрироваться, увидеть карточку, сходить в лес, получить шмот, прокачать толщину до 2, использовать предсказание, увидеть себя в топе. Работает RU + EN. Есть DAU Gate.
 
+### Спринт 1.6 — Анти-чит хардкап (Pre-Phase-2 gate)
+
+> **Зачем перед Фазой 2:** Фаза 2 вводит PvP и масс-PvP — новые источники прибавки/потери длины с высокой пропускной способностью. Без хардкапа в этих use-cases экспоит даст экспоненциальный рост. Анти-чит должен быть готов **до** PvP-механик. Полная спецификация — в ГДД §3.3.
+
+| # | Задача | Критерий приёмки |
+|---|---|---|
+| 1.6.1 | Колонки `users.anticheat_ban_until TIMESTAMPTZ NULL` + `audit_log.clamped_from INT NULL` + `audit_log.source TEXT NOT NULL` (миграция, default `'unknown'` для backfill старых записей; новые записи обязаны указывать source) | `make migrations` зелёный; CHECK `source IN ('forest', 'oracle', 'referral_signup', 'referral_thickness', 'pvp_reward', 'caravan_reward', 'raid_reward', 'admin_grant', 'admin_refund', 'stars_payment', 'ton_payment', 'usdt_payment', 'unknown')` |
+| 1.6.2 | Конфиг `balance.yaml` секция `anticheat` (см. ГДД §3.3.5) + pydantic-схема + `IBalanceConfig.anticheat` getter | Юнит-тесты на загрузку, дефолтные значения, валидацию |
+| 1.6.3 | Доменная сущность `AnticheatWindow` (rolling-агрегация) + порт `IAnticheatRepository.sum_organic_in_window(player_id, since: datetime)` | Юнит-тесты на сумму с разными `source` (organic vs donate vs admin_refund) |
+| 1.6.4 | Use-case `progression.add_length(player_id, delta, *, source, reason)` — единая точка начисления длины. Внутри: загрузка `anticheat_ban_until` → если бан → `AnticheatSoftBanError`. Иначе clamp по `daily_cap_cm` и `weekly_cap_cm`, запись в `audit_log` с фактической дельтой и `clamped_from`. После записи trip-wire рекомпьют — если суммы > лимита → `anticheat_ban_until = now + 14d`, action `ANTICHEAT_*_CAP_EXCEEDED`, INotifier→admin alert | Юнит-тесты: clamp до 0, частичный clamp, без clamp, донат не считается, soft-ban блокирует, trip-wire срабатывает на race-симуляции (10×100 параллельных коллов) |
+| 1.6.5 | Гейт `AnticheatGuard` для всех «спендалок» длины (`/upgrade`, `/duel`, ставки в каравану, рейдах) — если `anticheat_ban_until > now()` → ошибка «вы в режиме проверки» | Юнит-тесты на каждый гейт |
+| 1.6.6 | Миграция всех существующих use-cases (`FinishForestRun`, `InvokeOracle`, `RegisterPlayer` с реферальным бонусом и т. д.) на вызов `progression.add_length(...)` через DI-порт `ILengthGranter` | После рефакторинга — **0** прямых `player.with_length(...)` + `repo.save(player)` в коде (lint-rule на это или ручной audit; `import-linter`-контракт «прибавка длины только через ILengthGranter») |
+| 1.6.7 | Bot-команда `/anticheat_unban <tg_id> <reason>` (только `super_admin`, обязательная причина) — снимает `anticheat_ban_until`, пишет `admin_audit_log` | Юнит-тесты на authz, на запись audit-а, на обнуление поля |
+| 1.6.8 | Локализация (`anticheat-soft-ban-active`, `anticheat-cap-clamped`, `anticheat-admin-alert`) в `locales/{ru,en}.ftl` | Через `IMessageBundle` (паттерн 1.5.B-F) |
+| 1.6.9 | Интеграционный нагрузочный тест: 100 параллельных лесов одного игрока → суточная сумма ≤ 3000, ни одна транзакция не «прорывает» лимит | `tests/integration/load/test_anticheat_concurrent.py` |
+| 1.6.10 | Документация: README + `docs/anticheat.md` (как добавить новый source, как вручную снять бан) | Готов для нового разработчика |
+
+**DoD спринта:** Все use-cases прибавки длины проходят через `progression.add_length`. Хардкап работает в clamp-режиме на штатном пути и в trip-wire-режиме при обходе. Soft-ban на 14 дней снимается автоматически и вручную. Алёрт админу идёт через `INotifier`. Race-test зелёный. Покрытие новых файлов ≥ 90 %.
+
 ---
 
 ## 5. Фаза 2 — PvP и социалка (3–4 недели)
@@ -490,6 +510,7 @@ pipirik_wars/
 | Несбалансированная экономика | Ежетижневая ревизия `balance.yaml` + симулятор |
 | Потеря состояния (perezagruzka) | Persistence в PG для всех таймеров (APScheduler jobstore) |
 | Двойные начисления длины | Idempotency-keys + audit_log + транзакции `SERIALIZABLE` для критичных мест |
+| Эксплойт/баг ускоряет рост длины | Анти-чит хардкап 3000 см/сутки + 14000 см/неделя (clamp на штатном пути + trip-wire с soft-ban-ом 14 дней при обходе); единая точка `progression.add_length(...)`; см. ГДД §3.3, Спринт 1.6 |
 | Игроки «застряли» < 20 см | Гарантирован лес и предсказатель «всегда +» (в ГДД); юнит-тесты на это правило |
 | Юридические требования к платежам (Stars/TON) | Использовать только официальные API, хранить чеки |
 
@@ -500,7 +521,7 @@ pipirik_wars/
 | Фаза | Готовность |
 |---|---|
 | Фаза 0 | Каркас clean architecture, CI gates (`ruff`/`mypy --strict`/`pytest`/`pip-audit`), `IUnitOfWork`/`IdempotencyService`/`AuditLogger`/`ActivityLock` |
-| MVP (Фаза 1) | Регистрация (юзер через ЛС с длиной 2 / толщиной 1 / без титула и имени, клан через добавление в группу с заморозкой при кике), лес (3 ветки исходов + автотитул «Новичок»), толщина, предсказатель (по Москве, +1..+20 см), топ, RU+EN, DAU Gate, рефералка (+5/+1 / +10 за тол. 3 / +30 за тол. 5), бот-админ-команды (`/admin_stats`, `/find_player`, `/freeze`, `/grant_length`), деплой |
+| MVP (Фаза 1) | Регистрация (юзер через ЛС с длиной 2 / толщиной 1 / без титула и имени, клан через добавление в группу с заморозкой при кике), лес (3 ветки исходов + автотитул «Новичок»), толщина, предсказатель (по Москве, +1..+20 см), топ, RU+EN, DAU Gate, рефералка (+5/+1 / +10 за тол. 3 / +30 за тол. 5), бот-админ-команды (`/admin_stats`, `/find_player`, `/freeze`, `/grant_length`), **анти-чит хардкап (3000/14000 см organic, soft-ban 14 дней при превышении, см. ГДД §3.3 и Спринт 1.6)**, деплой |
 | Фаза 2 | Полноценный PvP 1×1, масс-PvP, **Глава клана дня** (иронично-смешные цитаты), шеринг, итоги недели, **расширенный бот-админ-интерфейс** (`/clan_*`, `/balance_*`, `/audit`) |
 | Фаза 3 | Горы, данжон, караваны, рейд-боссы (по ГДД §9, §10) |
 | Фаза 4 | Stars + TON + USDT, Redis, ИИ-генерация, доп. языки, метрики; **опциональная веб-админ-панель** (поверх готовых use-cases) |
