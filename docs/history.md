@@ -23,6 +23,83 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.1.C: persistence-фундамент агрегата `Duel`
+
+**Автор:** Devin (по запросу persisyellow)
+**Тип:** feature (infrastructure + domain port)
+**Связано:** `current_tasks.md` Спринт 2.1.C, ПД 2.1.6 (`development_plan.md §5`), ГДД §7.1.
+
+Третий саб-спринт PvP-эпика 2.1. Поверх доменного агрегата `Duel` из 2.1.B появляется persistence-слой — миграция `0009_pvp_duels`, ORM-модели, доменный порт `IDuelRepository` и его реализация поверх SQLAlchemy. Use-cases — отдельный саб-спринт 2.1.D.
+
+Что сделано:
+
+- **Миграция `0009_pvp_duels`** (`src/pipirik_wars/infrastructure/db/migrations/versions/20260505_0009_pvp_duels.py`):
+    - Таблица **`pvp_duels`** — корневая запись агрегата (id, challenger_id, challenged_id, mode, state, hit_pct, expected_rounds, p1/p2_initial_length_cm, created_at/accepted_at/completed_at/cancelled_at, pending_round_num + 4 pending_pX_attack/block, 5 final_*-колонок). FK `challenger_id`/`challenged_id` → `users.id` с `ON DELETE CASCADE`.
+    - Таблица **`pvp_duel_rounds`** — 1:N completed-раунды (PK `(duel_id, round_num)`), FK `duel_id` → `pvp_duels.id` с `ON DELETE CASCADE`. Колонки: 4 для choice-ов (p1/p2 × attack/block), 2 для attack_blocked-флагов, 2 для damage-чисел.
+    - **CHECK-инварианты** охраняют корректность данных при ручных SQL-правках в обход доменного слоя:
+        - `mode IN ('chat_then_global', 'chat_only', 'global_only')`;
+        - `state IN ('pending_accept', 'in_progress', 'completed', 'cancelled')`;
+        - `hit_pct BETWEEN 0 AND 100`, `expected_rounds >= 1`;
+        - `challenger_id <> challenged_id` (когда `challenged_id IS NOT NULL`) — last-line-of-defense self-challenge;
+        - `pX_initial_length_cm >= 0` (или NULL), `pending_round_num >= 1` (или NULL);
+        - `Position`-колонки ∈ `('high', 'mid', 'low')` (или NULL для pending);
+        - `pending_pX_attack` и `pending_pX_block` — пара (либо оба заданы, либо оба NULL);
+        - `final_winner ∈ ('p1', 'p2', 'draw')` (или NULL);
+        - **Комплексный state-related CHECK** `ck_pvp_duels_state_invariants` — каждый из 4 state-ов ↔ свой шаблон NULL/NOT NULL для accepted_at/completed_at/cancelled_at/pX_length/pending_round_num/final_winner;
+        - На `pvp_duel_rounds`: `damage >= 0`, `attack_blocked = TRUE ⇒ damage = 0` (консистентность).
+    - **Индексы** для будущих use-cases:
+        - `ix_pvp_duels_challenger_id_state` / `ix_pvp_duels_challenged_id_state` — preflight «есть ли активный бой у игрока» (use-case 2.1.D + activity-lock);
+        - `ix_pvp_duels_state_created_at` — сканирование экспирированных pending-вызовов (job 2.1.F auto-cancel/promote по TTL).
+    - `downgrade()` — линейное удаление обеих таблиц с индексами в обратном порядке. Round-trip `upgrade head → downgrade base → upgrade head` валидирован ручным smoke-test-ом (alembic CLI на временном SQLite).
+- **ORM-модели** (`src/pipirik_wars/infrastructure/db/models/pvp.py`): `PvpDuelORM` + `PvpDuelRoundORM` — зеркало миграции, тот же набор CHECK-ов в `__table_args__`. Зарегистрированы в `infrastructure/db/models/__init__.py` (alphabetical order) и в `tests/integration/db/conftest.py` (чтобы `Base.metadata.create_all` создал таблицы для in-memory SQLite в integration-тестах).
+- **Доменный порт** (`src/pipirik_wars/domain/pvp/repositories.py`): `IDuelRepository` — `add(duel) → Duel` (assigns id), `get_by_id(duel_id) → Duel | None`, `save(duel) → Duel` (по id, отказ для duel.id is None). UoW-неотягощённый — все методы `async`, исполняются внутри активного `IUnitOfWork`. Зарегистрирован в `domain/pvp/__init__.py`.
+- **Реализация** (`src/pipirik_wars/infrastructure/db/repositories/pvp_duel.py`):
+    - `SqlAlchemyDuelRepository(uow=...)`. Сериализация `Duel ↔ PvpDuelORM`:
+        - enum-ы (`DuelState`/`DuelMode`/`Position`/`DuelWinner`) → строковое `.value`;
+        - `pending_round: PendingRound | None` ↔ 4 nullable-колонки `pending_pX_attack/block` + `pending_round_num`;
+        - `final_outcome: DuelOutcome | None` ↔ 5 nullable-колонок `final_*`;
+        - `completed_rounds: tuple[RoundOutcome, ...]` ↔ 1:N в `pvp_duel_rounds` (round_num — индекс в кортеже + 1).
+    - `add(duel)` — INSERT root-row, flush, INSERT всех существующих completed-раундов (если на момент add-а они уже есть в агрегате), flush, return reload-енный агрегат с id-ом. Запись с `id != None` отвергается (`use save()`).
+    - `get_by_id(duel_id)` — load root + все round-rows (`order by round_num`), сборка `Duel`-агрегата.
+    - `save(duel)` — UPDATE root через `_apply_duel_to_row` (все поля), потом INSERT недостающих round-rows (старые иммутабельны после авторазрешения — для них в домене API нет).
+    - `IntegrityError` БД-уровня (нарушение CHECK-/FK-инвариантов) ловится и конвертируется в доменный `IntegrityError` из `pipirik_wars.shared.errors`.
+    - Зарегистрирован в `infrastructure/db/repositories/__init__.py`.
+- **Тесты** (15 новых):
+    - `tests/integration/db/test_migrations.py`: +1 пункт в `expected_revisions`, +`test_0009_descends_from_0008`, +файл `20260505_0009_pvp_duels.py` в `test_versions_dir_lists_only_known_files`, +`pvp_duels`/`pvp_duel_rounds` в `expected` множество в `test_upgrade_head_creates_all_tables`. Round-trip `upgrade → downgrade → upgrade` уже покрыт общим case-ом — теперь автоматически проверяет и 0009.
+    - `tests/integration/db/pvp/test_pvp_duel_repository.py` (14):
+        - `TestPendingAcceptPersistence` (7): add chat-вызов сохраняет все поля, get_by_id reloads; add global-вызов с `challenged_id=None` (специфика `GLOBAL_ONLY`); get_by_id missing → None; add с pre-set id → `IntegrityError`; save без id → `IntegrityError`; save с unknown id → `IntegrityError`.
+        - `TestCancelPersistence` (1): cancel переводит `state=CANCELLED` и `cancelled_at` — оба поля переживают reload с диска.
+        - `TestAcceptPersistence` (2): chat-accept снимает снэпшот lengths и стартует `pending_round.round_num=1` с `p1_choice=p2_choice=None`; global-accept устанавливает `challenged_id=accepter_id` (и переживает reload).
+        - `TestSubmitMovePersistence` (2): partial pending_round (только p1 ответил — `pending_p1_*` not null, `pending_p2_*` null); auto-resolve раунда при готовности обоих → `completed_rounds[0]` заполнен с правильной damage formula `floor(80*10/100)=8`, `pending_round.round_num=2`.
+        - `TestFullDuelPersistence` (1): полный 3-раундовый бой с `save` после каждого раунда → `state=COMPLETED`, `final_outcome.winner=P1`, `p1_total_dealt=30` / `p2_total_dealt=0`, дельты ±30, `len(completed_rounds)=3`. Полная перезагрузка с диска идентична исходному агрегату.
+        - `TestSelfChallengeDbConstraint` (1): эмуляция обхода домена через `dataclasses.replace(challenge, challenged_id=challenger.id)` → CHECK-констрейнт `ck_pvp_duels_no_self_challenge` блокирует INSERT, конвертируется в доменный `IntegrityError`.
+
+Результат / артефакты:
+
+- Коммиты:
+    - `feat(pvp): persistence — migration 0009_pvp_duels + ORM + IDuelRepository (Sprint 2.1.C 1/2)` — миграция + 2 ORM + порт + репо + регистрация (861 insertions).
+    - `test(pvp): integration tests — migration 0009 + repo roundtrip (Sprint 2.1.C 2/2)` — 15 интеграционных тестов + регистрация ORM в conftest (570 insertions).
+- Тесты: `make ci` зелёный — `1626 passed, 1 skipped` (предыдущая baseline 1607 → +14 интеграционных + 1 миграция). Покрытие — 96.89%. Layered-architecture контракты (3) — KEPT.
+- ruff + ruff-format + mypy + import-linter — ✅. pre-commit на каждом коммите — ✅.
+
+Заметки / решения:
+
+- **Две таблицы вместо одной с JSON.** Альтернативой было хранить `completed_rounds` как JSON-колонку в `pvp_duels`. Отвергнуто: SQL-агрегации/индексы по конкретным раундам (например, «топ игроков по damage за раунд» в админке 2.2+) на JSON-extract-е непортабельны (SQLite vs Postgres) и плохо индексируются. Выделение в `pvp_duel_rounds` тривиально, даёт правильную нормализацию и каскадное удаление.
+- **Pending round — 4 колонки в root-row, а не отдельная таблица.** Альтернативой было `pvp_duel_pending_rounds(duel_id, round_num, p1_attack, ...)` — но в любой момент времени есть **ровно один** pending-раунд (или ни одного). Отдельная таблица — оверкилл, требует JOIN-ов на каждом read-е и усложняет CHECK-консистентность. 4 nullable-колонки в `pvp_duels` дешевле и проще; CHECK-констрейнты `pending_pX_pair_consistent` гарантируют, что `attack` и `block` приходят парой.
+- **`final_outcome` — тоже в root-row.** Аналогично pending-раунду: `final_winner` + 4 числовых колонки → выводится в `DuelOutcome` при reload-е. CHECK ck_pvp_duels_state_invariants гарантирует: `state=COMPLETED` ⇔ `final_winner IS NOT NULL` (плюс остальные `final_*` тоже NOT NULL — все `Frozen`-поля `DuelOutcome` имеют значение в момент завершения). Альтернатива «отдельная таблица `pvp_duel_outcomes`» — те же причины overkill-а, что и для pending-раунда.
+- **Self-challenge на уровне БД.** Доменный `Duel.create_challenge` уже бросает `SelfChallengeError` для `CHAT_*`-режимов, и `accept` бросает `NotADuelParticipantError` для `GLOBAL_ONLY`. Но domain-layer-валидация — не last-line-of-defense на случай миграций / ручных правок / багов в use-case-ах. CHECK `challenger_id <> challenged_id` (когда `challenged_id IS NOT NULL`) гарантирует консистентность данных в БД независимо от пути записи. Тест `test_db_check_blocks_self_challenge_via_raw_replace` это явно проверяет.
+- **Single-active-duel-per-player НЕ охраняется на уровне БД.** Один игрок может иметь несколько `PENDING_ACCEPT`-вызовов в разных чатах одновременно. Только `IN_PROGRESS`-бой должен быть единственным — это охраняется `activity_locks`-таблицей из 0.2 (`activity='pvp_duel'` + ownership одного duel-id-а) и use-case 2.1.D. Дублировать как partial unique index вида `WHERE state='in_progress'` — преждевременная оптимизация: в production это решит activity_lock, и при двойной защите ловить race-condition станет неудобнее.
+- **`_apply_duel_to_row` вместо отдельных `add` и `save` body.** Сериализация Duel → row занимает ~30 строк присваиваний (особенно с разворотом `pending_round` и `final_outcome` в группы nullable-колонок). Вынесение в общий хелпер устраняет дублирование между `add()` и `save()`; row передаётся параметром (для add — свежесозданный, для save — загруженный по id). На `save()` мы не пересоздаём row, а UPDATE-им in-place — это правильно, потому что SQLAlchemy 2.x async session уже знает row-у через identity map после `session.get(...)`.
+- **`completed_rounds` иммутабельны после авторазрешения.** Доменный API не имеет метода «отредактировать прошлый раунд» — `submit_move` и `force_complete_round` только добавляют новые. Соответственно `save()` синхронизирует только новые round-rows, существующие не трогает (через `existing_round_nums` set + skip). Это упрощает persistence (нет UPDATE-ов на round-rows) и даёт audit-trail: исторические раунды остаются неизменными после первой записи.
+- **Что не вошло (для следующих саб-спринтов):**
+    - Use-cases `ChallengeDuel` / `AcceptDuel` / `SubmitMove` / `ResolveDuel` (с activity-lock-ом, `IRandom` для AFK, `progression.add_length(source=PVP_REWARD)` с anti-cheat-cap-ом) → 2.1.D.
+    - Bot-handler-ы и presenter-ы (`/duel`, inline-кнопки, локали) → 2.1.E.
+    - Глобальное лобби FIFO + auto-promote через 3 мин → 2.1.F.
+    - Раунд-таймер 30–60s через APScheduler + AFK-job (вызывает `Duel.force_complete_round` через repo+save) → 2.1.G.
+    - 50+ JSON-шаблонов забавных раунд-логов + presenter-карточка + кнопка «Поделиться» → 2.1.H.
+
+---
+
 ## 2026-05-05 — Спринт 2.1.B: доменный агрегат `Duel` (lifecycle state machine)
 
 **Автор:** Devin (по запросу persisyellow)
