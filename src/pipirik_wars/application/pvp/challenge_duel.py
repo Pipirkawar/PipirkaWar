@@ -48,12 +48,14 @@ from pipirik_wars.domain.pvp import (
     IDuelRepository,
     PvpRequirementsNotMetError,
 )
+from pipirik_wars.domain.pvp.lobby import IGlobalLobbyRepository
 from pipirik_wars.domain.security import LockReason
 from pipirik_wars.domain.shared.ports import (
     AuditAction,
     AuditEntry,
     IAuditLogger,
     IClock,
+    IDelayedJobScheduler,
     IUnitOfWork,
 )
 
@@ -85,8 +87,10 @@ class ChallengeDuel:
         "_balance",
         "_clock",
         "_duels",
+        "_lobby",
         "_locks",
         "_players",
+        "_scheduler",
         "_uow",
     )
 
@@ -100,6 +104,8 @@ class ChallengeDuel:
         balance: IBalanceConfig,
         audit: IAuditLogger,
         clock: IClock,
+        scheduler: IDelayedJobScheduler | None = None,
+        lobby: IGlobalLobbyRepository | None = None,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -108,6 +114,8 @@ class ChallengeDuel:
         self._balance = balance
         self._audit = audit
         self._clock = clock
+        self._scheduler = scheduler
+        self._lobby = lobby
 
     async def execute(self, input_dto: ChallengeDuelInput) -> DuelChallenged:
         """Создать вызов. Бросает:
@@ -174,6 +182,40 @@ class ChallengeDuel:
                     occurred_at=now,
                 )
             )
+
+            # GLOBAL_ONLY → enqueue в лобби сразу. CHAT_THEN_GLOBAL —
+            # ждём ивент эскалации (job через `chat_to_global_promotion_minutes`).
+            if saved.mode is DuelMode.GLOBAL_ONLY and self._lobby is not None:
+                await self._lobby.enqueue(duel_id=saved.id, enqueued_at=now)
+                await self._audit.record(
+                    AuditEntry(
+                        action=AuditAction.PVP_LOBBY_ENQUEUED,
+                        actor_id=challenger.tg_id,
+                        target_kind="pvp_duel",
+                        target_id=str(saved.id),
+                        before=None,
+                        after={"enqueued_at": now.isoformat()},
+                        reason="pvp_lobby_enqueued_on_challenge",
+                        idempotency_key=f"pvp_lobby_enqueued:{saved.id}",
+                        occurred_at=now,
+                    )
+                )
+
+        # Schedule вызывается **снаружи** UoW: если транзакция упадёт,
+        # job не появится. Если нет шедулера (тесты до F.2 / DI ещё не
+        # подвязали) — пропускаем без ошибки.
+        if self._scheduler is not None:
+            assert saved.id is not None
+            if saved.mode is DuelMode.GLOBAL_ONLY:
+                await self._scheduler.schedule_global_lobby_expiration(
+                    duel_id=saved.id,
+                    run_at=now + timedelta(minutes=cfg.global_lobby_ttl_minutes),
+                )
+            elif saved.mode is DuelMode.CHAT_THEN_GLOBAL:
+                await self._scheduler.schedule_chat_to_global_escalation(
+                    duel_id=saved.id,
+                    run_at=now + timedelta(minutes=cfg.chat_to_global_promotion_minutes),
+                )
         return DuelChallenged(duel=saved)
 
     async def _fetch_player(self, *, tg_id: int) -> Player:
