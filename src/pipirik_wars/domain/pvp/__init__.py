@@ -35,6 +35,7 @@ from pipirik_wars.domain.pvp.entities import (
     RoundOutcome,
 )
 from pipirik_wars.domain.pvp.errors import (
+    DuelLogNoTemplatesError,
     DuelNotFoundError,
     InvalidDuelStateError,
     InvalidLengthError,
@@ -47,6 +48,12 @@ from pipirik_wars.domain.pvp.errors import (
     SelfChallengeError,
 )
 from pipirik_wars.domain.pvp.lobby import IGlobalLobbyRepository, LobbyEntry
+from pipirik_wars.domain.pvp.log_template import (
+    DuelLogTemplate,
+    RoundOutcomeKind,
+    classify_round_outcome,
+    pick_duel_log_template,
+)
 from pipirik_wars.domain.pvp.repositories import IDuelRepository
 from pipirik_wars.domain.pvp.services import (
     DEFAULT_DUEL_ROUNDS,
@@ -57,6 +64,8 @@ from pipirik_wars.domain.pvp.services import (
 __all__ = [
     "DEFAULT_DUEL_ROUNDS",
     "Duel",
+    "DuelLogNoTemplatesError",
+    "DuelLogTemplate",
     "DuelMode",
     "DuelNotFoundError",
     "DuelOutcome",
@@ -77,7 +86,10 @@ __all__ = [
     "PvpRequirementsNotMetError",
     "RoundChoice",
     "RoundOutcome",
+    "RoundOutcomeKind",
     "SelfChallengeError",
+    "classify_round_outcome",
+    "pick_duel_log_template",
     "resolve_duel",
     "resolve_round",
 ]
