@@ -6,6 +6,9 @@ from pipirik_wars.infrastructure.db.repositories.activity_lock import (
 from pipirik_wars.infrastructure.db.repositories.admin import (
     SqlAlchemyAdminRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.anticheat import (
+    SqlAlchemyAnticheatRepository,
+)
 from pipirik_wars.infrastructure.db.repositories.clan import (
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
@@ -26,6 +29,7 @@ from pipirik_wars.infrastructure.db.repositories.signup_queue import (
 __all__ = [
     "SqlAlchemyActivityLockRepository",
     "SqlAlchemyAdminRepository",
+    "SqlAlchemyAnticheatRepository",
     "SqlAlchemyClanMembershipRepository",
     "SqlAlchemyClanRepository",
     "SqlAlchemyForestRunRepository",

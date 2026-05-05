@@ -87,6 +87,7 @@ from pipirik_wars.infrastructure.settings import (
 from tests.fakes import (
     FakeActivityLockRepository,
     FakeAdminRepository,
+    FakeAnticheatRepository,
     FakeAuditLogger,
     FakeBalanceConfig,
     FakeClanMembershipRepository,
@@ -170,6 +171,7 @@ def _container_with_fakes() -> Container:
         clock=clock,
     )
     oracle_history = FakeOracleHistoryRepository()
+    anticheat = FakeAnticheatRepository()
     oracle_templates = FakeOracleTemplateProvider()
     top_players_query = FakeTopPlayersQuery()
     bundle: IMessageBundle = FakeMessageBundle()
@@ -283,6 +285,7 @@ def _container_with_fakes() -> Container:
             clock=clock,
         ),
         oracle_history=oracle_history,
+        anticheat=anticheat,
         oracle_templates=oracle_templates,
         invoke_oracle=InvokeOracle(
             uow=uow,

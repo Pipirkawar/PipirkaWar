@@ -33,6 +33,7 @@ class SqlAlchemyAuditLogger(IAuditLogger):
             idempotency_key=entry.idempotency_key,
             source=entry.source.value,
             clamped_from=entry.clamped_from,
+            delta_cm=entry.delta_cm,
         )
         self._uow.session.add(row)
         await self._uow.session.flush()

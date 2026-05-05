@@ -102,6 +102,14 @@ class AuditEntry:
     запрошенная дельта в см), если `progression.add_length` подрезал
     её под `daily_cap_cm` / `weekly_cap_cm`. Заполняется только в
     Спринте 1.6.D; до этого всегда `None`.
+
+    `delta_cm` — фактически применённая дельта длины (знаковая, в см).
+    `None` для не-длиновых событий (`clan_register`, `balance_reload`,
+    `player_locale_set` и т. п.). Anti-cheat rolling-окно (Спринт 1.6.C)
+    суммирует `delta_cm > 0` с фильтром по `source IN organic_sources`.
+    Заполняется в Спринте 1.6.D через `progression.add_length`; до того
+    момента старые `LENGTH_GRANT`-вызовы в `RegisterPlayer`/`InvokeOracle`/
+    `FinishForestRun` явно прокидывают `delta_cm` для интеграции с anti-cheat.
     """
 
     action: AuditAction
@@ -115,6 +123,7 @@ class AuditEntry:
     occurred_at: datetime
     source: AuditSource = AuditSource.UNKNOWN
     clamped_from: int | None = None
+    delta_cm: int | None = None
 
 
 class IAuditLogger(abc.ABC):

@@ -70,6 +70,7 @@ from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import register_middlewares
 from pipirik_wars.bot.notifications import TelegramForestFinishNotifier
 from pipirik_wars.domain.admin import IAdminRepository
+from pipirik_wars.domain.anticheat import IAnticheatRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.dau import IDauCounter, IDauLimit, IDauThresholdAlerter
@@ -98,6 +99,7 @@ from pipirik_wars.infrastructure.db.engine import build_engine, build_sessionmak
 from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyActivityLockRepository,
     SqlAlchemyAdminRepository,
+    SqlAlchemyAnticheatRepository,
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
     SqlAlchemyForestRunRepository,
@@ -164,6 +166,7 @@ class Container:
     activity_locks: IActivityLockRepository
     forest_runs: IForestRunRepository
     oracle_history: IOracleHistoryRepository
+    anticheat: IAnticheatRepository
 
     # Шаблоны (Спринт 1.4.B)
     oracle_templates: IOracleTemplateProvider
@@ -253,6 +256,7 @@ def build_container(
     activity_locks = SqlAlchemyActivityLockRepository(uow=uow)
     forest_runs = SqlAlchemyForestRunRepository(uow=uow, balance=balance)
     oracle_history = SqlAlchemyOracleHistoryRepository(uow=uow)
+    anticheat = SqlAlchemyAnticheatRepository(uow=uow)
     oracle_templates = JsonOracleTemplateProvider(
         templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
     )
@@ -437,6 +441,7 @@ def build_container(
         activity_locks=activity_locks,
         forest_runs=forest_runs,
         oracle_history=oracle_history,
+        anticheat=anticheat,
         oracle_templates=oracle_templates,
         bundle=bundle,
         player_locale_resolver=player_locale_resolver,

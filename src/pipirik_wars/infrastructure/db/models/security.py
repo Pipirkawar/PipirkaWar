@@ -92,10 +92,24 @@ class AuditLogORM(Base):
     # запрошенная дельта в см), если progression.add_length подрезал её
     # под daily_cap_cm/weekly_cap_cm (Спринт 1.6.D).
     clamped_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # ── Спринт 1.6.C ──
+    # `delta_cm` — фактически применённая дельта длины в см (знаковая;
+    # admin_refund будет отрицательной). Anti-cheat rolling-окно
+    # суммирует `delta_cm > 0` с фильтром по `source IN organic_sources`.
+    # NULL для не-длиновых событий (clan_register, balance_reload и т. п.).
+    delta_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
         Index("ix_audit_log_target_kind_target_id", "target_kind", "target_id"),
         Index("ix_audit_log_action", "action"),
+        # Composite-индекс под anti-cheat-агрегацию (Спринт 1.6.C):
+        # `WHERE target_id=:pid AND source IN (...) AND occurred_at >= :since`.
+        Index(
+            "ix_audit_log_target_source_occurred",
+            "target_id",
+            "source",
+            "occurred_at",
+        ),
         CheckConstraint(
             "source IN ('forest', 'oracle', 'referral_signup', 'referral_thickness', "
             "'pvp_reward', 'caravan_reward', 'raid_reward', 'admin_grant', "
