@@ -36,6 +36,7 @@ from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.application.progression import UpgradeThickness
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
+from pipirik_wars.application.top import GetTopPlayers
 from pipirik_wars.bot.main import Container, build_container, build_dispatcher
 from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
@@ -94,6 +95,7 @@ from tests.fakes import (
     FakePlayerRepository,
     FakeRandom,
     FakeSignupQueueRepository,
+    FakeTopPlayersQuery,
     FakeUnitOfWork,
 )
 from tests.unit.domain.balance.factories import build_valid_balance
@@ -161,6 +163,7 @@ def _container_with_fakes() -> Container:
     )
     oracle_history = FakeOracleHistoryRepository()
     oracle_templates = FakeOracleTemplateProvider()
+    top_players_query = FakeTopPlayersQuery()
     return Container(
         clock=clock,
         random=rng,
@@ -282,6 +285,8 @@ def _container_with_fakes() -> Container:
             audit=audit,
             clock=clock,
         ),
+        top_players_query=top_players_query,
+        get_top_players=GetTopPlayers(query=top_players_query),
     )
 
 

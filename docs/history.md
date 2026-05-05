@@ -23,6 +23,38 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.4.C: топ игроков (`/top` + in-memory TTL=60s кэш)
+
+**Автор:** Devin (по запросу persisyellow)
+**Тип:** feature (domain + application port + use-case + in-memory cache + bot-handler + composition wiring)
+**Связано:** Текущий PR (Спринт 1.4.C), [development_plan.md §3 / Спринт 1.4, задача 1.4.6](development_plan.md), [current_tasks.md Спринт 1.4 → 1.4.C](current_tasks.md). Продолжение Спринта 1.4 после смерженного 1.4.B (PR #22).
+
+Узкий PR: публичная команда `/top` — топ-100 пипириков по убыванию длины (формат «Титул Название Имя — N см»). Под капотом — in-memory кэш TTL=60s, чтобы шквал нажатий из чата не упирался в БД.
+
+Что сделано:
+- **Domain (`domain/player/repositories.py`)** — расширен порт `IPlayerRepository` методом `list_top_by_length(*, limit) -> Sequence[Player]`. Контракт: только `ACTIVE`-игроки (заморозка исключается — игроки на «лавке штрафников» в топ не лезут), сортировка `length_cm DESC`, тай-брейкер `id ASC` (стабильный порядок при равной длине, важно для воспроизводимости результата под кэшем), `ValueError` для `limit ≤ 0`.
+- **Application (`application/top/`)** — frozen DTO `TopPlayerEntry(title, display_name, name, length_cm)` с валидацией `length_cm ≥ 0`. Read-only порт `ITopPlayersQuery.get_top(*, limit) -> Sequence[TopPlayerEntry]`. Use-case `GetTopPlayers(query, default_limit=100)` — тонкая обёртка над портом, валидирует `limit > 0`, по умолчанию использует `default_limit=100` (контракт ПД 1.4.6 «топ-100»). Чистая разводка: use-case **не знает** про кэш или БД — это инфраструктурный выбор сборки.
+- **Infrastructure (`infrastructure/db/repositories/player.py` + `infrastructure/cache/top_players.py`)** — `SqlAlchemyPlayerRepository.list_top_by_length` строит честный `SELECT … WHERE status = 'ACTIVE' ORDER BY length_cm DESC, id ASC LIMIT :limit`. `TopPlayersCache(ITopPlayersQuery)` — in-memory снимок с `asyncio.Lock` для защиты от cache stampede: когда десять корутин одновременно зовут `/top` под просроченным кэшем, к БД летит **один** запрос, остальные ждут на локе. TTL=60s по умолчанию (через ctor-параметр), на границе считаем кэш уже устаревшим (`elapsed >= ttl`). При запросе с большим `limit`, чем закэшировано — рефреш; при меньшем — отдаём «префикс» из кэша. `invalidate()` для админских флоу. `display_name` пересчитывается через `IBalanceConfig` при каждом рефреше — после `/balance_reload` следующий рефреш увидит новые имена бесплатно (TTL ≤ 60 с).
+- **Bot (`bot/handlers/top.py` + `bot/presenters/top.py`)** — handler `/top` доступен и в ЛС, и в группах (это «социальная» команда, ГДД §2.6); вызывает `get_top_players.execute()` без аргументов, рендерит результат презентером. Презентер `render_top` делегирует склейку «Титул Название Имя» в уже существующий `render_full_nick` (DRY с `/profile`), форматирует строки как «`N. Полный_ник — N см`», пустой список → дружелюбное приглашение «нажми /start». Никакой регистрации для `/top` не требуется — это публичный read-only.
+- **Composition root (`bot/main.py`)** — `top_players_query = TopPlayersCache(uow=…, players=…, balance=…, clock=…, ttl_seconds=60)` и `get_top_players = GetTopPlayers(query=top_players_query)` собираются в `build_container(...)`, прокидываются в `Container` и aiogram-DI (`dispatcher["get_top_players"]`). Новый `top_router` зарегистрирован в `register_routers(...)` после `oracle_router`.
+- **Тесты (40+ новых)** — интеграционные на `list_top_by_length` (ordering DESC, frozen excluded, tie-break id ASC, limit, empty, ValueError на limit ≤ 0); юнит на `TopPlayerEntry` (валидации/frozen); юнит на `GetTopPlayers` (default_limit=100, передача limit, валидации); юнит на `TopPlayersCache` (TTL boundary, refresh after stale, prefix-of-cache reuse, invalidate, balance hot-reload visibility, **stampede protection** под `asyncio.gather` — 3 параллельных вызова → 1 обращение к репо); юнит на handler `/top` (private/group/empty); юнит на презентер (форматирование, эмодзи, порядок); composition root обновлён с `FakeTopPlayersQuery` и `GetTopPlayers`. `make ci`: **911 passed, 1 skipped**, coverage **96.81%**.
+
+Результат / артефакты:
+- domain port: `src/pipirik_wars/domain/player/repositories.py` (новая абстрактная method `list_top_by_length`).
+- application: `src/pipirik_wars/application/top/{__init__,entries,query,get_top}.py`.
+- infra: `src/pipirik_wars/infrastructure/db/repositories/player.py` (метод `list_top_by_length`), `src/pipirik_wars/infrastructure/cache/{__init__,top_players}.py`.
+- bot: `src/pipirik_wars/bot/handlers/top.py`, `src/pipirik_wars/bot/presenters/top.py` + регистрация в `__init__.py` обоих пакетов и в `bot/main.py`.
+- тесты: `tests/integration/db/test_player_repository.py` (+6), `tests/unit/application/top/{test_entries,test_get_top}.py`, `tests/unit/infrastructure/cache/test_top_players_cache.py`, `tests/unit/bot/{handlers,presenters}/test_top.py`, `tests/fakes/top_players.py` + регистрация в `tests/fakes/__init__.py` и `tests/unit/bot/test_composition_root.py`.
+
+Заметки / решения:
+- **Кэш как порт, не как декоратор** — `TopPlayersCache` реализует `ITopPlayersQuery` напрямую, а не декорирует другую реализацию. На уровне use-case-а ничего не знает про кэш: меняем стратегию в `build_container` без правок application-слоя. Если завтра захотим Redis — добавим `RedisTopPlayersCache(ITopPlayersQuery)` без касания доменa/application.
+- **Тай-брейкер `id ASC`** — без него порядок одинаковых длин был бы не детерминирован, и кэш отдавал бы «прыгающие» места. С тай-брейкером один и тот же `/top` всегда выглядит одинаково между рефрешами.
+- **Stampede protection через `asyncio.Lock`** — критично для социальной команды в группах: под пик-нагрузкой 10 нажатий /top за секунду от разных юзеров в БД летит ровно 1 запрос. Тест `test_concurrent_requests_trigger_single_refresh` это явно проверяет: 3 параллельных `gather` → 1 обращение к репо.
+- **Frozen-игроки исключаются** — заблокированные/замороженные не должны портить публичный рейтинг. Это доменное правило, поэтому `WHERE status = 'ACTIVE'` сидит и в SqlAlchemy-репо, и в FakePlayerRepository.
+- **DRY с `/profile`** — `render_full_nick` уже умеет «Титул Название Имя» с пропуском `None`-частей; переиспользуем без копипаста.
+
+---
+
 ## 2026-05-05 — Спринт 1.4.B: предсказатель (`/oracle` + Moscow-TZ кулдаун + 220 RU + 220 EN темплейтов)
 
 **Автор:** Devin (по запросу persisyellow)

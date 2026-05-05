@@ -25,6 +25,12 @@ from pipirik_wars.bot.presenters.profile import (
     render_full_nick,
     render_profile_card,
 )
+from pipirik_wars.bot.presenters.top import (
+    REPLY_TOP_EMPTY_RU as RENDER_TOP_EMPTY_RU,
+    REPLY_TOP_HEADER_RU as RENDER_TOP_HEADER_RU,
+    render_top,
+    render_top_entry,
+)
 from pipirik_wars.bot.presenters.upgrade import (
     RENDER_UPGRADE_CANCELLED,
     RENDER_UPGRADE_RACE_RU,
@@ -42,6 +48,8 @@ __all__ = [
     "RENDER_ORACLE_GROUP_RU",
     "RENDER_ORACLE_NOT_REGISTERED_RU",
     "RENDER_ORACLE_OTHER_RU",
+    "RENDER_TOP_EMPTY_RU",
+    "RENDER_TOP_HEADER_RU",
     "RENDER_UPGRADE_CANCELLED",
     "RENDER_UPGRADE_RACE_RU",
     "ForestCallbackAction",
@@ -59,6 +67,8 @@ __all__ = [
     "render_oracle_already_used",
     "render_oracle_success",
     "render_profile_card",
+    "render_top",
+    "render_top_entry",
     "render_upgrade_insufficient",
     "render_upgrade_proposal",
     "render_upgrade_success",
