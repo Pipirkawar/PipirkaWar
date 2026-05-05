@@ -1,0 +1,56 @@
+# Pipirik Wars: docker build context exclusions (Спринт 1.5.H).
+# Цель — минимизировать build context (быстрый build, нет утечки локальных
+# артефактов в образ).
+
+# Git / VCS
+.git
+.gitignore
+
+# CI / GitHub
+.github
+
+# Python артефакты
+__pycache__
+*.py[cod]
+*$py.class
+*.egg-info
+build
+dist
+.venv
+venv
+env
+
+# Тесты / coverage
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.import_linter_cache
+htmlcov
+coverage.xml
+.coverage*
+tests
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# Локальные секреты (НИКОГДА не должны попасть в образ)
+.env
+.env.*
+!.env.example
+
+# Документация (не нужна в образе). README.md остаётся — pyproject.toml
+# ссылается на него (`readme = "README.md"`), pip фейлится без него на
+# `pip install .`.
+docs
+ops/runbooks
+CONTRIBUTING.md
+
+# Сам Dockerfile / compose — context, не cargo
+ops/docker/Dockerfile
+ops/docker/docker-compose.yml
+
+# Прочее
+*.log
+*.tmp
