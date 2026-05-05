@@ -137,7 +137,14 @@ class FluentMessageBundle(IMessageBundle):
         path = self._locales_dir / f"{locale.code}.ftl"
         if not path.is_file():
             raise FileNotFoundError(f"locale file not found: {path}")
-        bundle = FluentBundle([locale.code])
+        # `use_isolating=False`: Fluent по умолчанию оборачивает значения
+        # `{ $vars }` в Unicode-bidi-isolation marks (U+2068/U+2069). Это
+        # корректно для смешанной LTR/RTL-вёрстки, но в Telegram-чате RU+EN
+        # с emoji/HTML-разметкой эти невидимые символы только мешают:
+        # ломают `in`-чек в тестах, ломают подсчёт длины и могут засветиться
+        # в копи-пасте у игроков. Все наши локали — однонаправленные (RU/EN
+        # — LTR), поэтому изоляция не нужна.
+        bundle = FluentBundle([locale.code], use_isolating=False)
         bundle.add_resource(FluentResource(path.read_text(encoding="utf-8")))
         return bundle
 

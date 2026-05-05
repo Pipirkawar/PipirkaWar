@@ -23,6 +23,46 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.5.C: `/profile` и `/top` через `IMessageBundle`
+
+**Автор:** Devin (по запросу sufficientdorette)
+**Тип:** feature (i18n-прогон ещё двух handler-ов + презентеров)
+**Связано:** Текущий PR (Спринт 1.5.C), [development_plan.md §3 / Спринт 1.5, задача 1.5.1](development_plan.md), [current_tasks.md Спринт 1.5 → 1.5.C](current_tasks.md). Продолжение Спринта 1.5 после смерженного 1.5.B (PR #26).
+
+Что сделано:
+- **`bot/presenters/profile.py`** — переписан под `ProfilePresenter` (DI `bundle: IMessageBundle`):
+  - `group()` / `other()` / `not_registered()` / `card()` — методы рендера, все ходят в `IMessageBundle.format(...)` по ключам `profile-group`/`profile-other`/`profile-not-registered`/`profile-card`.
+  - `card()` собирает «полный ник» («Титул Название Имя») с локализованным титулом через `profile-title-<value>` (для `Title.NEWBIE` → `profile-title-newbie`); потом передаёт `nick` + `length_cm` + `thickness_level` в шаблон `profile-card`.
+  - Public функция `title_message_key(title)` — единый «контракт» между Python-кодом и `.ftl` (тест проверяет, что для каждого члена `Title` ключ существует и в RU, и в EN — иначе bundle бросит `MessageKeyError`).
+  - Legacy pure-функция `render_full_nick(...)` оставлена временно — её ещё зовут `bot/presenters/forest.py`. Удаление — в 1.5.D, после миграции forest-презентера.
+- **`bot/presenters/top.py`** — заменён на `TopPresenter`:
+  - `render(entries, *, locale)` — пустой топ → ключ `top-empty`, иначе шапка + `top-entry`-ряды (`{ $rank }. { $nick } — { $length_cm } см`).
+  - Локализация титулов делается через тот же `profile-title-<value>` (общий пул с /profile) — переводчику не нужно дублировать «Новичок/Newbie».
+- **`bot/handlers/profile.py`** и **`bot/handlers/top.py`** — handler-ы получают `bundle: IMessageBundle` + `locale: Locale | None = None` (тот же fallback на `DEFAULT_LOCALE`, что и в `/start`). Удалены `REPLY_GROUP_RU`/`REPLY_OTHER_RU`/`REPLY_NOT_REGISTERED_RU` (`/profile`) и `REPLY_TOP_HEADER_RU`/`REPLY_TOP_EMPTY_RU` (`/top`).
+- **`infrastructure/i18n/fluent_bundle.py`** — `FluentBundle` теперь создаётся с `use_isolating=False`. По умолчанию `fluent.runtime` оборачивает значения `{ $vars }` в Unicode bidi-isolation marks U+2068/U+2069 — это корректно для RTL-языков, но в чисто-LTR-наборе (RU/EN) ломает `in`-проверки в тестах и засоряет копипасту в чате.
+- **`locales/ru.ftl` + `locales/en.ftl`** — добавлены ключи `profile-group`/`profile-other`/`profile-not-registered`/`profile-card`/`profile-title-newbie` и `top-header`/`top-empty`/`top-entry`. RU/EN-варианты карточки `/profile` — структурно идентичные (одинаковые эмодзи, разный текст).
+- **`bot/presenters/__init__.py`** — экспорт `ProfilePresenter` + `TopPresenter`, удалены устаревшие `render_profile_card`/`render_top`/`render_top_entry`/`REPLY_TOP_*_RU`. Pure `render_full_nick` оставлена в публичном API на время 1.5.D.
+- **Тесты:**
+  - `tests/unit/bot/presenters/test_profile.py` — 12 тестов: `render_full_nick` (legacy, 4 кейса), `title_message_key` (mapping + integrity-проверка через `FluentMessageBundle`, RU + EN), `ProfilePresenter` (chat-ветки через `FakeMessageBundle` + интеграция `card()` через `FluentMessageBundle`, RU + EN, проверка отсутствия русских букв в EN-выводе).
+  - `tests/unit/bot/presenters/test_top.py` — 12 тестов: `FakeMessageBundle` (правильные ключи + параметры в `top-entry`) + `FluentMessageBundle` (4 сочетания «титул × имя», порядок entries, EN-локаль).
+  - `tests/unit/bot/handlers/test_profile.py` — 8 тестов: все ветки (private+registered/unregistered, group/supergroup, channel, private без `tg_identity`) + locale-propagation (RU vs EN) + fallback на `DEFAULT_LOCALE`.
+  - `tests/unit/bot/handlers/test_top.py` — 6 тестов: рендер в private/group, пустой топ, default-limit, locale-propagation, fallback.
+
+Результат / артефакты:
+- `make ci` локально: **971 passed, 1 skipped, 96.88%** покрытие (порог DoD — 80%, см. `pyproject.toml`).
+- ruff (lint + format) ✅, mypy ✅, import-linter ✅, pre-commit ✅.
+- Файлы: `src/pipirik_wars/bot/presenters/profile.py` (v2), `src/pipirik_wars/bot/presenters/top.py` (v2), `src/pipirik_wars/bot/handlers/profile.py` (v2), `src/pipirik_wars/bot/handlers/top.py` (v2), `src/pipirik_wars/bot/presenters/__init__.py` (обновлён), `src/pipirik_wars/infrastructure/i18n/fluent_bundle.py` (`use_isolating=False`), `locales/ru.ftl` + `locales/en.ftl` (новые ключи), 4 тест-файла (~50 unit-тестов суммарно).
+
+Заметки / решения:
+- **Почему карточка `/profile` — один ключ, а не 4–5 атомарных.** Вариант «`profile-card-length-label` + `profile-card-thickness-label` + …» (склеивает презентер) даёт переводчику набор маленьких кусочков без контекста — он не знает, как они склеятся. Многострочный `profile-card` с `{ $nick }`/`{ $length_cm }`/`{ $thickness_level }` показывает весь layout сразу, и переводчик может, например, поменять порядок строк под язык (если в EN «Equipment» традиционно идёт перед «Length»). Минус — multi-line-индентация в Fluent чувствительна к позиции эмодзи (см. ниже).
+- **Почему `use_isolating=False` именно сейчас, а не в 1.5.A.** В 1.5.A bundle был занят только короткими RU-ключами (`start-*`), и плейсхолдеры были редкими (только `position` в `start-queued`). Изоляция-марки никому не мешали. В 1.5.C появилась карточка с тремя плейсхолдерами в одной строке, и тесты типа `assert "47 см" in card` стали падать — потому что текст в реальности `\u206847\u2069 см`. Чтобы не тащить везде «нормализующий» helper, проще сразу выключить изоляцию: наши локали все LTR, RTL не ожидается даже в дальних спринтах.
+- **Почему `title_message_key` — public.** Я мог сделать локализацию титула приватной деталью `ProfilePresenter`, но тогда `TopPresenter` дублировал бы код. Вынес в модуль профиля как public helper — это маленький contract `Title → MessageKey`, и оба презентера используют его без копипасты. Контрактный тест `test_every_title_value_resolves_in_real_bundle` гарантирует, что любой новый член `Title` получит ключ в `.ftl` (иначе `FluentMessageBundle.format` бросит `MessageKeyError` — это и есть «безопасник»).
+- **Почему legacy `render_full_nick(...)` оставлена.** `bot/presenters/forest.py` ещё пользуется старой pure-сигнатурой. Менять её сейчас означало бы тащить миграцию forest-презентера в этот PR — это +200 LoC и риск сломать flow `/forest` без отдельной проверки. Оставил `render_full_nick(...)` как RU-only-shim, помечен в docstring «1.5.D уберёт после миграции forest». Эта тактика — стандартный «strangler» подход: новый код пишется параллельно, старый удаляется отдельным PR-ом.
+- **Тест-стратегия — двухслойная.** Маркерный `FakeMessageBundle` (`<locale>:<key>[k=v,...]`) проверяет, что **handler/презентер зовёт нужный ключ с нужными параметрами** — это юнит-тест. Реальный `FluentMessageBundle` поверх `locales/{ru,en}.ftl` проверяет, что **ключ действительно существует, рендерится и содержит нужные подстроки** — это интеграция с инфраструктурой. Раздел «два слоя» нужен потому, что иначе либо пришлось бы тестировать на марк-строках без проверки реального вывода, либо парсить русский/английский текст из `.ftl` в каждом тесте — оба плохие крайности.
+- **Чего НЕТ в этом PR (специально оставлено для 1.5.D/E).** Миграция `/forest`, `/oracle`, `/upgrade` (отдельные handler-ы и презентеры — каждый со своим набором ключей и тестов). Команда `/lang ru|en` + миграция `players.locale_override` + use-case `SetPlayerLocale` (уехала в 1.5.E вместе с 300+ JSON-логами). Идея — держать каждый PR в районе 300–500 LoC + ≤30–40 тестов; склеивать всё в один PR — это против §0.4 ПД.
+
+---
+
 ## 2026-05-05 — Спринт 1.5.B: DI `IMessageBundle` + `/start` через `StartPresenter`
 
 **Автор:** Devin (по запросу sufficientdorette)
