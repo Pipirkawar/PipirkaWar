@@ -27,13 +27,18 @@ from __future__ import annotations
 
 from aiogram import Router
 from aiogram.filters import Command
+from aiogram.filters.command import CommandObject
 from aiogram.types import Message
 
+from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.dau import GetDauStats, SetMaxDau
+from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.bot.middlewares import TgIdentity
+from pipirik_wars.bot.presenters.anticheat import AnticheatUnbanPresenter
+from pipirik_wars.domain.player import PlayerNotFoundError
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
 from pipirik_wars.shared.errors import ConfigError
 
@@ -179,3 +184,90 @@ async def handle_set_max_dau(
         await message.answer(msg)
     else:
         await message.answer(f"✅ MAX_DAU не изменён ({result.new_max_dau}) — значение совпало.")
+
+
+def _parse_anticheat_unban(raw_args: str | None) -> tuple[int, str] | None:
+    """Распарсить аргументы `/anticheat_unban <tg_id> <reason>`.
+
+    Возвращает `(tg_id, reason)` или `None`, если формат неверен:
+    - меньше двух токенов;
+    - первый токен не int или ноль;
+    - reason пустой после трима.
+
+    `tg_id` Telegram-а — int (положительный для пользователей,
+    отрицательный для каналов; здесь принимаем любой не-ноль).
+    """
+    if raw_args is None:
+        return None
+    parts = raw_args.strip().split(maxsplit=1)
+    if len(parts) != 2:
+        return None
+    try:
+        tg_id = int(parts[0])
+    except ValueError:
+        return None
+    reason = parts[1].strip()
+    if tg_id == 0 or not reason:
+        return None
+    return tg_id, reason
+
+
+@router.message(Command("anticheat_unban"))
+async def handle_anticheat_unban(
+    message: Message,
+    command: CommandObject,
+    tg_identity: TgIdentity | None,
+    lift_anticheat_ban: LiftAnticheatBan,
+    bundle: IMessageBundle,
+    locale: Locale | None = None,
+) -> None:
+    """Снять anti-cheat soft-ban с игрока (Спринт 1.6.G; super_admin only).
+
+    Использование: `/anticheat_unban <tg_id> <reason>`. Reason обязательна,
+    идёт в `audit_log` как причина снятия.
+
+    Ответы локализованы (`anticheat-unban-*` в `locales/{ru,en}.ftl`).
+    Не из ЛС → стандартный ответ «только в ЛС». Не super_admin →
+    `not_authorized`-текст без светки попытки в audit (намеренно).
+    """
+    presenter = AnticheatUnbanPresenter(bundle=bundle)
+    effective_locale = locale or DEFAULT_LOCALE
+    chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
+    if chat_kind != "private" or tg_identity is None:
+        await message.answer(REPLY_NON_PRIVATE_RU)
+        return
+
+    parsed = _parse_anticheat_unban(command.args)
+    if parsed is None:
+        await message.answer(presenter.usage(locale=effective_locale))
+        return
+    target_tg_id, reason = parsed
+
+    try:
+        result = await lift_anticheat_ban.execute(
+            actor_tg_id=tg_identity.tg_user_id,
+            target_tg_id=target_tg_id,
+            reason=reason,
+        )
+    except AuthorizationError:
+        await message.answer(presenter.not_authorized(locale=effective_locale))
+        return
+    except PlayerNotFoundError:
+        await message.answer(
+            presenter.player_not_found(locale=effective_locale, tg_id=target_tg_id)
+        )
+        return
+
+    if not result.was_banned:
+        await message.answer(presenter.not_banned(locale=effective_locale, tg_id=target_tg_id))
+        return
+
+    assert result.banned_until_before is not None
+    await message.answer(
+        presenter.success(
+            locale=effective_locale,
+            tg_id=target_tg_id,
+            banned_until_before=result.banned_until_before,
+            reason=result.reason,
+        )
+    )

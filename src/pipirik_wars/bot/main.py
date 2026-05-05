@@ -34,6 +34,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.clan import (
     FreezeClan,
@@ -211,6 +212,7 @@ class Container:
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
     add_length: ILengthGranter
+    lift_anticheat_ban: LiftAnticheatBan
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -442,6 +444,14 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=audit,
         clock=clock,
     )
+    # /anticheat_unban (Спринт 1.6.G) — admin-команда снятия soft-ban-а.
+    lift_anticheat_ban = LiftAnticheatBan(
+        uow=uow,
+        admins=admins,
+        players=players,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -489,6 +499,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,
         add_length=add_length,
+        lift_anticheat_ban=lift_anticheat_ban,
     )
 
 
@@ -527,6 +538,7 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["clock"] = container.clock
     dispatcher["bundle"] = container.bundle
     dispatcher["set_player_locale"] = container.set_player_locale
+    dispatcher["lift_anticheat_ban"] = container.lift_anticheat_ban
     return dispatcher
 
 

@@ -23,6 +23,56 @@
 
 ---
 
+## 2026-05-04 — Спринт 1.6.G: bot-команда `/anticheat_unban` + `LiftAnticheatBan`
+
+**Автор:** Devin (по запросу azurehannah)
+**Тип:** application / bot / domain / i18n
+**Связано:** `current_tasks.md` Спринт 1.6.G, ПД 1.6.7 (development_plan.md §4), ГДД §3.3, §18.6.
+
+Что сделано:
+- **Domain — `Admin.can_lift_anticheat_ban()`**: новый метод. Возвращает `True` только для активного `super_admin`. Намеренно строже, чем `support`: сценарий редкий (false-positive trip-wire-а), требует ручного анализа `audit_log`-а перед действием.
+- **Application — `application.anticheat.LiftAnticheatBan`** (`application/anticheat/lift_ban.py`):
+    - Конструктор: `uow`, `admins`, `players`, `audit`, `clock`.
+    - `execute(*, actor_tg_id, target_tg_id, reason) -> LiftAnticheatBanResult`. Валидирует, что `reason.strip()` не пустой (иначе `ValueError`).
+    - Шаги внутри одной `IUnitOfWork`-транзакции (`async with self._uow:`):
+        1. `admins.get_by_tg_id(actor)` → проверка `can_lift_anticheat_ban()` → `AuthorizationError`.
+        2. `players.get_by_tg_id(target)` → `PlayerNotFoundError`, если нет.
+        3. Если игрок не в активном soft-ban-е (`is_anticheat_banned(now)` False) — идемпотентный no-op (`was_banned=False`, audit не пишем).
+        4. Иначе: `player.with_anticheat_ban_lifted(now)` → `players.save(...)` → audit `ANTICHEAT_BAN_LIFTED` с `before={"anticheat_ban_until": <iso>}` / `after={"anticheat_ban_until": null}` / `reason=<actor reason>` / `idempotency_key=anticheat_unban:{actor}:{target}:{ts}`.
+    - Authz и мутация — в одной транзакции: защита от гонки «админа деактивировали между authz и мутацией».
+- **Bot — handler `/anticheat_unban` в `bot/handlers/admin.py`** (тот же файл, что и `/balance_reload`/`/admin_stats`/`/set_max_dau`):
+    - Только в ЛС (вне ЛС → стандартный `REPLY_NON_PRIVATE_RU`).
+    - Парсер `_parse_anticheat_unban(...)`: первый токен — int (не ноль, отрицательные допустимы для каналов), остальное — `reason` (обязательна, ненулевая после трима).
+    - `AuthorizationError` / `PlayerNotFoundError` / no-op / success — каждое возвращает соответствующий локализованный текст. `AuthorizationError` намеренно НЕ светим в audit (не палим попытку нелегитимному пользователю).
+- **Presenter `AnticheatUnbanPresenter`** (`bot/presenters/anticheat.py`): рендер 5 ответов (`usage`, `not_authorized`, `player_not_found`, `not_banned`, `success`) через `IMessageBundle`.
+- **Локализация (RU + EN)**:
+    - `anticheat-unban-usage` — формат команды.
+    - `anticheat-unban-not-authorized` — нет прав.
+    - `anticheat-unban-player-not-found` — игрок не найден (с параметром `tg_id`).
+    - `anticheat-unban-not-banned` — бан уже не активен (с параметром `tg_id`).
+    - `anticheat-unban-success` — успех (с параметрами `tg_id`, `banned-until-before`, `reason`).
+- **Composition root**: `LiftAnticheatBan` сконструирован в `bot/main.py::build_container` после `set_player_locale`; добавлен в `Container` и в workflow-data dispatcher-а (`dispatcher["lift_anticheat_ban"]`).
+
+Результат / артефакты:
+- `src/pipirik_wars/application/anticheat/__init__.py`, `src/pipirik_wars/application/anticheat/lift_ban.py` (новые).
+- `src/pipirik_wars/bot/handlers/admin.py` (handler `/anticheat_unban`, парсер, импорты).
+- `src/pipirik_wars/bot/presenters/anticheat.py` (новый).
+- `src/pipirik_wars/bot/main.py` (DI).
+- `src/pipirik_wars/domain/admin/entities.py` (`Admin.can_lift_anticheat_ban`).
+- `locales/ru.ftl`, `locales/en.ftl` (5 новых ключей).
+- `tests/unit/application/anticheat/test_lift_ban.py` — 13 юнит-тестов (happy-path, идемпотентность 2×, authz 4 роли + неактивный + неизвестный, player-not-found, reason-guard 3×, reason-trim).
+- `tests/unit/bot/handlers/test_anticheat_unban.py` — 13 юнит-тестов handler-а (не-ЛС, невалидные args 7×, AuthorizationError, PlayerNotFoundError, no-op, success, locale-fallback).
+- `tests/unit/bot/test_composition_root.py` — обновлён под новый параметр `Container.lift_anticheat_ban`.
+- Все тесты: `pytest tests/unit -q`: **1288 passed, 1 skipped**. `pytest tests/integration -q`: **163 passed**. Архитектурный guard 1.6.F всё ещё зелёный (новый код не использует `with_length`).
+
+Заметки / решения:
+- **Транзакция авторизации.** Существующие admin-команды (`SetMaxDau`, `ReloadBalance`) делают `admins.get_by_tg_id` ДО `async with self._uow:`. Это работает только в тестах (FakeAdminRepository), но в production упало бы на `RuntimeError("UnitOfWork is not entered")` — `SqlAlchemyAdminRepository.get_by_tg_id` тянет `uow.session`. В `LiftAnticheatBan` намеренно открыли UoW первой строкой, чтобы код был корректен и в production-режиме. Существующие use-cases оставлены как есть — рефактор в скоупе 1.6.G не входит, но потенциальная задача: `1.X — починить admin authz-flow для SqlAlchemy-репозитория`.
+- **Идемпотентный no-op.** Если бан и так не активен (None или истёк), мы возвращаем `was_banned=False` без save и без audit. Альтернативой было бы писать «no-op» audit, но это создаёт лишний шум; админу в чате и так показывается «no action needed».
+- **Reason обязателен.** Это требование ГДД §18.6 («любая админ-команда оставляет след в audit под именем конкретного админа с причиной»). Пустой reason → `ValueError` на стороне use-case-а (handler-парсер сначала отсекает на уровне args). В audit пишется именно `reason.strip()`.
+- **`anticheat-admin-alert` ключ.** В исходной формулировке упоминался для алёрта админу при срабатывании trip-wire. На текущей фазе `IAnticheatAdminAlerter` реализован через structlog (`StructlogAnticheatAdminAlerter`, 1.6.D), не через i18n. Этот ключ был отложен — будет добавлен, когда появится Telegram-канал для админ-алёртов.
+
+---
+
 ## 2026-05-04 — Спринт 1.6.F: миграция `FinishForestRun` / `InvokeOracle` на `ILengthGranter`
 
 **Автор:** Devin (по запросу azurehannah)
