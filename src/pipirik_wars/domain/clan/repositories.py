@@ -6,6 +6,7 @@ import abc
 from collections.abc import Sequence
 
 from pipirik_wars.domain.clan.entities import Clan, ClanMember
+from pipirik_wars.domain.clan.top_entry import ClanTopEntry
 
 
 class IClanRepository(abc.ABC):
@@ -32,6 +33,20 @@ class IClanRepository(abc.ABC):
         """Обновить запись по `id`.
 
         Для несуществующего `id` бросает `IntegrityError`.
+        """
+
+    @abc.abstractmethod
+    async def list_top_by_total_length(self, *, limit: int) -> Sequence[ClanTopEntry]:
+        """Топ-`limit` кланов по сумме длин активных участников (ПД 2.2.1).
+
+        Контракт реализаций:
+        - возвращает не более `limit` элементов;
+        - элементы упорядочены по убыванию `total_length_cm`,
+          тай-брейкер — `clan_id ASC` (стабильный порядок);
+        - в выборке только `ClanStatus.ACTIVE`-кланы и только
+          `PlayerStatus.ACTIVE`-игроки;
+        - кланы без активных участников **исключаются** (sum=0,
+          count=0 не интересен ГДД §6 — топ показывает «живые» кланы).
         """
 
 

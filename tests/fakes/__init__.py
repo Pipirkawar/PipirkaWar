@@ -43,6 +43,7 @@ from tests.fakes.player_locale_resolver import FakePlayerLocaleResolver
 from tests.fakes.player_repo import FakePlayerRepository
 from tests.fakes.random import FakeRandom
 from tests.fakes.signup_queue import FakeSignupQueueRepository
+from tests.fakes.top_clans import FakeClanTopQuery
 from tests.fakes.top_players import FakeTopPlayersQuery
 from tests.fakes.uow import FakeUnitOfWork
 
@@ -57,6 +58,7 @@ __all__ = [
     "FakeBalanceConfig",
     "FakeClanMembershipRepository",
     "FakeClanRepository",
+    "FakeClanTopQuery",
     "FakeClock",
     "FakeDauCounter",
     "FakeDauLimit",

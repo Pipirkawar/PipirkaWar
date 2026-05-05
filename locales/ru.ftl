@@ -65,6 +65,15 @@ top-empty = 🏆 Пока в топе никого нет. Стань первы
 # Один ряд топа: «<rank>. Титул Название Имя — N см».
 top-entry = { $rank }. { $nick } — { $length_cm } см
 
+## /clantop (Спринт 2.2.A)
+
+clantop-header = 🛡 <b>Топ кланов</b>
+
+clantop-empty = 🛡 Кланов в топе пока нет. Добавь бота в группу — и зарегистрируй клан!
+
+# Один ряд топа: «<rank>. Название клана — N см (M 👥)».
+clantop-entry = { $rank }. { $clan_title } — { $total_length_cm } см ({ $member_count } 👥)
+
 ## /oracle (Спринт 1.4.B → 1.5.D)
 
 oracle-group = 🔮 Команда /oracle доступна только в личке бота. Открой приватный чат и повтори.

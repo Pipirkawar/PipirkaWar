@@ -53,7 +53,7 @@ from pipirik_wars.application.pvp import (
 )
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
-from pipirik_wars.application.top import GetTopPlayers
+from pipirik_wars.application.top import GetTopClans, GetTopPlayers
 from pipirik_wars.bot.main import Container, build_container, build_dispatcher
 from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
@@ -109,6 +109,7 @@ from tests.fakes import (
     FakeBalanceConfig,
     FakeClanMembershipRepository,
     FakeClanRepository,
+    FakeClanTopQuery,
     FakeClock,
     FakeDauThresholdAlerter,
     FakeDelayedJobScheduler,
@@ -190,6 +191,7 @@ def _container_with_fakes() -> Container:
     oracle_templates = FakeOracleTemplateProvider()
     duel_log_templates = FakeDuelLogTemplateProvider()
     top_players_query = FakeTopPlayersQuery()
+    top_clans_query = FakeClanTopQuery()
     bundle: IMessageBundle = FakeMessageBundle()
     add_length = AddLength(
         uow=uow,
@@ -429,7 +431,9 @@ def _container_with_fakes() -> Container:
             clock=clock,
         ),
         top_players_query=top_players_query,
+        top_clans_query=top_clans_query,
         get_top_players=GetTopPlayers(query=top_players_query),
+        get_top_clans=GetTopClans(query=top_clans_query),
         bundle=bundle,
         player_locale_resolver=FakePlayerLocaleResolver(),
         set_player_locale=SetPlayerLocale(

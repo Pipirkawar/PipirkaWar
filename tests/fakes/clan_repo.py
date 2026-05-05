@@ -23,15 +23,23 @@ from pipirik_wars.domain.clan import (
     ClanAlreadyRegisteredError,
     ClanMember,
     ClanMembershipExistsError,
+    ClanStatus,
+    ClanTopEntry,
     IClanMembershipRepository,
     IClanRepository,
 )
+from pipirik_wars.domain.player import Player, PlayerStatus
 from pipirik_wars.shared.errors import IntegrityError
 
 
 @dataclass
 class FakeClanRepository(IClanRepository):
     rows: list[Clan] = field(default_factory=list)
+    # Доп. источник для агрегации `list_top_by_total_length`. Заполняется
+    # тестом через `seed_player`/`seed_membership`. Реальный SQL-репо
+    # делает SQL-агрегацию по таблицам `players` × `clan_members`.
+    members: list[ClanMember] = field(default_factory=list)
+    players: list[Player] = field(default_factory=list)
 
     async def get_by_chat_id(self, chat_id: int) -> Clan | None:
         for c in self.rows:
@@ -63,6 +71,41 @@ class FakeClanRepository(IClanRepository):
                 self.rows[i] = clan
                 return clan
         raise IntegrityError(f"Clan id={clan.id} does not exist")
+
+    async def list_top_by_total_length(self, *, limit: int) -> Sequence[ClanTopEntry]:
+        if limit <= 0:
+            raise ValueError(f"limit must be positive, got {limit}")
+        # Агрегация: для каждого ACTIVE-клана считаем сумму длин и
+        # количество ACTIVE-участников. Кланы с 0 ACTIVE-участников
+        # исключаются (см. контракт `IClanRepository.list_top_by_total_length`).
+        active_clans = [c for c in self.rows if c.status is ClanStatus.ACTIVE and c.id is not None]
+        active_player_ids = {
+            p.id for p in self.players if p.id is not None and p.status is PlayerStatus.ACTIVE
+        }
+        player_length: dict[int, int] = {
+            p.id: p.length.cm
+            for p in self.players
+            if p.id is not None and p.status is PlayerStatus.ACTIVE
+        }
+        entries: list[ClanTopEntry] = []
+        for clan in active_clans:
+            assert clan.id is not None
+            members = [
+                m for m in self.members if m.clan_id == clan.id and m.player_id in active_player_ids
+            ]
+            if not members:
+                continue
+            total = sum(player_length.get(m.player_id, 0) for m in members)
+            entries.append(
+                ClanTopEntry(
+                    clan_id=clan.id,
+                    clan_title=clan.title,
+                    total_length_cm=total,
+                    member_count=len(members),
+                ),
+            )
+        entries.sort(key=lambda e: (-e.total_length_cm, e.clan_id))
+        return tuple(entries[:limit])
 
 
 @dataclass

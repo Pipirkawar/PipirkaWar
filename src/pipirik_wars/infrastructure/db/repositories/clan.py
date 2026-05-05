@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy import CursorResult, delete, select
+from sqlalchemy import CursorResult, delete, func, select
 from sqlalchemy.exc import IntegrityError
 
 from pipirik_wars.domain.clan import (
@@ -16,10 +16,12 @@ from pipirik_wars.domain.clan import (
     ClanMembershipExistsError,
     ClanStatus,
     ClanTitle,
+    ClanTopEntry,
     IClanMembershipRepository,
     IClanRepository,
 )
-from pipirik_wars.infrastructure.db.models import ClanMemberORM, ClanORM
+from pipirik_wars.domain.player import PlayerStatus
+from pipirik_wars.infrastructure.db.models import ClanMemberORM, ClanORM, UserORM
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from pipirik_wars.infrastructure.db.utils import ensure_utc
 from pipirik_wars.shared.errors import IntegrityError as DomainIntegrityError
@@ -102,6 +104,46 @@ class SqlAlchemyClanRepository(IClanRepository):
             # Может вылететь, если `with_chat_id` мигрировал на занятый chat_id.
             raise ClanAlreadyRegisteredError(chat_id=clan.chat_id) from exc
         return _row_to_clan(row)
+
+    async def list_top_by_total_length(self, *, limit: int) -> Sequence[ClanTopEntry]:
+        if limit <= 0:
+            raise ValueError(f"limit must be positive, got {limit}")
+        # Топ кланов по сумме длин ACTIVE-участников (Спринт 2.2.A / ПД 2.2.1).
+        # INNER JOIN clan_members → users отсеивает «осиротевшие» записи
+        # на уровне БД; WHERE отсекает frozen-кланов и не-active игроков;
+        # GROUP BY по `clans.id`/`clans.title` (PostgreSQL: title должен быть в
+        # GROUP BY либо в агрегате — берём в GROUP BY, чтобы не зависеть от
+        # `functional dependency` диалекта). Сорт: по сумме DESC, тай-брейкер
+        # `clans.id ASC` — стабильный порядок.
+        total_length = func.coalesce(func.sum(UserORM.length_cm), 0).label("total_length_cm")
+        member_count = func.count(UserORM.id).label("member_count")
+        stmt = (
+            select(
+                ClanORM.id,
+                ClanORM.title,
+                total_length,
+                member_count,
+            )
+            .join(ClanMemberORM, ClanMemberORM.clan_id == ClanORM.id)
+            .join(UserORM, UserORM.id == ClanMemberORM.player_id)
+            .where(
+                ClanORM.status == ClanStatus.ACTIVE.value,
+                UserORM.status == PlayerStatus.ACTIVE.value,
+            )
+            .group_by(ClanORM.id, ClanORM.title)
+            .order_by(total_length.desc(), ClanORM.id.asc())
+            .limit(limit)
+        )
+        result = await self._uow.session.execute(stmt)
+        return tuple(
+            ClanTopEntry(
+                clan_id=row.id,
+                clan_title=ClanTitle(value=row.title),
+                total_length_cm=int(row.total_length_cm),
+                member_count=int(row.member_count),
+            )
+            for row in result.all()
+        )
 
 
 class SqlAlchemyClanMembershipRepository(IClanMembershipRepository):
