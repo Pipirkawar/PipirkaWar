@@ -23,6 +23,58 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.1.A: чистый доменный движок боя PvP 1×1
+
+**Автор:** Devin (по запросу persisyellow)
+**Тип:** feature (domain)
+**Связано:** `current_tasks.md` Спринт 2.1.A, ПД 2.1.1 (development_plan.md §5), ГДД §7.1.
+
+Открывающий саб-спринт PvP-эпика 2.1. Стартует Фазу 2 (боевые механики) поверх закрытого MVP DoD (Спринты 1.1–1.6).
+
+Что сделано:
+
+- **Чистый доменный пакет** `src/pipirik_wars/domain/pvp/`:
+    - `entities.py`: `Position(StrEnum)` (HIGH/MID/LOW — единая ось для атак и блоков), `RoundChoice(frozen dataclass)` (атака + блок одного игрока на один раунд), `RoundOutcome(frozen dataclass)` (флаги `p1_attack_blocked` / `p2_attack_blocked` + нанесённые `p1_damage_to_p2` / `p2_damage_to_p1`), `DuelOutcome(frozen dataclass)` (`tuple[RoundOutcome, ...]` + суммарные dealt + zero-sum дельты + `winner`), `DuelWinner(StrEnum)` (P1/P2/DRAW). Все классы `@dataclass(frozen=True, slots=True)`.
+    - `services.py`: `resolve_round(*, p1, p2, p1_length_cm, p2_length_cm, hit_pct) -> RoundOutcome` — чистая функция, реализует «попал не в блок → урон, в блок → 0» через `attack == block` (3×3 = 9 пар, диагональ — блок). Урон = `floor(defender_length_cm * hit_pct / 100)` на целочисленном делении (без Decimal/float). `resolve_duel(*, rounds, p1_length_cm, p2_length_cm, hit_pct, expected_rounds=3) -> DuelOutcome` — собирает `tuple[RoundOutcome, ...]` через `resolve_round`, считает `p1_total_dealt`/`p2_total_dealt`, выводит `winner` через знак дельты. `len(rounds) ≠ expected_rounds` → `InvalidRoundCountError`. Path-independent: длины обоих игроков на момент НАЧАЛА БОЯ используются на всех 3 раундах.
+    - `errors.py`: `PvpError(DomainError)` базовый, `InvalidRoundCountError`, `InvalidLengthError`.
+- **Балансовая схема** `domain/balance/config.py`:
+    - `PvpDuel1v1Config(_Frozen)` — поля `rounds: int (ge=1, le=10)`, `hit_pct: int (ge=0, le=100)`, `min_length_cm: int (ge=0)`, `min_thickness_level: int (ge=1)`.
+    - `PvpConfig(_Frozen)` — обёртка `duel_1v1: PvpDuel1v1Config` (зарезервирована для будущих режимов 2.2 mass_pvp).
+    - `BalanceConfig.pvp: PvpConfig` — обязательное поле.
+- **Конфиг-файл** `config/balance.yaml`:
+    - Новая секция `pvp.duel_1v1`: `rounds: 3` (ГДД §7.1), `hit_pct: 10` (10% длины защитника за попадание), `min_length_cm: 20` (ГДД §7.1), `min_thickness_level: 2` (ГДД §3.2 / `thickness.unlock_levels.pvp_chat`).
+- **Юнит-тесты** (99 новых):
+    - `tests/unit/domain/pvp/test_resolve_round.py` (51 теста): полная матрица 9 пар атака×блок (3×3 с обеих сторон) → каждое совпадение ⇒ блок, каждое расхождение ⇒ пробитие; damage formula с целочисленным `floor`-делением (10% от 100 = 10, от 23 = 2, от 7 = 0, 0% — никогда, 100% = вся длина); погранцы (нулевая длина защитника, отрицательная длина → `InvalidLengthError`); `RoundOutcome` сохраняет выборы и флаги; frozen-immutability через `dataclasses.FrozenInstanceError`.
+    - `tests/unit/domain/pvp/test_resolve_duel.py` (24 теста): сценарии чистой победы P1 (3 пробития) / P2 / DRAW (равный обмен, нулевой обмен); zero-sum инвариант `p1_delta + p2_delta == 0` параметризованно (6 пар начальных длин и hit_pct); path-independence (порядок раундов не меняет суммарный dealt и winner-а); `InvalidRoundCountError` для 0/1/5 раундов при `expected_rounds=3`; `expected_rounds=1` и `=5` для коротких/длинных дуэлей; `DuelOutcome` immutability + `tuple` (не `list`) в `rounds`.
+    - `tests/unit/domain/balance/test_pvp_config.py` (24 теста): валидный default-payload, границы полей (`rounds` 1..10 ок, 0/-1/11 нет; `hit_pct` 0..100 ок, -1/101/200 нет; неотрицательные длины и уровень толщины ≥ 1), `frozen + extra=forbid` (попытка мутации → `ValidationError`, неизвестное поле → `ValidationError`), обязательность секции `pvp` в `BalanceConfig` (отсутствие → ошибка валидации, невалидное содержимое → ошибка).
+- **Дополнительно (фикс CI на main):**
+    - `tests/unit/application/anticheat/test_lift_ban.py` — импорт `Length` / `Thickness` / `Username` перенесён с `domain/player/entities` (где они только re-экспортируются без `__all__`) на `domain/player/value_objects` (где они объявлены). Mypy-strict в `--no-implicit-reexport`-режиме раньше падал на `attr-defined` для этих имён, что блокировало `make ci` независимо от моих изменений.
+
+Результат / артефакты:
+
+- 99 новых юнит-тестов; локально `make ci` зелёный: **1531 passed, 1 skipped, 97.03% покрытие**.
+- Layered-architecture (`.importlinter`) проходит: `domain/pvp/` импортирует только `domain/shared/`, без `application/` / `infrastructure/` / `bot/` / `aiogram` / `sqlalchemy`.
+- Файлы:
+    - `src/pipirik_wars/domain/pvp/__init__.py`, `entities.py`, `errors.py`, `services.py` (новые).
+    - `src/pipirik_wars/domain/balance/config.py`, `__init__.py` (расширены `PvpConfig` / `PvpDuel1v1Config`).
+    - `config/balance.yaml` (новая секция `pvp.duel_1v1`).
+    - `tests/unit/domain/balance/factories.py` (фабрика `valid_balance_payload` расширена `pvp`-секцией).
+    - `tests/unit/domain/pvp/__init__.py`, `test_resolve_round.py`, `test_resolve_duel.py` (новые).
+    - `tests/unit/domain/balance/test_pvp_config.py` (новый).
+    - `tests/unit/application/anticheat/test_lift_ban.py` (исправлен implicit re-export).
+
+Заметки / решения:
+
+- **Одна `Position` enum vs два отдельных `Attack` / `Block`:** в ГДД §7.1 «3 атаки + 3 блока» — это 3 уровня нанесения и 3 уровня защиты ОДНОЙ И ТОЙ ЖЕ оси (HIGH/MID/LOW). Раздельные enum-ы потребовали бы кастов в `resolve_round` (`attack.position == block.position`) и порождали бы тривиальные баги при сравнении. Единая `Position` даёт однозначное `attack == block` ⇔ блок отбил. Локализация подписей кнопок (`pvp-attack-high`/`pvp-block-high`) — забота 2.1.C, не доменных типов.
+- **Path-independent резолв:** все 3 раунда используют ОДНИ И ТЕ ЖЕ начальные длины. После раунда 1 у защитника «осталось бы» меньше длины — но в чистом домене это игнорируется. Так проще тестировать (порядок раундов не влияет), а cap-логика всё равно применяется выше — в use-case 2.1.E через `progression.add_length(...)`. Альтернатива (последовательное обновление длины между раундами) даёт «эффект снежного кома» — победитель раунда 1 наносит меньше в раунде 2, потому что defender уже похудел — и нестабильные тесты. ГДД §7.1 явного требования path-dependence не содержит; при балансе в будущем можно добавить параметр без правок `RoundOutcome`.
+- **Целочисленный `hit_pct` vs Decimal/float:** `damage = floor(L * pct / 100)` гарантирует exact-числа в тестах (10% от 100 = 10, ровно). Decimal/float дали бы «10.0» или «10.000000000000002» в зависимости от платформы — лишний шум в snapshot-тестах. Балансу не нужны 1.5%-доли, а `1..100` целое — достаточно гранулярно.
+- **Без `random` в чистом домене:** выбор атаки/блока приходит «снаружи» как `RoundChoice` (от игрока через ЛС либо от AFK-фоллбэка). Чистая функция → детерминированная, повторяемая в snapshot-тестах. AFK-фоллбэк через `IRandom` будет в 2.1.E (use-case `MakeMove`).
+- **Параметризованный `expected_rounds`:** движок поддерживает короткие (1 раунд) и длинные (5+ раундов) дуэли без правок. Боевой код всегда передаёт `expected_rounds=balance.pvp.duel_1v1.rounds`, но тесты могут симулировать «блиц»-режимы и «epic»-дуэли для будущих режимов 2.2.
+- **`DuelWinner` enum vs `Optional[Position]`:** winner ортогонален позициям и имеет осмысленное значение `DRAW` (равный обмен дилом). Отдельный enum читается яснее, чем `None`.
+- **Вынос фикса `test_lift_ban.py`:** обнаружено, что `make ci` падал на main из-за implicit re-export `Length`/`Thickness`/`Username` в этом тесте (mypy-strict). Это пре-существующая проблема, не моя — но без её фикса CI на моём PR не пройдёт. Минимальный фикс — импортировать из `value_objects` напрямую.
+
+---
+
 ## 2026-05-05 — Спринт 1.6.H: нагрузочный race-test анти-чит-cap-а + `docs/anticheat.md`
 
 **Автор:** Devin (по запросу azurehannah)
