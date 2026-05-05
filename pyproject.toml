@@ -20,7 +20,7 @@ classifiers = [
 
 # -----------------------------------------------------------------------------
 # Runtime dependencies. Phase 0 — security skeleton (Sprint 0.2).
-# Phase 1+ добавит aiogram, APScheduler, fluent-runtime, redis.
+# Phase 1.5+ добавит fluent-runtime (i18n) и redis.
 # -----------------------------------------------------------------------------
 dependencies = [
   "aiogram>=3.13,<4",
@@ -32,6 +32,7 @@ dependencies = [
   "alembic>=1.13,<2",
   "structlog>=24.1,<26",
   "APScheduler>=3.10,<4",
+  "fluent.runtime>=0.4,<1",      # i18n (Mozilla Fluent), Спринт 1.5.A
 ]
 
 [project.optional-dependencies]
@@ -127,6 +128,10 @@ disable_error_code = ["misc"]
 
 [[tool.mypy.overrides]]
 module = ["apscheduler.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["fluent.*"]
 ignore_missing_imports = true
 
 # -----------------------------------------------------------------------------
