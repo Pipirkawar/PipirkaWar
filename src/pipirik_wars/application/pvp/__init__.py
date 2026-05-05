@@ -29,6 +29,11 @@ from pipirik_wars.application.pvp.accept_duel import AcceptDuel, DuelAccepted
 from pipirik_wars.application.pvp.apply_outcome import apply_duel_outcome
 from pipirik_wars.application.pvp.cancel_duel import CancelDuel, DuelCancelled
 from pipirik_wars.application.pvp.challenge_duel import ChallengeDuel, DuelChallenged
+from pipirik_wars.application.pvp.enqueue_global_duel import (
+    EnqueueGlobalDuel,
+    GlobalDuelEnqueued,
+    InvalidLobbyEnqueueError,
+)
 from pipirik_wars.application.pvp.escalate_chat_to_global import (
     DuelEscalated,
     DuelEscalationSkipped,
@@ -38,6 +43,12 @@ from pipirik_wars.application.pvp.expire_lobby_entry import (
     ExpireLobbyEntry,
     LobbyEntryExpirationSkipped,
     LobbyEntryExpired,
+)
+from pipirik_wars.application.pvp.match_from_lobby import (
+    DuelMatched,
+    EmptyLobby,
+    LobbyEntryStale,
+    MatchFromLobby,
 )
 from pipirik_wars.application.pvp.resolve_afk_round import (
     AfkRoundResolved,
@@ -55,10 +66,17 @@ __all__ = [
     "DuelChallenged",
     "DuelEscalated",
     "DuelEscalationSkipped",
+    "DuelMatched",
+    "EmptyLobby",
+    "EnqueueGlobalDuel",
     "EscalateChatToGlobal",
     "ExpireLobbyEntry",
+    "GlobalDuelEnqueued",
+    "InvalidLobbyEnqueueError",
     "LobbyEntryExpirationSkipped",
     "LobbyEntryExpired",
+    "LobbyEntryStale",
+    "MatchFromLobby",
     "MoveSubmitted",
     "ResolveAfkRound",
     "SubmitMove",
