@@ -78,7 +78,12 @@ from pipirik_wars.application.pvp import (
 )
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
-from pipirik_wars.application.top import GetTopPlayers, ITopPlayersQuery
+from pipirik_wars.application.top import (
+    GetTopClans,
+    GetTopPlayers,
+    IClanTopQuery,
+    ITopPlayersQuery,
+)
 from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import register_middlewares
 from pipirik_wars.bot.notifications import TelegramForestFinishNotifier
@@ -105,7 +110,7 @@ from pipirik_wars.domain.shared.ports import (
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
 from pipirik_wars.infrastructure.anticheat import StructlogAnticheatAdminAlerter
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
-from pipirik_wars.infrastructure.cache import TopPlayersCache
+from pipirik_wars.infrastructure.cache import ClanTopCache, TopPlayersCache
 from pipirik_wars.infrastructure.clock import RealClock
 from pipirik_wars.infrastructure.dau import (
     InMemoryDauCounter,
@@ -201,8 +206,9 @@ class Container:
     bundle: IMessageBundle
     player_locale_resolver: IPlayerLocaleResolver
 
-    # Запросы (Спринт 1.4.C)
+    # Запросы (Спринт 1.4.C / 2.2.A)
     top_players_query: ITopPlayersQuery
+    top_clans_query: IClanTopQuery
 
     # Планировщик отложенных задач (Спринт 1.3.C)
     delayed_jobs: IDelayedJobScheduler
@@ -231,6 +237,7 @@ class Container:
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
+    get_top_clans: GetTopClans
     add_length: ILengthGranter
     lift_anticheat_ban: LiftAnticheatBan
 
@@ -314,6 +321,12 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         uow=uow,
         players=players,
         balance=balance,
+        clock=clock,
+        ttl_seconds=60,
+    )
+    top_clans_query = ClanTopCache(
+        uow=uow,
+        clans=clans,
         clock=clock,
         ttl_seconds=60,
     )
@@ -483,6 +496,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clock=clock,
     )
     get_top_players = GetTopPlayers(query=top_players_query)
+    get_top_clans = GetTopClans(query=top_clans_query)
     set_player_locale = SetPlayerLocale(
         uow=uow,
         players=players,
@@ -620,6 +634,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         bundle=bundle,
         player_locale_resolver=player_locale_resolver,
         top_players_query=top_players_query,
+        top_clans_query=top_clans_query,
         delayed_jobs=delayed_jobs,
         dau_counter=dau_counter,
         dau_limit=dau_limit,
@@ -642,6 +657,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,
+        get_top_clans=get_top_clans,
         add_length=add_length,
         lift_anticheat_ban=lift_anticheat_ban,
         challenge_duel=challenge_duel,
@@ -687,6 +703,7 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["upgrade_thickness"] = container.upgrade_thickness
     dispatcher["invoke_oracle"] = container.invoke_oracle
     dispatcher["get_top_players"] = container.get_top_players
+    dispatcher["get_top_clans"] = container.get_top_clans
     dispatcher["balance"] = container.balance
     dispatcher["clock"] = container.clock
     dispatcher["bundle"] = container.bundle

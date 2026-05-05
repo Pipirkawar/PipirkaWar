@@ -64,6 +64,15 @@ top-empty = 🏆 The top is empty for now. Be the first — tap /start!
 # Single row in the top: "<rank>. Title DisplayName Name — N cm".
 top-entry = { $rank }. { $nick } — { $length_cm } cm
 
+## /clantop (Sprint 2.2.A)
+
+clantop-header = 🛡 <b>Clan Top</b>
+
+clantop-empty = 🛡 No clans in the top yet. Add the bot to a group — and register your clan!
+
+# Single row in the clan top: "<rank>. ClanTitle — N cm (M 👥)".
+clantop-entry = { $rank }. { $clan_title } — { $total_length_cm } cm ({ $member_count } 👥)
+
 ## /oracle (Sprint 1.4.B → 1.5.D)
 
 oracle-group = 🔮 The /oracle command works only in the bot's DM. Open a private chat and try again.
