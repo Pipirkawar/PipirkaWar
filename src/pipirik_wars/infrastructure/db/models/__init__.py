@@ -23,6 +23,9 @@
 PvP 1×1 (Спринт 2.1.C):
 - `PvpDuelORM` — таблица `pvp_duels`.
 - `PvpDuelRoundORM` — таблица `pvp_duel_rounds`.
+
+PvP global lobby (Спринт 2.1.F):
+- `PvpGlobalLobbyORM` — таблица `pvp_global_lobby` (FIFO-очередь pending-вызовов GLOBAL_ONLY).
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
@@ -30,7 +33,11 @@ from pipirik_wars.infrastructure.db.models.clan import ClanMemberORM, ClanORM
 from pipirik_wars.infrastructure.db.models.forest import ForestRunORM
 from pipirik_wars.infrastructure.db.models.oracle import OracleInvocationORM
 from pipirik_wars.infrastructure.db.models.player import UserORM
-from pipirik_wars.infrastructure.db.models.pvp import PvpDuelORM, PvpDuelRoundORM
+from pipirik_wars.infrastructure.db.models.pvp import (
+    PvpDuelORM,
+    PvpDuelRoundORM,
+    PvpGlobalLobbyORM,
+)
 from pipirik_wars.infrastructure.db.models.security import (
     ActivityLockORM,
     AuditLogORM,
@@ -49,6 +56,7 @@ __all__ = [
     "OracleInvocationORM",
     "PvpDuelORM",
     "PvpDuelRoundORM",
+    "PvpGlobalLobbyORM",
     "SignupQueueORM",
     "UserORM",
 ]

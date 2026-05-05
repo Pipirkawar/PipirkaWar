@@ -30,6 +30,7 @@ from pipirik_wars.infrastructure.db.models import (  # noqa: F401  (регист
     OracleInvocationORM,
     PvpDuelORM,
     PvpDuelRoundORM,
+    PvpGlobalLobbyORM,
     SignupQueueORM,
     UserORM,
 )

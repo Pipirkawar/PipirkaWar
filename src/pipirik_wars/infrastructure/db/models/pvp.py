@@ -1,8 +1,10 @@
-"""ORM-модели PvP-подсистемы (Спринт 2.1.C).
+"""ORM-модели PvP-подсистемы (Спринт 2.1.C, расширено в 2.1.F).
 
-Зеркалят миграцию ``0009_pvp_duels``: ``pvp_duels`` — корневая запись
-агрегата ``Duel`` (домен 2.1.B) и ``pvp_duel_rounds`` — completed-раунды
-(1:N от duel-а с каскадным удалением).
+Зеркалят миграции ``0009_pvp_duels`` и ``0010_pvp_global_lobby``:
+``pvp_duels`` — корневая запись агрегата ``Duel`` (домен 2.1.B),
+``pvp_duel_rounds`` — completed-раунды (1:N от duel-а с каскадным
+удалением), ``pvp_global_lobby`` — FIFO-очередь pending-вызовов в
+режиме ``GLOBAL_ONLY`` (1:1 от ``pvp_duels``).
 
 State-related инварианты дублируются на CHECK-уровне БД (см.
 миграцию). Доменные мутации (``Duel.accept`` / ``submit_move`` / ...)
@@ -228,3 +230,36 @@ class PvpDuelRoundORM(Base):
             name="ck_pvp_duel_rounds_p2_damage_zero_when_blocked",
         ),
     )
+
+
+class PvpGlobalLobbyORM(Base):
+    """Таблица ``pvp_global_lobby`` — FIFO-очередь PvP-вызовов в режиме
+    ``GLOBAL_ONLY`` (Спринт 2.1.F).
+
+    Связь 1:1 с ``pvp_duels`` через PK = ``duel_id`` (FK CASCADE).
+    Запись добавляется через `EnqueueGlobalDuel` (use-case 2.1.F.2)
+    и удаляется тремя путями:
+
+    * успешный матч из лобби (`MatchFromLobby` → `AcceptDuel` →
+      `IGlobalLobbyRepository.remove`);
+    * истечение TTL (`ExpireLobbyEntry` → `lobby.remove` + `Duel.cancel`);
+    * отмена вызова челленджером (`CancelDuel`-cleanup).
+
+    FIFO-pop поддерживается индексом ``ix_pvp_global_lobby_enqueued_at``
+    (``ORDER BY enqueued_at ASC LIMIT 1``).
+    """
+
+    __tablename__ = "pvp_global_lobby"
+
+    duel_id: Mapped[int] = mapped_column(
+        _AutoIncBigInt,
+        ForeignKey(
+            "pvp_duels.id",
+            ondelete="CASCADE",
+            name="fk_pvp_global_lobby_duel_id_pvp_duels",
+        ),
+        primary_key=True,
+    )
+    enqueued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (Index("ix_pvp_global_lobby_enqueued_at", "enqueued_at"),)

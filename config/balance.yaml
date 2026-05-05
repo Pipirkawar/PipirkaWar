@@ -189,6 +189,9 @@ pvp:
     hit_pct: 10              # 10% длины защитника за попадание (10 см с 100 см)
     min_length_cm: 20        # ГДД §7.1
     min_thickness_level: 2   # ГДД §3.2 (дублирует thickness.unlock_levels.pvp_chat=2)
+    # Спринт 2.1.F — глобальное лобби FIFO и auto-escalation chat→global.
+    global_lobby_ttl_minutes: 10              # ГДД §7.1: вызов в global-лобби живёт 10 мин
+    chat_to_global_promotion_minutes: 3       # ГДД §7.1: chat-вызов авто-промоутится в global через 3 мин
 
 # -----------------------------------------------------------------------------
 # Контент-полиси для каталога цитат главы клана (templates/clan_quotes_*.json).

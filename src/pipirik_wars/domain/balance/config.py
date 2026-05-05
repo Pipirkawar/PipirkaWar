@@ -332,6 +332,16 @@ class PvpDuel1v1Config(_Frozen):
     hit_pct: int = Field(ge=0, le=100)
     min_length_cm: int = Field(ge=0)
     min_thickness_level: int = Field(ge=1)
+    # Спринт 2.1.F: глобальное лобби FIFO + auto-escalation chat→global.
+    # `global_lobby_ttl_minutes` — сколько pending-вызов в `GLOBAL_ONLY`
+    # ждёт оппонента в общем лобби, прежде чем будет отменён шедулером
+    # (ГДД §7.1: 10 мин). `chat_to_global_promotion_minutes` — сколько
+    # `CHAT_THEN_GLOBAL`-вызов ждёт `accept` в чате до авто-промоута в
+    # глобальное лобби (ГДД §7.1: 3 мин). Оба значения целочисленные;
+    # верхняя граница — 60 мин (час), чтобы DAU-gate не флапал на
+    # «вечно зависших» вызовах при балансовом ляпе.
+    global_lobby_ttl_minutes: int = Field(ge=1, le=60)
+    chat_to_global_promotion_minutes: int = Field(ge=1, le=60)
 
 
 class PvpConfig(_Frozen):
