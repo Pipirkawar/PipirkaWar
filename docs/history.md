@@ -23,6 +23,71 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.1.G: PvP — AFK-таймер раунда + scheduler integrations
+
+**Автор:** Devin (по запросу ambitious42)
+**Тип:** feature (balance + domain port + infrastructure scheduler + application use-cases + DI)
+**Связано:** `current_tasks.md` Спринт 2.1.G, ПД 2.1.4 + часть 2.1.5 (`development_plan.md §5`), ГДД §7.1; PR [#56](https://github.com/Pipirkawar/PipirkaWar/pull/56).
+
+После саб-спринта 2.1.F (FIFO глобального лобби) — следующий критический кусок PvP: автодобивание pending-раунда случайным выбором, если игрок молчит дольше 30–60 секунд. Принципиально отличается от F.2 escalation/expiration job-ов тем, что job-ы per-`(duel_id, round_num)` (а не per-`duel_id`), и количество рестартов цепочки на одну дуэль = `expected_rounds` (3).
+
+Что сделано:
+
+- **Balance** (`config/balance.yaml`, `src/pipirik_wars/domain/balance/config.py`, `tests/unit/domain/balance/factories.py`, `tests/unit/domain/balance/test_pvp_config.py`):
+    - Добавлено поле `pvp.duel_1v1.round_timer_seconds: int = Field(ge=30, le=60)`, default 45 (ГДД §7.1: «Таймер раунда 30–60s»).
+    - `build_valid_balance()` пробрасывает дефолт; добавлены параметризованные unit-тесты для нового поля (валидные/невалидные значения).
+- **Port `IDelayedJobScheduler`** (`src/pipirik_wars/domain/shared/ports/scheduler.py`) — 2 новых абстрактных метода:
+    - `schedule_round_afk_resolution(*, duel_id: int, round_num: int, run_at: datetime) -> None` — поставить AFK-таймер на конкретный `(duel_id, round_num)`. Идемпотентен: повторный schedule на ту же пару перезаписывает run_at.
+    - `cancel_round_afk_resolution(*, duel_id: int, round_num: int) -> None` — снять конкретный AFK-таймер. NO-OP, если job-ы нет (например, запоздалый submit после таймаута).
+- **APScheduler-адаптер** (`src/pipirik_wars/infrastructure/scheduler/aps.py`):
+    - Per-round job-id `pvp_round_afk:{duel_id}:{round_num}` (helper `_round_afk_job_id`).
+    - Реализованы оба новых метода через `add_job(..., trigger="date", replace_existing=True)` и `remove_job(...)` (try/except — `JobLookupError` для idempotent cancel).
+    - Новый late-bound `afk_resolution_factory: Callable[[], ResolveAfkRound] | None` (паттерн F.2 — лямбда-замыкание разрешает chicken-and-egg между `delayed_jobs` и `resolve_afk_round`).
+    - `_run_round_afk_job(duel_id: int, round_num: int)`-callback: разрешает фабрику, зовёт `ResolveAfkRound.execute(ResolveAfkRoundInput(duel_id, round_num))`. Если `afk_resolution_factory is None` — `logger.warning(...)` + skip (не ронять APScheduler-job-thread); любая другая ошибка → `logger.exception(...)` (job помечается как прошедшая).
+- **Use-case integration**:
+    - `AcceptDuel` (`src/pipirik_wars/application/pvp/accept_duel.py`): после успешного перехода в IN_PROGRESS вызывает `scheduler.schedule_round_afk_resolution(duel_id=..., round_num=saved.pending_round.round_num, run_at=now + timedelta(seconds=cfg.round_timer_seconds))`. На старом code-path (CHAT_ONLY) — не было scheduler-а; теперь scheduler опционален в `__init__`, но AcceptDuel-процессы 2.1.F.2/F.3 уже инжектят его.
+    - `SubmitMove` (`src/pipirik_wars/application/pvp/submit_move.py`): новые опциональные `__init__`-параметры `balance: IBalanceConfig | None`, `scheduler: IDelayedJobScheduler | None`. Перед мутацией захватывается `prev_round_num = duel.pending_round.round_num`. После save проверяется, изменилось ли `saved.pending_round.round_num` — это и есть «раунд закрылся». Если да: `cancel_round_afk_resolution(duel_id, prev_round_num)` + (если дуэль ещё IN_PROGRESS) `schedule_round_afk_resolution(duel_id, new_round_num, run_at=now + cfg.round_timer_seconds)`. Если дуэль COMPLETED — только cancel.
+    - `ResolveAfkRound` (`src/pipirik_wars/application/pvp/resolve_afk_round.py`): новые опциональные `balance` + `scheduler` в `__init__`. После `force_complete_round` если дуэль не завершилась и `saved.pending_round is not None` — schedule таймер следующего раунда. На stale-input (`pending_round.round_num != input.round_num`) — no-op (ничего не схедулится).
+    - `CancelDuel` — без изменений: `Duel.cancel` работает только в PENDING_ACCEPT, AFK-таймер на этой стадии ещё не существует.
+- **DI** (`src/pipirik_wars/bot/main.py` `build_container`):
+    - `delayed_jobs.afk_resolution_factory = lambda: resolve_afk_round` (поздняя привязка, как `escalate_factory` / `expire_factory` в F.2).
+    - `SubmitMove(...)` и `ResolveAfkRound(...)` получают `balance=balance, scheduler=delayed_jobs`.
+    - `test_composition_root.py` обновлён под новые DI-ключи (4 теста по-прежнему зелёные).
+- **`FakeDelayedJobScheduler`** (`tests/fakes/delayed_job_scheduler.py`, `tests/fakes/__init__.py`):
+    - Новый frozen+slots dataclass `ScheduledRoundAfkJob(duel_id: int, round_num: int, run_at: datetime)`.
+    - Поля `scheduled_round_afk: dict[tuple[int, int], ScheduledRoundAfkJob]` + `cancelled_round_afk: list[tuple[int, int]]`.
+    - Реализации `schedule_round_afk_resolution` (overwrite по ключу) + `cancel_round_afk_resolution` (no-op, добавляет в `cancelled_round_afk` вне зависимости от наличия).
+    - Экспорт `ScheduledRoundAfkJob` в `tests/fakes/__init__.py`.
+- **Тесты — +14**:
+    - `test_accept_duel.py` (+2): таймер раунда 1 ставится; не ставится при ошибках валидации.
+    - `test_submit_move.py` (+4): partial → no-op; round close mid-duel → cancel предыдущего + schedule следующего; round close + COMPLETED → cancel only; без scheduler-а — back-compat.
+    - `test_resolve_afk_round.py` (+4): IN_PROGRESS → schedule next; COMPLETED → no schedule; stale timer (round_num mismatch) → no schedule; без scheduler-а — back-compat.
+    - `test_aps.py` (+8): job-id per-`(duel_id, round_num)`; replace-existing на той же паре; раздельные раунды дают раздельные job-ы; cancel конкретного раунда; cancel missing — no-op; callback успех; factory None → warning + return; unexpected exception → exception-log без падения.
+- **`make ci` зелёный**: ruff + mypy strict + import-linter + 1909 passed (1 skip), coverage **96.13%** (без регрессии относительно F.3-baseline 96.11%).
+
+Результат / артефакты:
+
+- `config/balance.yaml`, `src/pipirik_wars/domain/balance/config.py`, `tests/unit/domain/balance/factories.py`, `tests/unit/domain/balance/test_pvp_config.py` — новое поле + дефолт + тесты.
+- `src/pipirik_wars/domain/shared/ports/scheduler.py` — 2 новых abstract-метода.
+- `src/pipirik_wars/infrastructure/scheduler/aps.py` — late-bound factory + 2 schedule/cancel-метода + callback `_run_round_afk_job`.
+- `src/pipirik_wars/application/pvp/{accept_duel,submit_move,resolve_afk_round}.py` — schedule/cancel-вызовы.
+- `src/pipirik_wars/bot/main.py` — DI-провязка `afk_resolution_factory` + `balance`/`scheduler` в SubmitMove/ResolveAfkRound.
+- `tests/fakes/delayed_job_scheduler.py`, `tests/fakes/__init__.py` — фейк + экспорт.
+- `tests/unit/application/pvp/test_{accept_duel,submit_move,resolve_afk_round}.py` — +10 тестов.
+- `tests/unit/infrastructure/scheduler/test_aps.py` — +8 тестов (TestRoundAfkSchedule + TestRoundAfkCallback).
+- `tests/unit/bot/test_composition_root.py` — DI-обновление.
+
+Заметки / решения:
+
+- **Per-round job-id, а не per-duel**: каждая дуэль на 3 раунда => 3 разных AFK-job-а (не один rolling). Это даёт точечный cancel: когда раунд закрылся реальными ходами или AFK-резолвом, отменяется именно его таймер, а следующий ставится отдельно. Альтернатива (один job на дуэль с rescheduled-trigger-ом) сложнее в idempotency и при concurrent submit-race.
+- **Late-bound `afk_resolution_factory`** (паттерн F.2): чтобы разрешить chicken-and-egg между `delayed_jobs = APSchedulerDelayedJobScheduler(afk_resolution_factory=lambda: resolve_afk_round)` (на этом моменте `resolve_afk_round` ещё не существует) и `resolve_afk_round = ResolveAfkRound(scheduler=delayed_jobs, ...)`. Лямбда захватывает имя по поздней привязке.
+- **`balance` + `scheduler` опциональны в SubmitMove / ResolveAfkRound**: бэк-совместимость для существующих тестов (D-spec) которые билдят use-case без этих параметров. В production-DI всё инжектится; back-compat-кейс ловится новыми тестами `test_no_scheduler_no_op`.
+- **CancelDuel не задействован**: `Duel.cancel` работает только в PENDING_ACCEPT, до accept-а AFK-таймер ещё не схедулится. Если когда-нибудь добавим cancel-after-accept — там понадобится сканирующий cancel диапазона раундов; но это не в G.
+- **Bot-handler integration AFK-уведомлений** (broadcast результата при auto-resolve через DM) — отдельный саб-спринт. После AFK-резолва `Duel.is_completed` пробрасывается через `AfkRoundResolved.duel_completed`, и handler 2.1.E уже умеет показывать результат через `_broadcast_result`. Но job-callback-у нужен handler-side message bundle для DM — там ещё нет нотификатора. Вынесено в backlog.
+- **Pre-existing F.2 callback gaps** (`_run_escalation_job` / `_run_expiration_job` без unit-тестов) остались как были — out-of-scope для G; они уже были в 73%-coverage `aps.py` до этого спринта.
+
+---
+
 ## 2026-05-05 — Спринт 2.1.F.3: глобальное лобби PvP — bot-handlers + /duel_global + локали
 
 **Автор:** Devin (по запросу ambitious42)
