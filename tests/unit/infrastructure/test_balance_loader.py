@@ -75,6 +75,30 @@ class TestReload:
         # последующий get() возвращает новый снимок
         assert loader.get() is new
 
+    def test_reload_picks_up_new_anticheat_caps(self, tmp_path: Path) -> None:
+        """Acceptance Спринта 1.6.B: hot-reload подменяет `anticheat` без рестарта."""
+        path = tmp_path / "balance.yaml"
+        _write_yaml(path, valid_balance_payload())
+        loader = YamlBalanceLoader(path)
+        old = loader.get()
+        assert old.anticheat.daily_cap_cm == 3000
+
+        changed = valid_balance_payload()
+        changed["anticheat"] = {
+            **changed["anticheat"],
+            "daily_cap_cm": 1500,
+            "weekly_cap_cm": 7000,
+            "soft_ban_duration_days": 7,
+        }
+        _write_yaml(path, changed)
+
+        new = loader.reload()
+        assert new.anticheat.daily_cap_cm == 1500
+        assert new.anticheat.weekly_cap_cm == 7000
+        assert new.anticheat.soft_ban_duration_days == 7
+        # старый снимок остался валидным (frozen)
+        assert old.anticheat.daily_cap_cm == 3000
+
     def test_reload_failure_keeps_old_snapshot(self, tmp_path: Path) -> None:
         """Если новая версия yaml невалидна, кэш остаётся прежним (атомарность)."""
         path = tmp_path / "balance.yaml"

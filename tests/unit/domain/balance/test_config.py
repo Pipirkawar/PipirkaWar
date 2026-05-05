@@ -422,6 +422,155 @@ class TestDailyHeadConfig:
             BalanceConfig.model_validate(payload)
 
 
+class TestAnticheatConfig:
+    """Юнит-тесты `AnticheatConfig` (Спринт 1.6.B / ГДД §3.3.5)."""
+
+    @staticmethod
+    def _valid_payload() -> dict[str, Any]:
+        return {
+            "daily_cap_cm": 3000,
+            "weekly_cap_cm": 14000,
+            "soft_ban_duration_days": 14,
+            "organic_sources": [
+                "forest",
+                "oracle",
+                "referral_signup",
+                "referral_thickness",
+                "pvp_reward",
+                "caravan_reward",
+                "raid_reward",
+                "admin_grant",
+            ],
+            "donate_sources": ["stars_payment", "ton_payment", "usdt_payment"],
+        }
+
+    def test_valid(self) -> None:
+        cfg = BalanceConfig.model_validate(_payload_with(anticheat=self._valid_payload()))
+        assert cfg.anticheat.daily_cap_cm == 3000
+        assert cfg.anticheat.weekly_cap_cm == 14000
+        assert cfg.anticheat.soft_ban_duration_days == 14
+        assert "forest" in {s.value for s in cfg.anticheat.organic_sources}
+        assert "stars_payment" in {s.value for s in cfg.anticheat.donate_sources}
+
+    def test_real_balance_yaml_has_anticheat(self) -> None:
+        """Реальный `config/balance.yaml` валиден и содержит `anticheat`."""
+        path = Path("config/balance.yaml")
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        cfg = BalanceConfig.model_validate(raw)
+        assert cfg.anticheat.daily_cap_cm == 3000
+        assert cfg.anticheat.weekly_cap_cm == 14000
+        assert cfg.anticheat.soft_ban_duration_days == 14
+
+    def test_zero_daily_cap_rejected(self) -> None:
+        payload = self._valid_payload() | {"daily_cap_cm": 0}
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_negative_weekly_cap_rejected(self) -> None:
+        payload = self._valid_payload() | {"weekly_cap_cm": -1}
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_zero_soft_ban_duration_rejected(self) -> None:
+        payload = self._valid_payload() | {"soft_ban_duration_days": 0}
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_daily_gt_weekly_rejected(self) -> None:
+        """Суточный лимит не может быть больше недельного."""
+        payload = self._valid_payload() | {
+            "daily_cap_cm": 20000,
+            "weekly_cap_cm": 14000,
+        }
+        with pytest.raises(ValidationError, match="daily_cap_cm"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_daily_eq_weekly_allowed(self) -> None:
+        """`daily == weekly` — допустимая конфигурация (например, для тестов)."""
+        payload = self._valid_payload() | {
+            "daily_cap_cm": 14000,
+            "weekly_cap_cm": 14000,
+        }
+        cfg = BalanceConfig.model_validate(_payload_with(anticheat=payload))
+        assert cfg.anticheat.daily_cap_cm == cfg.anticheat.weekly_cap_cm
+
+    def test_unknown_source_rejected(self) -> None:
+        """Опечатка в имени источника — `forst` вместо `forest`."""
+        payload = self._valid_payload() | {
+            "organic_sources": ["forst", "oracle"],
+        }
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_empty_organic_sources_rejected(self) -> None:
+        payload = self._valid_payload() | {"organic_sources": []}
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_empty_donate_sources_rejected(self) -> None:
+        payload = self._valid_payload() | {"donate_sources": []}
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_organic_donate_intersection_rejected(self) -> None:
+        """Источник не может быть одновременно organic и donate."""
+        payload = self._valid_payload() | {
+            "organic_sources": ["forest", "oracle", "stars_payment"],
+            "donate_sources": ["stars_payment", "ton_payment", "usdt_payment"],
+        }
+        with pytest.raises(ValidationError, match="disjoint"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_organic_duplicates_rejected(self) -> None:
+        payload = self._valid_payload() | {
+            "organic_sources": ["forest", "forest", "oracle"],
+        }
+        with pytest.raises(ValidationError, match="organic_sources contains duplicates"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_donate_duplicates_rejected(self) -> None:
+        payload = self._valid_payload() | {
+            "donate_sources": ["stars_payment", "stars_payment", "ton_payment"],
+        }
+        with pytest.raises(ValidationError, match="donate_sources contains duplicates"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_unknown_in_organic_rejected(self) -> None:
+        """`unknown` — backfill-маркер, не реальный источник."""
+        payload = self._valid_payload() | {
+            "organic_sources": ["forest", "unknown"],
+        }
+        with pytest.raises(ValidationError, match="UNKNOWN"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_unknown_in_donate_rejected(self) -> None:
+        payload = self._valid_payload() | {
+            "donate_sources": ["stars_payment", "unknown"],
+        }
+        with pytest.raises(ValidationError, match="UNKNOWN"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_admin_refund_in_organic_rejected(self) -> None:
+        """`admin_refund` — отрицательная дельта, не агрегируется."""
+        payload = self._valid_payload() | {
+            "organic_sources": ["forest", "admin_refund"],
+        }
+        with pytest.raises(ValidationError, match="ADMIN_REFUND"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_anticheat_section_required(self) -> None:
+        """`anticheat` — обязательная секция в `BalanceConfig`."""
+        payload = copy.deepcopy(valid_balance_payload())
+        del payload["anticheat"]
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(payload)
+
+    def test_extra_field_in_anticheat_rejected(self) -> None:
+        payload = self._valid_payload() | {"unknown_field": 42}
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+
 class TestExtraForbid:
     def test_extra_top_level_field_rejected(self) -> None:
         payload = _payload_with(unknown_section={"foo": 1})
