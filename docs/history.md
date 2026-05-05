@@ -23,6 +23,83 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.6.C: `AnticheatWindow` + `IAnticheatRepository` + миграция `delta_cm`
+
+**Автор:** Devin (по запросу birgit865)
+**Тип:** domain / infra / migration
+**Связано:** `current_tasks.md` Спринт 1.6.C, ПД 1.6.3 (development_plan.md §4), ГДД §3.3.4.
+
+Что сделано:
+- **Миграция `0008_audit_log_delta_cm`** — добавляет в `audit_log`:
+    - колонку `delta_cm INT NULL` — фактически применённая знаковая дельта длины в см. NULL для не-длиновых событий и для всех записей до 1.6.D.
+    - composite-индекс `ix_audit_log_target_source_occurred` (`target_id`, `source`, `occurred_at`) — покрывает rolling-window-агрегацию.
+    - Полностью реверсимая (downgrade чисто откатывает обе вещи).
+- **`AuditLogORM.delta_cm`** + расширение `__table_args__` под composite-индекс.
+- **`AuditEntry.delta_cm: int | None = None`** (бэк-совместимый дефолт; в Спринте 1.6.D через `progression.add_length` будет заполняться явно). `SqlAlchemyAuditLogger.record(...)` пишет колонку.
+- **Новый домен `pipirik_wars.domain.anticheat`** (Clean Architecture / DDD):
+    - `entities.AnticheatWindow` — frozen value object (`player_id`, `since: datetime` UTC-aware, `organic_sum_cm: int >= 0`). Методы `remaining_cap_cm(cap_cm)` (clamp до 0, не отрицательное) и `is_exceeded(cap_cm)` (строгое `>`, ровно cap не считается trip-wire). Конструктор валидирует `player_id > 0`, tz-aware `since`, `organic_sum_cm >= 0`.
+    - `repositories.IAnticheatRepository` — порт. Сигнатура: `sum_organic_in_window(*, player_id, since, organic_sources: Iterable[AuditSource]) -> AnticheatWindow`. Список organic-источников передаётся параметром (не зашит в импле) — единый source-of-truth остаётся в `balance.yaml::anticheat.organic_sources`, use-case 1.6.D сам читает конфиг и пробрасывает.
+- **`infrastructure/db/repositories/anticheat.py::SqlAlchemyAnticheatRepository`** — один SELECT с `COALESCE(SUM(delta_cm), 0)` и фильтром `target_kind='player' AND target_id=:pid AND source IN (...) AND delta_cm IS NOT NULL AND delta_cm > 0 AND occurred_at >= :since`. Пустой `organic_sources` короткозамыкается без обращения к БД. Зарегистрирован в `repositories/__init__.py`.
+- **DI в `bot/main.py`**: `Container.anticheat: IAnticheatRepository` + `SqlAlchemyAnticheatRepository(uow=uow)` в `build_container`. Тестовый сборщик `tests/unit/bot/test_composition_root.py` поднят на новое поле через `FakeAnticheatRepository()`.
+- **`tests/fakes/anticheat_repo.py::FakeAnticheatRepository`** — in-memory имитация для unit-тестов use-case-ов 1.6.D. API: `record_event(player_id, source, delta_cm, occurred_at)` + та же агрегация что и SQL-имп.
+
+Тесты:
+- **`tests/unit/domain/anticheat/test_window.py`** — 16 юнит-тестов:
+    - конструкция (валидный, zero, negative-rejected, zero/negative `player_id`-rejected, naive `since`-rejected, frozen);
+    - `remaining_cap_cm` (под cap / ровно cap → 0 / выше cap → 0 / нулевая сумма / negative cap-rejected);
+    - `is_exceeded` (под cap / ровно cap → False / выше cap → True / 0/0 / negative cap-rejected).
+- **`tests/integration/db/test_anticheat_repository.py`** — 17 integration-тестов:
+    - empty audit_log → 0;
+    - сумма organic positive deltas (3 источника, 17 см итого);
+    - donate-источники (`STARS_PAYMENT`/`TON_PAYMENT`/`USDT_PAYMENT`) исключаются;
+    - `ADMIN_REFUND` с отрицательной дельтой исключается (по source И по `delta_cm > 0`);
+    - `UNKNOWN` исключается (не в organic-list);
+    - window cutoff (25 ч назад — за окном 24 ч);
+    - boundary inclusivity (`occurred_at == since` → включается, `>=`);
+    - других игроков не считает (target_id=999);
+    - `delta_cm IS NULL` исключается;
+    - `delta_cm = 0` исключается;
+    - `target_kind='clan'` исключается (только player-аудит);
+    - частичный organic-subset (только FOREST → 10, ORACLE 20 проигнорирован);
+    - empty `organic_sources` → 0 без обращения к БД;
+    - naive `since` → ValueError;
+    - `player_id <= 0` → ValueError;
+    - 7-day rolling-агрегация (5 событий внутри окна, 1 за окном).
+- **`tests/integration/db/test_migrations.py`** — добавлены кейсы:
+    - `0008_audit_log_delta_cm` присутствует в revisions, `down_revision == '0007_anticheat_foundation'`;
+    - файл миграции в `versions_dir_lists_only_known_files`;
+    - `test_0008_adds_delta_cm_column`: после `upgrade head` есть `delta_cm` в `audit_log` + индекс `ix_audit_log_target_source_occurred`.
+
+Результат / артефакты:
+- **Source code:**
+    - `src/pipirik_wars/domain/anticheat/` (новый пакет: `entities.py` / `repositories.py` / `__init__.py`).
+    - `src/pipirik_wars/infrastructure/db/repositories/anticheat.py` (+ регистрация в `repositories/__init__.py`).
+    - `src/pipirik_wars/infrastructure/db/migrations/versions/20260505_0008_audit_log_delta_cm.py`.
+    - `src/pipirik_wars/infrastructure/db/models/security.py` (+ `delta_cm` колонка + composite-индекс).
+    - `src/pipirik_wars/infrastructure/db/services/audit.py` (+ `delta_cm` пишется).
+    - `src/pipirik_wars/domain/shared/ports/audit.py` (+ `AuditEntry.delta_cm`).
+    - `src/pipirik_wars/bot/main.py` (+ DI поля).
+- **Тесты:**
+    - `tests/unit/domain/anticheat/test_window.py` (новый, 16 кейсов).
+    - `tests/integration/db/test_anticheat_repository.py` (новый, 17 кейсов).
+    - `tests/integration/db/test_migrations.py` (+ 3 кейса для 0008).
+    - `tests/fakes/anticheat_repo.py` (новый) + регистрация в `tests/fakes/__init__.py`.
+    - `tests/unit/bot/test_composition_root.py` (+ `FakeAnticheatRepository` в Container).
+- **Прогон `make ci`:** 1168 passed, 1 skipped, **97.01 %** покрытия. Все 3 import-linter-контракта сохранены (layered_architecture, domain_must_not_import_infrastructure, application_must_not_import_io_libs).
+
+Заметки / решения:
+- **Зачем отдельная колонка `audit_log.delta_cm` вместо вычисления через JSON `(after.length_cm - before.length_cm)`:** `JSON_EXTRACT` в SQLite vs `->>` в Postgres → не-портабельный SQL и плохая индексируемость. Числовая колонка делает агрегацию однозначной (`SUM(delta_cm)`), быстрой (composite-индекс `(target_id, source, occurred_at)`) и не зависит от структуры `before/after`. Для не-длиновых событий — `NULL` (mostly clear).
+- **Знак `delta_cm`:** знаковый int. Положительные — organic-прирост, отрицательные — `admin_refund`. Anti-cheat-окно учитывает только `delta_cm > 0` — `admin_refund` обнуляет действие, не агрегируется как положительный рост (ГДД §3.3.4).
+- **`AuditEntry.delta_cm` дефолт `None`:** старые `AuditEntry`-конструкции (clan_register, balance_reload, dau_threshold_reached и т. д.) не сломались. В Спринте 1.6.D через `progression.add_length` все длиновые use-cases начнут передавать `delta_cm` явно. До тех пор `LENGTH_GRANT`-аудит из `RegisterPlayer.execute_register_with_referral`/`InvokeOracle`/`FinishForestRun` продолжает писать `delta_cm=NULL` — anti-cheat-окно их не сумирует, но это **временно** (Спринт 1.6.F замигрирует). Никакой дрейф в реальный продакшен не уходит, anti-cheat-логика не активна до 1.6.D.
+- **Сигнатура `sum_organic_in_window(*, player_id, since, organic_sources)`:** изначально планировалось без `organic_sources` (списка из конфига). Решение пробрасывать параметром: (1) DI-чистый — repo не зависит от `IBalanceConfig`; (2) hot-reload `balance.yaml` сразу применяется к новым агрегациям без mutate state репо; (3) тесты могут передать узкий subset, что ловит баги со жёстко-зашитым списком.
+- **`AnticheatWindow` как value object а не QueryResult-`int`:** возвращает `AnticheatWindow` чтобы (1) использовать его методы `remaining_cap_cm`/`is_exceeded` на стороне use-case (1.6.D) без отдельного wrap-а; (2) сохранить `since` и `player_id` для логирования/трассировки; (3) явный rolling-window семантика, а не «голое число».
+- **`is_exceeded` строго `>`, не `>=`:** ровно `cap_cm` (например, daily_cap_cm=3000 и сумма=3000) — это «впритык», не trip-wire. Trip-wire срабатывает только при превышении (3001+) — что возможно только при race / прямом обходе clamp-а через `repo.save(player)`. Это сознательно: чтобы случайная гонка под жёстким лимитом не выбрасывала легальных игроков в soft-ban.
+- **Composite-индекс `(target_id, source, occurred_at)` а не `(occurred_at, source, target_id)`:** для anti-cheat-запроса фильтрация по `target_id` максимально селективна (1 игрок vs все), `source` следующий (organic-list ≈ 8 значений из 13), `occurred_at` — финальный range-filter. Postgres planner так и собирает. Если статистика после Phase-2 покажет что-то иное — пере-индексируем без миграции схемы.
+- **Граничное условие `occurred_at >= since` (включающее):** rolling-окно должно быть симметрично: «события за последние 24 часа» включает событие, произошедшее ровно 24 часа назад. В тестах есть явный `test_since_boundary_inclusive`.
+- **Слой-чистота:** `domain/anticheat` зависит только от `domain/shared/ports/audit.AuditSource` — нет зависимостей на `domain/balance` (избегаем циклов). `infrastructure` слой импортирует и `domain/anticheat`, и `infrastructure/db/models` — нормально по слоям.
+
+---
+
 ## 2026-05-05 — Спринт 1.6.B: балансовая секция `anticheat`
 
 **Автор:** Devin (по запросу birgit865)

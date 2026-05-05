@@ -7,6 +7,7 @@
 """
 
 from tests.fakes.admin_repo import FakeAdminRepository
+from tests.fakes.anticheat_repo import FakeAnticheatRepository
 from tests.fakes.audit import FakeAuditLogger
 from tests.fakes.balance import FakeBalanceConfig
 from tests.fakes.clan_repo import FakeClanMembershipRepository, FakeClanRepository
@@ -40,6 +41,7 @@ __all__ = [
     "DauAlertEvent",
     "FakeActivityLockRepository",
     "FakeAdminRepository",
+    "FakeAnticheatRepository",
     "FakeAuditLogger",
     "FakeBalanceConfig",
     "FakeClanMembershipRepository",

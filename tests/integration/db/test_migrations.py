@@ -45,7 +45,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert len(heads) == 1, f"expected single head, got {heads}"
 
     def test_expected_revisions_exist(self) -> None:
-        """0001..0006 должны быть зарегистрированы."""
+        """0001..0008 должны быть зарегистрированы."""
         cfg = _alembic_config("sqlite:///:memory:")
         script = ScriptDirectory.from_config(cfg)
         revisions = {rev.revision for rev in script.walk_revisions()}
@@ -55,6 +55,8 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0004_forest_runs" in revisions
         assert "0005_oracle_invocations" in revisions
         assert "0006_users_locale_override" in revisions
+        assert "0007_anticheat_foundation" in revisions
+        assert "0008_audit_log_delta_cm" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -98,6 +100,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0007 is not None
         assert rev_0007.down_revision == "0006_users_locale_override"
 
+    def test_0008_descends_from_0007(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0008 = script.get_revision("0008_audit_log_delta_cm")
+        assert rev_0008 is not None
+        assert rev_0008.down_revision == "0007_anticheat_foundation"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -109,6 +118,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260505_0005_oracle_invocations.py",
             "20260505_0006_users_locale_override.py",
             "20260505_0007_anticheat_foundation.py",
+            "20260505_0008_audit_log_delta_cm.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -180,6 +190,31 @@ class TestAlembicMigrationsApplyCleanly:
         assert "anticheat_ban_until" in user_cols
         assert "source" in audit_cols
         assert "clamped_from" in audit_cols
+
+    def test_0008_adds_delta_cm_column(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Спринт 1.6.C: миграция добавляет `audit_log.delta_cm` + composite-индекс."""
+        db_path = tmp_path / "alembic_0008.sqlite"
+        async_url = f"sqlite+aiosqlite:///{db_path}"
+        monkeypatch.setenv("DATABASE_URL", async_url)
+
+        cfg = _alembic_config(async_url)
+        command.upgrade(cfg, "head")
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                inspector = inspect(conn)
+                audit_cols = {c["name"] for c in inspector.get_columns("audit_log")}
+                index_names = {ix["name"] for ix in inspector.get_indexes("audit_log")}
+        finally:
+            engine.dispose()
+
+        assert "delta_cm" in audit_cols
+        assert "ix_audit_log_target_source_occurred" in index_names
 
     def test_downgrade_then_upgrade_round_trips(
         self,
