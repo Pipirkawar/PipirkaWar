@@ -68,6 +68,11 @@ class Player:
     created_at: datetime
     updated_at: datetime
     locale_override: str | None = None
+    # ── Спринт 1.6.A (anti-cheat hardcap, ГДД §3.3) ──
+    # NULL = бан не активен. Конкретный datetime = soft-ban до этой точки.
+    # Всегда timezone-aware (UTC). Гейт `AnticheatGuard` сравнивает
+    # с `IClock.now()` — см. `is_anticheat_banned`.
+    anticheat_ban_until: datetime | None = None
 
     @classmethod
     def new(
@@ -89,6 +94,7 @@ class Player:
             status=PlayerStatus.ACTIVE,
             created_at=now,
             updated_at=now,
+            anticheat_ban_until=None,
         )
 
     @property
@@ -160,3 +166,47 @@ class Player:
         if locale_override == self.locale_override:
             return self
         return replace(self, locale_override=locale_override, updated_at=now)
+
+    # ── Anti-cheat (Спринт 1.6.A) ──
+
+    def is_anticheat_banned(self, *, now: datetime) -> bool:
+        """`True`, если игрок в активном soft-ban-е на момент `now`.
+
+        Отдельный метод (а не свойство) — чтобы вызывающий явно передавал
+        текущее время через `IClock.now()`. В domain недопустимы прямые
+        обращения к системным часам.
+        """
+        if self.anticheat_ban_until is None:
+            return False
+        return now < self.anticheat_ban_until
+
+    def with_anticheat_ban(self, *, until: datetime, now: datetime) -> Player:
+        """Поставить или продлить soft-ban до `until` (UTC, timezone-aware).
+
+        Trip-wire (Спринт 1.6.D) вызывает этот метод, когда rolling-сумма
+        organic-длины превысила daily/weekly cap. Если уже стоит более
+        поздний `until` — оставляем его (продлеваем монотонно вверх).
+        Допускается и для frozen-игроков: бан — это сервисное состояние,
+        не привязанное к статусу `ACTIVE/FROZEN`.
+
+        `until` обязан быть timezone-aware и в будущем относительно `now`,
+        иначе `ValueError`. Это спасает от накопления багов «забанили в
+        прошлом» (которые потом не отрабатывают как бан).
+        """
+        if until.tzinfo is None:
+            raise ValueError("anticheat_ban_until must be timezone-aware")
+        if until <= now:
+            raise ValueError("anticheat_ban_until must be in the future relative to now")
+        if self.anticheat_ban_until is not None and until <= self.anticheat_ban_until:
+            return self
+        return replace(self, anticheat_ban_until=until, updated_at=now)
+
+    def with_anticheat_ban_lifted(self, *, now: datetime) -> Player:
+        """Снять soft-ban (используется в `/anticheat_unban`, Спринт 1.6.G).
+
+        Идемпотентно: если бан и так снят — возвращаем тот же инстанс,
+        не дёргая UPDATE и не пишем audit-no-op.
+        """
+        if self.anticheat_ban_until is None:
+            return self
+        return replace(self, anticheat_ban_until=None, updated_at=now)

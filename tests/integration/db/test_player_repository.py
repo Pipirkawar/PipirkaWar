@@ -312,3 +312,51 @@ class TestSqlAlchemyPlayerRepository:
                 await repo.list_top_by_length(limit=0)
             with pytest.raises(ValueError, match="positive"):
                 await repo.list_top_by_length(limit=-3)
+
+    @pytest.mark.asyncio
+    async def test_anticheat_ban_until_roundtrip(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """Спринт 1.6.A: persist + reload `anticheat_ban_until`."""
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        ban_until = NOW + timedelta(days=14)
+        async with uow:
+            stored = await repo.add(_make_new(tg_id=42, username=None))
+            assert stored.anticheat_ban_until is None  # default
+
+            banned = stored.with_anticheat_ban(until=ban_until, now=NOW)
+            saved = await repo.save(banned)
+            assert saved.anticheat_ban_until == ban_until
+
+        # Перечитываем — UTC tz должен сохраниться (см. ensure_utc).
+        async with uow:
+            reloaded = await repo.get_by_tg_id(42)
+            assert reloaded is not None
+            assert reloaded.anticheat_ban_until == ban_until
+            assert reloaded.anticheat_ban_until is not None
+            assert reloaded.anticheat_ban_until.tzinfo is not None
+
+    @pytest.mark.asyncio
+    async def test_anticheat_ban_lifted_persists_null(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        ban_until = NOW + timedelta(days=14)
+        later = NOW + timedelta(days=15)
+        async with uow:
+            stored = await repo.add(_make_new(tg_id=42, username=None))
+            banned = stored.with_anticheat_ban(until=ban_until, now=NOW)
+            await repo.save(banned)
+
+        async with uow:
+            current = await repo.get_by_tg_id(42)
+            assert current is not None
+            lifted = current.with_anticheat_ban_lifted(now=later)
+            await repo.save(lifted)
+
+        async with uow:
+            reloaded = await repo.get_by_tg_id(42)
+            assert reloaded is not None
+            assert reloaded.anticheat_ban_until is None

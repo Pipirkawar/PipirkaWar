@@ -23,6 +23,64 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.6.A: БД-фундамент anti-cheat hardcap-а
+
+**Автор:** Devin (по запросу birgit865)
+**Тип:** infra / domain
+**Связано:** `current_tasks.md` Спринт 1.6.A, ПД 1.6.1 (development_plan.md §4 / Спринт 1.6).
+
+Что сделано:
+- **Миграция `0007_anticheat_foundation`** (`src/pipirik_wars/infrastructure/db/migrations/versions/20260505_0007_anticheat_foundation.py`):
+    - `users.anticheat_ban_until TIMESTAMPTZ NULL` + индекс `ix_users_anticheat_ban_until`. NULL = бан не активен; `datetime` = soft-ban до этой точки. Никаких CHECK-инвариантов: «дата в прошлом» это естественное «бан истёк», и проверять её на каждом INSERT-е не нужно.
+    - `audit_log.clamped_from INT NULL` — заполняется в Спринте 1.6.D, когда `progression.add_length` подрежет дельту под `daily_cap_cm` / `weekly_cap_cm`.
+    - `audit_log.source TEXT NOT NULL` (server_default `'unknown'`, индекс `ix_audit_log_source`, CHECK-инвариант на whitelist `('forest', 'oracle', 'referral_signup', 'referral_thickness', 'pvp_reward', 'caravan_reward', 'raid_reward', 'admin_grant', 'admin_refund', 'stars_payment', 'ton_payment', 'usdt_payment', 'unknown')`). Backfill `'unknown'` для исторических строк.
+    - Полностью реверсимая (`downgrade()` дропает индексы + CHECK + колонки).
+- **Domain (`domain/shared/ports/audit.py`):**
+    - Новый enum `AuditSource` с whitelist-источниками, дублирующими БД-CHECK. Drift-тест `tests/unit/domain/shared/ports/test_audit_source.py` загружает миграцию через `importlib.util` и сравнивает множества — расхождение даст красный CI.
+    - `AuditEntry` расширен полями `source: AuditSource = AuditSource.UNKNOWN` и `clamped_from: int | None = None`. Дефолты гарантируют бэк-совместимость со всеми существующими call-site-ами; миграция в Спринте 1.6.F переведёт их на явное указание источника.
+    - Новые `AuditAction.ANTICHEAT_DAILY_CAP_EXCEEDED` / `ANTICHEAT_WEEKLY_CAP_EXCEEDED` / `ANTICHEAT_BAN_LIFTED` (понадобятся в 1.6.D / 1.6.G).
+- **Domain (`domain/player/entities.py`):**
+    - Новое поле `Player.anticheat_ban_until: datetime | None = None` (frozen-датакласс, `replace(...)` для мутаторов как и для остальных полей).
+    - `is_anticheat_banned(*, now)` — отдельный метод, требующий явного `now` через `IClock` (без скрытого `datetime.now()` в домене).
+    - `with_anticheat_ban(*, until, now)` — продлевает бан **только вверх** (`until > self.anticheat_ban_until`). Это защита от случайной race-condition «два trip-wire-а одновременно укоротили бан». Валидация: `until.tzinfo is not None` и `until > now`, иначе `ValueError`. Допускается на frozen-игроков (бан — сервисное состояние, не зависит от `ACTIVE/FROZEN`).
+    - `with_anticheat_ban_lifted(*, now)` — идемпотентный сброс (используется в `/anticheat_unban` Спринт 1.6.G).
+- **Persistence:**
+    - `infrastructure/db/models/security.py::AuditLogORM` — новые колонки `source` (с `server_default="unknown"` + index) и `clamped_from`, `CheckConstraint("source IN (...)", name="audit_log_source_whitelist")`.
+    - `infrastructure/db/models/player.py::UserORM.anticheat_ban_until` (`DateTime(timezone=True)`, nullable, indexed).
+    - `infrastructure/db/repositories/player.py` — `_row_to_entity` пропускает `anticheat_ban_until` через `ensure_utc(...)`, `add()/save()` пишут поле в строку.
+    - `infrastructure/db/services/audit.py::SqlAlchemyAuditLogger` пишет `source.value` и `clamped_from` в строку.
+- **Тесты:**
+    - Unit: `tests/unit/domain/player/test_entities.py::TestAnticheatBan` (10 кейсов: дефолт, установка, граница `until`, монотонное продление, валидация tz/прошлого, lifting (включая no-op), бан на frozen-игрока, не модифицирует другие поля).
+    - Unit: `tests/unit/domain/shared/ports/test_audit_source.py` — drift-тест enum vs миграция, наличие `unknown`, наличие organic-источников.
+    - Integration: `tests/integration/db/test_player_repository.py` — `test_anticheat_ban_until_roundtrip` (UTC tz сохраняется), `test_anticheat_ban_lifted_persists_null` (lifting записывает NULL в БД).
+    - Integration: `tests/integration/db/test_audit_logger.py` — `test_record_persists_row` обновлён на проверку `source`/`clamped_from`, `test_record_default_source_is_unknown` (бэк-совместимость), `test_record_rejects_invalid_source` (CHECK ловит опечатку, транзакция роллбэкится).
+    - Integration: `tests/integration/db/test_migrations.py` — добавлены `test_0007_descends_from_0006`, обновлён `test_versions_dir_lists_only_known_files`, новый `test_0007_adds_anticheat_columns` (inspect колонки), существующий `test_downgrade_then_upgrade_round_trips` уже автоматом гоняет 0007.
+
+Результат / артефакты:
+- Новые файлы:
+    - `src/pipirik_wars/infrastructure/db/migrations/versions/20260505_0007_anticheat_foundation.py`
+    - `tests/unit/domain/shared/ports/test_audit_source.py`
+- Изменённые файлы:
+    - `src/pipirik_wars/domain/shared/ports/audit.py` — `AuditSource`, расширение `AuditEntry`, новые `AuditAction.ANTICHEAT_*`.
+    - `src/pipirik_wars/domain/shared/ports/__init__.py` — экспорт `AuditSource`.
+    - `src/pipirik_wars/domain/player/entities.py` — поле + 3 метода (`is_anticheat_banned`, `with_anticheat_ban`, `with_anticheat_ban_lifted`).
+    - `src/pipirik_wars/infrastructure/db/models/{player,security}.py`.
+    - `src/pipirik_wars/infrastructure/db/repositories/player.py`.
+    - `src/pipirik_wars/infrastructure/db/services/audit.py`.
+    - 3 файла тестов.
+- `make ci` локально — 1115+ tests passed, coverage **96.94 %**, ruff/mypy --strict/import-linter — все зелёные.
+
+Заметки / решения:
+- **`source` дефолтит в `UNKNOWN`, не падает на старых вызовах.** Альтернатива «сразу обязать source у всех use-cases» дала бы взрыв изменений в одном PR (10+ call-site-ов). Компромисс: в 1.6.A только инфраструктура; в 1.6.F отдельным узким PR-ом мигрируем все call-site-ы на явный source через `progression.add_length(...)` (через DI-порт `ILengthGranter`). Импорт-линтер-контракт против прямых `player.with_length(...)` появится тогда же.
+- **CHECK-инвариант в БД дублирует Python-enum.** Принцип defence-in-depth: opечатка в строке `source="forst"` в Python пройдёт type-checker (`str` совместим с `String(32)`), но упадёт на flush. Drift-тест защищает обратное направление (добавил источник в БД-whitelist, забыл в enum) — упадёт на CI.
+- **`with_anticheat_ban` продлевает только вверх.** Trip-wire (1.6.D) считает rolling-сумму после каждого начисления; при race-condition (две одновременных транзакции) каждая может сработать как «окей, лимит превышен → бан на 14 дней». Без монотонности вторая запись сократила бы бан. С монотонностью max-`until` остаётся стабильным.
+- **`is_anticheat_banned` — метод, а не свойство.** Доменные сущности не имеют доступа к `IClock`; передача `now` явно через параметр — это паттерн всего проекта (см. `Player.with_*(*, now=...)`). Свойство без `now` потребовало бы либо встроить `IClock` в `Player` (нарушение SRP), либо использовать `datetime.now()` (нарушение §0 «никакого времени в domain»).
+- **`Player.anticheat_ban_until: datetime | None = None`** имеет дефолт-значение, чтобы не ломать существующие тесты, которые конструируют `Player` через `Player.new(...)` или с keyword-аргументами без новой колонки. `frozen=True` + `slots=True` сохранены.
+- **Индекс на `users.anticheat_ban_until`** имеет смысл потому, что в 1.6.E `AnticheatGuard` будет читать его в каждом `/upgrade` / `/duel`. Без индекса при росте БД (после Phase-2) full table scan на каждый guard был бы катастрофой.
+- **Индекс на `audit_log.source`** имеет смысл потому, что в 1.6.C `AnticheatRepository.sum_organic_in_window` будет делать `WHERE source IN (...) AND occurred_at > now() - 24h`. Composite-индекс `(source, occurred_at)` появится в Спринте 1.6.C — если статистика покажет, что одной колонки недостаточно. Пока 1.6.A добавляет минимум: `source` отдельно.
+
+---
+
 ## 2026-05-05 — Спринт 1.5.H: docker-compose + README + CONTRIBUTING + VPS-runbook + DoD MVP
 
 **Автор:** Devin (по запросу birgit865)
