@@ -28,6 +28,7 @@ from tests.fakes.delayed_job_scheduler import (
     ScheduledLobbyJob,
     ScheduledRoundAfkJob,
 )
+from tests.fakes.duel_log_templates import FakeDuelLogTemplateProvider
 from tests.fakes.duel_repo import FakeDuelRepository
 from tests.fakes.forest_run_repo import FakeForestRunRepository
 from tests.fakes.global_lobby_repo import FakeGlobalLobbyRepository
@@ -61,6 +62,7 @@ __all__ = [
     "FakeDauLimit",
     "FakeDauThresholdAlerter",
     "FakeDelayedJobScheduler",
+    "FakeDuelLogTemplateProvider",
     "FakeDuelRepository",
     "FakeForestRunRepository",
     "FakeGlobalLobbyRepository",

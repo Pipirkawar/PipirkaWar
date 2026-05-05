@@ -361,6 +361,13 @@ duel-result-victory = 🏆 Победа! +{ NUMBER($delta_cm, useGrouping: 0) } 
 duel-result-defeat = 💀 Поражение. { NUMBER($delta_cm, useGrouping: 0) } см. Длина теперь { NUMBER($new_length_cm, useGrouping: 0) } см.
 duel-result-draw = 🤝 Ничья. Длина не изменилась — { NUMBER($length_cm, useGrouping: 0) } см.
 
+# Карточка результата дуэли (Спринт 2.1.H, ГДД §15) — публичный
+# вариант для расшаривания в чат. `$winner` / `$loser` — отформатированные
+# `@username` / «—». В draw-варианте — `$p1` / `$p2` (без победителя).
+duel-result-card-victory = ⚔️ Дуэль завершена: { $winner } разорвал { $loser } (+{ NUMBER($delta_cm, useGrouping: 0) } см).
+duel-result-card-draw = ⚔️ Дуэль завершена ничьей: { $p1 } и { $p2 } обменялись ударами по нулям.
+duel-share-button = 📢 Поделиться
+
 # /cancel_duel.
 duel-cancelled = ❌ Вызов отменён челленджером { $challenger }.
 duel-cancel-usage = Использование: `/cancel_duel <duel_id>`. ID можно найти в карточке вызова.

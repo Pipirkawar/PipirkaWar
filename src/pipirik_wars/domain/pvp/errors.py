@@ -27,6 +27,7 @@ from __future__ import annotations
 from pipirik_wars.shared.errors import DomainError
 
 __all__ = [
+    "DuelLogNoTemplatesError",
     "DuelNotFoundError",
     "InvalidDuelStateError",
     "InvalidLengthError",
@@ -187,3 +188,15 @@ class PvpRequirementsNotMetError(PvpError):
         self.requirement = requirement
         self.required = required
         self.actual = actual
+
+
+class DuelLogNoTemplatesError(PvpError):
+    """Каталог раунд-логов пуст для запрошенной локали и для fallback-локали.
+
+    Prod-инвариант: каталог `duel_logs_<locale>.json` непуст и содержит
+    ≥ 50 шаблонов на каждую локаль (Спринт 2.1.H, ГДД §15). Если
+    провайдер вернул пустую последовательность — это ошибка деплоя.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("PvP duel-log templates catalog is empty")

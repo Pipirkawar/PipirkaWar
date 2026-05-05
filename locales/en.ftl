@@ -359,6 +359,13 @@ duel-result-victory = 🏆 Victory! +{ NUMBER($delta_cm, useGrouping: 0) } cm. L
 duel-result-defeat = 💀 Defeat. { NUMBER($delta_cm, useGrouping: 0) } cm. Length is now { NUMBER($new_length_cm, useGrouping: 0) } cm.
 duel-result-draw = 🤝 Draw. Length unchanged — { NUMBER($length_cm, useGrouping: 0) } cm.
 
+# Public result card (Sprint 2.1.H, GDD §15) — shareable summary.
+# `$winner` / `$loser` — formatted `@username` / «—». In the draw variant —
+# `$p1` / `$p2` (no winner).
+duel-result-card-victory = ⚔️ Duel over: { $winner } crushed { $loser } (+{ NUMBER($delta_cm, useGrouping: 0) } cm).
+duel-result-card-draw = ⚔️ Duel ended in a draw: { $p1 } and { $p2 } traded zero-damage blows.
+duel-share-button = 📢 Share
+
 # /cancel_duel.
 duel-cancelled = ❌ Challenge cancelled by { $challenger }.
 duel-cancel-usage = Usage: `/cancel_duel <duel_id>`. ID is shown in the challenge card.

@@ -27,6 +27,7 @@ from pipirik_wars.application.pvp import (
     ChallengeDuel,
     DuelMatched,
     EmptyLobby,
+    IDuelLogTemplateProvider,
     LobbyEntryStale,
     MatchFromLobby,
     SubmitMove,
@@ -42,6 +43,7 @@ from pipirik_wars.bot.handlers.duel import (
     handle_pvp_attack,
     handle_pvp_block,
     handle_pvp_reject,
+    handle_share_pvp_result,
 )
 from pipirik_wars.bot.middlewares.auth import TgIdentity
 from pipirik_wars.domain.balance import PvpConfig, PvpDuel1v1Config
@@ -57,6 +59,7 @@ from pipirik_wars.domain.player import (
 from pipirik_wars.domain.progression import AnticheatSoftBanError
 from pipirik_wars.domain.pvp import (
     Duel,
+    DuelLogTemplate,
     DuelMode,
     DuelNotFoundError,
     DuelOutcome,
@@ -70,10 +73,12 @@ from pipirik_wars.domain.pvp import (
     PvpRequirementsNotMetError,
     RoundChoice,
     RoundOutcome,
+    RoundOutcomeKind,
     SelfChallengeError,
 )
 from pipirik_wars.domain.security import LockAlreadyHeldError
-from tests.fakes import FakeBalanceConfig, FakeMessageBundle
+from pipirik_wars.domain.shared.ports import IRandom
+from tests.fakes import FakeBalanceConfig, FakeDuelRepository, FakeMessageBundle, FakeRandom
 from tests.unit.domain.balance.factories import build_valid_balance
 
 _NOW = datetime(2026, 5, 5, 9, 0, tzinfo=UTC)
@@ -1638,11 +1643,17 @@ class TestHandlePvpBlock:
             _RU,
         )
 
-        # Оба DM получили текст: p1 — victory, p2 — defeat
-        assert bot.send_message.await_count == 2
+        # Оба DM получили текст: p1 — victory, p2 — defeat;
+        # плюс публичная карточка с кнопкой «Поделиться» каждому (Спринт 2.1.H).
+        assert bot.send_message.await_count == 4
         texts = [call.kwargs["text"] for call in bot.send_message.await_args_list]
         assert any("ru:duel-result-victory" in t for t in texts)
         assert any("ru:duel-result-defeat" in t for t in texts)
+        assert sum("ru:duel-result-card-victory" in t for t in texts) == 2
+        # Share-карточка идёт с inline-keyboard (один кнопочный ряд),
+        # тогда как персональный result-DM — без markup.
+        markups = [call.kwargs.get("reply_markup") for call in bot.send_message.await_args_list]
+        assert sum(m is not None for m in markups) == 2
 
     async def test_duel_completed_broadcasts_draw(self) -> None:
         cb = _callback(data="pvp-block:11:1:high:low")
@@ -1668,6 +1679,265 @@ class TestHandlePvpBlock:
             _RU,
         )
 
-        assert bot.send_message.await_count == 2
+        # 2 персональных result-DM (draw) + 2 публичных share-карточки.
+        assert bot.send_message.await_count == 4
         texts = [call.kwargs["text"] for call in bot.send_message.await_args_list]
-        assert all("ru:duel-result-draw" in t for t in texts)
+        assert sum("ru:duel-result-draw" in t for t in texts) == 2
+        assert sum("ru:duel-result-card-draw" in t for t in texts) == 2
+
+
+# ─────────────────── Pvp round flavour broadcast (2.1.H) ───────────────────
+
+
+class _StubDuelLogTemplateProvider(IDuelLogTemplateProvider):
+    """Минимальный провайдер: один шаблон на каждую `kind` per-locale."""
+
+    __slots__ = ("_by_locale",)
+
+    def __init__(self, by_locale: dict[str, list[DuelLogTemplate]] | None = None) -> None:
+        self._by_locale = by_locale or {
+            "ru": [
+                DuelLogTemplate(
+                    id="pvp.ru.both_hit.0001",
+                    text="RU-BOTH-HIT {p1}/{p2}",
+                    kind=RoundOutcomeKind.BOTH_HIT,
+                ),
+                DuelLogTemplate(
+                    id="pvp.ru.single_hit.0001",
+                    text="RU-SINGLE {attacker}>{defender}",
+                    kind=RoundOutcomeKind.SINGLE_HIT,
+                ),
+                DuelLogTemplate(
+                    id="pvp.ru.both_blocked.0001",
+                    text="RU-BLOCKED {p1}-{p2}",
+                    kind=RoundOutcomeKind.BOTH_BLOCKED,
+                ),
+            ],
+            "en": [
+                DuelLogTemplate(
+                    id="pvp.en.both_hit.0001",
+                    text="EN-BOTH-HIT {p1}/{p2}",
+                    kind=RoundOutcomeKind.BOTH_HIT,
+                ),
+            ],
+        }
+
+    def get_templates(self, *, locale: str) -> list[DuelLogTemplate]:
+        return list(self._by_locale.get(locale, self._by_locale["ru"]))
+
+
+def _completed_round(
+    *,
+    p1_attack_blocked: bool = False,
+    p2_attack_blocked: bool = False,
+    p1_dmg: int = 0,
+    p2_dmg: int = 0,
+) -> RoundOutcome:
+    return RoundOutcome(
+        p1_choice=RoundChoice(attack=Position.HIGH, block=Position.LOW),
+        p2_choice=RoundChoice(attack=Position.LOW, block=Position.HIGH),
+        p1_attack_blocked=p1_attack_blocked,
+        p2_attack_blocked=p2_attack_blocked,
+        p1_damage_to_p2=p2_dmg,
+        p2_damage_to_p1=p1_dmg,
+    )
+
+
+@pytest.mark.asyncio
+class TestRoundFlavorBroadcast:
+    async def test_round_closed_broadcasts_flavor_then_attack(self) -> None:
+        cb = _callback(data="pvp-block:11:1:high:low")
+        bot = _stub_bot()
+        p1 = _player(pid=1, tg_id=100, username="alice")
+        p2 = _player(pid=2, tg_id=200, username="bob")
+        # Раунд 1 закрылся (both_hit) → pending_round.round_num=2
+        duel = _duel(
+            challenger_id=1,
+            challenged_id=2,
+            state=DuelState.IN_PROGRESS,
+            pending=PendingRound(round_num=2, p1_choice=None, p2_choice=None),
+            completed_rounds=(_completed_round(p1_dmg=2, p2_dmg=2),),
+        )
+        submit = _stub_submit(duel=duel, duel_completed=False)
+
+        await handle_pvp_block(
+            cb,
+            cast(Bot, bot),
+            _identity(),
+            cast(SubmitMove, submit),
+            _stub_players(p1, p2),
+            _bundle(),
+            cast(IPlayerLocaleResolver, _stub_locale_resolver()),
+            _RU,
+            cast(IDuelLogTemplateProvider, _StubDuelLogTemplateProvider()),
+            cast(IRandom, FakeRandom(seed=0)),
+        )
+
+        # 2 flavour DM + 2 attack-prompt DM = 4
+        assert bot.send_message.await_count == 4
+        texts = [call.kwargs["text"] for call in bot.send_message.await_args_list]
+        # Первые два сообщения — flavour (RU-BOTH-HIT)
+        assert sum("RU-BOTH-HIT" in t for t in texts) == 2
+
+    async def test_completed_duel_broadcasts_flavor_for_last_round(self) -> None:
+        cb = _callback(data="pvp-block:11:3:high:low")
+        bot = _stub_bot()
+        p1 = _player(pid=1, tg_id=100, username="alice", length_cm=30)
+        p2 = _player(pid=2, tg_id=200, username="bob", length_cm=20)
+        duel = _duel(
+            challenger_id=1,
+            challenged_id=2,
+            state=DuelState.COMPLETED,
+            final=_outcome(p1_delta_cm=5, p2_delta_cm=-5, winner=DuelWinner.P1),
+            completed_rounds=(
+                _completed_round(
+                    p1_dmg=2, p2_dmg=0, p1_attack_blocked=False, p2_attack_blocked=True
+                ),
+            ),
+        )
+        submit = _stub_submit(duel=duel, duel_completed=True)
+
+        await handle_pvp_block(
+            cb,
+            cast(Bot, bot),
+            _identity(),
+            cast(SubmitMove, submit),
+            _stub_players(p1, p2),
+            _bundle(),
+            cast(IPlayerLocaleResolver, _stub_locale_resolver()),
+            _RU,
+            cast(IDuelLogTemplateProvider, _StubDuelLogTemplateProvider()),
+            cast(IRandom, FakeRandom(seed=0)),
+        )
+
+        # 2 flavour + 2 result + 2 share-card = 6
+        assert bot.send_message.await_count == 6
+        texts = [call.kwargs["text"] for call in bot.send_message.await_args_list]
+        # SINGLE_HIT: p2 заблокирован, значит p1 — атакующий
+        assert sum("RU-SINGLE @alice>@bob" in t for t in texts) == 2
+
+    async def test_no_log_templates_skips_flavor_silently(self) -> None:
+        cb = _callback(data="pvp-block:11:1:high:low")
+        bot = _stub_bot()
+        p1 = _player(pid=1, tg_id=100, username="alice")
+        p2 = _player(pid=2, tg_id=200, username="bob")
+        duel = _duel(
+            challenger_id=1,
+            challenged_id=2,
+            state=DuelState.IN_PROGRESS,
+            pending=PendingRound(round_num=2, p1_choice=None, p2_choice=None),
+            completed_rounds=(_completed_round(p1_dmg=2, p2_dmg=2),),
+        )
+        submit = _stub_submit(duel=duel, duel_completed=False)
+
+        await handle_pvp_block(
+            cb,
+            cast(Bot, bot),
+            _identity(),
+            cast(SubmitMove, submit),
+            _stub_players(p1, p2),
+            _bundle(),
+            cast(IPlayerLocaleResolver, _stub_locale_resolver()),
+            _RU,
+            None,  # log_templates не подвязан → flavour skip
+            None,
+        )
+
+        # Только attack-prompt: 2 DM, без flavour.
+        assert bot.send_message.await_count == 2
+
+
+# ─────────────────── handle_share_pvp_result (2.1.H) ───────────────────
+
+
+@pytest.mark.asyncio
+class TestHandleSharePvpResult:
+    async def test_no_data_returns_silently(self) -> None:
+        cb = _callback(data=None)
+        bot = _stub_bot()
+        await handle_share_pvp_result(
+            cb,
+            cast(Bot, bot),
+            _identity(),
+            FakeDuelRepository(),
+            _stub_players(),
+            _bundle(),
+            _RU,
+        )
+        bot.send_message.assert_not_awaited()
+
+    async def test_invalid_data_outdated_toast(self) -> None:
+        cb = _callback(data="pvp-share:bad")
+        bot = _stub_bot()
+        await handle_share_pvp_result(
+            cb,
+            cast(Bot, bot),
+            _identity(),
+            FakeDuelRepository(),
+            _stub_players(),
+            _bundle(),
+            _RU,
+        )
+        bot.send_message.assert_not_awaited()
+        toast = cb.answer.await_args.args[0]
+        assert "ru:duel-toast-outdated" in toast
+
+    async def test_duel_not_found_returns_toast(self) -> None:
+        cb = _callback(data="pvp-share:999")
+        bot = _stub_bot()
+        await handle_share_pvp_result(
+            cb,
+            cast(Bot, bot),
+            _identity(),
+            FakeDuelRepository(),
+            _stub_players(),
+            _bundle(),
+            _RU,
+        )
+        bot.send_message.assert_not_awaited()
+        toast = cb.answer.await_args.args[0]
+        assert "ru:duel-toast-not-found" in toast
+
+    async def test_success_posts_card_to_chat(self) -> None:
+        cb = _callback(data="pvp-share:1")
+        bot = _stub_bot()
+        p1 = _player(pid=1, tg_id=100, username="alice", length_cm=30)
+        p2 = _player(pid=2, tg_id=200, username="bob", length_cm=20)
+        # Без `id` — `FakeDuelRepository.add()` сам присвоит id=1.
+        duel_seed = Duel(
+            id=None,
+            challenger_id=1,
+            challenged_id=2,
+            mode=DuelMode.CHAT_THEN_GLOBAL,
+            state=DuelState.COMPLETED,
+            hit_pct=20,
+            expected_rounds=3,
+            created_at=_NOW,
+            accepted_at=_NOW,
+            completed_at=_NOW,
+            cancelled_at=None,
+            p1_initial_length_cm=25,
+            p2_initial_length_cm=25,
+            completed_rounds=(),
+            pending_round=None,
+            final_outcome=_outcome(p1_delta_cm=5, p2_delta_cm=-5, winner=DuelWinner.P1),
+        )
+        duels = FakeDuelRepository()
+        await duels.add(duel_seed)
+        await handle_share_pvp_result(
+            cb,
+            cast(Bot, bot),
+            _identity(),
+            duels,
+            _stub_players(p1, p2),
+            _bundle(),
+            _RU,
+        )
+        bot.send_message.assert_awaited_once()
+        kwargs = bot.send_message.await_args.kwargs
+        # Постим в чат, откуда пришёл callback (cb.message.chat.id == 42).
+        assert kwargs["chat_id"] == 42
+        assert "ru:duel-result-card-victory" in kwargs["text"]
+        # Без клавиатуры (нельзя бесконечно расшаривать).
+        assert kwargs.get("reply_markup") is None
+        cb.answer.assert_awaited_once_with()

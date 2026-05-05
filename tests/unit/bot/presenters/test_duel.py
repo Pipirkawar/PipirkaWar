@@ -24,9 +24,19 @@ from pipirik_wars.bot.presenters.duel import (
     parse_attack_callback_data,
     parse_block_callback_data,
     parse_reject_callback_data,
+    parse_share_callback_data,
     reject_callback_data,
+    share_callback_data,
 )
-from pipirik_wars.domain.pvp import Position
+from pipirik_wars.domain.pvp import (
+    DuelLogTemplate,
+    DuelOutcome,
+    DuelWinner,
+    Position,
+    RoundChoice,
+    RoundOutcome,
+    RoundOutcomeKind,
+)
 from pipirik_wars.infrastructure.i18n import FluentMessageBundle
 from tests.fakes import FakeMessageBundle
 
@@ -203,6 +213,17 @@ class TestCallbackDataRoundtrip:
         assert parsed.attack == "high"
         assert parsed.position == "low"
 
+    def test_share_roundtrip(self) -> None:
+        data = share_callback_data(42)
+        assert data == "pvp-share:42"
+        assert parse_share_callback_data(data).duel_id == 42
+
+    def test_share_rejects_non_positive(self) -> None:
+        with pytest.raises(ValueError, match="duel_id must be positive"):
+            share_callback_data(0)
+        with pytest.raises(ValueError):
+            share_callback_data(-3)
+
 
 class TestCallbackDataParsersErrors:
     @pytest.mark.parametrize(
@@ -251,6 +272,183 @@ class TestCallbackDataParsersErrors:
     def test_parse_block_invalid_raises(self, data: str) -> None:
         with pytest.raises(ValueError):
             parse_block_callback_data(data)
+
+    @pytest.mark.parametrize(
+        "data",
+        ["", "wrong:11", "pvp-share:", "pvp-share:abc", "pvp-share:0", "pvp-share:-1"],
+    )
+    def test_parse_share_invalid_raises(self, data: str) -> None:
+        with pytest.raises(ValueError):
+            parse_share_callback_data(data)
+
+
+# ─────────────────────── round_flavor / result_card (Спринт 2.1.H) ─────────
+
+
+def _outcome(
+    *,
+    winner: DuelWinner,
+    p1_delta: int = 0,
+    p2_delta: int = 0,
+) -> DuelOutcome:
+    """Минимальный `DuelOutcome` для тестов карточки результата."""
+    rc = RoundChoice(attack=Position.HIGH, block=Position.LOW)
+    round_zero = RoundOutcome(
+        p1_choice=rc,
+        p2_choice=rc,
+        p1_attack_blocked=False,
+        p2_attack_blocked=False,
+        p1_damage_to_p2=0,
+        p2_damage_to_p1=0,
+    )
+    return DuelOutcome(
+        rounds=(round_zero, round_zero, round_zero),
+        p1_total_dealt=abs(p1_delta) if winner is DuelWinner.P1 else 0,
+        p2_total_dealt=abs(p2_delta) if winner is DuelWinner.P2 else 0,
+        p1_delta_cm=p1_delta,
+        p2_delta_cm=p2_delta,
+        winner=winner,
+    )
+
+
+class TestDuelPresenterRoundFlavor:
+    def test_renders_p1_p2_for_both_hit(self) -> None:
+        tpl = DuelLogTemplate(
+            id="pvp.ru.both_hit.0001",
+            text="🥊 {p1} и {p2} оба пробили блок!",
+            kind=RoundOutcomeKind.BOTH_HIT,
+        )
+        out = _fake().round_flavor(template=tpl, p1_name="@alice", p2_name="@bob")
+        assert out == "🥊 @alice и @bob оба пробили блок!"
+
+    def test_renders_p1_p2_for_both_blocked(self) -> None:
+        tpl = DuelLogTemplate(
+            id="pvp.ru.both_blocked.0001",
+            text="🛡 Двойной блок: {p1} vs {p2}",
+            kind=RoundOutcomeKind.BOTH_BLOCKED,
+        )
+        out = _fake().round_flavor(template=tpl, p1_name="@a", p2_name="@b")
+        assert out == "🛡 Двойной блок: @a vs @b"
+
+    def test_renders_attacker_defender_for_single_hit(self) -> None:
+        tpl = DuelLogTemplate(
+            id="pvp.ru.single_hit.0001",
+            text="💥 {attacker} пробил {defender}",
+            kind=RoundOutcomeKind.SINGLE_HIT,
+        )
+        out = _fake().round_flavor(
+            template=tpl,
+            p1_name="@a",
+            p2_name="@b",
+            attacker_name="@a",
+            defender_name="@b",
+        )
+        assert out == "💥 @a пробил @b"
+
+    def test_returns_raw_text_on_unknown_placeholder(self) -> None:
+        tpl = DuelLogTemplate(
+            id="pvp.ru.both_hit.0002",
+            text="bad: {unknown}",
+            kind=RoundOutcomeKind.BOTH_HIT,
+        )
+        # `str.format` ругается KeyError → возвращаем сырой текст.
+        assert _fake().round_flavor(template=tpl, p1_name="@a", p2_name="@b") == "bad: {unknown}"
+
+
+class TestDuelPresenterResultCard:
+    def test_victory_renders_winner_and_delta_p1(self) -> None:
+        outcome = _outcome(winner=DuelWinner.P1, p1_delta=4, p2_delta=-4)
+        out = _fake().result_card_text(
+            outcome=outcome,
+            p1_name="@alice",
+            p2_name="@bob",
+            locale=Locale("ru"),
+        )
+        assert "ru:duel-result-card-victory" in out
+        assert "winner=@alice" in out and "loser=@bob" in out
+        assert "delta_cm=4" in out
+
+    def test_victory_renders_winner_and_delta_p2(self) -> None:
+        outcome = _outcome(winner=DuelWinner.P2, p1_delta=-3, p2_delta=3)
+        out = _fake().result_card_text(
+            outcome=outcome,
+            p1_name="@alice",
+            p2_name="@bob",
+            locale=Locale("en"),
+        )
+        assert "en:duel-result-card-victory" in out
+        assert "winner=@bob" in out and "loser=@alice" in out
+        assert "delta_cm=3" in out
+
+    def test_draw_uses_draw_key(self) -> None:
+        outcome = _outcome(winner=DuelWinner.DRAW)
+        out = _fake().result_card_text(
+            outcome=outcome,
+            p1_name="@alice",
+            p2_name="@bob",
+            locale=Locale("ru"),
+        )
+        assert "ru:duel-result-card-draw" in out
+        assert "p1=@alice" in out and "p2=@bob" in out
+
+    def test_share_keyboard_one_button_with_correct_callback(self) -> None:
+        keyboard = _fake().share_keyboard(duel_id=7, locale=Locale("ru"))
+        assert len(keyboard.inline_keyboard) == 1
+        row = keyboard.inline_keyboard[0]
+        assert len(row) == 1
+        button = row[0]
+        assert "ru:duel-share-button" in button.text
+        assert button.callback_data == "pvp-share:7"
+
+
+class TestDuelPresenterFluentResultCard:
+    def _make(self) -> DuelPresenter:
+        return DuelPresenter(bundle=_fluent())
+
+    def test_victory_card_ru_contains_winner_and_delta(self) -> None:
+        outcome = _outcome(winner=DuelWinner.P1, p1_delta=5, p2_delta=-5)
+        text = self._make().result_card_text(
+            outcome=outcome,
+            p1_name="@alice",
+            p2_name="@bob",
+            locale=Locale("ru"),
+        )
+        assert "@alice" in text
+        assert "@bob" in text
+        assert "5" in text
+
+    def test_victory_card_en_contains_winner_and_delta(self) -> None:
+        outcome = _outcome(winner=DuelWinner.P2, p1_delta=-2, p2_delta=2)
+        text = self._make().result_card_text(
+            outcome=outcome,
+            p1_name="@alice",
+            p2_name="@bob",
+            locale=Locale("en"),
+        )
+        assert "@bob" in text
+        assert "@alice" in text
+        assert "2" in text
+
+    def test_draw_card_ru_mentions_both(self) -> None:
+        outcome = _outcome(winner=DuelWinner.DRAW)
+        text = self._make().result_card_text(
+            outcome=outcome,
+            p1_name="@a",
+            p2_name="@b",
+            locale=Locale("ru"),
+        )
+        assert "@a" in text
+        assert "@b" in text
+
+    def test_share_button_label_localized_ru(self) -> None:
+        keyboard = self._make().share_keyboard(duel_id=1, locale=Locale("ru"))
+        button = keyboard.inline_keyboard[0][0]
+        assert "Поделиться" in button.text
+
+    def test_share_button_label_localized_en(self) -> None:
+        keyboard = self._make().share_keyboard(duel_id=1, locale=Locale("en"))
+        button = keyboard.inline_keyboard[0][0]
+        assert "Share" in button.text
 
 
 # ─────────────────────── FluentBundle (integration) ───────────────────────

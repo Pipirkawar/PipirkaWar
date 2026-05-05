@@ -33,7 +33,12 @@ from typing import Final, Literal
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
-from pipirik_wars.domain.pvp import Position
+from pipirik_wars.domain.pvp import (
+    DuelLogTemplate,
+    DuelOutcome,
+    DuelWinner,
+    Position,
+)
 
 # --- Callback-data --------------------------------------------------------
 
@@ -42,6 +47,7 @@ _PREFIX_ACCEPT: Final[str] = "pvp-accept"
 _PREFIX_REJECT: Final[str] = "pvp-reject"
 _PREFIX_ATTACK: Final[str] = "pvp-attack"
 _PREFIX_BLOCK: Final[str] = "pvp-block"
+_PREFIX_SHARE: Final[str] = "pvp-share"
 
 # Допустимые значения для `Position`-кодов в callback_data.
 _POSITION_VALUES: Final[frozenset[str]] = frozenset({"high", "mid", "low"})
@@ -88,6 +94,13 @@ class BlockCallbackData:
     position: Literal["high", "mid", "low"]
 
 
+@dataclass(frozen=True, slots=True)
+class ShareCallbackData:
+    """Распаршенный `callback_data` кнопки «Поделиться» (Спринт 2.1.H)."""
+
+    duel_id: int
+
+
 def accept_callback_data(duel_id: int) -> str:
     """Сериализовать `pvp-accept:<duel_id>`."""
     if duel_id <= 0:
@@ -119,6 +132,13 @@ def block_callback_data(
     if duel_id <= 0 or round_num <= 0:
         raise ValueError(f"duel_id and round_num must be positive: {duel_id}, {round_num}")
     return f"{_PREFIX_BLOCK}:{duel_id}:{round_num}:{attack.value}:{position.value}"
+
+
+def share_callback_data(duel_id: int) -> str:
+    """Сериализовать `pvp-share:<duel_id>` (Спринт 2.1.H)."""
+    if duel_id <= 0:
+        raise ValueError(f"duel_id must be positive: {duel_id}")
+    return f"{_PREFIX_SHARE}:{duel_id}"
 
 
 def parse_accept_callback_data(data: str) -> AcceptCallbackData:
@@ -165,6 +185,15 @@ def parse_block_callback_data(data: str) -> BlockCallbackData:
         attack=attack,
         position=position,
     )
+
+
+def parse_share_callback_data(data: str) -> ShareCallbackData:
+    """Распарсить `pvp-share:<duel_id>` (Спринт 2.1.H)."""
+    parts = data.split(":")
+    if len(parts) != 2 or parts[0] != _PREFIX_SHARE:
+        raise ValueError(f"invalid pvp-share callback_data: {data!r}")
+    duel_id = _parse_positive_int(parts[1], field="duel_id")
+    return ShareCallbackData(duel_id=duel_id)
 
 
 def _parse_positive_int(raw: str, *, field: str) -> int:
@@ -228,6 +257,11 @@ _KEY_ROUND_WAITING: Final[MessageKey] = MessageKey("duel-round-waiting")
 _KEY_RESULT_VICTORY: Final[MessageKey] = MessageKey("duel-result-victory")
 _KEY_RESULT_DEFEAT: Final[MessageKey] = MessageKey("duel-result-defeat")
 _KEY_RESULT_DRAW: Final[MessageKey] = MessageKey("duel-result-draw")
+
+# Карточка результата (публичная, для расшаривания) — Спринт 2.1.H.
+_KEY_RESULT_CARD_VICTORY: Final[MessageKey] = MessageKey("duel-result-card-victory")
+_KEY_RESULT_CARD_DRAW: Final[MessageKey] = MessageKey("duel-result-card-draw")
+_KEY_BTN_SHARE: Final[MessageKey] = MessageKey("duel-share-button")
 
 # Карточка отмены и тостов.
 _KEY_CANCELLED: Final[MessageKey] = MessageKey("duel-cancelled")
@@ -479,6 +513,113 @@ class DuelPresenter:
             length_cm=length_cm,
         )
 
+    # --- Раунд-flavour и карточка результата (Спринт 2.1.H) -----------
+
+    def round_flavor(
+        self,
+        *,
+        template: DuelLogTemplate,
+        p1_name: str,
+        p2_name: str,
+        attacker_name: str | None = None,
+        defender_name: str | None = None,
+    ) -> str:
+        """Подставить плейсхолдеры в раунд-flavour-шаблон (ГДД §15).
+
+        Допустимые плейсхолдеры:
+
+        * `{p1}`, `{p2}` — для шаблонов категорий `BOTH_HIT` и
+          `BOTH_BLOCKED`.
+        * `{attacker}`, `{defender}` — для категории `SINGLE_HIT`.
+
+        `attacker_name` / `defender_name` обязательны для `SINGLE_HIT`,
+        иначе используются пустые строки (defensive — `str.format`
+        не падает на unused-keys, но `KeyError` ловит наоборот).
+
+        Если в шаблоне попадётся неожиданный плейсхолдер (например,
+        `{unknown}`) или формат-строка покривлена — отдаём сырой
+        `template.text`, чтобы не сломать сообщение игрока (нарушение
+        каталога должно ловиться integration-тестом провайдера).
+        """
+        # Базовый набор для BOTH_HIT / BOTH_BLOCKED — `{p1}`, `{p2}`.
+        # Для SINGLE_HIT — дополнительно подменяем `{attacker}` /
+        # `{defender}`. Передаём ВСЕ плейсхолдеры одновременно, чтобы
+        # шаблон с любой из категорий рендерился предсказуемо.
+        params: dict[str, str] = {
+            "p1": p1_name,
+            "p2": p2_name,
+            "attacker": attacker_name or "",
+            "defender": defender_name or "",
+        }
+        try:
+            return template.text.format(**params)
+        except (KeyError, IndexError, ValueError):
+            return template.text
+
+    def result_card_text(
+        self,
+        *,
+        outcome: DuelOutcome,
+        p1_name: str,
+        p2_name: str,
+        locale: Locale,
+    ) -> str:
+        """Публичный текст карточки финала дуэли (Спринт 2.1.H, ГДД §15).
+
+        Отдельно от `result_victory` / `result_defeat` / `result_draw`
+        — последние идут в DM игроку, а карточка публичная (возможна
+        для пересылки в чат через кнопку «Поделиться»).
+
+        Победный вариант показывает `+delta_cm` победителя
+        (`p1_delta_cm` или `p2_delta_cm` в зависимости от
+        `outcome.winner`). Ничейный — без дельт.
+        """
+        if outcome.winner is DuelWinner.DRAW:
+            return self._bundle.format(
+                _KEY_RESULT_CARD_DRAW,
+                locale=locale,
+                p1=p1_name,
+                p2=p2_name,
+            )
+        if outcome.winner is DuelWinner.P1:
+            winner_name = p1_name
+            loser_name = p2_name
+            delta_cm = outcome.p1_delta_cm
+        else:
+            winner_name = p2_name
+            loser_name = p1_name
+            delta_cm = outcome.p2_delta_cm
+        return self._bundle.format(
+            _KEY_RESULT_CARD_VICTORY,
+            locale=locale,
+            winner=winner_name,
+            loser=loser_name,
+            delta_cm=delta_cm,
+        )
+
+    def share_keyboard(
+        self,
+        *,
+        duel_id: int,
+        locale: Locale,
+    ) -> InlineKeyboardMarkup:
+        """Inline-клавиатура с одной кнопкой «Поделиться» (Спринт 2.1.H).
+
+        Кнопка несёт `pvp-share:<duel_id>`; обработчик постит
+        `result_card_text(...)` без клавиатуры в чат, откуда нажали.
+        """
+        share_label = self._bundle.format(_KEY_BTN_SHARE, locale=locale)
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=share_label,
+                        callback_data=share_callback_data(duel_id),
+                    ),
+                ],
+            ],
+        )
+
     # --- Полные ошибки (сообщения) ------------------------------------
 
     def requirements_not_met(
@@ -633,6 +774,7 @@ __all__ = [
     "BlockCallbackData",
     "DuelPresenter",
     "RejectCallbackData",
+    "ShareCallbackData",
     "accept_callback_data",
     "attack_callback_data",
     "block_callback_data",
@@ -640,5 +782,7 @@ __all__ = [
     "parse_attack_callback_data",
     "parse_block_callback_data",
     "parse_reject_callback_data",
+    "parse_share_callback_data",
     "reject_callback_data",
+    "share_callback_data",
 ]

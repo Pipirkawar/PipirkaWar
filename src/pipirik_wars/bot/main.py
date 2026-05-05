@@ -71,6 +71,7 @@ from pipirik_wars.application.pvp import (
     EnqueueGlobalDuel,
     EscalateChatToGlobal,
     ExpireLobbyEntry,
+    IDuelLogTemplateProvider,
     MatchFromLobby,
     ResolveAfkRound,
     SubmitMove,
@@ -142,6 +143,7 @@ from pipirik_wars.infrastructure.rate_limit import (
 from pipirik_wars.infrastructure.scheduler import APSchedulerDelayedJobScheduler
 from pipirik_wars.infrastructure.settings import Settings
 from pipirik_wars.infrastructure.templates import (
+    JsonDuelLogTemplateProvider,
     JsonForestLogTemplateProvider,
     JsonOracleTemplateProvider,
 )
@@ -189,8 +191,9 @@ class Container:
     anticheat: IAnticheatRepository
     anticheat_admin_alerter: IAnticheatAdminAlerter
 
-    # Шаблоны (Спринт 1.4.B)
+    # Шаблоны (Спринт 1.4.B / 1.5.G / 2.1.H)
     oracle_templates: IOracleTemplateProvider
+    duel_log_templates: IDuelLogTemplateProvider
 
     # i18n (Спринт 1.5.A → 1.5.B → 1.5.F): локализованные
     # сообщения для handler-ов + резолвер языка игрока для middleware
@@ -300,6 +303,9 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
     )
     forest_log_templates = JsonForestLogTemplateProvider(
+        templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
+    )
+    duel_log_templates = JsonDuelLogTemplateProvider(
         templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
     )
     bundle = FluentMessageBundle(locales_dir=locales_dir or _DEFAULT_LOCALES_DIR)
@@ -610,6 +616,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         anticheat=anticheat,
         anticheat_admin_alerter=anticheat_admin_alerter,
         oracle_templates=oracle_templates,
+        duel_log_templates=duel_log_templates,
         bundle=bundle,
         player_locale_resolver=player_locale_resolver,
         top_players_query=top_players_query,
@@ -696,6 +703,12 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["match_from_lobby"] = container.match_from_lobby
     dispatcher["players"] = container.players
     dispatcher["player_locale_resolver"] = container.player_locale_resolver
+    # PvP round-flavour + share (Спринт 2.1.H) — провайдер JSON-каталога
+    # раунд-логов, RNG для выбора шаблона, `duels` для share-handler-а
+    # (нужно подгрузить дуэль по `duel_id` из callback_data).
+    dispatcher["duel_log_templates"] = container.duel_log_templates
+    dispatcher["pvp_random"] = container.random
+    dispatcher["duels"] = container.duels
     return dispatcher
 
 
