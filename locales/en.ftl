@@ -188,6 +188,12 @@ forest-finished-header = 🌲 { $nick } returned from the forest!
 forest-finished-length =
     📏 Length: +{ NUMBER($length_delta_cm, useGrouping: 0) } cm (was { NUMBER($length_before_cm, useGrouping: 0) }, now { NUMBER($length_after_cm, useGrouping: 0) })
 
+# `{delta}` substitution for forest flavour log templates (Sprint 1.5.G,
+# GDD §15). `$length_delta_cm` — integer; format mirrors `+N cm` in
+# `forest-finished-length`. Kept as a separate key so localizers can
+# change units / sign for future languages without touching templates.
+forest-flavour-delta = +{ NUMBER($length_delta_cm, useGrouping: 0) } cm
+
 # Title "Newbie" granted (first forest return, GDD §8.2).
 forest-finished-title-granted = 🎖 Title earned: Newbie
 

@@ -34,6 +34,7 @@ from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
 from pipirik_wars.bot.presenters.profile import title_message_key
 from pipirik_wars.domain.forest import (
     Drop,
+    ForestLogTemplate,
     ItemDrop,
     NameDrop,
     NoDrop,
@@ -63,6 +64,7 @@ _KEY_STARTED: Final[MessageKey] = MessageKey("forest-started")
 _KEY_STARTED_FALLBACK: Final[MessageKey] = MessageKey("forest-started-fallback")
 _KEY_FINISHED_HEADER: Final[MessageKey] = MessageKey("forest-finished-header")
 _KEY_FINISHED_LENGTH: Final[MessageKey] = MessageKey("forest-finished-length")
+_KEY_FLAVOUR_DELTA: Final[MessageKey] = MessageKey("forest-flavour-delta")
 _KEY_FINISHED_TITLE_GRANTED: Final[MessageKey] = MessageKey("forest-finished-title-granted")
 _KEY_FINISHED_ITEM_FOUND: Final[MessageKey] = MessageKey("forest-finished-item-found")
 _KEY_FINISHED_NAME_GRANTED: Final[MessageKey] = MessageKey("forest-finished-name-granted")
@@ -172,10 +174,18 @@ class ForestPresenter:
         result: ForestRunFinished,
         display_name_after: DisplayName,
         locale: Locale,
+        flavor_template: ForestLogTemplate | None = None,
     ) -> str:
         """Полный текст сообщения «вернулся из леса» (ГДД §8.2).
 
-        Собирается построчно: заголовок + длина + (титул) + (находка).
+        Собирается построчно: заголовок + длина + (титул) + (находка)
+        + (flavour-строка из каталога 1.5.G).
+
+        `flavor_template` (опционально, ПД 1.5.3) — выбранный наружным
+        кодом шаблон забавного лога. Презентер сам подставляет
+        плейсхолдеры `{user}` (полный ник «Титул Название Имя») и
+        `{delta}` (`+N см` / `+N cm` через bundle-ключ
+        `forest-flavour-delta`).
         """
         after = result.player_after
         before = result.player_before
@@ -195,6 +205,15 @@ class ForestPresenter:
                 length_after_cm=after.length.cm,
             ),
         ]
+        if flavor_template is not None:
+            lines.append(
+                self._render_flavor(
+                    template=flavor_template,
+                    nick=nick,
+                    length_delta_cm=result.run.length_delta_cm,
+                    locale=locale,
+                )
+            )
         if result.granted_title:
             lines.append(self._bundle.format(_KEY_FINISHED_TITLE_GRANTED, locale=locale))
 
@@ -344,6 +363,37 @@ class ForestPresenter:
         if name is not None:
             parts.append(name.value)
         return " ".join(parts)
+
+    def _render_flavor(
+        self,
+        *,
+        template: ForestLogTemplate,
+        nick: str,
+        length_delta_cm: int,
+        locale: Locale,
+    ) -> str:
+        """Подставить плейсхолдеры в шаблон забавного лога (ГДД §15).
+
+        Поддерживаемые плейсхолдеры: `{user}` (полный ник),
+        `{delta}` (`+N см` / `+N cm` — берётся из bundle-ключа
+        `forest-flavour-delta`).
+
+        Шаблон может содержать оба плейсхолдера, один из них, или ни
+        одного — `str.format` молча игнорирует unused-keys.
+        """
+        delta = self._bundle.format(
+            _KEY_FLAVOUR_DELTA,
+            locale=locale,
+            length_delta_cm=length_delta_cm,
+        )
+        try:
+            return template.text.format(user=nick, delta=delta)
+        except (KeyError, IndexError, ValueError):
+            # Defensive: если в шаблоне кривой плейсхолдер (`{usr}` /
+            # позиционный) — отдаём сырой текст, чтобы не сломать
+            # сообщение игрока. Это invariant-нарушение каталога, должно
+            # ловиться в integration-тесте на JSON-файле.
+            return template.text
 
 
 def forest_callback_data(action: ForestCallbackAction, run_id: int) -> str:
