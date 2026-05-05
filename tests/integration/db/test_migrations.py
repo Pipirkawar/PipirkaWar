@@ -45,7 +45,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert len(heads) == 1, f"expected single head, got {heads}"
 
     def test_expected_revisions_exist(self) -> None:
-        """0001..0008 должны быть зарегистрированы."""
+        """0001..0009 должны быть зарегистрированы."""
         cfg = _alembic_config("sqlite:///:memory:")
         script = ScriptDirectory.from_config(cfg)
         revisions = {rev.revision for rev in script.walk_revisions()}
@@ -57,6 +57,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0006_users_locale_override" in revisions
         assert "0007_anticheat_foundation" in revisions
         assert "0008_audit_log_delta_cm" in revisions
+        assert "0009_pvp_duels" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -107,6 +108,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0008 is not None
         assert rev_0008.down_revision == "0007_anticheat_foundation"
 
+    def test_0009_descends_from_0008(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0009 = script.get_revision("0009_pvp_duels")
+        assert rev_0009 is not None
+        assert rev_0009.down_revision == "0008_audit_log_delta_cm"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -119,6 +127,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260505_0006_users_locale_override.py",
             "20260505_0007_anticheat_foundation.py",
             "20260505_0008_audit_log_delta_cm.py",
+            "20260505_0009_pvp_duels.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -149,7 +158,7 @@ class TestAlembicMigrationsApplyCleanly:
         finally:
             engine.dispose()
 
-        # Sprint 0.2 + 1.1 + 1.2.C + 1.3.B + 1.4.B таблицы.
+        # Sprint 0.2 + 1.1 + 1.2.C + 1.3.B + 1.4.B + 2.1.C таблицы.
         expected = {
             "alembic_version",
             "idempotency_keys",
@@ -162,6 +171,8 @@ class TestAlembicMigrationsApplyCleanly:
             "signup_queue",
             "forest_runs",
             "oracle_invocations",
+            "pvp_duels",
+            "pvp_duel_rounds",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 
