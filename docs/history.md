@@ -23,6 +23,55 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.6.B: балансовая секция `anticheat`
+
+**Автор:** Devin (по запросу birgit865)
+**Тип:** balance / domain
+**Связано:** `current_tasks.md` Спринт 1.6.B, ПД 1.6.2 (development_plan.md §4 / Спринт 1.6), ГДД §3.3.5.
+
+Что сделано:
+- **`config/balance.yaml`** — новая секция `anticheat` (после `daily_head`, перед `content_policy`):
+    - `daily_cap_cm: 3000` (rolling 24 ч, ГДД §3.3.1)
+    - `weekly_cap_cm: 14000` (rolling 7 дн, ГДД §3.3.2)
+    - `soft_ban_duration_days: 14`
+    - `organic_sources: [forest, oracle, referral_signup, referral_thickness, pvp_reward, caravan_reward, raid_reward, admin_grant]` — попадают в агрегацию trip-wire-а.
+    - `donate_sources: [stars_payment, ton_payment, usdt_payment]` — игнорируются хардкапом.
+    - Обновлён header-комментарий конфига (`§3.3.5 ГДД — анти-чит хардкап`).
+- **`domain/balance/config.py::AnticheatConfig`** — frozen-pydantic value object с импортом `AuditSource` (whitelist из 1.6.A): поля `daily_cap_cm`/`weekly_cap_cm`/`soft_ban_duration_days` (`Field(gt=0)`) + `organic_sources`/`donate_sources` (`tuple[AuditSource, ...]` с `min_length=1`).
+- **Инварианты `_validate(self) -> AnticheatConfig`** (после-валидатор):
+    1. `daily_cap_cm <= weekly_cap_cm` — суточный лимит не может превысить недельный.
+    2. Без дублей в каждом из списков (set-comparison + понятная ошибка с указанием источника).
+    3. `organic_sources ∩ donate_sources = ∅` — источник не может одновременно быть в обоих whitelist-ах.
+    4. `AuditSource.UNKNOWN` запрещён в обоих списках — это backfill-маркер из 1.6.A для исторических записей, не реальный источник.
+    5. `AuditSource.ADMIN_REFUND` запрещён в `organic_sources` — refund-ы пишутся как отрицательные дельты и не агрегируются.
+- **`BalanceConfig.anticheat: AnticheatConfig`** — обязательное поле (без `default`, иначе тестовые YAML-ы без секции прошли бы валидацию).
+- **`domain/balance/__init__.py`** — экспорт `AnticheatConfig` для DI (use-case `progression.add_length` в 1.6.D будет читать `balance.get().anticheat`).
+- **Тесты:**
+    - Unit (`tests/unit/domain/balance/test_config.py::TestAnticheatConfig`) — 18 кейсов: валидный baseline, реальный YAML парсится, `daily/weekly == 0` отклоняется, `daily > weekly` падает, `daily == weekly` разрешён (для тестов), пустой `organic_sources`/`donate_sources` отклоняется, опечатка в имени источника (`forst`) даёт `ValidationError`, intersection падает, дубли в каждом списке падают, `unknown` в любом списке падает, `admin_refund` в organic падает, секция обязательна, `extra=forbid` для `unknown_field`.
+    - Unit hot-reload (`tests/unit/infrastructure/test_balance_loader.py::test_reload_picks_up_new_anticheat_caps`) — пишет YAML с `daily_cap_cm=3000`, реломает на `daily_cap_cm=1500` через `loader.reload()`, проверяет, что `loader.get()` возвращает новый снимок и старая ссылка не изменилась (frozen).
+    - **Существующие тесты `test_reload_*` уже автоматом покрывают новую секцию**, потому что используют `valid_balance_payload()` (теперь содержит `anticheat`).
+    - **`tests/unit/domain/balance/factories.py::valid_balance_payload`** расширен полным валидным `anticheat`-payload-ом.
+
+Результат / артефакты:
+- Изменённые файлы:
+    - `config/balance.yaml` — новая секция + обновление header-комментария.
+    - `src/pipirik_wars/domain/balance/config.py` — `AnticheatConfig` + поле `BalanceConfig.anticheat` + импорт `AuditSource`.
+    - `src/pipirik_wars/domain/balance/__init__.py` — экспорт `AnticheatConfig`.
+    - `tests/unit/domain/balance/factories.py` — `anticheat`-payload в `valid_balance_payload()`.
+    - `tests/unit/domain/balance/test_config.py` — `TestAnticheatConfig` (18 кейсов).
+    - `tests/unit/infrastructure/test_balance_loader.py` — `test_reload_picks_up_new_anticheat_caps`.
+- `make ci` локально — 1133 passed + 1 skipped, coverage **96.96 %**, ruff/mypy --strict/import-linter — все зелёные.
+
+Заметки / решения:
+- **`organic_sources` / `donate_sources` в YAML — массив строк, не словарь.** Pydantic парсит `tuple[AuditSource, ...]` из YAML-списка строк автоматически (StrEnum). Опечатка типа `forst` ловится pydantic-ом с понятной ошибкой «Input should be 'forest', 'oracle', ...», пользователю не нужно знать про CHECK constraint.
+- **Не делать `organic_sources` дефолтом из enum.** Возможно соблазн «`organic_sources: tuple[AuditSource, ...] = (AuditSource.FOREST, AuditSource.ORACLE, ...)`», но это спрятало бы whitelist в Python-коде. Геймдиз должен видеть всё в balance.yaml — если завтра добавится `pvp_chat_reward`, то достаточно отредактировать YAML и hot-reload-нуть, не пересобирать Docker.
+- **Импорт `AuditSource` в `domain/balance/`** не нарушает import-linter (`domain → domain/shared/ports` — допустимо, оба слоя — domain). Если бы AuditSource жил в application/, контракт бы поломался.
+- **`daily == weekly` разрешён как валидная конфигурация.** Это позволяет в тестах ставить `daily=weekly=14000` и проверять только weekly-trip-wire без вмешательства daily-ветки. На production такой конфиг бессмыслен, но отказывать его — лишняя жёсткость.
+- **Hot-reload через `/balance_reload` работает «бесплатно».** Use-case `ReloadBalance` (Спринт 1.1.E) перечитывает весь `BalanceConfig`; добавление новой секции не требует трогать его код. Acceptance-тест в `test_balance_loader` это подтверждает.
+- **Соответствие `organic_sources` ↔ ГДД §3.3.4.** В таблице ГДД источник `admin_grant` помечен как «✅ Да, под лимитом» — это защищает админа от случайных опечаток в `/grant_length` (трип-вайр сработает на самого админа, бан снимается через `/anticheat_unban`).
+
+---
+
 ## 2026-05-05 — Спринт 1.6.A: БД-фундамент anti-cheat hardcap-а
 
 **Автор:** Devin (по запросу birgit865)

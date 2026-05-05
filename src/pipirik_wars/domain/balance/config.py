@@ -18,6 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from pipirik_wars.domain.shared.ports.audit import AuditSource
 from pipirik_wars.shared.errors import IntegrityError
 
 
@@ -259,6 +260,58 @@ class DailyHeadConfig(_Frozen):
         return self
 
 
+class AnticheatConfig(_Frozen):
+    """Конфиг анти-чит хардкапа (ГДД §3.3.5, Спринт 1.6.B).
+
+    Параметры rolling-окон (24 ч / 7 дн) и длительности soft-ban-а, плюс
+    whitelist organic-источников (попадают в агрегацию хардкапа) и
+    blacklist donate-источников (платный канал — без ограничений).
+
+    Источники, отсутствующие в обоих списках (`admin_refund`, `unknown`),
+    вообще не учитываются в агрегации: первый — служебная отрицательная
+    дельта при сторно, второй — backfill для исторических записей.
+    """
+
+    daily_cap_cm: int = Field(gt=0)
+    weekly_cap_cm: int = Field(gt=0)
+    soft_ban_duration_days: int = Field(gt=0)
+    organic_sources: tuple[AuditSource, ...] = Field(min_length=1)
+    donate_sources: tuple[AuditSource, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate(self) -> AnticheatConfig:
+        if self.daily_cap_cm > self.weekly_cap_cm:
+            raise ValueError(
+                f"anticheat.daily_cap_cm ({self.daily_cap_cm}) must be <= "
+                f"weekly_cap_cm ({self.weekly_cap_cm})"
+            )
+        organic_set = set(self.organic_sources)
+        donate_set = set(self.donate_sources)
+        if len(organic_set) != len(self.organic_sources):
+            raise ValueError(
+                f"anticheat.organic_sources contains duplicates: {self.organic_sources}"
+            )
+        if len(donate_set) != len(self.donate_sources):
+            raise ValueError(f"anticheat.donate_sources contains duplicates: {self.donate_sources}")
+        intersection = organic_set & donate_set
+        if intersection:
+            raise ValueError(
+                "anticheat: organic_sources and donate_sources must be disjoint, "
+                f"intersection: {sorted(s.value for s in intersection)}"
+            )
+        if AuditSource.UNKNOWN in organic_set or AuditSource.UNKNOWN in donate_set:
+            raise ValueError(
+                "anticheat: AuditSource.UNKNOWN must not appear in organic_sources "
+                "or donate_sources (it is a backfill marker, not a real source)"
+            )
+        if AuditSource.ADMIN_REFUND in organic_set:
+            raise ValueError(
+                "anticheat: AuditSource.ADMIN_REFUND must not appear in organic_sources "
+                "(refunds are negative deltas, never aggregated as positive growth)"
+            )
+        return self
+
+
 class ContentPolicyClanQuotes(_Frozen):
     """Контент-полиси для каталога цитат главы клана (ГДД §6.1, Q9 v9)."""
 
@@ -308,6 +361,7 @@ class BalanceConfig(_Frozen):
     thickness: ThicknessConfig
     dau_gate: DauGateConfig
     daily_head: DailyHeadConfig
+    anticheat: AnticheatConfig
     content_policy: ContentPolicy
     items_catalog: tuple[ItemEntry, ...] = Field(min_length=_MIN_ITEMS_CATALOG_SIZE)
     names_catalog: tuple[str, ...] = Field(min_length=_MIN_NAMES_CATALOG_SIZE)

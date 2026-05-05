@@ -85,6 +85,26 @@ def valid_balance_payload() -> dict[str, Any]:
             },
         },
         "dau_gate": {"max_dau": 200, "alert_threshold": 0.8},
+        "anticheat": {
+            "daily_cap_cm": 3000,
+            "weekly_cap_cm": 14000,
+            "soft_ban_duration_days": 14,
+            "organic_sources": [
+                "forest",
+                "oracle",
+                "referral_signup",
+                "referral_thickness",
+                "pvp_reward",
+                "caravan_reward",
+                "raid_reward",
+                "admin_grant",
+            ],
+            "donate_sources": [
+                "stars_payment",
+                "ton_payment",
+                "usdt_payment",
+            ],
+        },
         "daily_head": {
             "bonus_min": 1,
             "bonus_max": 20,

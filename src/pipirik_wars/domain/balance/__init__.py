@@ -12,6 +12,7 @@
 """
 
 from pipirik_wars.domain.balance.config import (
+    AnticheatConfig,
     BalanceConfig,
     ContentPolicy,
     ContentPolicyClanQuotes,
@@ -32,6 +33,7 @@ from pipirik_wars.domain.balance.config import (
 from pipirik_wars.domain.balance.ports import IBalanceConfig, IBalanceReloader
 
 __all__ = [
+    "AnticheatConfig",
     "BalanceConfig",
     "ContentPolicy",
     "ContentPolicyClanQuotes",
