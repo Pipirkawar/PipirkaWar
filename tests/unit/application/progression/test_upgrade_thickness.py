@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -19,7 +19,10 @@ from pipirik_wars.domain.player import (
     Thickness,
     Username,
 )
-from pipirik_wars.domain.progression import InsufficientLengthError
+from pipirik_wars.domain.progression import (
+    AnticheatSoftBanError,
+    InsufficientLengthError,
+)
 from pipirik_wars.domain.shared.ports import AuditAction
 from pipirik_wars.shared.errors import ConcurrencyError
 from tests.fakes import (
@@ -40,6 +43,7 @@ def _seed_player(
     tg_id: int = 42,
     length_cm: int,
     thickness_level: int = 1,
+    anticheat_ban_until: datetime | None = None,
 ) -> Player:
     """Положить в репо предзаполненного игрока."""
     player = Player(
@@ -53,6 +57,7 @@ def _seed_player(
         status=PlayerStatus.ACTIVE,
         created_at=_NOW,
         updated_at=_NOW,
+        anticheat_ban_until=anticheat_ban_until,
     )
     players.rows.append(player)
     return player
@@ -206,3 +211,79 @@ class TestUpgradeThicknessErrors:
 
         assert result.player_after.length.cm == 20
         assert result.new_thickness == 2
+
+
+@pytest.mark.asyncio
+class TestUpgradeThicknessAnticheatGate:
+    """Soft-ban-гейт `AnticheatGuard` (Спринт 1.6.E, ГДД §3.3.5).
+
+    Если игрок в активном soft-ban-е — `UpgradeThickness` бросает
+    `AnticheatSoftBanError` ДО любого списания / mutate / audit.
+    """
+
+    async def test_active_ban_raises_before_mutate(self) -> None:
+        use_case, players, _, audit, _, _ = _build_use_case()
+        ban_until = _NOW + timedelta(days=14)
+        _seed_player(
+            players,
+            length_cm=10_000,
+            thickness_level=1,
+            anticheat_ban_until=ban_until,
+        )
+
+        with pytest.raises(AnticheatSoftBanError) as exc_info:
+            await use_case.execute(UpgradeThicknessInput(tg_id=42))
+
+        assert exc_info.value.tg_id == 42
+        assert exc_info.value.banned_until == ban_until
+        # ничего не сохранилось / не записалось в аудит.
+        assert audit.entries == []
+        stored = await players.get_by_tg_id(42)
+        assert stored is not None
+        assert stored.thickness.level == 1
+        assert stored.length.cm == 10_000
+
+    async def test_expired_ban_passes(self) -> None:
+        use_case, players, _, _, _, _ = _build_use_case()
+        # Бан истёк час назад — должен пропускать.
+        _seed_player(
+            players,
+            length_cm=10_000,
+            thickness_level=1,
+            anticheat_ban_until=_NOW - timedelta(hours=1),
+        )
+
+        result = await use_case.execute(UpgradeThicknessInput(tg_id=42))
+
+        assert result.new_thickness == 2
+        assert result.cost_cm == 4_000
+
+    async def test_no_ban_passes(self) -> None:
+        use_case, players, _, _, _, _ = _build_use_case()
+        _seed_player(
+            players,
+            length_cm=10_000,
+            thickness_level=1,
+            anticheat_ban_until=None,
+        )
+
+        result = await use_case.execute(UpgradeThicknessInput(tg_id=42))
+
+        assert result.new_thickness == 2
+
+    async def test_active_ban_check_runs_before_cost_check(self) -> None:
+        """Если игрок в бане И не хватает длины — приоритет у бана."""
+
+        use_case, players, _, audit, _, _ = _build_use_case()
+        # Длины не хватает (нужно 4020, есть 1000) И активен бан.
+        _seed_player(
+            players,
+            length_cm=1_000,
+            thickness_level=1,
+            anticheat_ban_until=_NOW + timedelta(days=1),
+        )
+
+        # Должен бросить именно `AnticheatSoftBanError`, а не `InsufficientLengthError`.
+        with pytest.raises(AnticheatSoftBanError):
+            await use_case.execute(UpgradeThicknessInput(tg_id=42))
+        assert audit.entries == []

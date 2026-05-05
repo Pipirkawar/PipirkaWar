@@ -150,6 +150,12 @@ upgrade-toast-insufficient = Not enough length.
 
 upgrade-toast-race = Cost changed.
 
+# Anti-cheat soft-ban gate on /upgrade (Sprint 1.6.E, ГДД §3.3.5).
+# `$banned-until` is an ISO-8601 string of the ban-expiration moment (UTC, tz-aware).
+upgrade-anticheat-blocked = Upgrade is temporarily frozen. Anti-cheat verification is active until { $banned-until }.
+
+upgrade-toast-anticheat-blocked = Anti-cheat verification active.
+
 # Compressed "Insufficient length" used to replace message text after a
 # callback click (without the full card — handler doesn't know the
 # fresh thickness without re-fetching the profile).

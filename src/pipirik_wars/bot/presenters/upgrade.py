@@ -55,6 +55,8 @@ _KEY_TOAST_CANCELLED: Final[MessageKey] = MessageKey("upgrade-toast-cancelled")
 _KEY_TOAST_PLAYER_NOT_FOUND: Final[MessageKey] = MessageKey("upgrade-toast-player-not-found")
 _KEY_TOAST_INSUFFICIENT: Final[MessageKey] = MessageKey("upgrade-toast-insufficient")
 _KEY_TOAST_RACE: Final[MessageKey] = MessageKey("upgrade-toast-race")
+_KEY_ANTICHEAT_BLOCKED: Final[MessageKey] = MessageKey("upgrade-anticheat-blocked")
+_KEY_TOAST_ANTICHEAT: Final[MessageKey] = MessageKey("upgrade-toast-anticheat-blocked")
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +186,18 @@ class UpgradePresenter:
     def race(self, *, locale: Locale) -> str:
         return self._bundle.format(_KEY_RACE, locale=locale)
 
+    def anticheat_blocked(self, *, banned_until: str, locale: Locale) -> str:
+        """Текст ответа при `AnticheatSoftBanError` (Спринт 1.6.E).
+
+        :param banned_until: ISO-8601 строка момента истечения бана
+            (UTC, tz-aware, обычно `exc.banned_until.isoformat()`).
+        """
+        return self._bundle.format(
+            _KEY_ANTICHEAT_BLOCKED,
+            locale=locale,
+            **{"banned-until": banned_until},
+        )
+
     # --- toast-ы (≤ 200 символов) -------------------------------------
 
     def toast_upgraded(self, *, locale: Locale) -> str:
@@ -200,6 +214,9 @@ class UpgradePresenter:
 
     def toast_race(self, *, locale: Locale) -> str:
         return self._bundle.format(_KEY_TOAST_RACE, locale=locale)
+
+    def toast_anticheat_blocked(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_ANTICHEAT, locale=locale)
 
     # --- клавиатура ---------------------------------------------------
 

@@ -9,9 +9,11 @@
 
 from pipirik_wars.domain.anticheat.admin_alerter import IAnticheatAdminAlerter
 from pipirik_wars.domain.anticheat.entities import AnticheatWindow
+from pipirik_wars.domain.anticheat.guard import AnticheatGuard
 from pipirik_wars.domain.anticheat.repositories import IAnticheatRepository
 
 __all__ = [
+    "AnticheatGuard",
     "AnticheatWindow",
     "IAnticheatAdminAlerter",
     "IAnticheatRepository",
