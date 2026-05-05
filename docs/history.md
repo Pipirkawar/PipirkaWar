@@ -23,6 +23,63 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.1.F.3: глобальное лобби PvP — bot-handlers + /duel_global + локали
+
+**Автор:** Devin (по запросу ambitious42)
+**Тип:** feature (bot handlers + presenters + i18n + test backfill)
+**Связано:** `current_tasks.md` Спринт 2.1.F.3, ПД 2.1.3 (`development_plan.md §5`), ГДД §7.1; PR [#54](https://github.com/Pipirkawar/PipirkaWar/pull/54).
+
+Завершающий саб-PR саб-спринта 2.1.F. F.1 заложил domain+persistence (PR #52), F.2 — use-cases+scheduler+DI (PR #53). F.3 подключает глобальное лобби к Telegram-handler-ам, добавляет новый `/duel_global` и backfill-ит тесты модулей 2.1.E.
+
+Что сделано:
+
+- **`/duel` в ЛС без аргументов → enqueue в глобальное лобби**:
+    - Раньше handler отвечал «coming soon» (placeholder из 2.1.E).
+    - Теперь зовёт `ChallengeDuel(mode=global_only)` (через DI-инжект handler-параметра); use-case через F.2-цепочку enqueue-ит запись в `IGlobalLobbyRepository` + ставит expiration-job через `IDelayedJobScheduler`.
+    - Игроку шлётся `duel-global-enqueued` с `$duel_id` (для `/cancel_duel`) и `$ttl_minutes` (из `balance.pvp.duel_1v1.global_lobby_ttl_minutes`).
+    - Helper-функция `_challenge_global_from_private(message, tg_identity, challenge_duel, balance, presenter, effective_locale)` — выделена из `handle_duel`, чтобы не раздувать сигнатуру; маппит domain-ошибки (`PlayerNotFoundError` / `PvpRequirementsNotMetError` / `AnticheatSoftBanError` / `LockAlreadyHeldError`) на существующие `duel-*`-локали.
+- **Новый handler `/duel_global`** (только в ЛС бота — в группах ничего не делает, шлёт `duel-global-only-in-private`):
+    - Вызывает F.2-use-case `MatchFromLobby(accepter_tg_id=...)` для атомарного FIFO-pop-а.
+    - Результаты:
+        - `EmptyLobby` / `LobbyEntryStale` → `duel-global-empty` (предложит позже попробовать или бросить вызов через `/duel`).
+        - `DuelMatched` → `duel-global-matched` пикеру (с `$challenger`-именем) + DM-промпт «выбери атаку» обоим игрокам через существующий helper `_broadcast_attack_prompt` (учитывает per-player локаль через `IPlayerLocaleResolver`).
+    - Domain-ошибки (`PlayerNotFoundError` / `PvpRequirementsNotMetError` / `AnticheatSoftBanError` / `LockAlreadyHeldError`) маппятся аналогично `_challenge_global_from_private`.
+- **Локали `duel-global-*`** (`locales/{ru,en}.ftl`):
+    - `duel-global-enqueued` (с `$duel_id` + `$ttl_minutes`).
+    - `duel-global-matched` (с `$challenger`).
+    - `duel-global-empty`.
+    - `duel-global-only-in-private`.
+    - `duel-challenge-global` теперь принимает `$ttl_minutes` (старый текст без TTL заменён) — handler передаёт ttl корректно из `balance.get().pvp.duel_1v1.global_lobby_ttl_minutes`.
+    - Уточнены `duel-private-needs-global` + `duel-usage` (упоминание «ЛС-режим = глобал»).
+- **`DuelPresenter` расширен** (`bot/presenters/duel.py`) — 4 новых метода `global_enqueued` / `global_matched` / `global_empty` / `global_only_in_private` + `ttl_minutes` параметр в `challenge_global`. Сигнатуры stable: existing-callers F.1/F.2/E не сломаны.
+- **DI** — никакой работы: F.2 уже провязал `match_from_lobby` + `enqueue_global_duel` в `Container` и `build_dispatcher` workflow-data. Aiogram-DI инжектит use-case-ы прямо в handler-параметры (`MatchFromLobby`, `IBalanceConfig`).
+- **Бэкфилл тестов** (главная цель F.3 — закрытие технического долга 2.1.E):
+    - **`tests/unit/bot/handlers/test_duel.py`** — новый файл, **66 тестов**:
+        - `TestHandleDuel` × 25 — все ветки `/duel`: registered/not-registered, in-private/in-group, reply/no-reply, mode=`chat`/`chat_then_global`/`global_only`, lock-already-held, anti-cheat soft-ban, requirements-not-met (length/thickness), self-challenge, target-is-bot, full happy-path с эмиссией challenge card.
+        - `TestHandleDuelGlobal` × 8 — все ветки `/duel_global`: in-group rejection, EmptyLobby, LobbyEntryStale, DuelMatched (с broadcast), domain errors.
+        - `TestHandleCancelDuel` × 7, `TestHandlePvpAccept` × 7, `TestHandlePvpReject` × 3, `TestHandlePvpAttack` × 3, `TestHandlePvpBlock` × 13.
+        - Помощники: `_msg`, `_callback`, `_command`, `_balance` (через `build_valid_balance` + `model_copy`), `_stub_*` для всех use-case-ов.
+    - **`tests/unit/bot/presenters/test_duel.py`** — новый файл, **56 тестов**: маркерные с `FakeMessageBundle` (все ключи + параметры), callback-data parsers (4 happy + 21 параметризованных error case), Fluent-интеграция RU+EN для всех новых `duel-global-*`-сообщений (плейсхолдеры рендерятся, эмодзи на месте).
+    - **Покрытие**: `bot/handlers/duel.py` 11% → **92%**, `bot/presenters/duel.py` 49% → **96%**.
+    - **`make ci` зелёный**: 1883 passed, 1 skipped, coverage **96.11%** (≥80% gate; в F.2 было 90.97%); mypy --strict без ошибок, ruff/import-linter clean.
+
+Результат / артефакты:
+
+- `src/pipirik_wars/bot/handlers/duel.py` — новый handler `handle_duel_global` + helper `_challenge_global_from_private` + расширенный `handle_duel`.
+- `src/pipirik_wars/bot/presenters/duel.py` — 4 новых метода + `ttl_minutes` в `challenge_global`.
+- `locales/ru.ftl`, `locales/en.ftl` — `duel-global-*` ключи + обновлённый `duel-challenge-global`.
+- `tests/unit/bot/handlers/test_duel.py` (NEW, 1672 LoC, 66 тестов).
+- `tests/unit/bot/presenters/test_duel.py` (NEW, 305 LoC, 56 тестов).
+
+Заметки / решения:
+
+- **Почему F.3 — отдельный саб-PR**: F.2 уже превышал размер «полу-крупного» PR-а, а бэкфилл тестов (122 новых теста) на handler-ы и presenter-ы ещё больший. Разбиение на 3 саб-PR-а (F.1=domain+persistence, F.2=application+infrastructure, F.3=bot+i18n+тесты) даёт ревьюеру удобоваримые куски и независимые revert-окна.
+- **`assert isinstance(result, DuelMatched)`** в `handle_duel_global` после `EmptyLobby | LobbyEntryStale` — нужен для type narrowing mypy --strict. Альтернатива (`if isinstance(result, DuelMatched): ... else: ...`) длиннее и менее читаема, потому что `MatchFromLobbyResult` — closed sum-type из 3 вариантов, и первые 2 уже отфильтрованы.
+- **`balance: IBalanceConfig` в handler-сигнатуре**: aiogram-DI инжектит из workflow-data; handler читает только `balance.get().pvp.duel_1v1.global_lobby_ttl_minutes` для подстановки в локализованное сообщение. Не пробрасывали в use-case (use-case уже сам читает balance внутри).
+- **Тесты — на `FakeMessageBundle` маркеры** (`<locale>:<key>[k=v,...]`): assert-ы быстрые и тривиальные, проверяют **что** handler зовёт. Финальная проверка реального RU/EN-рендера — в `presenters/test_duel.py::TestDuelPresenterFluent` через `FluentMessageBundle`.
+
+---
+
 ## 2026-05-05 — Спринт 2.1.F.2: глобальное лобби PvP — use-cases + scheduler + DI
 
 **Автор:** Devin (по запросу ambitious42, продолжает HANDOFF предыдущего агента)
