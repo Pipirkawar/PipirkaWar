@@ -52,6 +52,7 @@ from pipirik_wars.application.forest import (
     IForestFinishNotifier,
     StartForestRun,
 )
+from pipirik_wars.application.i18n import IMessageBundle
 from pipirik_wars.application.oracle import (
     InvokeOracle,
     IOracleTemplateProvider,
@@ -105,6 +106,7 @@ from pipirik_wars.infrastructure.db.services import (
     SqlAlchemyIdempotencyService,
 )
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
+from pipirik_wars.infrastructure.i18n import FluentMessageBundle
 from pipirik_wars.infrastructure.random import RealRandom
 from pipirik_wars.infrastructure.rate_limit import (
     InMemoryTokenBucketRateLimiter,
@@ -123,6 +125,10 @@ _DEFAULT_BALANCE_YAML = Path("config/balance.yaml")
 # едут вместе с деплоем рядом с балансом — поэтому путь по умолчанию
 # указывает на тот же `config/`.
 _DEFAULT_TEMPLATES_DIR = Path("config/templates")
+
+# Каталог `.ftl`-файлов локализации (Спринт 1.5.A). По умолчанию —
+# `locales/` в корне репо/деплоя; на тестах путь подменяется через DI.
+_DEFAULT_LOCALES_DIR = Path("locales")
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +157,9 @@ class Container:
 
     # Шаблоны (Спринт 1.4.B)
     oracle_templates: IOracleTemplateProvider
+
+    # i18n (Спринт 1.5.A → 1.5.B): локализованные сообщения для handler-ов.
+    bundle: IMessageBundle
 
     # Запросы (Спринт 1.4.C)
     top_players_query: ITopPlayersQuery
@@ -188,6 +197,7 @@ def build_container(
     *,
     balance_yaml_path: Path | None = None,
     templates_dir: Path | None = None,
+    locales_dir: Path | None = None,
     bot: Bot | None = None,
 ) -> Container:
     """Собрать контейнер для production-запуска.
@@ -232,6 +242,7 @@ def build_container(
     oracle_templates = JsonOracleTemplateProvider(
         templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
     )
+    bundle = FluentMessageBundle(locales_dir=locales_dir or _DEFAULT_LOCALES_DIR)
     top_players_query = TopPlayersCache(
         uow=uow,
         players=players,
@@ -399,6 +410,7 @@ def build_container(
         forest_runs=forest_runs,
         oracle_history=oracle_history,
         oracle_templates=oracle_templates,
+        bundle=bundle,
         top_players_query=top_players_query,
         delayed_jobs=delayed_jobs,
         dau_counter=dau_counter,
@@ -453,6 +465,7 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["get_top_players"] = container.get_top_players
     dispatcher["balance"] = container.balance
     dispatcher["clock"] = container.clock
+    dispatcher["bundle"] = container.bundle
     return dispatcher
 
 
