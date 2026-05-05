@@ -1,10 +1,11 @@
-"""Unit-тесты domain-ошибок леса (Спринт 1.3.B / 1.3.C)."""
+"""Unit-тесты domain-ошибок леса (Спринт 1.3.B / 1.3.C / 1.5.G)."""
 
 from __future__ import annotations
 
 from pipirik_wars.domain.forest import (
     AlreadyInForestError,
     ForestError,
+    ForestLogNoTemplatesError,
     ForestRunNotFoundError,
 )
 
@@ -23,3 +24,10 @@ class TestForestRunNotFoundError:
         assert exc.run_id == 777
         assert "777" in str(exc)
         assert isinstance(exc, ForestError)
+
+
+class TestForestLogNoTemplatesError:
+    def test_is_forest_error(self) -> None:
+        exc = ForestLogNoTemplatesError()
+        assert isinstance(exc, ForestError)
+        assert "empty" in str(exc).lower() or "no" in str(exc).lower()

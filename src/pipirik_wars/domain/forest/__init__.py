@@ -18,8 +18,13 @@ from pipirik_wars.domain.forest.errors import (
     AlreadyInForestError,
     ForestDropMismatchError,
     ForestError,
+    ForestLogNoTemplatesError,
     ForestRunNotFoundError,
     ForestRunOwnershipError,
+)
+from pipirik_wars.domain.forest.log_template import (
+    ForestLogTemplate,
+    pick_forest_log_template,
 )
 from pipirik_wars.domain.forest.repositories import IForestRunRepository
 from pipirik_wars.domain.forest.run import ForestRun, ForestRunStatus
@@ -30,6 +35,8 @@ __all__ = [
     "Drop",
     "ForestDropMismatchError",
     "ForestError",
+    "ForestLogNoTemplatesError",
+    "ForestLogTemplate",
     "ForestRun",
     "ForestRunNotFoundError",
     "ForestRunOutcome",
@@ -45,4 +52,5 @@ __all__ = [
     "Rarity",
     "Slot",
     "compute_forest_outcome",
+    "pick_forest_log_template",
 ]

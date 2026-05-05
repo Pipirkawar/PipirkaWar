@@ -61,6 +61,19 @@ class ForestRunOwnershipError(ForestError):
         self.actor_player_id = actor_player_id
 
 
+class ForestLogNoTemplatesError(ForestError):
+    """Каталог шаблонов забавных логов леса пуст для запрошенной локали.
+
+    Prod-инвариант (ПД 1.5.3): `config/templates/forest_logs_<locale>.json`
+    должен содержать ≥ 300 шаблонов. Эта ошибка означает баг деплоя
+    (файл не подложен / каталог пустой) и должна быть видна сразу — её
+    нельзя глушить «не показал flavour-строку».
+    """
+
+    def __init__(self) -> None:
+        super().__init__("forest log templates catalog is empty")
+
+
 class ForestDropMismatchError(ForestError):
     """Тип дропа не соответствует ожидаемому действием use-case-а.
 
