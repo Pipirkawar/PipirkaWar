@@ -11,12 +11,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
 from pipirik_wars.domain.player import (
     IPlayerRepository,
     Player,
     PlayerAlreadyRegisteredError,
+    PlayerStatus,
 )
 from pipirik_wars.shared.errors import IntegrityError
 
@@ -55,3 +57,10 @@ class FakePlayerRepository(IPlayerRepository):
                 self.rows[i] = player
                 return player
         raise IntegrityError(f"Player id={player.id} does not exist")
+
+    async def list_top_by_length(self, *, limit: int) -> Sequence[Player]:
+        active = [p for p in self.rows if p.status == PlayerStatus.ACTIVE]
+        # Сортировка: сперва по убыванию длины, затем по возрастанию id
+        # (стабильный тай-брейкер, как в SqlAlchemy-репо).
+        active.sort(key=lambda p: (-p.length.cm, p.id or 0))
+        return tuple(active[:limit])

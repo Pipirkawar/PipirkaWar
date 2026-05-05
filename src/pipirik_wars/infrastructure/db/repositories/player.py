@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import select
@@ -104,3 +105,17 @@ class SqlAlchemyPlayerRepository(IPlayerRepository):
         # `created_at` намеренно не трогаем — он immutable после INSERT.
         await self._uow.session.flush()
         return _row_to_entity(row)
+
+    async def list_top_by_length(self, *, limit: int) -> Sequence[Player]:
+        if limit <= 0:
+            raise ValueError(f"limit must be positive, got {limit}")
+        # Только ACTIVE: замороженные игроки не должны светиться в `/top`.
+        # Тай-брейкер `id ASC` — стабильный порядок, чтобы кэш не мерцал.
+        stmt = (
+            select(UserORM)
+            .where(UserORM.status == PlayerStatus.ACTIVE.value)
+            .order_by(UserORM.length_cm.desc(), UserORM.id.asc())
+            .limit(limit)
+        )
+        result = await self._uow.session.execute(stmt)
+        return tuple(_row_to_entity(row) for row in result.scalars().all())

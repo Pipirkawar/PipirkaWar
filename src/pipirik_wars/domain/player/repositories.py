@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+from collections.abc import Sequence
 
 from pipirik_wars.domain.player.entities import Player
 
@@ -44,4 +45,17 @@ class IPlayerRepository(abc.ABC):
         перепишет server-side).
 
         Для несуществующего `id` бросает `IntegrityError`.
+        """
+
+    @abc.abstractmethod
+    async def list_top_by_length(self, *, limit: int) -> Sequence[Player]:
+        """Топ-`limit` игроков по убыванию `length_cm` (ГДД §2.6, ПД 1.4.6).
+
+        Возвращает только `ACTIVE`-игроков (замороженные исключаются —
+        они не «играют»). Тай-брейкер при равной длине — `id ASC`,
+        чтобы порядок был стабильным от запроса к запросу.
+
+        `limit` обязан быть положительным; адаптер не обязан вычислять
+        отрицательные/нулевые лимиты — это контракт уровня use-case-а,
+        где валидируется DTO.
         """

@@ -209,3 +209,106 @@ class TestSqlAlchemyPlayerRepository:
         repo = SqlAlchemyPlayerRepository(uow=uow)
         async with uow:
             assert await repo.get_by_id(player_id=99999) is None
+
+    @pytest.mark.asyncio
+    async def test_list_top_by_length_orders_by_length_desc(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """Топ отсортирован по убыванию длины (ПД 1.4.6)."""
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        later = NOW + timedelta(seconds=1)
+        async with uow:
+            small = await repo.add(_make_new(tg_id=1, username=None))
+            medium = await repo.add(_make_new(tg_id=2, username=None))
+            big = await repo.add(_make_new(tg_id=3, username=None))
+            assert small.id is not None and medium.id is not None and big.id is not None
+            await repo.save(small.with_length(Length(cm=10), now=later))
+            await repo.save(medium.with_length(Length(cm=50), now=later))
+            await repo.save(big.with_length(Length(cm=200), now=later))
+
+        async with uow:
+            top = await repo.list_top_by_length(limit=10)
+        # ожидаем порядок: 200 → 50 → 10
+        assert [p.length.cm for p in top] == [200, 50, 10]
+        assert [p.tg_id for p in top] == [3, 2, 1]
+
+    @pytest.mark.asyncio
+    async def test_list_top_by_length_excludes_frozen(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """Замороженные игроки не должны светиться в `/top`."""
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        later = NOW + timedelta(seconds=1)
+        async with uow:
+            active = await repo.add(_make_new(tg_id=1, username=None))
+            frozen = await repo.add(_make_new(tg_id=2, username=None))
+            await repo.save(active.with_length(Length(cm=10), now=later))
+            saved_frozen = await repo.save(
+                frozen.with_length(Length(cm=999), now=later).freeze(now=later)
+            )
+            assert saved_frozen.status is PlayerStatus.FROZEN
+
+        async with uow:
+            top = await repo.list_top_by_length(limit=10)
+        assert [p.tg_id for p in top] == [1]  # frozen с длиной 999 исключён
+
+    @pytest.mark.asyncio
+    async def test_list_top_by_length_tie_break_by_id_asc(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """При равной длине — стабильный порядок по `id ASC`."""
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        later = NOW + timedelta(seconds=1)
+        async with uow:
+            first = await repo.add(_make_new(tg_id=10, username=None))
+            second = await repo.add(_make_new(tg_id=11, username=None))
+            third = await repo.add(_make_new(tg_id=12, username=None))
+            await repo.save(first.with_length(Length(cm=42), now=later))
+            await repo.save(second.with_length(Length(cm=42), now=later))
+            await repo.save(third.with_length(Length(cm=42), now=later))
+
+        async with uow:
+            top = await repo.list_top_by_length(limit=10)
+        # все по 42 см → стабильный порядок по id ASC (= порядок добавления)
+        assert [p.tg_id for p in top] == [10, 11, 12]
+
+    @pytest.mark.asyncio
+    async def test_list_top_by_length_respects_limit(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        later = NOW + timedelta(seconds=1)
+        async with uow:
+            for tg in range(1, 6):
+                p = await repo.add(_make_new(tg_id=tg, username=None))
+                await repo.save(p.with_length(Length(cm=10 * tg), now=later))
+
+        async with uow:
+            top = await repo.list_top_by_length(limit=2)
+        assert [p.length.cm for p in top] == [50, 40]
+
+    @pytest.mark.asyncio
+    async def test_list_top_by_length_empty_when_no_players(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        async with uow:
+            top = await repo.list_top_by_length(limit=100)
+        assert top == ()
+
+    @pytest.mark.asyncio
+    async def test_list_top_by_length_rejects_non_positive_limit(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        async with uow:
+            with pytest.raises(ValueError, match="positive"):
+                await repo.list_top_by_length(limit=0)
+            with pytest.raises(ValueError, match="positive"):
+                await repo.list_top_by_length(limit=-3)
