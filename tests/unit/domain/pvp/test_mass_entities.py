@@ -48,7 +48,7 @@ class TestMassRoundChoice:
     def test_frozen(self) -> None:
         choice = MassRoundChoice(player_id=1, attack=Position.HIGH, block=Position.LOW)
         with pytest.raises(FrozenInstanceError):
-            choice.player_id = 2  # type: ignore[misc]
+            choice.player_id = 2
 
 
 class TestMassPairing:
@@ -76,7 +76,7 @@ class TestMassPairing:
     def test_frozen(self) -> None:
         pair = MassPairing(attacker_id=1, defender_id=2)
         with pytest.raises(FrozenInstanceError):
-            pair.attacker_id = 5  # type: ignore[misc]
+            pair.attacker_id = 5
 
 
 class TestMassDamageEntry:
