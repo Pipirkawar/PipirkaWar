@@ -1,4 +1,10 @@
-"""Юнит-тесты `/upgrade`-handler-а и upgrade-callback-handler-ов (Спринт 1.4.A)."""
+"""Юнит-тесты `/upgrade`-handler-а и upgrade-callback-handler-ов
+(Спринт 1.4.A → 1.5.D).
+
+С 1.5.D handler рендерит ответы через `UpgradePresenter` + `IMessageBundle`,
+поэтому тесты используют `FakeMessageBundle` для проверки конкретных
+ключей `upgrade-*` (без привязки к реальному переводу).
+"""
 
 from __future__ import annotations
 
@@ -9,20 +15,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiogram.types import Chat, Message
 
+from pipirik_wars.application.i18n import IMessageBundle, Locale
 from pipirik_wars.application.player import GetProfile, ProfileView
 from pipirik_wars.application.progression import (
     ThicknessUpgraded,
     UpgradeThickness,
 )
 from pipirik_wars.bot.handlers.upgrade import (
-    REPLY_GROUP_RU,
-    REPLY_NOT_REGISTERED_RU,
-    REPLY_OTHER_RU,
-    TOAST_CANCELLED,
-    TOAST_INSUFFICIENT,
-    TOAST_PLAYER_NOT_FOUND,
-    TOAST_RACE,
-    TOAST_UPGRADED,
     handle_upgrade,
     handle_upgrade_callback,
 )
@@ -40,7 +39,7 @@ from pipirik_wars.domain.player import (
 )
 from pipirik_wars.domain.progression import InsufficientLengthError
 from pipirik_wars.shared.errors import ConcurrencyError
-from tests.fakes import FakeBalanceConfig
+from tests.fakes import FakeBalanceConfig, FakeMessageBundle
 from tests.unit.domain.balance.factories import build_valid_balance
 
 _NOW = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
@@ -94,6 +93,10 @@ def _stub_balance() -> IBalanceConfig:
     return FakeBalanceConfig(build_valid_balance())
 
 
+def _bundle() -> IMessageBundle:
+    return cast(IMessageBundle, FakeMessageBundle())
+
+
 @pytest.mark.asyncio
 class TestHandleUpgrade:
     async def test_private_success_shows_proposal_with_keyboard(self) -> None:
@@ -105,26 +108,27 @@ class TestHandleUpgrade:
             _identity("private"),
             cast(GetProfile, get_profile),
             _stub_balance(),
+            _bundle(),
+            Locale("ru"),
         )
 
         get_profile.execute.assert_awaited_once()
         msg.answer.assert_awaited_once()
-        # Текст содержит «Прокачка», текущий и целевой уровень, стоимость 4000.
         sent_text = msg.answer.await_args.args[0]
-        assert "Прокачка толщины" in sent_text
-        assert "Текущий уровень: 1" in sent_text
-        assert "Целевой уровень: 2" in sent_text
-        assert "4000 см" in sent_text
-        # Клавиатура передана; на ней есть кнопка «Подтвердить (4000 см)».
+        # FakeMessageBundle сериализует ключ + параметры детерминированно.
+        assert sent_text.startswith("ru:upgrade-proposal[")
+        assert "current_thickness=1" in sent_text
+        assert "next_thickness=2" in sent_text
+        assert "cost_cm=4000" in sent_text
+        assert "current_length_cm=5000" in sent_text
+        assert "remaining_cm=1000" in sent_text
+        # Клавиатура: 2 кнопки с локализованными подписями + invariant callback_data.
         kwargs = msg.answer.await_args.kwargs
-        assert "reply_markup" in kwargs
         kb = kwargs["reply_markup"]
-        confirm_btn = kb.inline_keyboard[0][0]
-        assert "Подтвердить" in confirm_btn.text
-        assert "4000" in confirm_btn.text
+        confirm_btn, cancel_btn = kb.inline_keyboard[0]
+        assert confirm_btn.text == "ru:upgrade-button-confirm[cost_cm=4000]"
         assert confirm_btn.callback_data == "upgrade:confirm:4000"
-        cancel_btn = kb.inline_keyboard[0][1]
-        assert cancel_btn.text == "Отменить"
+        assert cancel_btn.text == "ru:upgrade-button-cancel"
         assert cancel_btn.callback_data == "upgrade:cancel:0"
 
     async def test_player_not_found(self) -> None:
@@ -137,9 +141,11 @@ class TestHandleUpgrade:
             _identity("private"),
             cast(GetProfile, get_profile),
             _stub_balance(),
+            _bundle(),
+            Locale("ru"),
         )
 
-        msg.answer.assert_awaited_once_with(REPLY_NOT_REGISTERED_RU)
+        msg.answer.assert_awaited_once_with("ru:upgrade-not-registered")
 
     async def test_insufficient_length_shows_explainer(self) -> None:
         msg = _msg("private")
@@ -151,12 +157,15 @@ class TestHandleUpgrade:
             _identity("private"),
             cast(GetProfile, get_profile),
             _stub_balance(),
+            _bundle(),
+            Locale("ru"),
         )
 
         msg.answer.assert_awaited_once()
         sent_text = msg.answer.await_args.args[0]
-        assert "Недостаточно длины" in sent_text
-        assert "4000 см" in sent_text
+        assert sent_text.startswith("ru:upgrade-insufficient[")
+        assert "next_thickness=2" in sent_text
+        assert "cost_cm=4000" in sent_text
         # Клавиатуры быть не должно — только текст.
         kwargs = msg.answer.await_args.kwargs
         assert "reply_markup" not in kwargs or kwargs["reply_markup"] is None
@@ -170,10 +179,12 @@ class TestHandleUpgrade:
             _identity("group"),
             cast(GetProfile, get_profile),
             _stub_balance(),
+            _bundle(),
+            Locale("ru"),
         )
 
         get_profile.execute.assert_not_awaited()
-        msg.answer.assert_awaited_once_with(REPLY_GROUP_RU)
+        msg.answer.assert_awaited_once_with("ru:upgrade-group")
 
     async def test_supergroup_replies_instructions(self) -> None:
         msg = _msg("supergroup")
@@ -184,9 +195,11 @@ class TestHandleUpgrade:
             _identity("supergroup"),
             cast(GetProfile, get_profile),
             _stub_balance(),
+            _bundle(),
+            Locale("ru"),
         )
 
-        msg.answer.assert_awaited_once_with(REPLY_GROUP_RU)
+        msg.answer.assert_awaited_once_with("ru:upgrade-group")
 
     async def test_channel_replies_other(self) -> None:
         msg = _msg("channel")
@@ -197,9 +210,11 @@ class TestHandleUpgrade:
             _identity("channel"),
             cast(GetProfile, get_profile),
             _stub_balance(),
+            _bundle(),
+            Locale("ru"),
         )
 
-        msg.answer.assert_awaited_once_with(REPLY_OTHER_RU)
+        msg.answer.assert_awaited_once_with("ru:upgrade-other")
 
     async def test_no_identity_falls_back(self) -> None:
         msg = _msg("private")
@@ -210,10 +225,45 @@ class TestHandleUpgrade:
             None,
             cast(GetProfile, get_profile),
             _stub_balance(),
+            _bundle(),
+            Locale("ru"),
         )
 
-        msg.answer.assert_awaited_once_with(REPLY_OTHER_RU)
+        msg.answer.assert_awaited_once_with("ru:upgrade-other")
         get_profile.execute.assert_not_awaited()
+
+    async def test_locale_propagates_to_presenter_en(self) -> None:
+        msg = _msg("private")
+        get_profile = _stub_profile(_profile_view(length_cm=5_000, thickness_level=1))
+
+        await handle_upgrade(
+            cast(Message, msg),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            _stub_balance(),
+            _bundle(),
+            Locale("en"),
+        )
+
+        sent_text = msg.answer.await_args.args[0]
+        assert sent_text.startswith("en:upgrade-proposal[")
+
+    async def test_no_locale_falls_back_to_default_locale(self) -> None:
+        msg = _msg("private")
+        get_profile = _stub_profile(_profile_view(length_cm=5_000, thickness_level=1))
+
+        await handle_upgrade(
+            cast(Message, msg),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            _stub_balance(),
+            _bundle(),
+            None,
+        )
+
+        # DEFAULT_LOCALE = "en"
+        sent_text = msg.answer.await_args.args[0]
+        assert sent_text.startswith("en:upgrade-proposal[")
 
 
 def _callback(
@@ -268,48 +318,75 @@ class TestHandleUpgradeCallback:
         cb = _callback(data="upgrade:confirm:4000")
         upgrade = _stub_upgrade(new_thickness=2, cost_cm=4_000, new_length_cm=1_000)
 
-        await handle_upgrade_callback(cb, _identity("private"), cast(UpgradeThickness, upgrade))
+        await handle_upgrade_callback(
+            cb,
+            _identity("private"),
+            cast(UpgradeThickness, upgrade),
+            _bundle(),
+            Locale("ru"),
+        )
 
         upgrade.execute.assert_awaited_once()
         passed = upgrade.execute.await_args.args[0]
         assert passed.tg_id == 100
         assert passed.expected_cost_cm == 4_000
-        cb.answer.assert_awaited_once_with(TOAST_UPGRADED, show_alert=False)
+        cb.answer.assert_awaited_once_with("ru:upgrade-toast-upgraded", show_alert=False)
         cb.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
         cb.message.edit_text.assert_awaited_once()
         sent_text = cb.message.edit_text.await_args.args[0]
-        assert "Толщина прокачана до 2" in sent_text
-        assert "1000 см" in sent_text
+        assert sent_text.startswith("ru:upgrade-success[")
+        assert "new_thickness=2" in sent_text
+        assert "new_length_cm=1000" in sent_text
 
     async def test_cancel_strips_keyboard_and_replaces_text(self) -> None:
         cb = _callback(data="upgrade:cancel:0")
         upgrade = _stub_upgrade()
 
-        await handle_upgrade_callback(cb, _identity("private"), cast(UpgradeThickness, upgrade))
+        await handle_upgrade_callback(
+            cb,
+            _identity("private"),
+            cast(UpgradeThickness, upgrade),
+            _bundle(),
+            Locale("ru"),
+        )
 
         upgrade.execute.assert_not_awaited()
-        cb.answer.assert_awaited_once_with(TOAST_CANCELLED, show_alert=False)
+        cb.answer.assert_awaited_once_with("ru:upgrade-toast-cancelled", show_alert=False)
         cb.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
-        cb.message.edit_text.assert_awaited_once()
-        assert "отменена" in cb.message.edit_text.await_args.args[0].lower()
+        cb.message.edit_text.assert_awaited_once_with("ru:upgrade-cancelled")
 
     async def test_invalid_callback_data_strips_keyboard(self) -> None:
         cb = _callback(data="upgrade:bad")
         upgrade = _stub_upgrade()
 
-        await handle_upgrade_callback(cb, _identity("private"), cast(UpgradeThickness, upgrade))
+        await handle_upgrade_callback(
+            cb,
+            _identity("private"),
+            cast(UpgradeThickness, upgrade),
+            _bundle(),
+            Locale("ru"),
+        )
 
         upgrade.execute.assert_not_awaited()
-        cb.answer.assert_awaited_once_with(TOAST_RACE, show_alert=False)
+        cb.answer.assert_awaited_once_with("ru:upgrade-toast-race", show_alert=False)
         cb.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
 
     async def test_player_not_found_shows_alert(self) -> None:
         cb = _callback(data="upgrade:confirm:4000")
         upgrade = _stub_upgrade(error=PlayerNotFoundError(tg_id=100))
 
-        await handle_upgrade_callback(cb, _identity("private"), cast(UpgradeThickness, upgrade))
+        await handle_upgrade_callback(
+            cb,
+            _identity("private"),
+            cast(UpgradeThickness, upgrade),
+            _bundle(),
+            Locale("ru"),
+        )
 
-        cb.answer.assert_awaited_once_with(TOAST_PLAYER_NOT_FOUND, show_alert=True)
+        cb.answer.assert_awaited_once_with(
+            "ru:upgrade-toast-player-not-found",
+            show_alert=True,
+        )
         cb.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
 
     async def test_insufficient_length_shows_explainer(self) -> None:
@@ -322,31 +399,52 @@ class TestHandleUpgradeCallback:
         )
         upgrade = _stub_upgrade(error=err)
 
-        await handle_upgrade_callback(cb, _identity("private"), cast(UpgradeThickness, upgrade))
+        await handle_upgrade_callback(
+            cb,
+            _identity("private"),
+            cast(UpgradeThickness, upgrade),
+            _bundle(),
+            Locale("ru"),
+        )
 
-        cb.answer.assert_awaited_once_with(TOAST_INSUFFICIENT, show_alert=False)
+        cb.answer.assert_awaited_once_with(
+            "ru:upgrade-toast-insufficient",
+            show_alert=False,
+        )
         cb.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
         cb.message.edit_text.assert_awaited_once()
         sent_text = cb.message.edit_text.await_args.args[0]
-        assert "Недостаточно длины" in sent_text
-        assert "4000 см" in sent_text
+        assert sent_text.startswith("ru:upgrade-insufficient-short[")
+        assert "cost_cm=4000" in sent_text
+        assert "deficit_cm=" in sent_text
 
     async def test_concurrency_error_shows_race_message(self) -> None:
         cb = _callback(data="upgrade:confirm:3000")
         upgrade = _stub_upgrade(error=ConcurrencyError("expected_cost_cm=3000 != actual=4000"))
 
-        await handle_upgrade_callback(cb, _identity("private"), cast(UpgradeThickness, upgrade))
+        await handle_upgrade_callback(
+            cb,
+            _identity("private"),
+            cast(UpgradeThickness, upgrade),
+            _bundle(),
+            Locale("ru"),
+        )
 
-        cb.answer.assert_awaited_once_with(TOAST_RACE, show_alert=False)
+        cb.answer.assert_awaited_once_with("ru:upgrade-toast-race", show_alert=False)
         cb.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
-        cb.message.edit_text.assert_awaited_once()
-        assert "Стоимость" in cb.message.edit_text.await_args.args[0]
+        cb.message.edit_text.assert_awaited_once_with("ru:upgrade-race")
 
     async def test_no_identity_silently_returns(self) -> None:
         cb = _callback(data="upgrade:confirm:4000")
         upgrade = _stub_upgrade()
 
-        await handle_upgrade_callback(cb, None, cast(UpgradeThickness, upgrade))
+        await handle_upgrade_callback(
+            cb,
+            None,
+            cast(UpgradeThickness, upgrade),
+            _bundle(),
+            Locale("ru"),
+        )
 
         upgrade.execute.assert_not_awaited()
         cb.answer.assert_not_awaited()
@@ -355,10 +453,46 @@ class TestHandleUpgradeCallback:
         cb = _callback(data="upgrade:confirm:4000", has_message=False)
         upgrade = _stub_upgrade()
 
-        await handle_upgrade_callback(cb, _identity("private"), cast(UpgradeThickness, upgrade))
+        await handle_upgrade_callback(
+            cb,
+            _identity("private"),
+            cast(UpgradeThickness, upgrade),
+            _bundle(),
+            Locale("ru"),
+        )
 
         upgrade.execute.assert_not_awaited()
         cb.answer.assert_not_awaited()
+
+    async def test_locale_propagates_en(self) -> None:
+        cb = _callback(data="upgrade:cancel:0")
+        upgrade = _stub_upgrade()
+
+        await handle_upgrade_callback(
+            cb,
+            _identity("private"),
+            cast(UpgradeThickness, upgrade),
+            _bundle(),
+            Locale("en"),
+        )
+
+        cb.answer.assert_awaited_once_with("en:upgrade-toast-cancelled", show_alert=False)
+        cb.message.edit_text.assert_awaited_once_with("en:upgrade-cancelled")
+
+    async def test_no_locale_falls_back_to_default_locale(self) -> None:
+        cb = _callback(data="upgrade:cancel:0")
+        upgrade = _stub_upgrade()
+
+        await handle_upgrade_callback(
+            cb,
+            _identity("private"),
+            cast(UpgradeThickness, upgrade),
+            _bundle(),
+            None,
+        )
+
+        # DEFAULT_LOCALE = "en"
+        cb.answer.assert_awaited_once_with("en:upgrade-toast-cancelled", show_alert=False)
 
 
 @pytest.mark.asyncio
@@ -370,7 +504,13 @@ class TestUpgradeCallbackHelperEncoding:
         cb = _callback(data=upgrade_callback_data("confirm", 9_000))
         upgrade = _stub_upgrade(new_thickness=3, cost_cm=9_000, new_length_cm=500)
 
-        await handle_upgrade_callback(cb, _identity("private"), cast(UpgradeThickness, upgrade))
+        await handle_upgrade_callback(
+            cb,
+            _identity("private"),
+            cast(UpgradeThickness, upgrade),
+            _bundle(),
+            Locale("ru"),
+        )
 
         upgrade.execute.assert_awaited_once()
         passed = upgrade.execute.await_args.args[0]

@@ -1,15 +1,16 @@
-"""Презентеры для команды `/upgrade` (Спринт 1.4.A, ГДД §3.2).
+"""Презентеры для команды `/upgrade` (Спринт 1.4.A → 1.5.D, ГДД §3.2).
 
-Тонкий слой рендеринга для bot-handler-а:
+Тонкий слой между use-case `UpgradeThickness` и Telegram-handler-ом.
+С 1.5.D переехал на `IMessageBundle`: ключи `upgrade-*` лежат в
+`locales/{ru,en}.ftl`.
 
-- **`render_upgrade_proposal(...)`** — текст карточки подтверждения
-  «Прокачать с N до N+1: стоимость XXXX см» (показывается после
-  `/upgrade`, до `Подтвердить`).
-- **`render_upgrade_success(...)`** — текст после успешной прокачки.
-- **`render_upgrade_insufficient(...)`** — текст «нужно ещё N см» при
-  отказе из-за правила 20 см.
-- **`build_upgrade_proposal_keyboard(...)`** — `InlineKeyboardMarkup` с
-  парой «Подтвердить / Отменить».
+Что внутри:
+
+- **`UpgradePresenter`** — локализованные тексты карточки-предложения,
+  успеха, отказа («не хватает длины»), отмены, race-сообщения,
+  toast-ов, подписей кнопок.
+- **`build_upgrade_proposal_keyboard(...)`** — `InlineKeyboardMarkup`
+  с парой «Подтвердить (X см) / Отменить» (тексты тоже локализуются).
 - **`upgrade_callback_data(...)` / `parse_upgrade_callback_data(...)`** —
   кодирование/декодирование `callback_data`. Формат:
   ``"upgrade:<action>:<expected_cost_cm>"`` ≤ 64 байта. `action` — один
@@ -20,8 +21,6 @@
 от случая «balance.yaml перегружен между показом и нажатием
 Подтвердить» — use-case бросит `ConcurrencyError`, а handler покажет
 понятное сообщение.
-
-Презентеры — чистые функции без I/O, тестируются изолированно.
 """
 
 from __future__ import annotations
@@ -31,12 +30,31 @@ from typing import Final, Literal
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
+
 # Telegram callback_data hard-cap = 64 байта. Префикс + action +
 # `expected_cost_cm` (до ~10 цифр) умещаются с большим запасом.
 _CALLBACK_PREFIX: Final[str] = "upgrade"
 
 UpgradeCallbackAction = Literal["confirm", "cancel"]
 _VALID_ACTIONS: Final[frozenset[UpgradeCallbackAction]] = frozenset({"confirm", "cancel"})
+
+_KEY_GROUP: Final[MessageKey] = MessageKey("upgrade-group")
+_KEY_OTHER: Final[MessageKey] = MessageKey("upgrade-other")
+_KEY_NOT_REGISTERED: Final[MessageKey] = MessageKey("upgrade-not-registered")
+_KEY_PROPOSAL: Final[MessageKey] = MessageKey("upgrade-proposal")
+_KEY_SUCCESS: Final[MessageKey] = MessageKey("upgrade-success")
+_KEY_INSUFFICIENT: Final[MessageKey] = MessageKey("upgrade-insufficient")
+_KEY_INSUFFICIENT_SHORT: Final[MessageKey] = MessageKey("upgrade-insufficient-short")
+_KEY_CANCELLED: Final[MessageKey] = MessageKey("upgrade-cancelled")
+_KEY_RACE: Final[MessageKey] = MessageKey("upgrade-race")
+_KEY_BUTTON_CONFIRM: Final[MessageKey] = MessageKey("upgrade-button-confirm")
+_KEY_BUTTON_CANCEL: Final[MessageKey] = MessageKey("upgrade-button-cancel")
+_KEY_TOAST_UPGRADED: Final[MessageKey] = MessageKey("upgrade-toast-upgraded")
+_KEY_TOAST_CANCELLED: Final[MessageKey] = MessageKey("upgrade-toast-cancelled")
+_KEY_TOAST_PLAYER_NOT_FOUND: Final[MessageKey] = MessageKey("upgrade-toast-player-not-found")
+_KEY_TOAST_INSUFFICIENT: Final[MessageKey] = MessageKey("upgrade-toast-insufficient")
+_KEY_TOAST_RACE: Final[MessageKey] = MessageKey("upgrade-toast-race")
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,91 +70,170 @@ class UpgradeCallbackData:
     expected_cost_cm: int
 
 
-def render_upgrade_proposal(
-    *,
-    current_thickness: int,
-    cost_cm: int,
-    current_length_cm: int,
-    min_after_spend_cm: int,
-) -> str:
-    """Карточка подтверждения «Прокачать с N до N+1?».
+class UpgradePresenter:
+    """Локализованный фасад над `IMessageBundle` для команды `/upgrade`.
 
-    Содержит текущий уровень, целевой уровень, стоимость и остаток
-    после списания. Если у игрока не хватает длины — handler сам
-    подменяет это сообщение через `render_upgrade_insufficient(...)`,
-    кнопок не показывает.
+    Включая клавиатуру: метод `proposal_keyboard(cost_cm, locale)`
+    собирает `InlineKeyboardMarkup` с локализованными подписями
+    «Подтвердить (X см)» / «Отменить» (а вот `callback_data` остаётся
+    invariant — он не зависит от локали).
     """
-    next_level = current_thickness + 1
-    remaining = current_length_cm - cost_cm
-    return (
-        "📐 Прокачка толщины\n"
-        f"Текущий уровень: {current_thickness}\n"
-        f"Целевой уровень: {next_level}\n"
-        f"Стоимость: {cost_cm} см\n"
-        f"У тебя: {current_length_cm} см\n"
-        f"Останется: {remaining} см "
-        f"(минимум по правилу 20 см: {min_after_spend_cm})"
-    )
 
+    __slots__ = ("_bundle",)
 
-def render_upgrade_success(
-    *,
-    new_thickness: int,
-    cost_cm: int,
-    new_length_cm: int,
-) -> str:
-    """Подтверждение «Толщина прокачана» после успешного use-case-а."""
-    return (
-        f"✅ Толщина прокачана до {new_thickness}!\n"
-        f"📏 Списано: {cost_cm} см\n"
-        f"Осталось: {new_length_cm} см"
-    )
+    def __init__(self, *, bundle: IMessageBundle) -> None:
+        self._bundle = bundle
 
+    # --- chat-ветки ---------------------------------------------------
 
-def render_upgrade_insufficient(
-    *,
-    current_thickness: int,
-    cost_cm: int,
-    current_length_cm: int,
-    deficit_cm: int,
-    min_after_spend_cm: int,
-) -> str:
-    """Текст ответа при `InsufficientLengthError` (правило 20 см).
+    def group(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_GROUP, locale=locale)
 
-    Поясняет игроку, сколько ещё см нужно набрать, чтобы прокачаться.
-    """
-    next_level = current_thickness + 1
-    return (
-        f"❌ Недостаточно длины для прокачки до {next_level}.\n"
-        f"Стоимость: {cost_cm} см\n"
-        f"У тебя: {current_length_cm} см\n"
-        f"Минимальный остаток: {min_after_spend_cm} см\n"
-        f"Не хватает: {deficit_cm} см"
-    )
+    def other(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_OTHER, locale=locale)
 
+    def not_registered(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_NOT_REGISTERED, locale=locale)
 
-RENDER_UPGRADE_CANCELLED: Final[str] = "Прокачка отменена."
-RENDER_UPGRADE_RACE_RU: Final[str] = (
-    "⚠️ Стоимость прокачки изменилась — открой /upgrade ещё раз, чтобы увидеть актуальную."
-)
+    # --- карточки -----------------------------------------------------
 
+    def proposal(
+        self,
+        *,
+        current_thickness: int,
+        cost_cm: int,
+        current_length_cm: int,
+        min_after_spend_cm: int,
+        locale: Locale,
+    ) -> str:
+        """Карточка подтверждения «Прокачать с N до N+1?»."""
+        return self._bundle.format(
+            _KEY_PROPOSAL,
+            locale=locale,
+            current_thickness=current_thickness,
+            next_thickness=current_thickness + 1,
+            cost_cm=cost_cm,
+            current_length_cm=current_length_cm,
+            remaining_cm=current_length_cm - cost_cm,
+            min_after_spend_cm=min_after_spend_cm,
+        )
 
-def build_upgrade_proposal_keyboard(*, expected_cost_cm: int) -> InlineKeyboardMarkup:
-    """Инлайн-клавиатура «Подтвердить / Отменить» под карточкой /upgrade."""
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=f"Подтвердить ({expected_cost_cm} см)",
-                    callback_data=upgrade_callback_data("confirm", expected_cost_cm),
-                ),
-                InlineKeyboardButton(
-                    text="Отменить",
-                    callback_data=upgrade_callback_data("cancel", 0),
-                ),
-            ],
-        ]
-    )
+    def success(
+        self,
+        *,
+        new_thickness: int,
+        cost_cm: int,
+        new_length_cm: int,
+        locale: Locale,
+    ) -> str:
+        """Подтверждение «Толщина прокачана» после успеха use-case-а."""
+        return self._bundle.format(
+            _KEY_SUCCESS,
+            locale=locale,
+            new_thickness=new_thickness,
+            cost_cm=cost_cm,
+            new_length_cm=new_length_cm,
+        )
+
+    def insufficient(
+        self,
+        *,
+        current_thickness: int,
+        cost_cm: int,
+        current_length_cm: int,
+        deficit_cm: int,
+        min_after_spend_cm: int,
+        locale: Locale,
+    ) -> str:
+        """Текст ответа при `InsufficientLengthError` (правило 20 см)."""
+        return self._bundle.format(
+            _KEY_INSUFFICIENT,
+            locale=locale,
+            next_thickness=current_thickness + 1,
+            cost_cm=cost_cm,
+            current_length_cm=current_length_cm,
+            min_after_spend_cm=min_after_spend_cm,
+            deficit_cm=deficit_cm,
+        )
+
+    def insufficient_short(
+        self,
+        *,
+        cost_cm: int,
+        current_length_cm: int,
+        min_after_spend_cm: int,
+        deficit_cm: int,
+        locale: Locale,
+    ) -> str:
+        """Сжатый текст «Недостаточно длины» — для `edit_text` после
+        нажатия `Подтвердить`. Без полной карточки — handler не знает
+        свежий `thickness` без повторного `GetProfile`.
+        """
+        return self._bundle.format(
+            _KEY_INSUFFICIENT_SHORT,
+            locale=locale,
+            cost_cm=cost_cm,
+            current_length_cm=current_length_cm,
+            min_after_spend_cm=min_after_spend_cm,
+            deficit_cm=deficit_cm,
+        )
+
+    def cancelled(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_CANCELLED, locale=locale)
+
+    def race(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_RACE, locale=locale)
+
+    # --- toast-ы (≤ 200 символов) -------------------------------------
+
+    def toast_upgraded(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_UPGRADED, locale=locale)
+
+    def toast_cancelled(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_CANCELLED, locale=locale)
+
+    def toast_player_not_found(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_PLAYER_NOT_FOUND, locale=locale)
+
+    def toast_insufficient(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_INSUFFICIENT, locale=locale)
+
+    def toast_race(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_TOAST_RACE, locale=locale)
+
+    # --- клавиатура ---------------------------------------------------
+
+    def proposal_keyboard(
+        self,
+        *,
+        expected_cost_cm: int,
+        locale: Locale,
+    ) -> InlineKeyboardMarkup:
+        """Инлайн-клавиатура «Подтвердить / Отменить» под карточкой /upgrade.
+
+        Подписи кнопок локализованы; `callback_data` остаётся
+        локаль-независимым (зависит только от action + cost).
+        """
+        confirm_label = self._bundle.format(
+            _KEY_BUTTON_CONFIRM,
+            locale=locale,
+            cost_cm=expected_cost_cm,
+        )
+        cancel_label = self._bundle.format(_KEY_BUTTON_CANCEL, locale=locale)
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=confirm_label,
+                        callback_data=upgrade_callback_data("confirm", expected_cost_cm),
+                    ),
+                    InlineKeyboardButton(
+                        text=cancel_label,
+                        callback_data=upgrade_callback_data("cancel", 0),
+                    ),
+                ],
+            ]
+        )
 
 
 def upgrade_callback_data(action: UpgradeCallbackAction, expected_cost_cm: int) -> str:
@@ -189,14 +286,9 @@ def _as_action(raw: str) -> UpgradeCallbackAction:
 
 
 __all__ = [
-    "RENDER_UPGRADE_CANCELLED",
-    "RENDER_UPGRADE_RACE_RU",
     "UpgradeCallbackAction",
     "UpgradeCallbackData",
-    "build_upgrade_proposal_keyboard",
+    "UpgradePresenter",
     "parse_upgrade_callback_data",
-    "render_upgrade_insufficient",
-    "render_upgrade_proposal",
-    "render_upgrade_success",
     "upgrade_callback_data",
 ]
