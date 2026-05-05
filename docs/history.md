@@ -23,6 +23,54 @@
 
 ---
 
+## 2026-05-04 — Спринт 1.6.F: миграция `FinishForestRun` / `InvokeOracle` на `ILengthGranter`
+
+**Автор:** Devin (по запросу azurehannah)
+**Тип:** refactor / application / architecture
+**Связано:** `current_tasks.md` Спринт 1.6.F, ПД 1.6.6 (development_plan.md §4), ГДД §3.3, `HANDOFF_1_6_F.md` (удалён по завершении).
+
+Что сделано:
+- **Архитектурное решение (ADR в коде):** Variant B из `HANDOFF_1_6_F.md` — `AddLength.grant(...)` переведён в **ambient-UoW** режим. Caller обязан открыть `async with uow:` сам; `AddLength` лишь проверяет `IUnitOfWork.is_active` (новое property на интерфейсе) и работает в уже-открытой сессии. Это снимает блокер «nested UoW не разрешён», возникавший при попытке вызвать `AddLength.grant(...)` из других use-case-ов (`InvokeOracle`, `FinishForestRun`).
+- **Domain — `IUnitOfWork.is_active`:** новое property на абстракции (`domain/shared/ports/uow.py`); реализации (`infrastructure/db/uow.py`, `tests/fakes/uow.py`, локальный `_FakeUnitOfWork` в `tests/unit/bot/notifications/test_forest.py`) обновлены. Контракт «один контекст — одна транзакция» сохранён: вложенные `async with uow:` по-прежнему запрещены.
+- **`AddLength` рефактор:** убран `async with self._uow:` из `grant(...)`; добавлен runtime-guard `if not self._uow.is_active: raise RuntimeError(...)`. Логика (валидация → идемпотентность → soft-ban-гейт → clamp → mutate → audit `LENGTH_GRANT` → idempotency-mark → trip-wire) полностью сохранена. 21 unit-тест обновлён: добавлен helper `_grant(env, ...)`, открывающий UoW из теста перед вызовом, чтобы не дублировать boilerplate.
+- **`InvokeOracle` миграция:**
+    - В конструкторе `audit: IAuditLogger` заменён на `length_granter: ILengthGranter`.
+    - Раньше: вычисление бонуса → `player.with_length(...)` → `players.save(...)` → audit `LENGTH_GRANT` (source=`ORACLE`).
+    - Теперь: вычисление бонуса → запись `OracleInvocation` (UNIQUE-индекс остаётся last-line race-защитой) → `length_granter.grant(source=ORACLE, delta=bonus_cm, reason="oracle_invocation", idempotency_key="add_length:oracle:{player_id}:{moscow_date}")` → reload игрока для response-snapshot. `LENGTH_GRANT` теперь пишет `AddLength`, со всеми его cap-ами / soft-ban-гейтом / trip-wire-ом. Поведение: «оракул один раз в день» прежнее (двойной guard: preflight + UNIQUE).
+- **`FinishForestRun` миграция:**
+    - В конструкторе добавлен `length_granter: ILengthGranter`.
+    - Раньше: `length += run.length_delta_cm` + `Title.NEWBIE` + (`NameDrop` auto-apply) → один `players.save(...)` → audit `LENGTH_GRANT` (source отсутствовал) + `TITLE_GRANT` + `NAME_GRANT`.
+    - Теперь: разделено на (1) бизнес-mutations леса (title/name → `players.save(...)`); (2) прибавка длины — `length_granter.grant(source=FOREST, delta=run.length_delta_cm, reason="forest_run_finished", idempotency_key="add_length:forest_run:{run.id}")`; (3) reload игрока + `runs.save(mark_finished)` + release lock + audit `TITLE_GRANT` / `NAME_GRANT`. `LENGTH_GRANT` пишет `AddLength`. APScheduler-рестарт + повторный финиш по-прежнему идемпотентен (`status=FINISHED` → no-op + idempotency-key для прибавки).
+- **Composition root (`bot/main.py`):** `AddLength` теперь конструируется один раз сразу после `ActivityLockService` и переиспользуется как `ILengthGranter` в `FinishForestRun` и `InvokeOracle`. Тестовый container в `tests/unit/bot/test_composition_root.py` синхронизирован.
+- **Architecture guard:** новый тест `tests/unit/architecture/test_length_grant_guard.py` сканирует `src/pipirik_wars/` и фейлит CI, если `.with_length(` встречается вне approved-файлов:
+    - `domain/player/entities.py` — само определение метода;
+    - `application/progression/add_length.py` — единственная approved-прибавка;
+    - `application/progression/upgrade_thickness.py` — вычет стоимости (не прибавка, cap-ы неприменимы).
+    - Любой новый прямой вызов в `bot/`, `application/forest/`, `application/oracle/` и т. п. сразу будет красным CI с указанием файла.
+- **`HANDOFF_1_6_F.md`** удалён — блокер закрыт, спринт готов к ревью.
+
+Результат / артефакты:
+- `src/pipirik_wars/domain/shared/ports/uow.py` (новое `is_active`).
+- `src/pipirik_wars/infrastructure/db/uow.py`, `tests/fakes/uow.py` (`is_active`-реализации).
+- `src/pipirik_wars/application/progression/add_length.py` (ambient-UoW; `is_active`-guard).
+- `src/pipirik_wars/application/oracle/invoke.py` (миграция на `ILengthGranter`).
+- `src/pipirik_wars/application/forest/finish_run.py` (миграция на `ILengthGranter`).
+- `src/pipirik_wars/bot/main.py` (DI единого `AddLength`).
+- `tests/unit/architecture/test_length_grant_guard.py` (architecture-тест, 217 файлов в скане).
+- `tests/unit/application/progression/test_add_length.py` (helper `_grant`, 21 passed).
+- `tests/unit/application/oracle/test_invoke.py` (фикстуры на `AddLength`-как-`ILengthGranter`, 6 passed).
+- `tests/unit/application/forest/test_finish_run.py` (фикстуры на `AddLength`-как-`ILengthGranter`, 8 passed; новые ассерты на `audit.source=FOREST`, `idempotency_key="add_length:forest_run:{id}"`).
+- `tests/unit/bot/test_composition_root.py` (DI обновлён под новый конструктор `FinishForestRun`/`InvokeOracle`).
+- Все тесты: `pytest tests/unit -q`: **1042 passed, 1 skipped**. `pytest tests/integration -q`: **163 passed**. `pytest tests/unit/architecture -q`: **217 passed**.
+
+Заметки / решения:
+- **Ambient-UoW vs re-entrant UoW.** Альтернатива (вариант A handoff-а — сделать `IUnitOfWork` re-entrant через savepoint-ы) добавила бы скрытую сложность транзакционных границ и риски частичного rollback-а: внешний use-case мог бы продолжать выполняться после rollback вложенного. Ambient-UoW требует от каждого нового use-case-а явно открыть `async with uow:` (и единый CI-контракт «AddLength всегда зовётся в ambient»), но даёт честную транзакционную семантику.
+- **Audit shape для леса слегка изменился.** Раньше `LENGTH_GRANT` от леса имел `target_kind="forest_run"` + `target_id=run.id` + `idempotency_key="forest_run_finished:length:{id}"`. Теперь — `target_kind="player"` + `source=FOREST` + `idempotency_key="add_length:forest_run:{id}"`. Это согласуется со всеми остальными `LENGTH_GRANT`-ами (формат от `AddLength`), и `source` теперь явный — это требование ГДД §3.3.4 и единственный способ для `AnticheatWindow.sum_organic_in_window(...)` корректно агрегировать лес как organic-источник.
+- **Реферальный бонус (RegisterPlayer).** В исходной формулировке 1.6.F упоминался, но в коде референц-механика ещё не реализована (нет `referral_bonus`-handler-а). Перевозить нечего; перенесено в 1.6.G (там же будет `/anticheat_unban`).
+- **Trip-wire поведение в `FinishForestRun`.** Если игрок за день упёрся в дневной cap, finish-job всё равно отработает: `AddLength` заклемит прирост и поставит soft-ban через `with_anticheat_ban(...)`. APScheduler не теряет job, lock снимается, игрок при следующих action-ах увидит `anticheat-soft-ban-active`-сообщение.
+
+---
+
 ## 2026-05-05 — Спринт 1.6.D: `progression.add_length(...)` use-case + anti-cheat hardcap
 
 **Автор:** Devin (по запросу sandyemaroon)

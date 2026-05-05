@@ -1,4 +1,4 @@
-"""Use-case `FinishForestRun` (Спринт 1.3.C).
+"""Use-case `FinishForestRun` (Спринты 1.3.C, 1.6.F).
 
 Срабатывает по APScheduler-job-у, запланированному `StartForestRun`-ом
 на `ends_at`. Применяет уже сохранённый исход:
@@ -7,33 +7,25 @@
 2. Если запись уже `FINISHED` — идемпотентный no-op (job мог стрельнуть
    повторно из-за рестарта воркера или ручного `cancel`/`reschedule`).
 3. Загружает `Player` по `forest_runs.player_id`.
-4. Применяет:
-   - `length += run.length_delta_cm` (всегда `>0`, лес — безопасная
-     активность; ГДД §8.2 / ПД §3.1).
-   - Если у игрока `title is None` → выдать `Title.NEWBIE` (ПД §1.3.8 /
-     ГДД §8.2: «при первом успешном возвращении из леса»). Идемпотентно:
-     при повторном вызове на уже-`FINISHED`-записи второй выдачи не
-     случится, потому что мы выходим раньше; при первом вызове —
-     проверяем `player.title is None`, чтобы не перетереть уже-выданный
-     титул вручную (rare).
-   - Если `run.drop is NameDrop` и у игрока `name is None` → выдать
-     имя (ГДД §2.5 / §1.3.7: «новичок без имени → после леса с дропом
-     имени получает имя»). Если у игрока уже есть имя — `NameDrop`
-     остаётся как «предложение», 1.3.D-handler даст inline-кнопки
-     «Заменить / Выбросить».
-   - `ItemDrop` — также **не** применяется автоматически. Решение
-     «надеть/выбросить» отдаём 1.3.6/1.3.D-handler-у.
-5. Помечает `forest_runs.status = FINISHED, finished_at = now`.
-6. Снимает `activity_lock` `(player, FOREST)` (NO-OP, если истёк).
-7. Пишет в audit отдельные записи: `LENGTH_GRANT`, опционально
-   `TITLE_GRANT` (`reason="first_forest_title"`), опционально
-   `NAME_GRANT`. Один и тот же `forest_run_id` используется как
-   `idempotency_key`.
+4. Применяет титул/имя (mutations без длины):
+   - Если `title is None` → выдать `Title.NEWBIE` (ПД §1.3.8 / ГДД §8.2:
+     «при первом успешном возвращении из леса»).
+   - Если `run.drop is NameDrop` и `name is None` → выдать имя.
+     Иначе — предложение остаётся на 1.3.D-handler-е.
+   - `ItemDrop` — ручное «надеть/выбросить» в 1.3.6/1.3.D.
+5. Прибавляет длину через `ILengthGranter` (Спринт 1.6.F):
+   `length_granter.grant(source=FOREST, delta=run.length_delta_cm,
+   reason="forest_run_finished", idempotency_key="add_length:forest_run:{id}")`.
+   `AddLength` в ambient-UoW режиме проверяет anti-cheat soft-ban,
+   клампит по cap-ам, пишет audit `LENGTH_GRANT`, взводит trip-wire.
+6. Помечает `forest_runs.status = FINISHED, finished_at = now`.
+7. Снимает `activity_lock` `(player, FOREST)` (NO-OP, если истёк).
+8. Пишет audit опциональные `TITLE_GRANT` / `NAME_GRANT`
+   («бизнес-события» леса). `LENGTH_GRANT` уже пишется из `AddLength`.
 
-Транзакция: всё — внутри одного `IUnitOfWork`. Любая ошибка откатывает
-все mutations (но сам APScheduler уже снял job, поэтому повторный
-запуск произойдёт только если кто-то его перепланирует — это уже
-«ручной» сценарий).
+Транзакция: всё — внутри одного `IUnitOfWork` (`async with self._uow:`),
+`AddLength.grant(...)` вызывается в ambient-режиме внутри этого контекста.
+Любая ошибка откатывает все mutations (в т. ч. soft-ban-кик из trip-wire-а).
 """
 
 from __future__ import annotations
@@ -53,12 +45,12 @@ from pipirik_wars.domain.forest import (
 )
 from pipirik_wars.domain.player import (
     IPlayerRepository,
-    Length,
     Player,
     PlayerName,
     Title,
 )
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
+from pipirik_wars.domain.progression.length_granter import ILengthGranter
 from pipirik_wars.domain.shared.ports import (
     AuditAction,
     AuditEntry,
@@ -66,6 +58,7 @@ from pipirik_wars.domain.shared.ports import (
     IClock,
     IUnitOfWork,
 )
+from pipirik_wars.domain.shared.ports.audit import AuditSource
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +92,7 @@ class FinishForestRun:
     __slots__ = (
         "_audit",
         "_clock",
+        "_length_granter",
         "_locks",
         "_players",
         "_runs",
@@ -112,6 +106,7 @@ class FinishForestRun:
         players: IPlayerRepository,
         runs: IForestRunRepository,
         locks: ActivityLockService,
+        length_granter: ILengthGranter,
         audit: IAuditLogger,
         clock: IClock,
     ) -> None:
@@ -119,6 +114,7 @@ class FinishForestRun:
         self._players = players
         self._runs = runs
         self._locks = locks
+        self._length_granter = length_granter
         self._audit = audit
         self._clock = clock
 
@@ -148,17 +144,12 @@ class FinishForestRun:
             now = self._clock.now()
             player_before = player
 
-            # 1. Длина (всегда +).
-            new_length = Length(cm=player.length.cm + run.length_delta_cm)
-            updated = player.with_length(new_length, now=now)
-
-            # 2. Титул NEWBIE — идемпотентный: только если ещё нет титула.
-            granted_title = updated.title is None
+            # 1. Титул NEWBIE и имя — бизнес-мутации леса, не связанные с длиной.
+            granted_title = player.title is None
+            updated = player
             if granted_title:
                 updated = updated.with_title(Title.NEWBIE, now=now)
 
-            # 3. Имя — auto-apply, только если у игрока ещё нет имени и
-            # дроп — `NameDrop`.
             granted_name = isinstance(run.drop, NameDrop) and updated.name is None
             if granted_name:
                 assert isinstance(run.drop, NameDrop)
@@ -167,24 +158,27 @@ class FinishForestRun:
                     now=now,
                 )
 
-            saved_player = await self._players.save(updated)
+            if granted_title or granted_name:
+                await self._players.save(updated)
+
+            # 2. Прибавка длины — через единый ILengthGranter (Спринт 1.6.F).
+            # AddLength сам запишет audit `LENGTH_GRANT` и взведёт trip-wire
+            # при превышении cap-ов.
+            assert player.id is not None
+            await self._length_granter.grant(
+                player_id=player.id,
+                delta_cm=run.length_delta_cm,
+                source=AuditSource.FOREST,
+                reason="forest_run_finished",
+                idempotency_key=f"add_length:forest_run:{run.id}",
+            )
+
+            # 3. Финальный снимок игрока (с учётом title/name и прибавки).
+            saved_player = await self._players.get_by_id(player_id=player.id) or updated
             finished_run = await self._runs.save(run.mark_finished(finished_at=now))
 
             await self._locks.release(actor_kind="player", actor_id=run.player_id)
 
-            await self._audit.record(
-                AuditEntry(
-                    action=AuditAction.LENGTH_GRANT,
-                    actor_id=player_before.tg_id,
-                    target_kind="forest_run",
-                    target_id=str(finished_run.id),
-                    before={"length_cm": player_before.length.cm},
-                    after={"length_cm": saved_player.length.cm},
-                    reason="forest_run_finished",
-                    idempotency_key=f"forest_run_finished:length:{finished_run.id}",
-                    occurred_at=now,
-                )
-            )
             if granted_title:
                 await self._audit.record(
                     AuditEntry(

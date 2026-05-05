@@ -157,14 +157,6 @@ def _container_with_fakes() -> Container:
         repository=activity_locks,
         clock=clock,
     )
-    finish_forest_run = FinishForestRun(
-        uow=uow,
-        players=players,
-        runs=forest_runs,
-        locks=activity_lock_service,
-        audit=audit,
-        clock=clock,
-    )
     apply_forest_name_drop = ApplyForestNameDrop(
         uow=uow,
         players=players,
@@ -178,6 +170,25 @@ def _container_with_fakes() -> Container:
     oracle_templates = FakeOracleTemplateProvider()
     top_players_query = FakeTopPlayersQuery()
     bundle: IMessageBundle = FakeMessageBundle()
+    add_length = AddLength(
+        uow=uow,
+        players=players,
+        anticheat=anticheat,
+        audit=audit,
+        balance=balance,
+        clock=clock,
+        idempotency=idempotency,
+        admin_alerter=anticheat_admin_alerter,
+    )
+    finish_forest_run = FinishForestRun(
+        uow=uow,
+        players=players,
+        runs=forest_runs,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -298,7 +309,7 @@ def _container_with_fakes() -> Container:
             templates=oracle_templates,
             balance=balance,
             random=rng,
-            audit=audit,
+            length_granter=add_length,
             clock=clock,
         ),
         top_players_query=top_players_query,
@@ -311,16 +322,7 @@ def _container_with_fakes() -> Container:
             audit=audit,
             clock=clock,
         ),
-        add_length=AddLength(
-            uow=uow,
-            players=players,
-            anticheat=anticheat,
-            audit=audit,
-            balance=balance,
-            clock=clock,
-            idempotency=idempotency,
-            admin_alerter=anticheat_admin_alerter,
-        ),
+        add_length=add_length,
     )
 
 

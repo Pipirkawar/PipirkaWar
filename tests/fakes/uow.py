@@ -23,6 +23,10 @@ class FakeUnitOfWork(IUnitOfWork):
         self.rollbacks = 0
         self._in_context = False
 
+    @property
+    def is_active(self) -> bool:
+        return self._in_context
+
     async def __aenter__(self) -> Self:
         if self._in_context:
             raise RuntimeError("FakeUnitOfWork: nested context not allowed")

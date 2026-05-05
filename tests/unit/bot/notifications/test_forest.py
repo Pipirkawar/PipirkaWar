@@ -109,6 +109,10 @@ class _FakeBalanceConfig(IBalanceConfig):
 class _FakeUnitOfWork(IUnitOfWork):
     """Минимальный stub: реальные транзакции нотификатор не открывает."""
 
+    @property
+    def is_active(self) -> bool:
+        return False
+
     async def __aenter__(self) -> _FakeUnitOfWork:
         return self
 
