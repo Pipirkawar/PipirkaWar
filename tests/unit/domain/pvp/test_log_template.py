@@ -42,7 +42,7 @@ class TestDuelLogTemplate:
     def test_frozen(self) -> None:
         t = DuelLogTemplate(id="x.0001", text="text", kind=RoundOutcomeKind.SINGLE_HIT)
         with pytest.raises(FrozenInstanceError):
-            t.id = "y"  # type: ignore[misc]
+            t.id = "y"
 
 
 class TestClassifyRoundOutcome:

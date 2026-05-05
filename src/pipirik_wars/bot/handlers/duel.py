@@ -62,6 +62,7 @@ from pipirik_wars.application.pvp import (
     ChallengeDuel,
     DuelMatched,
     EmptyLobby,
+    IDuelLogTemplateProvider,
     LobbyEntryStale,
     MatchFromLobby,
     SubmitMove,
@@ -73,21 +74,28 @@ from pipirik_wars.bot.presenters import (
     parse_attack_callback_data,
     parse_block_callback_data,
     parse_reject_callback_data,
+    parse_share_callback_data,
 )
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.player import IPlayerRepository, PlayerNotFoundError
 from pipirik_wars.domain.progression import AnticheatSoftBanError
 from pipirik_wars.domain.pvp import (
     Duel,
+    DuelLogNoTemplatesError,
     DuelNotFoundError,
+    IDuelRepository,
     InvalidDuelStateError,
     MoveAlreadySubmittedError,
     NotADuelParticipantError,
     Position,
     PvpRequirementsNotMetError,
+    RoundOutcomeKind,
     SelfChallengeError,
+    classify_round_outcome,
+    pick_duel_log_template,
 )
 from pipirik_wars.domain.security import LockAlreadyHeldError
+from pipirik_wars.domain.shared.ports import IRandom
 
 router = Router(name="duel")
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
@@ -554,6 +562,8 @@ async def handle_pvp_block(  # noqa: PLR0911 — каждая ветка = от�
     bundle: IMessageBundle,
     player_locale_resolver: IPlayerLocaleResolver,
     locale: Locale | None = None,
+    duel_log_templates: IDuelLogTemplateProvider | None = None,
+    pvp_random: IRandom | None = None,
 ) -> None:
     """Callback «Блок» — отправить ход (атака+блок) через `SubmitMove`."""
     if tg_identity is None or callback.data is None:
@@ -621,7 +631,20 @@ async def handle_pvp_block(  # noqa: PLR0911 — каждая ветка = от�
     await _strip_keyboard(callback)
 
     if result.duel_completed:
-        # Финал боя: отправляем result-DM обоим игрокам.
+        # Раунд закрылся этим ходом → flavour-broadcast по последнему
+        # раунду (best-effort, ГДД §15, Спринт 2.1.H).
+        await _broadcast_round_flavor(
+            bot=bot,
+            players_repo=players,
+            presenter=presenter,
+            duel=duel,
+            locale_resolver=player_locale_resolver,
+            fallback_locale=effective_locale,
+            log_templates=duel_log_templates,
+            random=pvp_random,
+        )
+        # Финал боя: отправляем result-DM обоим игрокам и публичную
+        # карточку с кнопкой «Поделиться» (Спринт 2.1.H).
         await _broadcast_result(
             bot=bot,
             players=players,
@@ -636,7 +659,18 @@ async def handle_pvp_block(  # noqa: PLR0911 — каждая ветка = от�
     # ещё открыт (оппонент не походил).
     pending = duel.pending_round
     if pending is not None and pending.round_num > parsed.round_num:
-        # Раунд закрылся → разсылаем следующий attack-промпт обоим.
+        # Раунд закрылся → flavour-broadcast по только что закрытому
+        # раунду + следующий attack-промпт обоим (Спринт 2.1.H).
+        await _broadcast_round_flavor(
+            bot=bot,
+            players_repo=players,
+            presenter=presenter,
+            duel=duel,
+            locale_resolver=player_locale_resolver,
+            fallback_locale=effective_locale,
+            log_templates=duel_log_templates,
+            random=pvp_random,
+        )
         await _broadcast_attack_prompt(
             bot=bot,
             players=players,
@@ -656,6 +690,71 @@ async def handle_pvp_block(  # noqa: PLR0911 — каждая ветка = от�
             locale=effective_locale,
         ),
     )
+
+
+# ---------------------------- pvp-share ----------------------------
+
+
+@router.callback_query(F.data.startswith("pvp-share:"))
+async def handle_share_pvp_result(
+    callback: CallbackQuery,
+    bot: Bot,
+    tg_identity: TgIdentity | None,
+    duels: IDuelRepository,
+    players: IPlayerRepository,
+    bundle: IMessageBundle,
+    locale: Locale | None = None,
+) -> None:
+    """Callback «Поделиться» — постит результат дуэли в текущий чат
+    (Спринт 2.1.H, ГДД §15).
+
+    Расширяет публичный охват: персональные DM-результаты получают
+    оба участника, а карточка с этой кнопкой даёт им возможность
+    запостить итог в любой чат, где есть бот (текст без клавиатуры,
+    чтобы избежать рекурсивного шаринга).
+    """
+    if tg_identity is None or callback.data is None:
+        return
+    presenter = DuelPresenter(bundle=bundle)
+    effective_locale = locale or DEFAULT_LOCALE
+
+    try:
+        parsed = parse_share_callback_data(callback.data)
+    except ValueError:
+        await callback.answer(
+            presenter.toast_outdated(locale=effective_locale),
+            show_alert=False,
+        )
+        return
+
+    duel = await duels.get_by_id(duel_id=parsed.duel_id)
+    if duel is None or duel.final_outcome is None or duel.challenged_id is None:
+        await callback.answer(
+            presenter.toast_duel_not_found(locale=effective_locale),
+            show_alert=False,
+        )
+        return
+
+    p1 = await players.get_by_id(player_id=duel.challenger_id)
+    p2 = await players.get_by_id(player_id=duel.challenged_id)
+    p1_name = _format_username(p1.username.value if p1 and p1.username else None)
+    p2_name = _format_username(p2.username.value if p2 and p2.username else None)
+
+    text = presenter.result_card_text(
+        outcome=duel.final_outcome,
+        p1_name=p1_name,
+        p2_name=p2_name,
+        locale=effective_locale,
+    )
+    chat_id = callback.message.chat.id if callback.message is not None else tg_identity.chat_id
+    try:
+        await bot.send_message(chat_id=chat_id, text=text)
+    except Exception:
+        _LOGGER.warning(
+            "duel.share: failed to post result card",
+            extra={"duel_id": parsed.duel_id, "chat_id": chat_id},
+        )
+    await callback.answer()
 
 
 # ---------------------------- helpers ----------------------------
@@ -806,17 +905,26 @@ async def _broadcast_result(
     locale_resolver: IPlayerLocaleResolver,
     fallback_locale: Locale,
 ) -> None:
-    """Шлёт DM-результат обоим игрокам после завершения дуэли."""
+    """Шлёт DM-результат обоим игрокам после завершения дуэли.
+
+    После персональных DM (`result_victory` / `result_defeat` /
+    `result_draw`) каждому игроку отправляется публичная карточка
+    результата с кнопкой «Поделиться» (Спринт 2.1.H, ГДД §15).
+    """
     duel_id = duel.id
     outcome = duel.final_outcome
     if duel_id is None or outcome is None or duel.challenged_id is None:
         return
 
-    for pid, delta_cm in (
-        (duel.challenger_id, outcome.p1_delta_cm),
-        (duel.challenged_id, outcome.p2_delta_cm),
+    p1 = await players.get_by_id(player_id=duel.challenger_id)
+    p2 = await players.get_by_id(player_id=duel.challenged_id)
+    p1_name = _format_username(p1.username.value if p1 and p1.username else None)
+    p2_name = _format_username(p2.username.value if p2 and p2.username else None)
+
+    for player, delta_cm in (
+        (p1, outcome.p1_delta_cm),
+        (p2, outcome.p2_delta_cm),
     ):
-        player = await players.get_by_id(player_id=pid)
         if player is None:
             continue
         player_locale = await locale_resolver.resolve_for_tg_id(player.tg_id) or fallback_locale
@@ -843,6 +951,108 @@ async def _broadcast_result(
         except Exception:
             _LOGGER.warning(
                 "duel.broadcast_result: failed to DM player",
+                extra={"duel_id": duel_id, "tg_id": player.tg_id},
+            )
+
+        card_text = presenter.result_card_text(
+            outcome=outcome,
+            p1_name=p1_name,
+            p2_name=p2_name,
+            locale=player_locale,
+        )
+        try:
+            await bot.send_message(
+                chat_id=player.tg_id,
+                text=card_text,
+                reply_markup=presenter.share_keyboard(
+                    duel_id=duel_id,
+                    locale=player_locale,
+                ),
+            )
+        except Exception:
+            _LOGGER.warning(
+                "duel.broadcast_result_card: failed to DM player",
+                extra={"duel_id": duel_id, "tg_id": player.tg_id},
+            )
+
+
+async def _broadcast_round_flavor(
+    *,
+    bot: Bot,
+    players_repo: IPlayerRepository,
+    presenter: DuelPresenter,
+    duel: Duel,
+    locale_resolver: IPlayerLocaleResolver,
+    fallback_locale: Locale,
+    log_templates: IDuelLogTemplateProvider | None,
+    random: IRandom | None,
+) -> None:
+    """Best-effort flavour-broadcast по только что закрытому раунду.
+
+    `duel.completed_rounds[-1]` — последний разрешённый раунд (после
+    `SubmitMove`). Шаблон выбирается per-locale (на каждого игрока),
+    плейсхолдеры заполняются `@username`-форматом.
+
+    Если `log_templates` или `random` не подвязаны (например, в
+    unit-тестах handler-а или до полной DI-провязки) — тихо выходим.
+    Любая ошибка провайдера/доставки тоже не валит handler — flavour
+    второстепенен по сравнению с раунд-логикой (ГДД §15).
+    """
+    duel_id = duel.id
+    if duel_id is None or duel.challenged_id is None:
+        return
+    if log_templates is None or random is None:
+        return
+    if not duel.completed_rounds:
+        return
+    round_outcome = duel.completed_rounds[-1]
+    kind = classify_round_outcome(round_outcome)
+
+    p1 = await players_repo.get_by_id(player_id=duel.challenger_id)
+    p2 = await players_repo.get_by_id(player_id=duel.challenged_id)
+    if p1 is None or p2 is None:
+        return
+    p1_name = _format_username(p1.username.value if p1.username else None)
+    p2_name = _format_username(p2.username.value if p2.username else None)
+
+    attacker_name: str | None = None
+    defender_name: str | None = None
+    if kind is RoundOutcomeKind.SINGLE_HIT:
+        # `p1_attack_blocked = True` ⇒ p1's attack landed in p2's block ⇒
+        # атакующий "пробил" — это p2 (p2's attack landed). Симметрично
+        # для p2_attack_blocked.
+        if round_outcome.p1_attack_blocked:
+            attacker_name = p2_name
+            defender_name = p1_name
+        else:
+            attacker_name = p1_name
+            defender_name = p2_name
+
+    for player in (p1, p2):
+        try:
+            player_locale = await locale_resolver.resolve_for_tg_id(player.tg_id) or fallback_locale
+            templates = log_templates.get_templates(locale=player_locale.code)
+            template = pick_duel_log_template(
+                random=random,
+                templates=templates,
+                kind=kind,
+            )
+            text = presenter.round_flavor(
+                template=template,
+                p1_name=p1_name,
+                p2_name=p2_name,
+                attacker_name=attacker_name,
+                defender_name=defender_name,
+            )
+            await bot.send_message(chat_id=player.tg_id, text=text)
+        except DuelLogNoTemplatesError:
+            _LOGGER.warning(
+                "duel.broadcast_flavor: empty templates catalog",
+                extra={"duel_id": duel_id, "tg_id": player.tg_id, "kind": kind.value},
+            )
+        except Exception:
+            _LOGGER.warning(
+                "duel.broadcast_flavor: failed to DM player",
                 extra={"duel_id": duel_id, "tg_id": player.tg_id},
             )
 
@@ -885,5 +1095,6 @@ __all__ = [
     "handle_pvp_attack",
     "handle_pvp_block",
     "handle_pvp_reject",
+    "handle_share_pvp_result",
     "router",
 ]

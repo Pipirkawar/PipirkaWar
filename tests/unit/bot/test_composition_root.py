@@ -112,6 +112,7 @@ from tests.fakes import (
     FakeClock,
     FakeDauThresholdAlerter,
     FakeDelayedJobScheduler,
+    FakeDuelLogTemplateProvider,
     FakeDuelRepository,
     FakeForestRunRepository,
     FakeGlobalLobbyRepository,
@@ -187,6 +188,7 @@ def _container_with_fakes() -> Container:
     anticheat = FakeAnticheatRepository()
     anticheat_admin_alerter = FakeAnticheatAdminAlerter()
     oracle_templates = FakeOracleTemplateProvider()
+    duel_log_templates = FakeDuelLogTemplateProvider()
     top_players_query = FakeTopPlayersQuery()
     bundle: IMessageBundle = FakeMessageBundle()
     add_length = AddLength(
@@ -415,6 +417,7 @@ def _container_with_fakes() -> Container:
         anticheat=anticheat,
         anticheat_admin_alerter=anticheat_admin_alerter,
         oracle_templates=oracle_templates,
+        duel_log_templates=duel_log_templates,
         invoke_oracle=InvokeOracle(
             uow=uow,
             players=players,
