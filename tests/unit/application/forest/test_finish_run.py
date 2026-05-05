@@ -23,6 +23,7 @@ import pytest
 
 from pipirik_wars.application.dto.inputs import FinishForestRunInput
 from pipirik_wars.application.forest import FinishForestRun, ForestRunFinished
+from pipirik_wars.application.progression import AddLength
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.domain.forest import (
     ForestRun,
@@ -45,14 +46,20 @@ from pipirik_wars.domain.player import (
 )
 from pipirik_wars.domain.security import ActivityLock, LockReason
 from pipirik_wars.domain.shared.ports import AuditAction
+from pipirik_wars.domain.shared.ports.audit import AuditSource
 from tests.fakes import (
     FakeActivityLockRepository,
+    FakeAnticheatAdminAlerter,
+    FakeAnticheatRepository,
     FakeAuditLogger,
+    FakeBalanceConfig,
     FakeClock,
     FakeForestRunRepository,
+    FakeIdempotencyKey,
     FakePlayerRepository,
     FakeUnitOfWork,
 )
+from tests.unit.domain.balance.factories import build_valid_balance
 
 _NOW = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
 _STARTED = _NOW - timedelta(minutes=15)
@@ -78,11 +85,23 @@ def _build_use_case(
     used_clock = clock or FakeClock(_NOW)
     lock_repo = FakeActivityLockRepository()
     locks = ActivityLockService(repository=lock_repo, clock=used_clock)
+    # ILengthGranter (Спринт 1.6.F) — единая точка прибавки длины.
+    length_granter = AddLength(
+        uow=uow,
+        players=players,
+        anticheat=FakeAnticheatRepository(),
+        audit=audit,
+        balance=FakeBalanceConfig(build_valid_balance()),
+        clock=used_clock,
+        idempotency=FakeIdempotencyKey(),
+        admin_alerter=FakeAnticheatAdminAlerter(),
+    )
     use_case = FinishForestRun(
         uow=uow,
         players=players,
         runs=runs,
         locks=locks,
+        length_granter=length_granter,
         audit=audit,
         clock=used_clock,
     )
@@ -174,7 +193,14 @@ class TestHappyPath:
         assert uow.rollbacks == 0
         actions = [e.action for e in audit.entries]
         assert actions == [AuditAction.LENGTH_GRANT, AuditAction.TITLE_GRANT]
-        assert audit.entries[0].idempotency_key == f"forest_run_finished:length:{run.id}"
+        # 1.6.F: LENGTH_GRANT теперь пишет AddLength (source=FOREST,
+        # idempotency_key=add_length:forest_run:{id}); TITLE_GRANT — это бизнес-
+        # событие леса.
+        length_entry = audit.entries[0]
+        assert length_entry.action is AuditAction.LENGTH_GRANT
+        assert length_entry.source is AuditSource.FOREST
+        assert length_entry.idempotency_key == f"add_length:forest_run:{run.id}"
+        assert length_entry.delta_cm == 7
         assert audit.entries[1].idempotency_key == f"forest_run_finished:title:{run.id}"
 
 

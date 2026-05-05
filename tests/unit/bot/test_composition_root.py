@@ -157,14 +157,6 @@ def _container_with_fakes() -> Container:
         repository=activity_locks,
         clock=clock,
     )
-    finish_forest_run = FinishForestRun(
-        uow=uow,
-        players=players,
-        runs=forest_runs,
-        locks=activity_lock_service,
-        audit=audit,
-        clock=clock,
-    )
     apply_forest_name_drop = ApplyForestNameDrop(
         uow=uow,
         players=players,
@@ -187,6 +179,15 @@ def _container_with_fakes() -> Container:
         clock=clock,
         idempotency=idempotency,
         admin_alerter=anticheat_admin_alerter,
+    )
+    finish_forest_run = FinishForestRun(
+        uow=uow,
+        players=players,
+        runs=forest_runs,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        audit=audit,
+        clock=clock,
     )
     return Container(
         clock=clock,

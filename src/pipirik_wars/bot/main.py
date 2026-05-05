@@ -361,11 +361,25 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         repository=activity_locks,
         clock=clock,
     )
+    # AddLength — единая точка прибавки длины (Спринт 1.6.D / 1.6.F).
+    # Конструируем рано, чтобы переиспользовать в use-case-ах FinishForestRun
+    # / InvokeOracle / ... как `ILengthGranter`.
+    add_length = AddLength(
+        uow=uow,
+        players=players,
+        anticheat=anticheat,
+        audit=audit,
+        balance=balance,
+        clock=clock,
+        idempotency=idempotency,
+        admin_alerter=anticheat_admin_alerter,
+    )
     finish_forest_run = FinishForestRun(
         uow=uow,
         players=players,
         runs=forest_runs,
         locks=activity_lock_service,
+        length_granter=add_length,
         audit=audit,
         clock=clock,
     )
@@ -410,18 +424,6 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         balance=balance,
         audit=audit,
         clock=clock,
-    )
-    # AddLength — единая точка прибавки длины (Спринт 1.6.D / 1.6.F).
-    # Зависимости: anti-cheat repo, audit, balance, idempotency, admin alerter.
-    add_length = AddLength(
-        uow=uow,
-        players=players,
-        anticheat=anticheat,
-        audit=audit,
-        balance=balance,
-        clock=clock,
-        idempotency=idempotency,
-        admin_alerter=anticheat_admin_alerter,
     )
     invoke_oracle = InvokeOracle(
         uow=uow,
