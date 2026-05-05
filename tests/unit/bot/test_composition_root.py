@@ -31,6 +31,7 @@ from pipirik_wars.application.forest import (
     FinishForestRun,
     StartForestRun,
 )
+from pipirik_wars.application.i18n import IMessageBundle
 from pipirik_wars.application.oracle import InvokeOracle
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.application.progression import UpgradeThickness
@@ -66,6 +67,7 @@ from pipirik_wars.infrastructure.db.services import (
     SqlAlchemyIdempotencyService,
 )
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
+from pipirik_wars.infrastructure.i18n import FluentMessageBundle
 from pipirik_wars.infrastructure.random import RealRandom
 from pipirik_wars.infrastructure.rate_limit import (
     InMemoryTokenBucketRateLimiter,
@@ -90,6 +92,7 @@ from tests.fakes import (
     FakeDelayedJobScheduler,
     FakeForestRunRepository,
     FakeIdempotencyKey,
+    FakeMessageBundle,
     FakeOracleHistoryRepository,
     FakeOracleTemplateProvider,
     FakePlayerRepository,
@@ -164,6 +167,7 @@ def _container_with_fakes() -> Container:
     oracle_history = FakeOracleHistoryRepository()
     oracle_templates = FakeOracleTemplateProvider()
     top_players_query = FakeTopPlayersQuery()
+    bundle: IMessageBundle = FakeMessageBundle()
     return Container(
         clock=clock,
         random=rng,
@@ -287,6 +291,7 @@ def _container_with_fakes() -> Container:
         ),
         top_players_query=top_players_query,
         get_top_players=GetTopPlayers(query=top_players_query),
+        bundle=bundle,
     )
 
 
@@ -332,6 +337,8 @@ class TestContainer:
         assert isinstance(c.finish_forest_run, FinishForestRun)
         # Thickness upgrade (Спринт 1.4.A).
         assert isinstance(c.upgrade_thickness, UpgradeThickness)
+        # i18n bundle (Спринт 1.5.A → 1.5.B).
+        assert isinstance(c.bundle, FakeMessageBundle)
 
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
@@ -380,6 +387,8 @@ class TestBuildContainer:
         assert isinstance(c.finish_forest_run, FinishForestRun)
         # Thickness upgrade (Спринт 1.4.A).
         assert isinstance(c.upgrade_thickness, UpgradeThickness)
+        # i18n bundle (Спринт 1.5.A → 1.5.B): реальный FluentMessageBundle.
+        assert isinstance(c.bundle, FluentMessageBundle)
 
 
 class TestBuildDispatcher:
@@ -422,3 +431,5 @@ class TestBuildDispatcher:
         assert dp["balance"] is c.balance
         # Sprint 1.4.A: новый router `upgrade`.
         assert any(r.name == "upgrade" for r in dp.sub_routers)
+        # Sprint 1.5.B: bundle прокинут в workflow-data для handler-ов.
+        assert dp["bundle"] is c.bundle

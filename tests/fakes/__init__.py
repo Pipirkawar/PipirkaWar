@@ -24,6 +24,7 @@ from tests.fakes.delayed_job_scheduler import (
 from tests.fakes.forest_run_repo import FakeForestRunRepository
 from tests.fakes.idempotency import FakeIdempotencyKey
 from tests.fakes.lock_repo import FakeActivityLockRepository
+from tests.fakes.message_bundle import FakeMessageBundle
 from tests.fakes.oracle import (
     FakeOracleHistoryRepository,
     FakeOracleTemplateProvider,
@@ -49,6 +50,7 @@ __all__ = [
     "FakeDelayedJobScheduler",
     "FakeForestRunRepository",
     "FakeIdempotencyKey",
+    "FakeMessageBundle",
     "FakeOracleHistoryRepository",
     "FakeOracleTemplateProvider",
     "FakePlayerRepository",

@@ -23,6 +23,48 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.5.B: DI `IMessageBundle` + `/start` через `StartPresenter`
+
+**Автор:** Devin (по запросу sufficientdorette)
+**Тип:** feature (DI-провязка + первый handler через i18n-порт)
+**Связано:** Текущий PR (Спринт 1.5.B), [development_plan.md §3 / Спринт 1.5, задачи 1.5.1–1.5.2](development_plan.md), [current_tasks.md Спринт 1.5 → 1.5.B](current_tasks.md). Открытие середины Спринта 1.5 после смерженного 1.5.A (PR #25).
+
+Второй слайс Спринта 1.5 — выводим `IMessageBundle` из «фундамента» в реальное использование на handler-е `/start`. Это в т.ч. валидирует архитектуру 1.5.A end-to-end: `LocaleResolver` → `LocaleMiddleware` → `data["locale"]` → handler → `StartPresenter` → `FluentMessageBundle` → `.ftl`.
+
+Что сделано:
+- **`src/pipirik_wars/bot/presenters/start.py`** — новый `StartPresenter`-класс. DI-параметр `bundle: IMessageBundle`; методы `registered(*, locale)`, `already(*, locale)`, `group(*, locale)`, `other(*, locale)`, `queued(*, locale, position)`. Все ключи (`start-registered`, `start-already`, `start-group`, `start-other`, `start-queued`) уже лежат в `locales/{ru,en}.ftl` со Спринта 1.5.A.
+- **`src/pipirik_wars/bot/handlers/start.py`** — refactor:
+  - Удалены `REPLY_REGISTERED_RU`, `REPLY_ALREADY_RU`, `REPLY_GROUP_RU`, `REPLY_OTHER_RU` и `_format_queued()`. Все ответы теперь идут через `StartPresenter` с резолвенной `Locale`.
+  - Сигнатура handler-а получила два новых DI-параметра: `bundle: IMessageBundle` (workflow-data из Container-а) и `locale: Locale | None = None` (приходит из `LocaleMiddleware.data["locale"]`). `None` означает «middleware не сработал» (тест) — берём `DEFAULT_LOCALE = Locale("en")` как fallback.
+  - `RegisterPlayerInput.locale` больше не hardcoded `"ru"`, а равен `effective_locale.code` — то есть язык игрока, сохранённый в БД, теперь действительно отражает резолвенную локаль (ПД 1.5.2).
+- **`src/pipirik_wars/bot/main.py`** — DI-провязка:
+  - `Container` получил поле `bundle: IMessageBundle`.
+  - `build_container()` принимает `locales_dir: Path | None = None` (по умолчанию — `Path("locales")` в корне репо/деплоя) и собирает `FluentMessageBundle(locales_dir=...)`.
+  - `build_dispatcher()` кладёт `dispatcher["bundle"] = container.bundle` — aiogram автоматически пробросит его в handler-ы по имени параметра.
+- **`tests/fakes/message_bundle.py`** — `FakeMessageBundle` с маркерным `format(...)`-выводом `<locale>:<key>[k=v,...]`. Это позволяет unit-тестам однозначно проверять и сам ключ, и переданные плейсхолдеры (`position`) без зависимости от Fluent / `.ftl`-файлов.
+- **`tests/unit/bot/handlers/test_start.py`** — 12 тестов переведены на `FakeMessageBundle`: каждый assert теперь сверяет точную marker-строку (например, `"ru:start-queued[position=42]"`). Добавлены два новых теста: `test_private_calls_register_player_with_resolved_locale_en` (`Locale("en") → input.locale="en"`) и `test_locale_none_falls_back_to_default_en` (middleware не сработал → fallback EN).
+- **`tests/unit/bot/presenters/test_start.py`** — 6 новых юнит-тестов для `StartPresenter`: каждый ключ + проверка, что разные `Locale` дают разные строки.
+- **`tests/unit/bot/test_composition_root.py`** — обновлены fake-Container и `build_container()`-тест: проверяем, что `bundle` собирается как `FluentMessageBundle` (real) / `FakeMessageBundle` (test) и пробрасывается в `dispatcher["bundle"]`.
+- **CI**: `make ci` локально — **963 passed, 1 skipped, 96.85%** покрытие; `pre-commit run --all-files` — все хуки зелёные. На +8 тестов больше, чем после 1.5.A.
+
+Результат / артефакты:
+- `src/pipirik_wars/bot/presenters/start.py` (новый, ~70 LoC).
+- `src/pipirik_wars/bot/handlers/start.py` (рефактор, было 119 LoC → стало 110 LoC, hardcoded-строки удалены).
+- `src/pipirik_wars/bot/main.py` (+`bundle` поле в Container, +`locales_dir` в `build_container`, +`dispatcher["bundle"]` в `build_dispatcher`).
+- `tests/fakes/message_bundle.py` + `tests/fakes/__init__.py` (новый fake, экспорт).
+- `tests/unit/bot/handlers/test_start.py` (рефактор + 2 новых теста).
+- `tests/unit/bot/presenters/test_start.py` (новый, 6 тестов).
+- `tests/unit/bot/test_composition_root.py` (assert-ы на `bundle`).
+
+Заметки / решения:
+- **Почему `StartPresenter` — класс, а не модуль с функциями.** В `bot/presenters/profile.py` функции `render_full_nick` / `render_profile_card` чистые — они получают на вход уже готовый `ProfileView`, никаких внешних зависимостей у них нет. У `StartPresenter` иначе: **нужно переносить `bundle` через слой**. Если это были бы module-level-функции, каждая из них принимала бы `bundle` как первый аргумент: `def registered(*, bundle, locale): ...`. Это работает, но даёт два хвоста: (1) handler передаёт один и тот же `bundle` в каждый вызов — копипаста, (2) когда в 1.5.C мы добавим аналогичные `ProfilePresenter`/`ForestPresenter`/`OraclePresenter`, у каждого будет 5–10 функций со своим повтором. Класс с `bundle` в `__init__` инкапсулирует эту зависимость один раз и даёт унифицированный API всем будущим презентерам.
+- **Почему `locale: Locale | None` с fallback на `DEFAULT_LOCALE`, а не required-параметр.** В production `LocaleMiddleware` всегда положит `Locale` в `data["locale"]` (см. Спринт 1.5.A). Но: (1) старые тесты вызывали handler без `locale` напрямую, чтобы не таскать middleware — оставляем им compat. (2) Если кто-то вырубит `LocaleMiddleware` в `register_middlewares` (скажем, дебаг/тестовая сборка), handler не должен падать — `DEFAULT_LOCALE = Locale("en")` это безопасный fallback по ПД 1.5.2. Это явно задокументировано в docstring-е.
+- **Почему `RegisterPlayerInput.locale = effective_locale.code`, а не сохраняем `Locale` целиком.** `RegisterPlayerInput.locale: str | None` живёт в application-DTO и остался от Спринта 1.1.D. Менять его на `Locale` value-object потребовало бы ревизии и use-case-ов, и репозитория. По дизайн-решению на 1.5.B мы НЕ ломаем DTO, а просто заполняем его реальным кодом локали (`"ru"`/`"en"`). Если в будущем (1.5.C+) понадобится сохранять более сложную локаль (например, fallback chain), DTO будет переехать на `Locale` отдельным рефактор-PR-ом.
+- **Почему `FakeMessageBundle` живёт в `tests/fakes/`, а не как inline в каждом тестовом файле.** В 1.5.B он используется в трёх местах (`test_start.py` handler, `test_start.py` presenter, `test_composition_root.py`). В 1.5.C те же самые тесты для `/profile`, `/forest`, `/oracle`, `/upgrade`, `/top` будут пользоваться этим же fake. Дублировать его шесть раз — анти-паттерн; общий fake в `tests/fakes/__init__.py` рядом с `FakeAuditLogger` / `FakeBalanceConfig` — единственный системный путь.
+- **Почему стартовый `.ftl` НЕ менялся.** Все 5 ключей `start-*` были созданы в Спринте 1.5.A заранее с расчётом «handler 1.5.B их использует». Никаких новых ключей в этом PR-е добавлять не пришлось — это валидация, что план 1.5.A был корректным.
+
+---
+
 ## 2026-05-05 — Спринт 1.5.A: i18n-фундамент (Locale + IMessageBundle + FluentMessageBundle + LocaleMiddleware)
 
 **Автор:** Devin (по запросу sufficientdorette)

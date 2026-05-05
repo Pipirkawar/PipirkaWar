@@ -1,4 +1,4 @@
-"""Юнит-тесты `/start` handler-а (acceptance 1.1.1, 1.1.3, 1.2.4)."""
+"""Юнит-тесты `/start` handler-а (acceptance 1.1.1, 1.1.3, 1.2.4, 1.5.B)."""
 
 from __future__ import annotations
 
@@ -10,18 +10,13 @@ import pytest
 from aiogram.types import Chat, Message
 
 from pipirik_wars.application.dto.inputs import RegisterPlayerInput
+from pipirik_wars.application.i18n import IMessageBundle, Locale
 from pipirik_wars.application.player import (
     PlayerQueued,
     PlayerRegistered,
     RegisterPlayer,
 )
-from pipirik_wars.bot.handlers.start import (
-    REPLY_ALREADY_RU,
-    REPLY_GROUP_RU,
-    REPLY_OTHER_RU,
-    REPLY_REGISTERED_RU,
-    handle_start,
-)
+from pipirik_wars.bot.handlers.start import handle_start
 from pipirik_wars.bot.middlewares.auth import TgIdentity
 from pipirik_wars.domain.player import (
     Player,
@@ -34,7 +29,11 @@ from pipirik_wars.domain.signup_queue import (
     ISignupQueueRepository,
     SignupQueueEntry,
 )
-from tests.fakes import FakeSignupQueueRepository
+from tests.fakes import FakeMessageBundle, FakeSignupQueueRepository
+
+
+def _bundle() -> IMessageBundle:
+    return cast(IMessageBundle, FakeMessageBundle())
 
 
 def _build_message_mock(
@@ -53,12 +52,17 @@ def _build_message_mock(
     return msg
 
 
-def _identity(chat_kind: str = "private", tg_user_id: int = 100) -> TgIdentity:
+def _identity(
+    chat_kind: str = "private",
+    tg_user_id: int = 100,
+    *,
+    language_code: str | None = None,
+) -> TgIdentity:
     return TgIdentity(
         tg_user_id=tg_user_id,
         chat_id=42,
         chat_kind=chat_kind,
-        language_code=None,
+        language_code=language_code,
     )
 
 
@@ -108,6 +112,8 @@ class TestHandleStart:
             _identity("private", tg_user_id=100),
             cast(RegisterPlayer, register_player),
             cast(ISignupQueueRepository, queue),
+            _bundle(),
+            locale=Locale("ru"),
         )
 
         register_player.execute.assert_awaited_once()
@@ -115,7 +121,26 @@ class TestHandleStart:
         assert isinstance(actual_input, RegisterPlayerInput)
         assert actual_input.tg_id == 100
         assert actual_input.username == "alice"
-        msg.answer.assert_awaited_once_with(REPLY_REGISTERED_RU)
+        assert actual_input.locale == "ru"
+        msg.answer.assert_awaited_once_with("ru:start-registered")
+
+    async def test_private_calls_register_player_with_resolved_locale_en(self) -> None:
+        msg = _build_message_mock("private", username="bob")
+        register_player = _stub_register_player()
+        queue = _queue()
+
+        await handle_start(
+            cast(Message, msg),
+            _identity("private"),
+            cast(RegisterPlayer, register_player),
+            cast(ISignupQueueRepository, queue),
+            _bundle(),
+            locale=Locale("en"),
+        )
+
+        actual_input = register_player.execute.await_args.args[0]
+        assert actual_input.locale == "en"
+        msg.answer.assert_awaited_once_with("en:start-registered")
 
     async def test_private_already_registered_replies_already(self) -> None:
         msg = _build_message_mock("private")
@@ -129,9 +154,11 @@ class TestHandleStart:
             _identity("private"),
             cast(RegisterPlayer, register_player),
             cast(ISignupQueueRepository, queue),
+            _bundle(),
+            locale=Locale("ru"),
         )
 
-        msg.answer.assert_awaited_once_with(REPLY_ALREADY_RU)
+        msg.answer.assert_awaited_once_with("ru:start-already")
 
     async def test_private_queued_replies_with_position(self) -> None:
         msg = _build_message_mock("private", username="bob")
@@ -151,12 +178,11 @@ class TestHandleStart:
             _identity("private"),
             cast(RegisterPlayer, register_player),
             cast(ISignupQueueRepository, queue),
+            _bundle(),
+            locale=Locale("ru"),
         )
 
-        msg.answer.assert_awaited_once()
-        sent_text = msg.answer.await_args.args[0]
-        assert "Серверы переполнены" in sent_text
-        assert "#42" in sent_text
+        msg.answer.assert_awaited_once_with("ru:start-queued[position=42]")
 
     async def test_private_already_queued_reads_current_position_and_replies(
         self,
@@ -182,11 +208,11 @@ class TestHandleStart:
             _identity("private"),
             cast(RegisterPlayer, register_player),
             cast(ISignupQueueRepository, queue),
+            _bundle(),
+            locale=Locale("ru"),
         )
 
-        msg.answer.assert_awaited_once()
-        sent_text = msg.answer.await_args.args[0]
-        assert "#1" in sent_text
+        msg.answer.assert_awaited_once_with("ru:start-queued[position=1]")
 
     async def test_group_skips_registration_and_replies_instructions(self) -> None:
         msg = _build_message_mock("group")
@@ -198,10 +224,12 @@ class TestHandleStart:
             _identity("group"),
             cast(RegisterPlayer, register_player),
             cast(ISignupQueueRepository, queue),
+            _bundle(),
+            locale=Locale("ru"),
         )
 
         register_player.execute.assert_not_awaited()
-        msg.answer.assert_awaited_once_with(REPLY_GROUP_RU)
+        msg.answer.assert_awaited_once_with("ru:start-group")
 
     async def test_supergroup_skips_registration(self) -> None:
         msg = _build_message_mock("supergroup")
@@ -213,10 +241,12 @@ class TestHandleStart:
             _identity("supergroup"),
             cast(RegisterPlayer, register_player),
             cast(ISignupQueueRepository, queue),
+            _bundle(),
+            locale=Locale("en"),
         )
 
         register_player.execute.assert_not_awaited()
-        msg.answer.assert_awaited_once_with(REPLY_GROUP_RU)
+        msg.answer.assert_awaited_once_with("en:start-group")
 
     async def test_channel_replies_other(self) -> None:
         msg = _build_message_mock("channel")
@@ -228,10 +258,12 @@ class TestHandleStart:
             _identity("channel"),
             cast(RegisterPlayer, register_player),
             cast(ISignupQueueRepository, queue),
+            _bundle(),
+            locale=Locale("ru"),
         )
 
         register_player.execute.assert_not_awaited()
-        msg.answer.assert_awaited_once_with(REPLY_OTHER_RU)
+        msg.answer.assert_awaited_once_with("ru:start-other")
 
     async def test_private_without_identity_replies_other(self) -> None:
         msg = _build_message_mock("private")
@@ -243,10 +275,12 @@ class TestHandleStart:
             None,
             cast(RegisterPlayer, register_player),
             cast(ISignupQueueRepository, queue),
+            _bundle(),
+            locale=Locale("ru"),
         )
 
         register_player.execute.assert_not_awaited()
-        msg.answer.assert_awaited_once_with(REPLY_OTHER_RU)
+        msg.answer.assert_awaited_once_with("ru:start-other")
 
     async def test_no_identity_falls_back_to_message_chat_type(self) -> None:
         msg = _build_message_mock("group")
@@ -258,9 +292,11 @@ class TestHandleStart:
             None,
             cast(RegisterPlayer, register_player),
             cast(ISignupQueueRepository, queue),
+            _bundle(),
+            locale=Locale("ru"),
         )
 
-        msg.answer.assert_awaited_once_with(REPLY_GROUP_RU)
+        msg.answer.assert_awaited_once_with("ru:start-group")
 
     async def test_username_none_when_no_from_user(self) -> None:
         msg = _build_message_mock("private", username=None)
@@ -272,7 +308,28 @@ class TestHandleStart:
             _identity("private"),
             cast(RegisterPlayer, register_player),
             cast(ISignupQueueRepository, queue),
+            _bundle(),
+            locale=Locale("ru"),
         )
 
         actual_input = register_player.execute.await_args.args[0]
         assert actual_input.username is None
+
+    async def test_locale_none_falls_back_to_default_en(self) -> None:
+        """Если middleware не сработал, handler берёт `DEFAULT_LOCALE = en`."""
+        msg = _build_message_mock("private", username="dave")
+        register_player = _stub_register_player()
+        queue = _queue()
+
+        await handle_start(
+            cast(Message, msg),
+            _identity("private"),
+            cast(RegisterPlayer, register_player),
+            cast(ISignupQueueRepository, queue),
+            _bundle(),
+            locale=None,
+        )
+
+        actual_input = register_player.execute.await_args.args[0]
+        assert actual_input.locale == "en"
+        msg.answer.assert_awaited_once_with("en:start-registered")
