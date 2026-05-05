@@ -52,6 +52,10 @@ from pipirik_wars.application.forest import (
     IForestFinishNotifier,
     StartForestRun,
 )
+from pipirik_wars.application.oracle import (
+    InvokeOracle,
+    IOracleTemplateProvider,
+)
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.application.progression import UpgradeThickness
 from pipirik_wars.application.security import ActivityLockService
@@ -64,6 +68,7 @@ from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.dau import IDauCounter, IDauLimit, IDauThresholdAlerter
 from pipirik_wars.domain.forest import IForestRunRepository
+from pipirik_wars.domain.oracle import IOracleHistoryRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import (
@@ -89,6 +94,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
     SqlAlchemyForestRunRepository,
+    SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemySignupQueueRepository,
 )
@@ -104,11 +110,17 @@ from pipirik_wars.infrastructure.rate_limit import (
 )
 from pipirik_wars.infrastructure.scheduler import APSchedulerDelayedJobScheduler
 from pipirik_wars.infrastructure.settings import Settings
+from pipirik_wars.infrastructure.templates import JsonOracleTemplateProvider
 
 # Путь к балансовому файлу по умолчанию (относительно cwd процесса).
 # Деплой кладёт `config/balance.yaml` рядом с бинарём; локально
 # pytest/`make ci` стартуют из корня репо, где он и лежит.
 _DEFAULT_BALANCE_YAML = Path("config/balance.yaml")
+
+# Каталог JSON-шаблонов (`oracle_<locale>.json`, Спринт 1.4.B). Файлы
+# едут вместе с деплоем рядом с балансом — поэтому путь по умолчанию
+# указывает на тот же `config/`.
+_DEFAULT_TEMPLATES_DIR = Path("config/templates")
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +145,10 @@ class Container:
     signup_queue: ISignupQueueRepository
     activity_locks: IActivityLockRepository
     forest_runs: IForestRunRepository
+    oracle_history: IOracleHistoryRepository
+
+    # Шаблоны (Спринт 1.4.B)
+    oracle_templates: IOracleTemplateProvider
 
     # Планировщик отложенных задач (Спринт 1.3.C)
     delayed_jobs: IDelayedJobScheduler
@@ -158,12 +174,14 @@ class Container:
     finish_forest_run: FinishForestRun
     apply_forest_name_drop: ApplyForestNameDrop
     upgrade_thickness: UpgradeThickness
+    invoke_oracle: InvokeOracle
 
 
 def build_container(
     settings: Settings | None = None,
     *,
     balance_yaml_path: Path | None = None,
+    templates_dir: Path | None = None,
     bot: Bot | None = None,
 ) -> Container:
     """Собрать контейнер для production-запуска.
@@ -204,6 +222,10 @@ def build_container(
     signup_queue = SqlAlchemySignupQueueRepository(uow=uow)
     activity_locks = SqlAlchemyActivityLockRepository(uow=uow)
     forest_runs = SqlAlchemyForestRunRepository(uow=uow, balance=balance)
+    oracle_history = SqlAlchemyOracleHistoryRepository(uow=uow)
+    oracle_templates = JsonOracleTemplateProvider(
+        templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
+    )
     dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=settings.bot.max_dau)
     dau_threshold_alerter = StructlogDauThresholdAlerter()
@@ -334,6 +356,16 @@ def build_container(
         audit=audit,
         clock=clock,
     )
+    invoke_oracle = InvokeOracle(
+        uow=uow,
+        players=players,
+        history=oracle_history,
+        templates=oracle_templates,
+        balance=balance,
+        random=RealRandom(),
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -351,6 +383,8 @@ def build_container(
         signup_queue=signup_queue,
         activity_locks=activity_locks,
         forest_runs=forest_runs,
+        oracle_history=oracle_history,
+        oracle_templates=oracle_templates,
         delayed_jobs=delayed_jobs,
         dau_counter=dau_counter,
         dau_limit=dau_limit,
@@ -370,6 +404,7 @@ def build_container(
         finish_forest_run=finish_forest_run,
         apply_forest_name_drop=apply_forest_name_drop,
         upgrade_thickness=upgrade_thickness,
+        invoke_oracle=invoke_oracle,
     )
 
 
@@ -398,7 +433,9 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["finish_forest_run"] = container.finish_forest_run
     dispatcher["apply_forest_name_drop"] = container.apply_forest_name_drop
     dispatcher["upgrade_thickness"] = container.upgrade_thickness
+    dispatcher["invoke_oracle"] = container.invoke_oracle
     dispatcher["balance"] = container.balance
+    dispatcher["clock"] = container.clock
     return dispatcher
 
 

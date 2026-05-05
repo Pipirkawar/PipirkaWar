@@ -1,0 +1,885 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "id": "oracle.en.0001",
+      "text": "Today the stars favor you, {user}. Luck is knocking — open the door."
+    },
+    {
+      "id": "oracle.en.0002",
+      "text": "Winds of change are at your back, {user}. Take a step."
+    },
+    {
+      "id": "oracle.en.0003",
+      "text": "Today you'll succeed at what felt impossible yesterday, {user}."
+    },
+    {
+      "id": "oracle.en.0004",
+      "text": "Good news is flying your way, {user}. Listen for the ping."
+    },
+    {
+      "id": "oracle.en.0005",
+      "text": "This week, {user}, expect a small but genuinely happy victory."
+    },
+    {
+      "id": "oracle.en.0006",
+      "text": "Don't rush to conclusions, {user}: what looks like a setback is a gift."
+    },
+    {
+      "id": "oracle.en.0007",
+      "text": "Today your intuition is laser-sharp, {user}. Trust it."
+    },
+    {
+      "id": "oracle.en.0008",
+      "text": "On the horizon, {user}, a meeting that changes how you see people."
+    },
+    {
+      "id": "oracle.en.0009",
+      "text": "Quiet kindness you forgot will return to you today, {user}."
+    },
+    {
+      "id": "oracle.en.0010",
+      "text": "Money will arrive from where you don't expect it, {user}."
+    },
+    {
+      "id": "oracle.en.0011",
+      "text": "{user}, your next forest run will be generous."
+    },
+    {
+      "id": "oracle.en.0012",
+      "text": "The pipirik feels it: tomorrow is brighter than today, {user}."
+    },
+    {
+      "id": "oracle.en.0013",
+      "text": "Someone will think of you and smile today, {user}."
+    },
+    {
+      "id": "oracle.en.0014",
+      "text": "A small choice today will rearrange a big slice of life, {user}."
+    },
+    {
+      "id": "oracle.en.0015",
+      "text": "Luck is a habit, {user}. Today you pick it up."
+    },
+    {
+      "id": "oracle.en.0016",
+      "text": "{user}, a new opportunity is right around the corner. Turn your head."
+    },
+    {
+      "id": "oracle.en.0017",
+      "text": "The stars whisper: a bright streak is starting for you, {user}."
+    },
+    {
+      "id": "oracle.en.0018",
+      "text": "Today, {user}, something you've sought a while will quietly reveal itself."
+    },
+    {
+      "id": "oracle.en.0019",
+      "text": "{user}, your pipirik senses only good ahead."
+    },
+    {
+      "id": "oracle.en.0020",
+      "text": "Today there's a rare window, {user}. Make a wish in time."
+    },
+    {
+      "id": "oracle.en.0021",
+      "text": "Someone will praise you today, {user}, and they'll mean it."
+    },
+    {
+      "id": "oracle.en.0022",
+      "text": "The wise pipirik says: your chosen path is right, {user}."
+    },
+    {
+      "id": "oracle.en.0023",
+      "text": "{user}, don't decline today's invitation — it's fate."
+    },
+    {
+      "id": "oracle.en.0024",
+      "text": "Today is a day for bold moves, {user}. Be bold."
+    },
+    {
+      "id": "oracle.en.0025",
+      "text": "You'll be noticed where you didn't expect it, {user}."
+    },
+    {
+      "id": "oracle.en.0026",
+      "text": "The cosmos winks at you, {user}. Wink back."
+    },
+    {
+      "id": "oracle.en.0027",
+      "text": "Today the right people will hear your words, {user}."
+    },
+    {
+      "id": "oracle.en.0028",
+      "text": "{user}, you're half a step from a breakthrough. Keep going."
+    },
+    {
+      "id": "oracle.en.0029",
+      "text": "Luck loves the prepared, {user}. Today you are."
+    },
+    {
+      "id": "oracle.en.0030",
+      "text": "Someone you missed is coming back into your life, {user}."
+    },
+    {
+      "id": "oracle.en.0031",
+      "text": "{user}, remember: you're stronger than you think."
+    },
+    {
+      "id": "oracle.en.0032",
+      "text": "Today even the pebbles on the road will be on your side, {user}."
+    },
+    {
+      "id": "oracle.en.0033",
+      "text": "A small kindness now will return as great luck later, {user}."
+    },
+    {
+      "id": "oracle.en.0034",
+      "text": "{user}, the pipirik guardian is on duty just for you today."
+    },
+    {
+      "id": "oracle.en.0035",
+      "text": "A bright turn is coming within 24 hours, {user}."
+    },
+    {
+      "id": "oracle.en.0036",
+      "text": "Today you'll find what you considered hopelessly lost, {user}."
+    },
+    {
+      "id": "oracle.en.0037",
+      "text": "{user}, an evening surprise is queued up. Don't miss it."
+    },
+    {
+      "id": "oracle.en.0038",
+      "text": "Star advice: be generous today, {user} — it doubles back."
+    },
+    {
+      "id": "oracle.en.0039",
+      "text": "A letter of joy is flying toward you, {user}."
+    },
+    {
+      "id": "oracle.en.0040",
+      "text": "{user}, no doubt: your 'yes' today is the right one."
+    },
+    {
+      "id": "oracle.en.0041",
+      "text": "{user}, your pipirik grows faster than you think."
+    },
+    {
+      "id": "oracle.en.0042",
+      "text": "Today every centimeter of length will feel real, {user}."
+    },
+    {
+      "id": "oracle.en.0043",
+      "text": "{user}, don't measure your pipirik before sunset — surprise incoming."
+    },
+    {
+      "id": "oracle.en.0044",
+      "text": "The forest is generous on length to anyone named {user} today."
+    },
+    {
+      "id": "oracle.en.0045",
+      "text": "Thickness without length is dust; length without thickness is a straw. You're balanced, {user}."
+    },
+    {
+      "id": "oracle.en.0046",
+      "text": "{user}, your pipirik has a big day: it's near a new size."
+    },
+    {
+      "id": "oracle.en.0047",
+      "text": "Today you'll add more than expected, {user}. Don't panic."
+    },
+    {
+      "id": "oracle.en.0048",
+      "text": "{user}, length is earnable. Today's a good day to earn."
+    },
+    {
+      "id": "oracle.en.0049",
+      "text": "The stars say: by the end of the week you'll see a round number, {user}."
+    },
+    {
+      "id": "oracle.en.0050",
+      "text": "{user}, don't fear /forest today. The pipirik scents profit."
+    },
+    {
+      "id": "oracle.en.0051",
+      "text": "Length is not a destination but a path, {user}. Yet the destination is close."
+    },
+    {
+      "id": "oracle.en.0052",
+      "text": "{user}, your next /forest will yield an interesting drop."
+    },
+    {
+      "id": "oracle.en.0053",
+      "text": "Time to upgrade, {user}. Thickness is calling."
+    },
+    {
+      "id": "oracle.en.0054",
+      "text": "{user}, the pipirik hints: today is a day of long victories."
+    },
+    {
+      "id": "oracle.en.0055",
+      "text": "Don't miss the moment, {user}: the moment of length only catches the bold."
+    },
+    {
+      "id": "oracle.en.0056",
+      "text": "{user}, soon you'll outgrow an old friend in length. Brace for talks."
+    },
+    {
+      "id": "oracle.en.0057",
+      "text": "Forest spirits whisper your name today, {user}. That's luck."
+    },
+    {
+      "id": "oracle.en.0058",
+      "text": "{user}, don't waste length on the wind — spend wisely."
+    },
+    {
+      "id": "oracle.en.0059",
+      "text": "Today even a short pipirik feels grand, {user}."
+    },
+    {
+      "id": "oracle.en.0060",
+      "text": "{user}, you're at the threshold of a title you wanted."
+    },
+    {
+      "id": "oracle.en.0061",
+      "text": "One smart forest run today equals ten dumb ones, {user}."
+    },
+    {
+      "id": "oracle.en.0062",
+      "text": "{user}, every centimeter today counts double in meaning."
+    },
+    {
+      "id": "oracle.en.0063",
+      "text": "Today your pipirik is wiser than your mind. Listen, {user}."
+    },
+    {
+      "id": "oracle.en.0064",
+      "text": "{user}, length comes to those who can wait. To you too."
+    },
+    {
+      "id": "oracle.en.0065",
+      "text": "Soon you'll remember you started at 2 cm, {user}, and laugh."
+    },
+    {
+      "id": "oracle.en.0066",
+      "text": "{user}, your name's on the forest's lucky list today."
+    },
+    {
+      "id": "oracle.en.0067",
+      "text": "Don't begrudge the centimeters on the path to the dream, {user}."
+    },
+    {
+      "id": "oracle.en.0068",
+      "text": "{user}, the pipirik grows even in sleep. Especially today."
+    },
+    {
+      "id": "oracle.en.0069",
+      "text": "Today the forest brings what you've missed for weeks, {user}."
+    },
+    {
+      "id": "oracle.en.0070",
+      "text": "{user}, remember: length isn't about size — it's about the journey."
+    },
+    {
+      "id": "oracle.en.0071",
+      "text": "Say 'thank you' to the forest today, {user} — it'll hear."
+    },
+    {
+      "id": "oracle.en.0072",
+      "text": "{user}, your thickness is outpacing your length. That's rare."
+    },
+    {
+      "id": "oracle.en.0073",
+      "text": "Don't scare others with your stature, {user}. Boast tastefully."
+    },
+    {
+      "id": "oracle.en.0074",
+      "text": "{user}, today think twice before spending. Length will remember."
+    },
+    {
+      "id": "oracle.en.0075",
+      "text": "The pipirik sage forecasts: by month's end you'll hit a personal record, {user}."
+    },
+    {
+      "id": "oracle.en.0076",
+      "text": "{user}, small gains compound into big magic."
+    },
+    {
+      "id": "oracle.en.0077",
+      "text": "Today you'll feel the joy of growth, {user}, even on a small number."
+    },
+    {
+      "id": "oracle.en.0078",
+      "text": "{user}, length is winking at you. Wink back."
+    },
+    {
+      "id": "oracle.en.0079",
+      "text": "Walk into the forest with confidence, {user}. The forest believes in you."
+    },
+    {
+      "id": "oracle.en.0080",
+      "text": "{user}, you won't linger on this centimeter — the next one is calling."
+    },
+    {
+      "id": "oracle.en.0081",
+      "text": "Today the cat will look at you longer than usual, {user}. That's a sign."
+    },
+    {
+      "id": "oracle.en.0082",
+      "text": "{user}, your mug today will be exactly half full — that's perfect."
+    },
+    {
+      "id": "oracle.en.0083",
+      "text": "Don't buy a lottery ticket today, {user}. Use /forest instead."
+    },
+    {
+      "id": "oracle.en.0084",
+      "text": "{user}, the fridge holds a discovery you forgot yesterday."
+    },
+    {
+      "id": "oracle.en.0085",
+      "text": "Today you'll find a sock, {user}. Possibly even your own."
+    },
+    {
+      "id": "oracle.en.0086",
+      "text": "{user}, don't trust the black cat. Trust the red pipirik."
+    },
+    {
+      "id": "oracle.en.0087",
+      "text": "Traffic lights will be on your side today, {user}."
+    },
+    {
+      "id": "oracle.en.0088",
+      "text": "{user}, today's coffee will be stronger than usual. Take it as a sign."
+    },
+    {
+      "id": "oracle.en.0089",
+      "text": "Flip the pillow — find an idea, {user}."
+    },
+    {
+      "id": "oracle.en.0090",
+      "text": "{user}, don't sit on a three-legged stool today."
+    },
+    {
+      "id": "oracle.en.0091",
+      "text": "Star advice: do the dishes right away, {user} — karma boost."
+    },
+    {
+      "id": "oracle.en.0092",
+      "text": "{user}, wear something with buttons today. It'll work."
+    },
+    {
+      "id": "oracle.en.0093",
+      "text": "Don't open an old chat today, {user}. Seriously."
+    },
+    {
+      "id": "oracle.en.0094",
+      "text": "{user}, take out the trash before sunset, or luck will linger."
+    },
+    {
+      "id": "oracle.en.0095",
+      "text": "Be kind to the courier today, {user}. It pays back."
+    },
+    {
+      "id": "oracle.en.0096",
+      "text": "{user}, don't eat the last dumpling. Save it — it'll matter."
+    },
+    {
+      "id": "oracle.en.0097",
+      "text": "Today wear mismatched socks, {user} — it works."
+    },
+    {
+      "id": "oracle.en.0098",
+      "text": "{user}, slip a coin under the keyboard — your daily talisman."
+    },
+    {
+      "id": "oracle.en.0099",
+      "text": "Don't get up on the wrong foot today, {user}. Strictly the right one."
+    },
+    {
+      "id": "oracle.en.0100",
+      "text": "{user}, check your pockets. Something's there."
+    },
+    {
+      "id": "oracle.en.0101",
+      "text": "Today you'll remember a song you haven't heard in a decade, {user}."
+    },
+    {
+      "id": "oracle.en.0102",
+      "text": "{user}, drink water from the blue cup today. Important."
+    },
+    {
+      "id": "oracle.en.0103",
+      "text": "Don't argue with the printer today, {user}. It wins."
+    },
+    {
+      "id": "oracle.en.0104",
+      "text": "{user}, today's best idea will come in the shower. Don't lose it."
+    },
+    {
+      "id": "oracle.en.0105",
+      "text": "If you meet a pigeon — nod, {user}. It's a pipirik scout."
+    },
+    {
+      "id": "oracle.en.0106",
+      "text": "{user}, don't open an umbrella indoors. Still."
+    },
+    {
+      "id": "oracle.en.0107",
+      "text": "Today's food will be a notch better than usual, {user}."
+    },
+    {
+      "id": "oracle.en.0108",
+      "text": "{user}, don't step on cracks — old superstition works."
+    },
+    {
+      "id": "oracle.en.0109",
+      "text": "Look at the sky at least once today, {user} — clouds advise."
+    },
+    {
+      "id": "oracle.en.0110",
+      "text": "{user}, don't reply to a message from someone you don't remember."
+    },
+    {
+      "id": "oracle.en.0111",
+      "text": "Set the alarm a minute earlier, {user}. That minute is gold."
+    },
+    {
+      "id": "oracle.en.0112",
+      "text": "{user}, pet the cat today. No cat? Pet a pillow."
+    },
+    {
+      "id": "oracle.en.0113",
+      "text": "Don't buy seeds today, {user}. They can wait."
+    },
+    {
+      "id": "oracle.en.0114",
+      "text": "{user}, don't forget the charger. Phone's and yours."
+    },
+    {
+      "id": "oracle.en.0115",
+      "text": "Today's best place to think is the balcony, {user}."
+    },
+    {
+      "id": "oracle.en.0116",
+      "text": "{user}, don't lend a pen today — it might not come back."
+    },
+    {
+      "id": "oracle.en.0117",
+      "text": "Smile at the mirror tonight, {user}. The mirror will smile back."
+    },
+    {
+      "id": "oracle.en.0118",
+      "text": "{user}, promise not to eat cold pizza — bad omen for pipiriks."
+    },
+    {
+      "id": "oracle.en.0119",
+      "text": "Eat an apple today, {user}. Even if you don't want one."
+    },
+    {
+      "id": "oracle.en.0120",
+      "text": "{user}, check the remote's batteries. Just saying."
+    },
+    {
+      "id": "oracle.en.0121",
+      "text": "The ancients said: the pipirik is the measure of all things. Today you see why, {user}."
+    },
+    {
+      "id": "oracle.en.0122",
+      "text": "{user}, tonight's moonlight will land where you await a hint."
+    },
+    {
+      "id": "oracle.en.0123",
+      "text": "The starry wheel turns its face toward you, {user}."
+    },
+    {
+      "id": "oracle.en.0124",
+      "text": "{user}, in tonight's dream a sign will appear. Note its color."
+    },
+    {
+      "id": "oracle.en.0125",
+      "text": "Dark forces give you a wide berth today, {user}."
+    },
+    {
+      "id": "oracle.en.0126",
+      "text": "{user}, today is your soul's birthday. Congratulate yourself."
+    },
+    {
+      "id": "oracle.en.0127",
+      "text": "The third eye will crack open for a minute, {user}. Don't blink."
+    },
+    {
+      "id": "oracle.en.0128",
+      "text": "{user}, an ancestral pipirik in your karma awakens today."
+    },
+    {
+      "id": "oracle.en.0129",
+      "text": "Today whisper your wish to the wind, {user}. It'll carry."
+    },
+    {
+      "id": "oracle.en.0130",
+      "text": "{user}, gold lives inside you. The stars notice first."
+    },
+    {
+      "id": "oracle.en.0131",
+      "text": "Today is a good day to make peace with the past, {user}."
+    },
+    {
+      "id": "oracle.en.0132",
+      "text": "{user}, a new line will appear on your palm. Find it, learn it."
+    },
+    {
+      "id": "oracle.en.0133",
+      "text": "The moon waxes — and so do you, {user}."
+    },
+    {
+      "id": "oracle.en.0134",
+      "text": "{user}, tonight's sunset bonfire (even imagined) brings clarity."
+    },
+    {
+      "id": "oracle.en.0135",
+      "text": "An old pipirik ancestor smiles at you from beyond the clouds, {user}."
+    },
+    {
+      "id": "oracle.en.0136",
+      "text": "{user}, ancient power passes to you. Use it well."
+    },
+    {
+      "id": "oracle.en.0137",
+      "text": "Today you'll receive a sign — not from a person, {user}."
+    },
+    {
+      "id": "oracle.en.0138",
+      "text": "{user}, your amulet is hot to the touch today. That's normal."
+    },
+    {
+      "id": "oracle.en.0139",
+      "text": "The reading: ahead lies a field of possibilities, {user}."
+    },
+    {
+      "id": "oracle.en.0140",
+      "text": "{user}, don't step into the circle today — it'll bind you to a promise."
+    },
+    {
+      "id": "oracle.en.0141",
+      "text": "Powers of the pipirik come to you, {user}. Receive them with thanks."
+    },
+    {
+      "id": "oracle.en.0142",
+      "text": "{user}, at midnight think of something good — the stars record it."
+    },
+    {
+      "id": "oracle.en.0143",
+      "text": "Today you're closer to the essence than ever, {user}."
+    },
+    {
+      "id": "oracle.en.0144",
+      "text": "{user}, you're a knot in fate's thread. Today the knot loosens."
+    },
+    {
+      "id": "oracle.en.0145",
+      "text": "The ancients say: today's forest run is protected, {user}."
+    },
+    {
+      "id": "oracle.en.0146",
+      "text": "{user}, your guardian's on leave but left an instruction."
+    },
+    {
+      "id": "oracle.en.0147",
+      "text": "An old coin will bring luck, {user}, if you find it yourself."
+    },
+    {
+      "id": "oracle.en.0148",
+      "text": "{user}, don't miss three owls today — they're for you."
+    },
+    {
+      "id": "oracle.en.0149",
+      "text": "The forces of nature whisper your name, {user}."
+    },
+    {
+      "id": "oracle.en.0150",
+      "text": "{user}, the air today carries luck dust. Breathe deeply."
+    },
+    {
+      "id": "oracle.en.0151",
+      "text": "Don't light a candle without intent today, {user}. The candle dislikes idleness."
+    },
+    {
+      "id": "oracle.en.0152",
+      "text": "{user}, forest spirits will reward you when met."
+    },
+    {
+      "id": "oracle.en.0153",
+      "text": "An ancient pipirik oracle says: you're on the right path, {user}."
+    },
+    {
+      "id": "oracle.en.0154",
+      "text": "{user}, today the element of water is strong. Be near it — even mentally."
+    },
+    {
+      "id": "oracle.en.0155",
+      "text": "Luck spell: turn your mug three times — luck wakes, {user}."
+    },
+    {
+      "id": "oracle.en.0156",
+      "text": "{user}, an ancient sign will appear in the most ordinary form today."
+    },
+    {
+      "id": "oracle.en.0157",
+      "text": "Don't put anything heavy under your pillow today, {user} — it blocks magic."
+    },
+    {
+      "id": "oracle.en.0158",
+      "text": "{user}, you have a rare aura. Guard it from envy."
+    },
+    {
+      "id": "oracle.en.0159",
+      "text": "Today silence is golden, {user}."
+    },
+    {
+      "id": "oracle.en.0160",
+      "text": "{user}, the wise turtle sends a tip today: don't rush."
+    },
+    {
+      "id": "oracle.en.0161",
+      "text": "Today is a good day to forgive, {user}."
+    },
+    {
+      "id": "oracle.en.0162",
+      "text": "{user}, don't carry grudges — they always weigh more than the pipirik itself."
+    },
+    {
+      "id": "oracle.en.0163",
+      "text": "Today you'll see yourself through a friend's eyes, {user}. Be surprised."
+    },
+    {
+      "id": "oracle.en.0164",
+      "text": "{user}, do less — but better. Today's your quality day."
+    },
+    {
+      "id": "oracle.en.0165",
+      "text": "Today you're nearer to who you want to be, {user}."
+    },
+    {
+      "id": "oracle.en.0166",
+      "text": "{user}, every pipirik has its own pace. Don't compare."
+    },
+    {
+      "id": "oracle.en.0167",
+      "text": "A long road begins with a small step, {user}. Take it."
+    },
+    {
+      "id": "oracle.en.0168",
+      "text": "{user}, you're not late — you're right on time."
+    },
+    {
+      "id": "oracle.en.0169",
+      "text": "Today is for gratitude, {user}. Find three reasons."
+    },
+    {
+      "id": "oracle.en.0170",
+      "text": "{user}, breath is your first instrument. Use it."
+    },
+    {
+      "id": "oracle.en.0171",
+      "text": "Today one deep conversation beats ten empty ones, {user}."
+    },
+    {
+      "id": "oracle.en.0172",
+      "text": "{user}, do a small good deed today. Expect nothing."
+    },
+    {
+      "id": "oracle.en.0173",
+      "text": "Today think of someone who hasn't called in a while, {user}. Call first."
+    },
+    {
+      "id": "oracle.en.0174",
+      "text": "{user}, a tidy home is a tidy mind."
+    },
+    {
+      "id": "oracle.en.0175",
+      "text": "Today you're stronger than your doubts, {user}."
+    },
+    {
+      "id": "oracle.en.0176",
+      "text": "{user}, don't hide your light — the world is waiting."
+    },
+    {
+      "id": "oracle.en.0177",
+      "text": "Today is a good day to learn something new, {user}."
+    },
+    {
+      "id": "oracle.en.0178",
+      "text": "{user}, don't judge others by their worst day. Or yourself."
+    },
+    {
+      "id": "oracle.en.0179",
+      "text": "Today you'll re-rank what you thought important, {user}."
+    },
+    {
+      "id": "oracle.en.0180",
+      "text": "{user}, being yourself is the highest level-up."
+    },
+    {
+      "id": "oracle.en.0181",
+      "text": "Today you already have what you need, {user}. Just look."
+    },
+    {
+      "id": "oracle.en.0182",
+      "text": "{user}, slow doesn't mean bad. It means thoughtful."
+    },
+    {
+      "id": "oracle.en.0183",
+      "text": "Today hug someone, {user}. Free magic."
+    },
+    {
+      "id": "oracle.en.0184",
+      "text": "{user}, a small joy at breakfast guarantees a big day."
+    },
+    {
+      "id": "oracle.en.0185",
+      "text": "Today your 'no' is an act of self-love, {user}."
+    },
+    {
+      "id": "oracle.en.0186",
+      "text": "{user}, don't fear seeming kind. Kindness is power."
+    },
+    {
+      "id": "oracle.en.0187",
+      "text": "Listen to silence for a minute today, {user}. You'll catch a hint."
+    },
+    {
+      "id": "oracle.en.0188",
+      "text": "{user}, the world gets better just because you stepped outside."
+    },
+    {
+      "id": "oracle.en.0189",
+      "text": "Today someone needs your advice, {user}. Don't go silent."
+    },
+    {
+      "id": "oracle.en.0190",
+      "text": "{user}, mistakes aren't sentences — they're growth material."
+    },
+    {
+      "id": "oracle.en.0191",
+      "text": "Today smile first, {user}. It pays back."
+    },
+    {
+      "id": "oracle.en.0192",
+      "text": "{user}, you're never alone. Even when it feels otherwise."
+    },
+    {
+      "id": "oracle.en.0193",
+      "text": "Today is a day for small courage, {user}."
+    },
+    {
+      "id": "oracle.en.0194",
+      "text": "{user}, your version of success is the only correct one."
+    },
+    {
+      "id": "oracle.en.0195",
+      "text": "Today look at an old photo, {user}. You'll meet a new self."
+    },
+    {
+      "id": "oracle.en.0196",
+      "text": "{user}, don't forget to drink water. The pipirik appreciates it."
+    },
+    {
+      "id": "oracle.en.0197",
+      "text": "Today do what you've been postponing, {user}. At least halfway."
+    },
+    {
+      "id": "oracle.en.0198",
+      "text": "{user}, you don't owe everyone your charm. Especially today."
+    },
+    {
+      "id": "oracle.en.0199",
+      "text": "Today one good habit beats ten grand plans, {user}."
+    },
+    {
+      "id": "oracle.en.0200",
+      "text": "{user}, you deserve good things. Today especially."
+    },
+    {
+      "id": "oracle.en.0201",
+      "text": "{user}, you'll meet an old acquaintance today. Don't walk past."
+    },
+    {
+      "id": "oracle.en.0202",
+      "text": "Today's task is just to rest, {user}. That's work too."
+    },
+    {
+      "id": "oracle.en.0203",
+      "text": "{user}, your pipirik can sing. You'll catch the tune today."
+    },
+    {
+      "id": "oracle.en.0204",
+      "text": "Today you'll fix something small and feel like a hero, {user}."
+    },
+    {
+      "id": "oracle.en.0205",
+      "text": "{user}, take a longer shower today. It's therapy."
+    },
+    {
+      "id": "oracle.en.0206",
+      "text": "Try a dish you used to fear today, {user}."
+    },
+    {
+      "id": "oracle.en.0207",
+      "text": "{user}, today you have the kind of face everyone likes."
+    },
+    {
+      "id": "oracle.en.0208",
+      "text": "Today calling mom is wonderful, {user}. Truly."
+    },
+    {
+      "id": "oracle.en.0209",
+      "text": "{user}, your laugh today is the best currency."
+    },
+    {
+      "id": "oracle.en.0210",
+      "text": "Today there'll be a sale somewhere, {user}. Guess where."
+    },
+    {
+      "id": "oracle.en.0211",
+      "text": "{user}, iron a fresh shirt. Power!"
+    },
+    {
+      "id": "oracle.en.0212",
+      "text": "Today you'll see a smile that warms you, {user}."
+    },
+    {
+      "id": "oracle.en.0213",
+      "text": "{user}, don't miss the rainbow. Even if you have to look."
+    },
+    {
+      "id": "oracle.en.0214",
+      "text": "Today write down one thought, {user}. A year from now you'll appreciate it."
+    },
+    {
+      "id": "oracle.en.0215",
+      "text": "{user}, take a mirror selfie with the pipirik. For memory."
+    },
+    {
+      "id": "oracle.en.0216",
+      "text": "Today's day for a tiny adventure, {user}. The tiniest."
+    },
+    {
+      "id": "oracle.en.0217",
+      "text": "{user}, today's breakfast will be a small masterpiece."
+    },
+    {
+      "id": "oracle.en.0218",
+      "text": "Today high-five yourself, {user}. You won't be wrong."
+    },
+    {
+      "id": "oracle.en.0219",
+      "text": "{user}, today a sunrise is great — even from the window."
+    },
+    {
+      "id": "oracle.en.0220",
+      "text": "Today your pipirik gains a touch more importance, {user}."
+    }
+  ]
+}

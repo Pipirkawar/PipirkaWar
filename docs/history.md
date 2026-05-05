@@ -23,6 +23,50 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.4.B: предсказатель (`/oracle` + Moscow-TZ кулдаун + 220 RU + 220 EN темплейтов)
+
+**Автор:** Devin (по запросу persisyellow)
+**Тип:** feature (domain + application use-case + infra + bot-handler + DI + 220 RU/EN темплейтов)
+**Связано:** Текущий PR (Спринт 1.4.B), [development_plan.md §3 / Спринт 1.4, задачи 1.4.4 / 1.4.5](development_plan.md), [current_tasks.md Спринт 1.4 → 1.4.B](current_tasks.md). Продолжение Спринта 1.4 после смерженного 1.4.A.
+
+Узкий PR: пользовательская команда `/oracle` — игрок раз в сутки **по Москве** (`Europe/Moscow`, сброс в 00:00 МСК) получает шуточное предсказание из каталога ≥ 200 шаблонов и прибавку длины `uniform(1, 20)` см.
+
+Что сделано:
+- **Domain (`domain/oracle/`)** — иммутабельные сущности `OracleTemplate(id, text)` (валидация: непустое + без whitespace) и `OracleResult(bonus_cm, template)`. Чистая функция `roll_oracle(*, balance, random, templates)` через `IRandom` (никаких side-эффектов, тривиально тестируется на FakeRandom). Порт `IOracleHistoryRepository` с frozen-dataclass `OracleInvocation(player_id, moscow_date, bonus_cm, template_id, occurred_at)`. Иерархия ошибок: `OracleError` ← `OracleAlreadyUsedTodayError(player_id, moscow_date)` / `OracleNoTemplatesError(locale)`.
+- **Application (`application/oracle/`)** — порт `IOracleTemplateProvider.get_templates(*, locale)`, DTO `InvokeOracleInput(tg_id, locale='ru')` с pydantic-валидацией, use-case `InvokeOracle`. Workflow: `players.get_by_tg_id` → preflight `history.get_for_day(player_id, moscow_date)` (если запись уже есть → `OracleAlreadyUsedTodayError`) → `roll_oracle(...)` → `with_length(+bonus_cm)` → `players.save` → `history.add` (если БД-уровень UNIQUE упал — ловим `IntegrityError` и трактуем как race-вариант `OracleAlreadyUsedTodayError`) → audit `LENGTH_GRANT` с `idempotency_key=f"oracle:{player_id}:{moscow_date.isoformat()}"`.
+- **Infrastructure** — миграция `0005_oracle_invocations` создаёт таблицу с FK→users(id) CASCADE, CHECK `bonus_cm > 0`, **уникальный** индекс `(player_id, moscow_date)` (защита от race на БД-уровне) + индекс по `moscow_date` для аналитики. ORM `OracleInvocationORM` с `mapped_column`. Репозиторий `SqlAlchemyOracleHistoryRepository` (catches `sa.exc.IntegrityError` → `DomainIntegrityError`). `JsonOracleTemplateProvider(templates_dir)` — lazy load + per-locale кэш + fallback на `ru` если запрошенная локаль отсутствует, ошибки парсинга/дублей → `ConfigError`, пустой каталог → `OracleNoTemplatesError`.
+- **Bot (`bot/handlers/oracle.py` + `bot/presenters/oracle.py`)** — handler `/oracle` (только в ЛС, иначе инструкция «открой ЛС»): `InvokeOracle.execute(InvokeOracleInput(tg_id, locale='ru'))`, обработка `PlayerNotFoundError` / `OracleAlreadyUsedTodayError` (рендерит «возвращайся через Xч Yм, 00:00 по Москве» с реальным временем до сброса). Чистые презентеры с safe-format `{user}` (отсутствующий ключ → возвращает плейсхолдер as-is, не падает с `KeyError`).
+- **Темплейты** — `config/templates/oracle_ru.json` (220 шаблонов, ID `oracle.ru.0001..0220`) и `config/templates/oracle_en.json` (220 шаблонов, ID `oracle.en.0001..0220`). Все темплейты содержат плейсхолдер `{user}`. Категории: позитив, пипирик-юмор, мистика, мотивация, бытовуха, бонусы.
+- **Composition root (`bot/main.py`)** — `oracle_history`, `oracle_templates`, `invoke_oracle` собираются в `build_container(...)` (новый параметр `templates_dir: Path | None = None`, default `config/templates`), прокидываются в `Container` и aiogram-DI (`dispatcher["invoke_oracle"]`, `dispatcher["clock"]`). Новый `oracle_router` зарегистрирован в `register_routers(...)` после `upgrade_router`.
+- **Тесты** — 7 новых файлов:
+  - `tests/unit/domain/oracle/test_entities.py` — валидация полей, frozen, OracleResult.
+  - `tests/unit/domain/oracle/test_errors.py` — иерархия исключений и поля.
+  - `tests/unit/domain/oracle/test_services.py` — `roll_oracle` happy path, детерминированность по seed-у, **acceptance ПД 1.4.4: 10 000 прогонов uniform(1, 20) → среднее 10.0..11.0**, всегда `bonus_cm ≥ 1` и в диапазоне.
+  - `tests/unit/application/oracle/test_invoke.py` — успех, length grant, audit `LENGTH_GRANT`, повтор в тот же московский день → `OracleAlreadyUsedTodayError`, успех на следующий день, изоляция между игроками, **граничный кейс TZ** (4 мая 23:30 UTC = 5 мая 02:30 МСК), `PlayerNotFoundError` с rollback.
+  - `tests/integration/db/oracle/test_oracle_history_repository.py` — `add()` + `get_for_day()`, UNIQUE-нарушение, изоляция между игроками и днями.
+  - `tests/integration/db/test_migrations.py` — обновлён: `0005_oracle_invocations` зарегистрирован в линейной цепочке, applied чисто, таблица создаётся.
+  - `tests/integration/templates/test_oracle_loader.py` — реальные `oracle_ru.json` и `oracle_en.json` ≥ 200 шаблонов, уникальные ID, корректный `{user}` рендер; кэш per-locale; fallback ru при отсутствующей локали; ошибки парсинга → `ConfigError`.
+  - `tests/unit/bot/presenters/test_oracle.py` — рендеринг плейсхолдера, отсутствующий `{stranger}` сохраняется как есть, время до сброса.
+  - `tests/unit/bot/handlers/test_oracle.py` — happy path, отказ в группе, `PlayerNotFoundError` → REPLY_NOT_REGISTERED_RU, `OracleAlreadyUsedTodayError` → cooldown text, fallback `username` если нет `first_name`.
+
+Результат / артефакты:
+- Domain: `src/pipirik_wars/domain/oracle/{entities,errors,services,repositories,__init__}.py`.
+- Application: `src/pipirik_wars/application/oracle/{invoke,templates,__init__}.py`, DTO `InvokeOracleInput`.
+- Infra: `migrations/versions/20260505_0005_oracle_invocations.py`, `db/models/oracle.py`, `db/repositories/oracle_history.py`, `templates/oracle.py`.
+- Bot: `bot/handlers/oracle.py`, `bot/presenters/oracle.py`.
+- Темплейты: `config/templates/oracle_ru.json` (220), `config/templates/oracle_en.json` (220).
+- Тесты: 50+ новых тестов в 9 файлах. Локальный `make ci` (ruff + mypy --strict + import-linter + pytest 869 passed) — зелёный, общий покрытие 96.70%.
+- Документация: обновлены `docs/current_tasks.md` (1.4.A → ✅ смержено, 1.4.B → 🟢 готово к ревью) и `docs/history.md` (эта запись).
+
+Заметки / решения:
+- **Кулдаун — по `Europe/Moscow`, не UTC.** В таблице `oracle_invocations.moscow_date` — `DATE`, отдельная колонка для `(player_id, moscow_date)` UNIQUE. `IClock.moscow_date()` уже был с 1.4.A (для `daily_head`); use-case вызывает его строго один раз и передаёт результат в repo, чтобы логика теста на «23:30 UTC = 02:30 МСК следующего дня» жила в одном месте.
+- **Race protection.** Preflight `get_for_day(...)` ловит обычный кейс «нажал второй раз через час». Однако между preflight и `add()` могут проскочить два конкурентных запроса; БД-уровень UNIQUE-индекс ловит это, репозиторий ловит `IntegrityError` и use-case переводит её в `OracleAlreadyUsedTodayError` — handler одинаково покажет «возвращайся завтра».
+- **Идемпотентность.** `idempotency_key=f"oracle:{player_id}:{moscow_date.isoformat()}"` — стабильный, поэтому даже при retry-е на уровне сети audit-лог не задублируется (audit-сервис проверяет ключ).
+- **Темплейты.** 220 RU + 220 EN > требуемых 200, чтобы не упереться в acceptance, если потом захотим выкинуть несколько неудачных. Все шаблоны содержат `{user}` ровно 1 раз; loader проверяет уникальность `id`, ошибки JSON/структуры → `ConfigError`. Тест на реальные файлы валидирует `tpl.text.format(user='Alice')` — это ловит сломанные плейсхолдеры в production-каталоге.
+- **Что НЕ сделано в этом PR.** `1.4.6` (`/top` + кэш TTL=60s) и `1.4.7` (мини-нагрузочный тест) — это `1.4.C` и `1.4.D`. `i18n` LocaleMiddleware — это Спринт 1.5; пока handler жёстко передаёт `locale="ru"` в use-case (template_provider всё равно умеет fallback на ru при отсутствии запрошенной локали).
+
+---
+
 ## 2026-05-04 — Спринт 1.4.A: прокачка толщины (`/upgrade` + use-case + table-driven unlock)
 
 **Автор:** Devin (по запросу azurehannah)
