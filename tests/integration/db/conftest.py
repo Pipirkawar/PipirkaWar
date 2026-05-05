@@ -27,6 +27,7 @@ from pipirik_wars.infrastructure.db.models import (  # noqa: F401  (регист
     ClanORM,
     ForestRunORM,
     IdempotencyKeyORM,
+    OracleInvocationORM,
     SignupQueueORM,
     UserORM,
 )

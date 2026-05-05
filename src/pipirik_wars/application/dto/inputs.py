@@ -166,3 +166,21 @@ class UpgradeThicknessInput(_StrictBase):
         gt=0,
         description="Стоимость, которую UI показал пользователю; для защиты от race",
     )
+
+
+class InvokeOracleInput(_StrictBase):
+    """Вызов `/oracle` (Спринт 1.4.B, ГДД §11).
+
+    Локаль определяется `LocaleMiddleware` и пробрасывается до
+    use-case-а; `IOracleTemplateProvider` подтянет каталог шаблонов
+    нужного языка. Кулдаун (1 раз в сутки по Москве) считается на
+    стороне use-case-а через `IClock.moscow_date()` и
+    `IOracleHistoryRepository`.
+    """
+
+    tg_id: PositiveTgId = Field(gt=0, description="Telegram user_id игрока")
+    locale: str = Field(
+        default="ru",
+        pattern=r"^[a-z]{2}(_[A-Z]{2})?$",
+        description="Локаль каталога предсказаний (например, 'ru' или 'en')",
+    )

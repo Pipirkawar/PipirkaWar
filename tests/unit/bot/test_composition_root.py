@@ -31,6 +31,7 @@ from pipirik_wars.application.forest import (
     FinishForestRun,
     StartForestRun,
 )
+from pipirik_wars.application.oracle import InvokeOracle
 from pipirik_wars.application.player import GetProfile, RegisterPlayer
 from pipirik_wars.application.progression import UpgradeThickness
 from pipirik_wars.application.security import ActivityLockService
@@ -88,6 +89,8 @@ from tests.fakes import (
     FakeDelayedJobScheduler,
     FakeForestRunRepository,
     FakeIdempotencyKey,
+    FakeOracleHistoryRepository,
+    FakeOracleTemplateProvider,
     FakePlayerRepository,
     FakeRandom,
     FakeSignupQueueRepository,
@@ -156,6 +159,8 @@ def _container_with_fakes() -> Container:
         audit=audit,
         clock=clock,
     )
+    oracle_history = FakeOracleHistoryRepository()
+    oracle_templates = FakeOracleTemplateProvider()
     return Container(
         clock=clock,
         random=rng,
@@ -262,6 +267,18 @@ def _container_with_fakes() -> Container:
             uow=uow,
             players=players,
             balance=balance,
+            audit=audit,
+            clock=clock,
+        ),
+        oracle_history=oracle_history,
+        oracle_templates=oracle_templates,
+        invoke_oracle=InvokeOracle(
+            uow=uow,
+            players=players,
+            history=oracle_history,
+            templates=oracle_templates,
+            balance=balance,
+            random=rng,
             audit=audit,
             clock=clock,
         ),

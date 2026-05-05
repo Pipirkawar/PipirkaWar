@@ -16,11 +16,15 @@
 
 Лес (Спринт 1.3):
 - `ForestRunORM` — таблица `forest_runs`.
+
+Предсказатель (Спринт 1.4.B):
+- `OracleInvocationORM` — таблица `oracle_invocations`.
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
 from pipirik_wars.infrastructure.db.models.clan import ClanMemberORM, ClanORM
 from pipirik_wars.infrastructure.db.models.forest import ForestRunORM
+from pipirik_wars.infrastructure.db.models.oracle import OracleInvocationORM
 from pipirik_wars.infrastructure.db.models.player import UserORM
 from pipirik_wars.infrastructure.db.models.security import (
     ActivityLockORM,
@@ -37,6 +41,7 @@ __all__ = [
     "ClanORM",
     "ForestRunORM",
     "IdempotencyKeyORM",
+    "OracleInvocationORM",
     "SignupQueueORM",
     "UserORM",
 ]
