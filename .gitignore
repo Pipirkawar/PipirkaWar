@@ -147,3 +147,4 @@ logs/
 .tmp/
 .cache/
 *.tmp
+uv.lock
