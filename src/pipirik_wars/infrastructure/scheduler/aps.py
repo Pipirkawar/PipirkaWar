@@ -23,21 +23,36 @@ from typing import Final
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from pipirik_wars.application.dto.inputs import FinishForestRunInput
+from pipirik_wars.application.dto.inputs import (
+    EscalateChatToGlobalInput,
+    ExpireLobbyEntryInput,
+    FinishForestRunInput,
+)
 from pipirik_wars.application.forest import (
     FinishForestRun,
     ForestRunFinished,
     IForestFinishNotifier,
 )
+from pipirik_wars.application.pvp import EscalateChatToGlobal, ExpireLobbyEntry
 from pipirik_wars.domain.forest import ForestRunNotFoundError
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
 
 _FINISH_JOB_PREFIX: Final[str] = "forest_run_finish:"
+_ESCALATE_JOB_PREFIX: Final[str] = "pvp_chat_to_global:"
+_EXPIRE_JOB_PREFIX: Final[str] = "pvp_global_lobby_expire:"
 
 
 def _job_id(run_id: int) -> str:
     return f"{_FINISH_JOB_PREFIX}{run_id}"
+
+
+def _escalate_job_id(duel_id: int) -> str:
+    return f"{_ESCALATE_JOB_PREFIX}{duel_id}"
+
+
+def _expire_job_id(duel_id: int) -> str:
+    return f"{_EXPIRE_JOB_PREFIX}{duel_id}"
 
 
 class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
@@ -53,9 +68,23 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
     чтобы отправить игроку Telegram-сообщение «вернулся из леса»
     (ГДД §8.2). Зовётся вне транзакции — ошибки доставки игнорируются
     самим notifier-ом.
+
+    `escalate_factory` / `expire_factory` (Спринт 2.1.F.2, опциональны
+    до полной DI-провязки в F.3) — фабрики `EscalateChatToGlobal` /
+    `ExpireLobbyEntry`-use-case-ов; если `None`, `schedule_*` всё равно
+    регистрирует job в APScheduler (для recovery / тестов APScheduler-а
+    самого по себе), но при срабатывании job-а callback логирует
+    «factory not wired» и тихо выходит.
     """
 
-    __slots__ = ("_finish_factory", "_logger", "_notifier", "_scheduler")
+    __slots__ = (
+        "_escalate_factory",
+        "_expire_factory",
+        "_finish_factory",
+        "_logger",
+        "_notifier",
+        "_scheduler",
+    )
 
     def __init__(
         self,
@@ -63,11 +92,15 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         scheduler: AsyncIOScheduler,
         finish_factory: Callable[[], FinishForestRun],
         notifier: IForestFinishNotifier | None = None,
+        escalate_factory: Callable[[], EscalateChatToGlobal] | None = None,
+        expire_factory: Callable[[], ExpireLobbyEntry] | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._scheduler = scheduler
         self._finish_factory = finish_factory
         self._notifier = notifier
+        self._escalate_factory = escalate_factory
+        self._expire_factory = expire_factory
         self._logger = logger or logging.getLogger(__name__)
 
     async def schedule_finish_forest_run(
@@ -92,6 +125,50 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         except Exception:
             # APScheduler.JobLookupError; конкретный класс зависит от версии.
             # Cancel — best-effort: если job-ы нет, цели достигнуты.
+            return
+
+    async def schedule_chat_to_global_escalation(
+        self,
+        *,
+        duel_id: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_escalation_job,
+            trigger="date",
+            run_date=run_at,
+            args=(duel_id,),
+            id=_escalate_job_id(duel_id),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_chat_to_global_escalation(self, *, duel_id: int) -> None:
+        try:
+            self._scheduler.remove_job(_escalate_job_id(duel_id))
+        except Exception:
+            return
+
+    async def schedule_global_lobby_expiration(
+        self,
+        *,
+        duel_id: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_expiration_job,
+            trigger="date",
+            run_date=run_at,
+            args=(duel_id,),
+            id=_expire_job_id(duel_id),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_global_lobby_expiration(self, *, duel_id: int) -> None:
+        try:
+            self._scheduler.remove_job(_expire_job_id(duel_id))
+        except Exception:
             return
 
     def start(self) -> None:
@@ -138,6 +215,50 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
                 "forest_run_finish: notifier failed",
                 extra={"run_id": run_id, "error": type(exc).__name__},
             )
+
+    async def _run_escalation_job(self, duel_id: int) -> None:
+        """Callback `EscalateChatToGlobal`-job-а (Спринт 2.1.F.2).
+
+        Если фабрика не подвязана (до полной DI-провязки в F.3) —
+        логируем и тихо выходим, чтобы APScheduler не помечал job-у
+        «failed».
+        """
+        if self._escalate_factory is None:
+            self._logger.warning(
+                "pvp_chat_to_global: factory not wired",
+                extra={"duel_id": duel_id},
+            )
+            return
+        try:
+            use_case = self._escalate_factory()
+            await use_case.execute(EscalateChatToGlobalInput(duel_id=duel_id))
+        except Exception as exc:
+            self._logger.exception(
+                "pvp_chat_to_global: unexpected error",
+                extra={"duel_id": duel_id, "error": type(exc).__name__},
+            )
+            return
+
+    async def _run_expiration_job(self, duel_id: int) -> None:
+        """Callback `ExpireLobbyEntry`-job-а (Спринт 2.1.F.2).
+
+        Если фабрика не подвязана — логируем и тихо выходим.
+        """
+        if self._expire_factory is None:
+            self._logger.warning(
+                "pvp_global_lobby_expire: factory not wired",
+                extra={"duel_id": duel_id},
+            )
+            return
+        try:
+            use_case = self._expire_factory()
+            await use_case.execute(ExpireLobbyEntryInput(duel_id=duel_id))
+        except Exception as exc:
+            self._logger.exception(
+                "pvp_global_lobby_expire: unexpected error",
+                extra={"duel_id": duel_id, "error": type(exc).__name__},
+            )
+            return
 
 
 __all__ = ["APSchedulerDelayedJobScheduler"]
