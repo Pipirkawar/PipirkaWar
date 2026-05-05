@@ -1,25 +1,36 @@
-"""Юнит-тесты `bot/presenters/profile.py` (Спринт 1.1.E, ГДД §2.1/§2.2).
+"""Юнит-тесты `bot/presenters/profile.py` (Спринт 1.1.E → 1.5.C, ГДД §2.1/§2.2).
 
 Покрываем:
 
-1. `render_full_nick` — все 4 сочетания «есть/нет титула × есть/нет имени»
-   плюс новые-локализованные титулы (`NEWBIE`).
-2. `render_profile_card` — целостный рендер карточки, проверяем,
-   что в выходной строке есть длина/толщина/секция «Экипировка».
-3. Integrity: для несуществующего в `_TITLE_RU` ключа функция падает
-   `KeyError` (это и есть «ловим, что забыли локализовать новый Title»).
+1. `render_full_nick` (legacy, ещё используется forest-презентером) —
+   все 4 сочетания «есть/нет титула × есть/нет имени» плюс новые-локализованные
+   титулы (`NEWBIE`).
+2. `ProfilePresenter`:
+   * `group()` / `other()` / `not_registered()` дают строки из `.ftl`,
+     отличные между RU и EN (т.е. локализация реально работает);
+   * `card()` — целостный рендер карточки: длина/толщина/секция «Экипировка»
+     присутствуют; локализованный титул (`profile-title-newbie`) лежит на
+     первой строке (вместо hardcoded RU «Новичок»);
+   * `card()` для нового игрока без титула/имени → первая строка только
+     `🏷 <display_name>` (Acceptance ГДД §2.2).
+3. `title_message_key(Title.X) == MessageKey("profile-title-x")` —
+   контракт между презентером и `.ftl`. Если в `Title` появится новый
+   член без соответствующего ключа в `.ftl`, `IMessageBundle.format`
+   бросит `MessageKeyError` и тесты падут — это намеренный «безопасник».
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
+from typing import cast
 
-import pytest
-
+from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
 from pipirik_wars.application.player import ProfileView
 from pipirik_wars.bot.presenters.profile import (
+    ProfilePresenter,
     render_full_nick,
-    render_profile_card,
+    title_message_key,
 )
 from pipirik_wars.domain.player import (
     DisplayName,
@@ -31,6 +42,8 @@ from pipirik_wars.domain.player import (
     Username,
 )
 from pipirik_wars.domain.player.value_objects import Length
+from pipirik_wars.infrastructure.i18n import FluentMessageBundle
+from tests.fakes import FakeMessageBundle
 
 
 def _build_player(
@@ -52,6 +65,16 @@ def _build_player(
         created_at=datetime(2026, 5, 4, tzinfo=UTC),
         updated_at=datetime(2026, 5, 4, tzinfo=UTC),
     )
+
+
+def _fluent_bundle() -> IMessageBundle:
+    """Реальный FluentMessageBundle поверх locales/{ru,en}.ftl.
+
+    Используется для интеграционных проверок «карточка действительно
+    рендерится с правильной длиной/толщиной/секциями». Маркерный
+    `FakeMessageBundle` использован для проверки конкретных ключей.
+    """
+    return FluentMessageBundle(locales_dir=Path(__file__).resolve().parents[4] / "locales")
 
 
 class TestRenderFullNick:
@@ -87,69 +110,90 @@ class TestRenderFullNick:
         )
         assert nick == "Новичок Бананчик Коляндр"
 
-    def test_only_known_titles_supported(self) -> None:
-        # Каждый существующий enum-член должен иметь локализацию.
-        # Если в `Title` появится новый член без правки `_TITLE_RU`,
-        # этот тест упадёт — это и есть напоминание локализовать.
+
+class TestTitleMessageKey:
+    def test_newbie_maps_to_profile_title_newbie(self) -> None:
+        assert title_message_key(Title.NEWBIE) == MessageKey("profile-title-newbie")
+
+    def test_every_title_value_resolves_in_real_bundle(self) -> None:
+        """Каждое значение `Title` → соответствующий ключ в `.ftl`.
+
+        Если в `Title` добавят новый член без ключа `profile-title-<value>`,
+        `FluentMessageBundle.format` бросит `MessageKeyError` и этот тест
+        упадёт. Это и есть напоминание перевести.
+        """
+        bundle = _fluent_bundle()
         for member in Title:
-            nick = render_full_nick(
-                title=member,
-                display_name=DisplayName(value="X"),
-                name=None,
-            )
-            assert nick.endswith("X")
-            # Локализованная часть — не пустая и не равна enum-значению
-            assert nick.split(" ")[0] != member.value
+            for locale in (Locale("ru"), Locale("en")):
+                rendered = bundle.format(title_message_key(member), locale=locale)
+                assert rendered, f"empty title for {member} / {locale.code}"
 
 
-class TestRenderProfileCard:
-    def test_card_includes_length_thickness_and_equipment_stub(self) -> None:
-        player = _build_player(
-            title=Title.NEWBIE,
-            name=PlayerName(value="Коляндр"),
-        )
+class TestProfilePresenterChatBranches:
+    """Проверяем, что презентер прогоняет ровно те ключи, которые
+    обещаны в контракте, через `IMessageBundle`."""
+
+    def _make(self) -> ProfilePresenter:
+        return ProfilePresenter(bundle=cast(IMessageBundle, FakeMessageBundle()))
+
+    def test_group_uses_profile_group_key(self) -> None:
+        assert self._make().group(locale=Locale("ru")) == "ru:profile-group"
+
+    def test_other_uses_profile_other_key(self) -> None:
+        assert self._make().other(locale=Locale("en")) == "en:profile-other"
+
+    def test_not_registered_uses_profile_not_registered_key(self) -> None:
+        assert self._make().not_registered(locale=Locale("ru")) == "ru:profile-not-registered"
+
+
+class TestProfilePresenterCard:
+    """Интеграционный рендер `card()` через реальный `FluentMessageBundle`."""
+
+    def test_card_includes_length_thickness_and_equipment_stub_ru(self) -> None:
+        presenter = ProfilePresenter(bundle=_fluent_bundle())
         view = ProfileView(
-            player=player,
+            player=_build_player(
+                title=Title.NEWBIE,
+                name=PlayerName(value="Коляндр"),
+            ),
             display_name=DisplayName(value="Бананчик"),
         )
-        card = render_profile_card(view)
+        card = presenter.card(view, locale=Locale("ru"))
         assert "Новичок Бананчик Коляндр" in card
         assert "47 см" in card
         assert "Толщина: 5" in card
-        assert "Экипировка" in card  # секция есть, даже если пусто
+        assert "Экипировка" in card
 
-    def test_card_for_fresh_player_just_shows_display_name(self) -> None:
+    def test_card_for_fresh_player_just_shows_display_name_ru(self) -> None:
         # Acceptance ГДД §2.2: новичок без титула/имени → «Пипирик».
-        player = _build_player(
-            title=None,
-            name=None,
-            length_cm=2,
-            thickness_level=1,
-        )
+        presenter = ProfilePresenter(bundle=_fluent_bundle())
         view = ProfileView(
-            player=player,
+            player=_build_player(
+                title=None,
+                name=None,
+                length_cm=2,
+                thickness_level=1,
+            ),
             display_name=DisplayName(value="Пипирик"),
         )
-        card = render_profile_card(view)
+        card = presenter.card(view, locale=Locale("ru"))
         first_line = card.splitlines()[0]
-        # Только название, никаких лишних слов.
         assert first_line == "🏷 Пипирик"
         assert "2 см" in card
         assert "Толщина: 1" in card
 
     def test_card_layout_matches_gdd_section_2_2_skeleton(self) -> None:
-        # Структурная проверка: 6 не-пустых строк в фиксированном порядке.
-        player = _build_player(
-            title=Title.NEWBIE,
-            name=PlayerName(value="Иванушка"),
-        )
+        # 6 не-пустых строк в фиксированном порядке (плюс пустые-разделители).
+        presenter = ProfilePresenter(bundle=_fluent_bundle())
         view = ProfileView(
-            player=player,
+            player=_build_player(
+                title=Title.NEWBIE,
+                name=PlayerName(value="Иванушка"),
+            ),
             display_name=DisplayName(value="Бананчик"),
         )
-        card = render_profile_card(view)
+        card = presenter.card(view, locale=Locale("ru"))
         lines = card.splitlines()
-        # Скелет: ник / пусто / длина / толщина / пусто / экипировка
         assert lines[0].startswith("🏷 ")
         assert lines[1] == ""
         assert lines[2].startswith("📏")
@@ -157,26 +201,20 @@ class TestRenderProfileCard:
         assert lines[4] == ""
         assert lines[5].startswith("🎽")
 
-
-class TestRenderFullNickInvariants:
-    @pytest.mark.parametrize(
-        ("title", "name", "expected_words"),
-        [
-            (None, None, 1),
-            (Title.NEWBIE, None, 2),
-            (None, PlayerName(value="X"), 2),
-            (Title.NEWBIE, PlayerName(value="X"), 3),
-        ],
-    )
-    def test_word_count_matches_present_parts(
-        self,
-        title: Title | None,
-        name: PlayerName | None,
-        expected_words: int,
-    ) -> None:
-        nick = render_full_nick(
-            title=title,
-            display_name=DisplayName(value="Пипирик"),
-            name=name,
+    def test_card_renders_in_english_with_localized_title_and_labels(self) -> None:
+        # Cross-locale: те же поля, но «Новичок» → «Newbie», «Длина:» → «Length:» и т.д.
+        presenter = ProfilePresenter(bundle=_fluent_bundle())
+        view = ProfileView(
+            player=_build_player(
+                title=Title.NEWBIE,
+                name=PlayerName(value="Coliander"),
+            ),
+            display_name=DisplayName(value="Banana"),
         )
-        assert len(nick.split(" ")) == expected_words
+        card = presenter.card(view, locale=Locale("en"))
+        assert "Newbie Banana Coliander" in card
+        assert "47 cm" in card
+        assert "Thickness: 5" in card
+        assert "Equipment" in card
+        # Ни одной русской буквы (грубая, но эффективная проверка).
+        assert not any(0x0400 <= ord(c) <= 0x04FF for c in card)

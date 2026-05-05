@@ -30,3 +30,36 @@ start-queued = 🍆 The servers are full — we've put you in the queue.
 
     Your position: #{ $position }.
     As soon as a slot opens up, we'll register you and send a notification.
+
+## /profile (Sprint 1.1.E → 1.5.C)
+
+profile-group = 🍆 The /profile command works only in the bot's DM. Open a private chat and try again.
+
+profile-other = 🍆 The /profile command works only in the bot's DM.
+
+profile-not-registered = 🍆 You don't seem to be registered yet. Tap /start in this chat and your card will appear.
+
+# Localized title names from `domain.player.value_objects.Title`.
+# Keys mirror enum values: `Title.NEWBIE = "newbie"` → `profile-title-newbie`.
+profile-title-newbie = Newbie
+
+# Player card from GDD §2.2. Parameters:
+# - `$nick` — assembled "Title DisplayName Name" (built by presenter)
+# - `$length_cm` — integer, cm
+# - `$thickness_level` — integer, level
+profile-card =
+    🏷 { $nick }
+
+    📏 Length: { $length_cm } cm
+    📐 Thickness: { $thickness_level }
+
+    🎽 Equipment: empty for now
+
+## /top (Sprint 1.4.C → 1.5.C)
+
+top-header = 🏆 <b>Pipirik Top</b>
+
+top-empty = 🏆 The top is empty for now. Be the first — tap /start!
+
+# Single row in the top: "<rank>. Title DisplayName Name — N cm".
+top-entry = { $rank }. { $nick } — { $length_cm } cm
