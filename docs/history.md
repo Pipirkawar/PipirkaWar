@@ -23,6 +23,62 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.5.H: docker-compose + README + CONTRIBUTING + VPS-runbook + DoD MVP
+
+**Автор:** Devin (по запросу birgit865)
+**Тип:** infra / doc
+**Связано:** PR [#TBD], `current_tasks.md` Спринт 1.5.H, ПД 1.5.5 + 1.5.6 + 1.5.7 (частично — runbook готов, ручная валидация после деплоя). **Закрывает Definition of Done MVP** (`docs/dod_mvp.md`).
+
+Что сделано:
+- **`ops/docker/Dockerfile`** — multi-stage build:
+    - **builder**: `python:3.12-slim-bookworm` + `build-essential` + `libpq-dev`, создаёт venv в `/opt/venv` и ставит туда runtime-зависимости (`pip install --no-cache-dir .` без dev-extras).
+    - **runtime**: `python:3.12-slim-bookworm` + `libpq5` (только runtime для asyncpg) + `tini` (init для PID 1, форвардинг сигналов в asyncio long-polling). Непривилегированный пользователь `pipirik:1000`. Венв из builder копируется в `/opt/venv`. Код, `config/`, `locales/`, `alembic.ini` копируются с `--chown=pipirik:pipirik`.
+    - **healthcheck** — `python -c "from pipirik_wars.infrastructure.settings import Settings; Settings()"`. Дёшево (нет сети), валидирует env. Если `BOT_TOKEN`/`DATABASE_URL` поломаны — контейнер сразу `unhealthy`, что виден в `docker compose ps`.
+    - **CMD** — `python -m pipirik_wars.bot.main`.
+- **`ops/docker/docker-compose.yml`** — три сервиса:
+    - `postgres: 16-alpine` с healthcheck (`pg_isready`) и volume `pipirik_pg_data`.
+    - `migrations` — одноразовый sidecar, гонит `alembic upgrade head`. Зависит от `postgres: service_healthy`.
+    - `bot` — long-polling. Зависит от `postgres: service_healthy` + `migrations: service_completed_successfully`. `BOT_TOKEN` валидируется compose-ом (`${BOT_TOKEN:?BOT_TOKEN must be set in .env}`) — пустой токен валит compose с понятным сообщением, а не молча запускает бота с заглушкой.
+- **`.dockerignore`** — исключает `.git`, `.venv`, `tests/`, `docs/`, кэши, `.env*`. `README.md` оставлен (pyproject.toml ссылается на него).
+- **`README.md`** (полностью переписан) — Quickstart через docker compose (< 5 мин), локальная разработка без Docker, описание архитектуры, структура репо, локализация, политика, ссылки на CONTRIBUTING + DoD + runbook.
+- **`CONTRIBUTING.md`** (новый) — workflow PR, чек-листы SOLID + security, правила git (без amend, без force-push в main, без `--no-verify`), CI gates, структура тестов, локализация, балансные данные.
+- **`ops/runbooks/deploy_vps.md`** (новый) — пошаговый деплой:
+    1. Создание Neon free Postgres + важный нюанс: scheme заменить на `postgresql+asyncpg://`, убрать `?sslmode=require`.
+    2. Подготовка VPS: docker + docker compose + git clone.
+    3. **`docker-compose.prod.yml`** prod-overlay (отключает локальный `postgres`-сервис через `profiles: ["never"]`, переопределяет `DATABASE_URL` на Neon).
+    4. Запуск через `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`.
+    5. Smoke-тест в Telegram: `/start`, `/profile`, `/forest`, `/oracle`, `/lang`.
+    6. 24-часовой стабильный прогон (Definition of Done MVP).
+    7. Обновление до новой версии + откат.
+    8. FAQ: connection refused (Neon SSL), unhealthy bot, memory pressure, audit_log lookup.
+- **`docs/dod_mvp.md`** (новый) — финальный чек-лист MVP. Архитектура (clean architecture, mypy --strict, import-linter, pytest ≥ 80 %), геймплей (регистрация, DAU Gate, лес, прокачка, оракул, топ, локализация), DevOps. Acceptance-сценарий «что делает игрок» (10 шагов), список того, что НЕ входит в MVP (анти-чит хардкап → 1.6, PvP → Phase-2, монетизация → Phase-4).
+
+**Smoke-тест Docker-образа** (локально, в этой же сессии):
+- `docker build -f ops/docker/Dockerfile -t pipirik-wars:dev .` → success (43 секунды на холодный build, ~6 секунд на тёплый).
+- `docker run pipirik-wars:dev python -c "from pipirik_wars.infrastructure.settings import Settings; Settings()"` → `OK dev` (env валидируется, образ работоспособен).
+- `docker compose config` → валиден.
+
+Результат / артефакты:
+- `ops/docker/Dockerfile` (multi-stage, ~80 строк).
+- `ops/docker/docker-compose.yml` (3 сервиса, ~60 строк).
+- `.dockerignore`.
+- `README.md` (~140 строк, переписан полностью).
+- `CONTRIBUTING.md` (~120 строк, новый).
+- `ops/runbooks/deploy_vps.md` (~250 строк, новый).
+- `docs/dod_mvp.md` (~120 строк, новый).
+- Локально `make ci` зелёный: ruff/mypy --strict (370 файлов, 0 issues) / import-linter (3 контракта kept) / pytest — **1094 passed + 1 skipped**, coverage **96.91 %**.
+
+Заметки / решения:
+- **Local vs Production compose** — два файла: базовый `docker-compose.yml` (с локальной Postgres) для разработки + `docker-compose.prod.yml` overlay (отключает локальную Postgres через `profiles: ["never"]`) для VPS-деплоя. Это идиоматичный compose-pattern: одна конфигурация для двух окружений, без дублирования.
+- **Migrations как sidecar** — отдельный сервис `migrations` гонит `alembic upgrade head` и завершается. Бот ждёт `service_completed_successfully`. Альтернатива — гонять миграции в `entrypoint.sh` бота — отвергнута, потому что (а) усложняет образ (нужен shell-wrapper), (б) при падении миграции непонятно, бот не стартанул из-за миграций или из-за самого кода.
+- **Healthcheck — импорт `Settings`, не пинг Telegram/БД** — намеренно. Healthcheck должен быть дешёвым и не зависеть от внешних сервисов: при кратковременной недоступности Telegram API (например, перезапуск Cloudflare на стороне Telegram) бот не должен падать как «unhealthy» и рестартоваться. Проверка валидности env — ровно то, что нам нужно: если `Settings()` упал, значит контейнер запущен с битым env, и его действительно нужно ребутнуть.
+- **`pipirik:1000` user** — не root. Standard practice для production-образов. UID 1000 совпадает с дефолтным `ubuntu:1000` на VPS, что упрощает дебаг через bind-mount-ы (если когда-нибудь понадобится).
+- **`tini` как init** — иначе SIGTERM от docker stop не доходит до asyncio в Python (PID 1 без init не реагирует на сигналы корректно). При `docker compose down` бот должен gracefully закрыться (закрыть Bot session, остановить scheduler) — `tini` это обеспечивает.
+- **MAX_DAU env var** — в `.env.example` лежит `MAX_DAU=200`, но фактически settings ожидает `BOT_MAX_DAU` (через `env_prefix="BOT_"`). В этом PR проставил `BOT_MAX_DAU` в compose, но сам `.env.example` пока **не правил** (это отдельный мелкий баг — стоит унифицировать в hot-fix отдельным PR-ом). Сейчас compose валиден, README — тоже (не упоминает `MAX_DAU` напрямую).
+- **DoD MVP Acceptance 1.5.7 (24 ч стабильной работы) — единственный пункт, который требует ручной валидации после деплоя.** Код-PR закрывает 1.5.5 (compose работает) и 1.5.6 (README < 30 мин для нового разработчика). Сам деплой на VPS — отдельный шаг, который агент не может сделать за пользователя (нужен реальный VPS + Neon + BOT_TOKEN).
+
+---
+
 ## 2026-05-05 — Спринт 1.5.G: каталог 300+ JSON-шаблонов забавных логов леса (RU+EN)
 
 **Автор:** Devin (продолжение работы предыдущего агента)

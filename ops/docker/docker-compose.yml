@@ -1,0 +1,85 @@
+# Базовый docker-compose для локальной разработки + smoke-теста образа
+# (Спринт 1.5.H, ПД 1.5.5).
+#
+# Поднимает три сервиса:
+#   - postgres: локальная Postgres 16 (только для разработки; в production
+#     используется внешний managed Postgres, например Neon free).
+#   - migrations: одноразовый sidecar — гонит alembic upgrade head перед
+#     стартом бота. После успеха exit 0; бот ждёт через
+#     depends_on.condition: service_completed_successfully.
+#   - bot: long-polling Telegram-бот.
+#
+# Запуск (из корня репо):
+#   cp .env.example .env       # заполнить BOT_TOKEN, BOOTSTRAP_ADMIN_IDS
+#   docker compose -f ops/docker/docker-compose.yml up --build
+#
+# Остановка:
+#   docker compose -f ops/docker/docker-compose.yml down            # без удаления volume
+#   docker compose -f ops/docker/docker-compose.yml down -v         # с удалением volume (БД)
+#
+# Production-деплой на VPS — см. ops/runbooks/deploy_vps.md (там используется
+# external managed Postgres, локальный postgres-сервис не поднимается).
+
+name: pipirik-wars
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pipirik-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pipirik}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pipirik_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-pipirik}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - pipirik_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pipirik} -d ${POSTGRES_DB:-pipirik}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  migrations:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+    image: pipirik-wars:dev
+    container_name: pipirik-migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Внутри сети compose Postgres-хост — postgres, не localhost.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pipirik}:${POSTGRES_PASSWORD:-pipirik_dev_password}@postgres:5432/${POSTGRES_DB:-pipirik}
+      # BOT_TOKEN миграции не нужен, но Settings() при импорте требует его —
+      # пробрасываем плейсхолдер, реальный токен у миграций не запрашивается.
+      BOT_TOKEN: ${BOT_TOKEN:-placeholder:not-used-by-migrations}
+    # Запуск alembic upgrade head внутри контейнера — alembic.ini лежит в /app.
+    entrypoint: ["tini", "--"]
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  bot:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+    image: pipirik-wars:dev
+    container_name: pipirik-bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrations:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pipirik}:${POSTGRES_PASSWORD:-pipirik_dev_password}@postgres:5432/${POSTGRES_DB:-pipirik}
+      BOT_TOKEN: ${BOT_TOKEN:?BOT_TOKEN must be set in .env}
+      BOOTSTRAP_ADMIN_IDS: ${BOOTSTRAP_ADMIN_IDS:-}
+      BOT_MAX_DAU: ${BOT_MAX_DAU:-200}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    restart: unless-stopped
+
+volumes:
+  pipirik_pg_data:
+    name: pipirik_pg_data
