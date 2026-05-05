@@ -287,3 +287,86 @@ anticheat-unban-not-banned = ℹ️ У игрока tg_id { $tg_id } нет ак
 
 # Бан успешно снят. `$banned-until-before` — ISO-строка прежнего срока бана.
 anticheat-unban-success = ✅ Anti-cheat-бан снят (tg_id { $tg_id }, бан до { $banned-until-before }). Причина: { $reason }.
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# PvP-дуэль 1×1 (Спринт 2.1.E, ГДД §7.1).
+# ──────────────────────────────────────────────────────────────────────────
+
+# /duel в ЛС без reply (нет глобал-лобби до 2.1.F).
+duel-private-needs-global = 🍆 Чтобы вызвать кого-то на дуэль, ответь /duel на сообщение оппонента в общем чате клана. Глобальный пул откроется в Фазе 2.1.F.
+
+# /duel без reply в группе или некорректные аргументы.
+duel-usage = 🍆 Использование: ответь `/duel` на сообщение оппонента. По умолчанию — режим «Чат → Глобал». Для «Только чат» — `/duel chat`.
+
+# Игрок (челленджер) ещё не зарегистрирован.
+duel-not-registered = 🍆 Похоже, ты ещё не зарегистрирован. Нажми /start.
+
+# Оппонент не зарегистрирован в боте.
+duel-target-not-registered = 🍆 Соперник ещё не зарегистрирован в боте — попроси его нажать /start в ЛС.
+
+# Reply на сообщение бота — нельзя.
+duel-target-is-bot = 🍆 На дуэль можно вызвать только живого пипирика, не бота.
+
+# Reply на собственное сообщение — нельзя.
+duel-self-challenge = 🍆 Сам с собой? Найди реального оппонента.
+
+# Карточка вызова в чате (chat_only mode). $challenger / $challenged — @username.
+duel-challenge-chat = ⚔️ { $challenger } вызывает { $challenged } на дуэль (только в этом чате)! Принять?
+
+# Карточка вызова в чате (chat_then_global mode).
+duel-challenge-chat-then-global = ⚔️ { $challenger } вызывает { $challenged } на дуэль! Если оппонент не примет за 3 минуты — вызов уплывёт в глобальное лобби.
+
+# Уведомление об отправке вызова в глобальное лобби (global_only mode).
+duel-challenge-global = ⚔️ { $challenger }, твой вызов отправлен в глобальное лобби (открывается в 2.1.F).
+
+# Текст после accept-а — заменяет challenge-карточку в общем чате.
+duel-chat-accepted = ✅ { $challenged } принял вызов { $challenger }. Бой идёт в ЛС бота.
+
+# Inline-кнопки.
+duel-button-accept = Принять
+duel-button-reject = Отклонить
+duel-button-attack-high = Атака: ⬆ верх
+duel-button-attack-mid = Атака: ➡ центр
+duel-button-attack-low = Атака: ⬇ низ
+duel-button-block-high = Блок: ⬆ верх
+duel-button-block-mid = Блок: ➡ центр
+duel-button-block-low = Блок: ⬇ низ
+
+# Раунд-промпт (DM).
+duel-round-attack-prompt = 🥊 Раунд { NUMBER($round_num, useGrouping: 0) } из 3. Куда бьёшь?
+
+# Промпт выбора блока (после атаки).
+duel-round-block-prompt = 🛡 Раунд { NUMBER($round_num, useGrouping: 0) } из 3. Атака: { $attack }. Что блокируешь?
+
+# Игрок сделал ход — ждём оппонента.
+duel-round-waiting = ⏳ Раунд { NUMBER($round_num, useGrouping: 0) } — твой ход принят. Ждём оппонента…
+
+# Финал боя.
+duel-result-victory = 🏆 Победа! +{ NUMBER($delta_cm, useGrouping: 0) } см. Длина теперь { NUMBER($new_length_cm, useGrouping: 0) } см.
+duel-result-defeat = 💀 Поражение. { NUMBER($delta_cm, useGrouping: 0) } см. Длина теперь { NUMBER($new_length_cm, useGrouping: 0) } см.
+duel-result-draw = 🤝 Ничья. Длина не изменилась — { NUMBER($length_cm, useGrouping: 0) } см.
+
+# /cancel_duel.
+duel-cancelled = ❌ Вызов отменён челленджером { $challenger }.
+duel-cancel-usage = Использование: `/cancel_duel <duel_id>`. ID можно найти в карточке вызова.
+
+# Toast-уведомления (ответы на callback_query).
+duel-toast-accepted = Вызов принят!
+duel-toast-rejected = Спасибо, не интересно.
+duel-toast-cancelled = Вызов отменён.
+duel-toast-not-found = Эта дуэль уже неактивна.
+duel-toast-not-participant = Эта дуэль не для тебя.
+duel-toast-foreign-button = Эта кнопка не для тебя.
+duel-toast-invalid-state = Дуэль уже не в той фазе.
+duel-toast-already-submitted = Ты уже сделал ход в этом раунде.
+duel-toast-outdated = Кнопка устарела.
+
+# Ошибки порога входа в дуэль.
+duel-requirements-not-met = 📏 Для дуэлей нужны длина ≥ { NUMBER($min_length_cm, useGrouping: 0) } см и толщина ≥ { NUMBER($min_thickness_level, useGrouping: 0) }.
+
+# Anti-cheat soft-ban активен.
+duel-anticheat-blocked = Антибот-проверка активна до { $banned-until }. Дуэли временно заморожены.
+
+# Игрок занят другой активностью (forest и т. п.).
+duel-lock-already-held = 🔒 Сейчас занят (например, в /forest). Сначала закончи активность.

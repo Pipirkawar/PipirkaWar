@@ -286,3 +286,86 @@ anticheat-unban-not-banned = ℹ️ Player tg_id { $tg_id } has no active anti-c
 
 # Ban successfully lifted. `$banned-until-before` — ISO string of previous ban expiration.
 anticheat-unban-success = ✅ Anti-cheat ban lifted (tg_id { $tg_id }, was banned until { $banned-until-before }). Reason: { $reason }.
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 1×1 PvP duel (Sprint 2.1.E, GDD §7.1).
+# ──────────────────────────────────────────────────────────────────────────
+
+# /duel in private chat without reply (no global lobby until 2.1.F).
+duel-private-needs-global = 🍆 To challenge someone, reply /duel to their message in your clan chat. Global pool opens in Phase 2.1.F.
+
+# /duel without reply in a group, or with invalid arguments.
+duel-usage = 🍆 Usage: reply `/duel` to your opponent's message. Default mode is chat → global. For chat-only — `/duel chat`.
+
+# Player (challenger) isn't registered yet.
+duel-not-registered = 🍆 You're not registered yet. Tap /start first.
+
+# Opponent isn't registered yet.
+duel-target-not-registered = 🍆 Opponent isn't registered yet — ask them to /start the bot.
+
+# Reply on a bot message — not allowed.
+duel-target-is-bot = 🍆 You can only challenge a real player, not a bot.
+
+# Reply on own message — not allowed.
+duel-self-challenge = 🍆 Challenging yourself? Find a real opponent.
+
+# Challenge card in chat (chat_only mode). $challenger / $challenged — @username.
+duel-challenge-chat = ⚔️ { $challenger } challenges { $challenged } to a duel (chat only)! Accept?
+
+# Challenge card in chat (chat_then_global mode).
+duel-challenge-chat-then-global = ⚔️ { $challenger } challenges { $challenged } to a duel! If not accepted within 3 minutes, the challenge will move to the global pool.
+
+# Notification that challenge has been sent to the global pool (global_only).
+duel-challenge-global = ⚔️ { $challenger }, your challenge has been sent to the global pool (opening in 2.1.F).
+
+# Replaces challenge card after accept.
+duel-chat-accepted = ✅ { $challenged } accepted { $challenger }'s challenge. Fight in progress (private).
+
+# Inline buttons.
+duel-button-accept = Accept
+duel-button-reject = Decline
+duel-button-attack-high = Attack: ⬆ high
+duel-button-attack-mid = Attack: ➡ mid
+duel-button-attack-low = Attack: ⬇ low
+duel-button-block-high = Block: ⬆ high
+duel-button-block-mid = Block: ➡ mid
+duel-button-block-low = Block: ⬇ low
+
+# Round prompt (DM).
+duel-round-attack-prompt = 🥊 Round { NUMBER($round_num, useGrouping: 0) } of 3. Where do you strike?
+
+# Block-selection prompt (after attack).
+duel-round-block-prompt = 🛡 Round { NUMBER($round_num, useGrouping: 0) } of 3. Attack: { $attack }. What do you block?
+
+# Player has moved — waiting for opponent.
+duel-round-waiting = ⏳ Round { NUMBER($round_num, useGrouping: 0) } — move accepted. Waiting for opponent…
+
+# Final result.
+duel-result-victory = 🏆 Victory! +{ NUMBER($delta_cm, useGrouping: 0) } cm. Length is now { NUMBER($new_length_cm, useGrouping: 0) } cm.
+duel-result-defeat = 💀 Defeat. { NUMBER($delta_cm, useGrouping: 0) } cm. Length is now { NUMBER($new_length_cm, useGrouping: 0) } cm.
+duel-result-draw = 🤝 Draw. Length unchanged — { NUMBER($length_cm, useGrouping: 0) } cm.
+
+# /cancel_duel.
+duel-cancelled = ❌ Challenge cancelled by { $challenger }.
+duel-cancel-usage = Usage: `/cancel_duel <duel_id>`. ID is shown in the challenge card.
+
+# Toast notifications (callback_query answers).
+duel-toast-accepted = Challenge accepted!
+duel-toast-rejected = Thanks, not interested.
+duel-toast-cancelled = Challenge cancelled.
+duel-toast-not-found = This duel is no longer active.
+duel-toast-not-participant = This duel isn't yours.
+duel-toast-foreign-button = This button isn't for you.
+duel-toast-invalid-state = Duel is no longer in that phase.
+duel-toast-already-submitted = You've already moved in this round.
+duel-toast-outdated = Button is outdated.
+
+# Pre-duel requirements not met.
+duel-requirements-not-met = 📏 Duels require length ≥ { NUMBER($min_length_cm, useGrouping: 0) } cm and thickness ≥ { NUMBER($min_thickness_level, useGrouping: 0) }.
+
+# Anti-cheat soft-ban active.
+duel-anticheat-blocked = Anti-cheat check is active until { $banned-until }. Duels are temporarily frozen.
+
+# Player is busy with another activity (forest etc.).
+duel-lock-already-held = 🔒 You're busy (e.g., in /forest). Finish the current activity first.
