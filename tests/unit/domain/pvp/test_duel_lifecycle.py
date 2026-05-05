@@ -244,6 +244,55 @@ class TestCancel:
         assert exc.value.actual is DuelState.IN_PROGRESS
 
 
+class TestEscalateToGlobal:
+    """Спринт 2.1.F: переход CHAT_THEN_GLOBAL → GLOBAL_ONLY (auto-escalation)."""
+
+    def test_escalates_chat_then_global_pending(self) -> None:
+        d = _challenge(mode=DuelMode.CHAT_THEN_GLOBAL)
+        d2 = d.escalate_to_global(now=_LATER)
+        assert d2.mode is DuelMode.GLOBAL_ONLY
+        assert d2.challenged_id is None
+        assert d2.state is DuelState.PENDING_ACCEPT
+        # Снэпшоты баланса не двигаются.
+        assert d2.hit_pct == d.hit_pct
+        assert d2.expected_rounds == d.expected_rounds
+
+    def test_escalate_returns_new_instance(self) -> None:
+        d = _challenge(mode=DuelMode.CHAT_THEN_GLOBAL)
+        d2 = d.escalate_to_global(now=_LATER)
+        assert d is not d2
+        assert d.mode is DuelMode.CHAT_THEN_GLOBAL  # original unchanged
+        assert d.challenged_id == 2
+
+    def test_rejects_when_mode_chat_only(self) -> None:
+        d = _challenge(mode=DuelMode.CHAT_ONLY)
+        with pytest.raises(InvalidDuelStateError) as exc:
+            d.escalate_to_global(now=_LATER)
+        assert exc.value.op == "escalate_to_global"
+        assert exc.value.actual is DuelMode.CHAT_ONLY
+
+    def test_rejects_when_mode_already_global_only(self) -> None:
+        d = _challenge(mode=DuelMode.GLOBAL_ONLY, challenged_id=None)
+        with pytest.raises(InvalidDuelStateError) as exc:
+            d.escalate_to_global(now=_LATER)
+        assert exc.value.op == "escalate_to_global"
+        assert exc.value.actual is DuelMode.GLOBAL_ONLY
+
+    def test_rejects_in_in_progress(self) -> None:
+        d = _challenge(mode=DuelMode.CHAT_THEN_GLOBAL).accept(
+            accepter_id=2, p1_length_cm=100, p2_length_cm=80, now=_LATER
+        )
+        with pytest.raises(InvalidDuelStateError) as exc:
+            d.escalate_to_global(now=_MUCH_LATER)
+        assert exc.value.op == "escalate_to_global"
+        assert exc.value.actual is DuelState.IN_PROGRESS
+
+    def test_rejects_in_cancelled(self) -> None:
+        d = _challenge(mode=DuelMode.CHAT_THEN_GLOBAL).cancel(now=_LATER)
+        with pytest.raises(InvalidDuelStateError):
+            d.escalate_to_global(now=_MUCH_LATER)
+
+
 class TestProperties:
     def test_is_pending(self) -> None:
         d = _challenge()

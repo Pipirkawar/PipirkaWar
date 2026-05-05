@@ -23,6 +23,69 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.1.F.1: глобальное лобби PvP — domain + persistence
+
+**Автор:** Devin (по запросу 612amaranth)
+**Тип:** feature (domain + infrastructure + balance config)
+**Связано:** `current_tasks.md` Спринт 2.1.F.1, ПД 2.1.3 (`development_plan.md §5`), ГДД §7.1.
+
+Первый саб-PR саб-спринта 2.1.F (декомпозиция: F.1 — domain+persistence; F.2 — use-cases+scheduler; F.3 — bot+DI). Цель этого PR — добавить безопасный доменный фундамент глобальной FIFO-очереди вызовов, не трогая ни бот, ни scheduler.
+
+Что сделано:
+
+- **Balance config** (`domain/balance/config.py` + `config/balance.yaml`):
+    - В `PvpDuel1v1Config` два новых поля с Pydantic-валидацией:
+        - `global_lobby_ttl_minutes: int = Field(ge=1, le=60)` — сколько минут вызов живёт в глобальном пуле (дефолт 10);
+        - `chat_to_global_promotion_minutes: int = Field(ge=1, le=60)` — через сколько минут после `mode=CHAT_THEN_GLOBAL`-вызова job-эскалации переводит его в `GLOBAL_ONLY` (дефолт 3).
+    - Параметры лежат именно в секции `pvp.duel_1v1`, чтобы вместе с TTL/anti-cheat-параметрами Сбринта 2.1.A правились единым релоадом баланса.
+- **Domain VO + порт** (`domain/pvp/lobby.py` — новый файл):
+    - `LobbyEntry` (frozen + slots): `duel_id: int`, `enqueued_at: datetime` (tz-aware UTC).
+    - Абстрактный порт `IGlobalLobbyRepository` с 4 методами:
+        - `enqueue(duel_id=…, enqueued_at=…) -> bool` — идемпотентный enqueue (повторная попытка для уже стоящего `duel_id` возвращает `False`, не двигая `enqueued_at` — это критично для FIFO-инварианта);
+        - `pop_oldest() -> LobbyEntry | None` — атомарная FIFO-выборка (на PG — `SELECT … ORDER BY enqueued_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED`, на SQLite вырождается в UoW-транзакцию);
+        - `remove(duel_id=…) -> bool` — идемпотентное удаление;
+        - `is_in_lobby(duel_id=…) -> bool` — read-only-проверка для preflight-валидации.
+- **Domain lifecycle** (`domain/pvp/duel.py`): `Duel.escalate_to_global(*, now)` — переход `CHAT_THEN_GLOBAL → GLOBAL_ONLY` с обнулением `challenged_id` (вызывается job-ом эскалации в F.2). Не идемпотентен: повторный вызов на уже глобальном вызове → `InvalidDuelStateError`.
+- **Миграция** `0010_pvp_global_lobby` (`down_revision=0009_pvp_duels`):
+    ```sql
+    CREATE TABLE pvp_global_lobby (
+      duel_id   BIGINT PRIMARY KEY,
+      enqueued_at TIMESTAMP WITH TIME ZONE NOT NULL,
+      FOREIGN KEY (duel_id) REFERENCES pvp_duels(id) ON DELETE CASCADE
+    );
+    CREATE INDEX ix_pvp_global_lobby_enqueued_at ON pvp_global_lobby(enqueued_at);
+    ```
+- **ORM** `PvpGlobalLobbyORM` в `infrastructure/db/models/pvp.py` — зеркало миграции; зарегистрирован в `infrastructure/db/models/__init__.py` и в фикстуре `tests/integration/db/conftest.py`.
+- **SqlAlchemyGlobalLobbyRepository** (`infrastructure/db/repositories/global_lobby.py`):
+    - `enqueue` — на PG `pg_insert(...).on_conflict_do_nothing(index_elements=["duel_id"])`, на SQLite `sqlite_insert(...).on_conflict_do_nothing(index_elements=["duel_id"])`. `bool` определяется по `result.rowcount`.
+    - `pop_oldest` — `select(...).order_by(enqueued_at.asc()).limit(1).with_for_update(skip_locked=True)` (PG), затем `delete(...) where duel_id == picked.duel_id`. На SQLite `with_for_update` no-op, FIFO держит UoW-транзакция.
+    - `remove`, `is_in_lobby` — стандартные.
+    - `enqueued_at` всегда нормализуется через `infrastructure/db/utils.ensure_utc(...)` (aiosqlite теряет tzinfo).
+- **FakeGlobalLobbyRepository** в `tests/fakes/global_lobby_repo.py` — in-memory FIFO для use-case-тестов 2.1.F.2.
+
+Тесты:
+
+- `tests/unit/domain/pvp/test_lobby.py` — 9 unit-тестов (LobbyEntry frozen + equality, FakeGlobalLobbyRepo контракт: enqueue/idempotent/pop-FIFO/empty/remove/is_in_lobby/pop-removes).
+- `tests/unit/domain/pvp/test_duel_lifecycle.py` — +6 тестов на `Duel.escalate_to_global` (happy chat→global, новая инстанция, отказы из CHAT_ONLY / GLOBAL_ONLY / IN_PROGRESS / CANCELLED).
+- `tests/unit/domain/balance/test_pvp_config.py` — +9 параметризованных тестов на новые TTL-поля (boundary cases, required-field, обновлённый extra=forbid, helper `_build`).
+- `tests/integration/db/pvp/test_global_lobby_repository.py` — 9 интеграционных тестов (enqueue→pop round-trip, FIFO ordering на 3 дуэлях, idempotent enqueue keeps first timestamp, remove existing/nonexistent, is_in_lobby present/absent, two independent duels).
+- `tests/integration/db/test_migrations.py` — +3 cases (`0010_pvp_global_lobby` в revisions / descends from 0009 / в `versions_dir` + `pvp_global_lobby` в expected tables).
+
+Результат / артефакты:
+
+- ветка `devin/1778007932-sprint-2-1-f-1-pvp-global-lobby-domain`, PR #?? (см. ссылку в `current_tasks.md`)
+- `make ci` локально зелёный: ruff + mypy --strict + lint-imports (3 контракта) + pytest (1727 passed, 1 skipped, coverage **91.07%**)
+
+Заметки / решения:
+
+- **PG-table, не Redis-list.** Текущая инфраструктура — Postgres + asyncpg, Redis ещё не подключён; расширять стек ради одной FIFO-очереди не нужно. На горячих нагрузках в будущем при необходимости можно мигрировать прозрачно — порт `IGlobalLobbyRepository` это позволяет.
+- **Идемпотентный enqueue.** Job-ы scheduler-а (F.2) могут ретраиться при временных сбоях; `False` на повторный enqueue — это нормальный benign-исход, а не ошибка.
+- **`Duel.escalate_to_global` не идемпотентен.** Идемпотентность реализуется выше — на уровне use-case-а в F.2 (через `is_in_lobby` или job-cancel-флаги). На домене явная ошибка лучше, чем тихий no-op: легче отлавливать race-conditions.
+- **CASCADE-тест на SQLite не пишем** — без `PRAGMA foreign_keys=ON` (в репо нигде не выставляется) cascade не сработает на in-memory aiosqlite-движке. CASCADE-инвариант декларирован в DDL и будет проверен на PG; для unit-уровня достаточно.
+- **F.2 + F.3** — следующие саб-PR-ы; план зафиксирован в `current_tasks.md`. F.2 поднимет use-cases и scheduler, F.3 переведёт `/duel` private-flow на новый global pool + добавит `/duel_global`.
+
+---
+
 ## 2026-05-05 — Спринт 2.1.E: bot-handler-ы и presenter-ы PvP (UX боя в Telegram)
 
 **Автор:** Devin (предыдущий агент, PR #50; запись и housekeeping — Devin по запросу 612amaranth)

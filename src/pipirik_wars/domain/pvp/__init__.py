@@ -46,6 +46,7 @@ from pipirik_wars.domain.pvp.errors import (
     PvpRequirementsNotMetError,
     SelfChallengeError,
 )
+from pipirik_wars.domain.pvp.lobby import IGlobalLobbyRepository, LobbyEntry
 from pipirik_wars.domain.pvp.repositories import IDuelRepository
 from pipirik_wars.domain.pvp.services import (
     DEFAULT_DUEL_ROUNDS,
@@ -62,9 +63,11 @@ __all__ = [
     "DuelState",
     "DuelWinner",
     "IDuelRepository",
+    "IGlobalLobbyRepository",
     "InvalidDuelStateError",
     "InvalidLengthError",
     "InvalidRoundCountError",
+    "LobbyEntry",
     "MoveAlreadySubmittedError",
     "NoMissingMovesError",
     "NotADuelParticipantError",

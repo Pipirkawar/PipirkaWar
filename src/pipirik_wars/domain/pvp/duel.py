@@ -311,6 +311,50 @@ class Duel:
             )
         return replace(self, state=DuelState.CANCELLED, cancelled_at=now)
 
+    def escalate_to_global(self, *, now: datetime) -> Duel:
+        """Перевести `CHAT_THEN_GLOBAL`-вызов в `GLOBAL_ONLY`.
+
+        Используется шедулером (`EscalateChatToGlobal`-job, Спринт 2.1.F.2)
+        по истечении ``balance.pvp.duel_1v1.chat_to_global_promotion_minutes``
+        (по умолчанию 3 мин), если вызов так и не приняли в чате.
+
+        После эскалации:
+
+        * ``mode = GLOBAL_ONLY`` — дуэль ставится в глобальное FIFO-лобби
+          через `EnqueueGlobalDuel` (use-case делает это сам после
+          вызова этого мутатора).
+        * ``challenged_id = None`` — теперь принять может любой свободный
+          игрок из лобби (через `MatchFromLobby`).
+
+        Допустимо только из ``state=PENDING_ACCEPT ∧ mode=CHAT_THEN_GLOBAL``.
+        Идемпотентно ли? Нет — повторный вызов на уже эскалированной
+        дуэли (она теперь GLOBAL_ONLY) даст `InvalidDuelStateError`.
+        Use-case 2.1.F.2 сам делает preflight-проверку через `mode` /
+        `is_in_lobby`, прежде чем дёргать этот мутатор. Параметр
+        ``now`` зарезервирован для будущей записи `escalated_at`
+        в audit (домен сейчас не хранит этот timestamp — он живёт
+        в `audit_log`).
+        """
+
+        del now  # unused, см. docstring
+        if self.state is not DuelState.PENDING_ACCEPT:
+            raise InvalidDuelStateError(
+                expected=DuelState.PENDING_ACCEPT,
+                actual=self.state,
+                op="escalate_to_global",
+            )
+        if self.mode is not DuelMode.CHAT_THEN_GLOBAL:
+            raise InvalidDuelStateError(
+                expected=DuelMode.CHAT_THEN_GLOBAL,
+                actual=self.mode,
+                op="escalate_to_global",
+            )
+        return replace(
+            self,
+            mode=DuelMode.GLOBAL_ONLY,
+            challenged_id=None,
+        )
+
     def submit_move(
         self,
         *,
