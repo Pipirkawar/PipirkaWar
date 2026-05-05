@@ -22,6 +22,9 @@ from pipirik_wars.infrastructure.db.repositories.oracle_history import (
 from pipirik_wars.infrastructure.db.repositories.player import (
     SqlAlchemyPlayerRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.pvp_duel import (
+    SqlAlchemyDuelRepository,
+)
 from pipirik_wars.infrastructure.db.repositories.signup_queue import (
     SqlAlchemySignupQueueRepository,
 )
@@ -32,6 +35,7 @@ __all__ = [
     "SqlAlchemyAnticheatRepository",
     "SqlAlchemyClanMembershipRepository",
     "SqlAlchemyClanRepository",
+    "SqlAlchemyDuelRepository",
     "SqlAlchemyForestRunRepository",
     "SqlAlchemyOracleHistoryRepository",
     "SqlAlchemyPlayerRepository",

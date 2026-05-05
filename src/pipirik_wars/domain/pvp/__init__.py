@@ -11,9 +11,12 @@
 `PendingRound`. Любая инфраструктура (БД, AFK-таймер, инлайн-кнопки)
 лежит выше доменного слоя.
 
-Будущие расширения (Спринты 2.1.C–F, 2.2):
+Спринт 2.1.C добавляет порт `IDuelRepository` для persistence-слоя
+(реализуется поверх таблиц `pvp_duels` + `pvp_duel_rounds`,
+см. `infrastructure/db/repositories/pvp_duel.py`).
 
-* `repositories.py` — порт `IDuelRepository`.
+Будущие расширения (Спринты 2.1.D–H, 2.2):
+
 * Дополнительные сервисы — `pick_random_choice` (AFK-фоллбэк) и
   `mass_pvp_resolver` для клановых N×M-битв.
 """
@@ -41,6 +44,7 @@ from pipirik_wars.domain.pvp.errors import (
     PvpError,
     SelfChallengeError,
 )
+from pipirik_wars.domain.pvp.repositories import IDuelRepository
 from pipirik_wars.domain.pvp.services import (
     DEFAULT_DUEL_ROUNDS,
     resolve_duel,
@@ -54,6 +58,7 @@ __all__ = [
     "DuelOutcome",
     "DuelState",
     "DuelWinner",
+    "IDuelRepository",
     "InvalidDuelStateError",
     "InvalidLengthError",
     "InvalidRoundCountError",
