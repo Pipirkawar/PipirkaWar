@@ -59,6 +59,11 @@ class AuditAction(str, enum.Enum):
     PVP_DUEL_ACCEPTED = "pvp_duel_accepted"
     PVP_DUEL_CANCELLED = "pvp_duel_cancelled"
     PVP_DUEL_COMPLETED = "pvp_duel_completed"
+    # ── Спринт 2.1.F.2 (глобальное лобби PvP) ──
+    PVP_LOBBY_ENQUEUED = "pvp_lobby_enqueued"
+    PVP_LOBBY_MATCHED = "pvp_lobby_matched"
+    PVP_LOBBY_ESCALATED = "pvp_lobby_escalated"
+    PVP_LOBBY_EXPIRED = "pvp_lobby_expired"
 
 
 class AuditSource(str, enum.Enum):

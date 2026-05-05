@@ -16,6 +16,12 @@ job-ов).
   ответственность infrastructure-адаптера: он замыкает callable вокруг
   contianer-а и при срабатывании вызывает use-case `FinishForestRun`
   с правильными зависимостями.
+
+Спринт 2.1.F.2: добавлены 4 метода для глобального лобби PvP —
+escalation `CHAT_THEN_GLOBAL → GLOBAL_ONLY` через 3 мин и expiration
+`GLOBAL_ONLY` после 10 мин в лобби (см. ГДД §7.1, balance
+`pvp.duel_1v1.{chat_to_global_promotion_minutes,
+global_lobby_ttl_minutes}`).
 """
 
 from __future__ import annotations
@@ -42,3 +48,49 @@ class IDelayedJobScheduler(abc.ABC):
     @abc.abstractmethod
     async def cancel_finish_forest_run(self, *, run_id: int) -> None:
         """Снять запланированный finish-job (NO-OP, если его нет)."""
+
+    # ── Спринт 2.1.F.2: глобальное лобби PvP ──
+
+    @abc.abstractmethod
+    async def schedule_chat_to_global_escalation(
+        self,
+        *,
+        duel_id: int,
+        run_at: datetime,
+    ) -> None:
+        """Запланировать `EscalateChatToGlobal(duel_id=...)` на `run_at` (UTC).
+
+        Срабатывает через `pvp.duel_1v1.chat_to_global_promotion_minutes`
+        после создания `mode=CHAT_THEN_GLOBAL`-вызова (ГДД §7.1).
+        Идемпотентно по `duel_id` (повторный вызов перезаписывает job).
+        """
+
+    @abc.abstractmethod
+    async def cancel_chat_to_global_escalation(self, *, duel_id: int) -> None:
+        """Снять запланированный escalation-job (NO-OP, если его нет).
+
+        Вызывается из `AcceptDuel` (chat-accept успел) и `CancelDuel`.
+        """
+
+    @abc.abstractmethod
+    async def schedule_global_lobby_expiration(
+        self,
+        *,
+        duel_id: int,
+        run_at: datetime,
+    ) -> None:
+        """Запланировать `ExpireLobbyEntry(duel_id=...)` на `run_at` (UTC).
+
+        Срабатывает через `pvp.duel_1v1.global_lobby_ttl_minutes` после
+        попадания вызова в глобальное лобби (либо сразу при
+        `mode=GLOBAL_ONLY`, либо после escalation-job-а из chat-режима).
+        Идемпотентно по `duel_id`.
+        """
+
+    @abc.abstractmethod
+    async def cancel_global_lobby_expiration(self, *, duel_id: int) -> None:
+        """Снять запланированный expiration-job (NO-OP, если его нет).
+
+        Вызывается из `MatchFromLobby` (вызов забран другим игроком),
+        `CancelDuel` (челленджер отменил вручную).
+        """

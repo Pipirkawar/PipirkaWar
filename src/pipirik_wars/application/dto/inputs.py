@@ -288,3 +288,43 @@ class InvokeOracleInput(_StrictBase):
         pattern=r"^[a-z]{2}(_[A-Z]{2})?$",
         description="Локаль каталога предсказаний (например, 'ru' или 'en')",
     )
+
+
+class EnqueueGlobalDuelInput(_StrictBase):
+    """Постановка дуэли в глобальную FIFO-очередь (Спринт 2.1.F.2)."""
+
+    duel_id: int = Field(gt=0, description="pvp_duels.id")
+
+
+class MatchFromLobbyInput(_StrictBase):
+    """Пикап дуэли из глобального лобби (Спринт 2.1.F.2).
+
+    Вызывается из `/duel_global`-handler-а. `accepter_tg_id` — Telegram
+    user_id игрока, который нажал «Принять из глобал-пула».
+    """
+
+    accepter_tg_id: PositiveTgId = Field(
+        gt=0, description="Telegram user_id игрока, принимающего из лобби"
+    )
+
+
+class EscalateChatToGlobalInput(_StrictBase):
+    """Job-эскалации `CHAT_THEN_GLOBAL → GLOBAL_ONLY` (Спринт 2.1.F.2).
+
+    Запускается планировщиком через
+    `pvp.duel_1v1.chat_to_global_promotion_minutes` после создания
+    chat-вызова. NO-OP, если дуэль уже принята/отменена.
+    """
+
+    duel_id: int = Field(gt=0, description="pvp_duels.id")
+
+
+class ExpireLobbyEntryInput(_StrictBase):
+    """Job-истечения TTL глобального лобби (Спринт 2.1.F.2).
+
+    Запускается планировщиком через `pvp.duel_1v1.global_lobby_ttl_minutes`
+    после попадания дуэли в лобби. NO-OP, если уже не в лобби (принят
+    другим игроком или отменён).
+    """
+
+    duel_id: int = Field(gt=0, description="pvp_duels.id")

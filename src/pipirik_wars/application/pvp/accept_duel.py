@@ -37,16 +37,19 @@ from pipirik_wars.domain.player import IPlayerRepository, Player
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from pipirik_wars.domain.pvp import (
     Duel,
+    DuelMode,
     DuelNotFoundError,
     IDuelRepository,
     PvpRequirementsNotMetError,
 )
+from pipirik_wars.domain.pvp.lobby import IGlobalLobbyRepository
 from pipirik_wars.domain.security import LockReason
 from pipirik_wars.domain.shared.ports import (
     AuditAction,
     AuditEntry,
     IAuditLogger,
     IClock,
+    IDelayedJobScheduler,
     IUnitOfWork,
 )
 
@@ -70,8 +73,10 @@ class AcceptDuel:
         "_balance",
         "_clock",
         "_duels",
+        "_lobby",
         "_locks",
         "_players",
+        "_scheduler",
         "_uow",
     )
 
@@ -85,6 +90,8 @@ class AcceptDuel:
         balance: IBalanceConfig,
         audit: IAuditLogger,
         clock: IClock,
+        scheduler: IDelayedJobScheduler | None = None,
+        lobby: IGlobalLobbyRepository | None = None,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -93,6 +100,8 @@ class AcceptDuel:
         self._balance = balance
         self._audit = audit
         self._clock = clock
+        self._scheduler = scheduler
+        self._lobby = lobby
 
     async def execute(self, input_dto: AcceptDuelInput) -> DuelAccepted:
         """Принять вызов. Бросает:
@@ -160,6 +169,25 @@ class AcceptDuel:
                     occurred_at=now,
                 )
             )
+
+            # удаляем запись из лобби, если она там была (GLOBAL_ONLY-вызов
+            # был принят по адресу — например через handler `/duel_global`).
+            duel_id_for_cleanup = saved.id
+            mode_was_chat_then_global = duel.mode is DuelMode.CHAT_THEN_GLOBAL
+            mode_was_global_only = duel.mode is DuelMode.GLOBAL_ONLY
+            if self._lobby is not None and mode_was_global_only:
+                await self._lobby.remove(duel_id=duel_id_for_cleanup)
+
+        # Снимаем scheduled-job-ы **снаружи** UoW (idempotent).
+        if self._scheduler is not None:
+            if mode_was_chat_then_global:
+                await self._scheduler.cancel_chat_to_global_escalation(
+                    duel_id=duel_id_for_cleanup,
+                )
+            elif mode_was_global_only:
+                await self._scheduler.cancel_global_lobby_expiration(
+                    duel_id=duel_id_for_cleanup,
+                )
         return DuelAccepted(duel=saved)
 
     async def _fetch_player(self, *, tg_id: int) -> Player:
