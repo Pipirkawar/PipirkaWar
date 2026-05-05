@@ -160,3 +160,66 @@ upgrade-insufficient-short =
     У тебя: { NUMBER($current_length_cm, useGrouping: 0) } см
     Минимальный остаток: { NUMBER($min_after_spend_cm, useGrouping: 0) } см
     Не хватает: { NUMBER($deficit_cm, useGrouping: 0) } см
+
+## /forest (Спринт 1.3.D → 1.5.E)
+
+forest-group = 🍆 Команда /forest доступна только в личке бота. Открой приватный чат и повтори.
+
+forest-other = 🍆 Команда /forest доступна только в личке бота.
+
+forest-not-registered = 🍆 Похоже, ты ещё не зарегистрирован. Нажми /start в этом чате — и тогда сможешь идти в лес.
+
+forest-already-in = 🌲 Ты уже в лесу — дождись возвращения. Бот пришлёт сообщение, когда поход закончится.
+
+# Сообщение-старт «ушёл в лес» (ГДД §8.2). Параметры:
+# - `$nick` — собранный «Титул Название Имя» (через презентер)
+# - `$cooldown_minutes` — целое, минут до возвращения
+forest-started = 🌲 { $nick } ушёл в лес на { NUMBER($cooldown_minutes, useGrouping: 0) } минут...
+
+# Fallback-сообщение, когда `GetProfile` не нашёл игрока сразу после
+# `StartForestRun` — параметр `$cooldown_minutes`.
+forest-started-fallback = 🌲 Ты ушёл в лес на { NUMBER($cooldown_minutes, useGrouping: 0) } минут...
+
+# Сообщение «вернулся из леса» — заголовок и строка длины (ГДД §8.2).
+# Параметры:
+# - `$nick` — полный ник «Титул Название Имя» с пересчитанным DisplayName
+# - `$length_delta_cm` — целое, +N см получено в лесу
+# - `$length_before_cm` / `$length_after_cm` — целые, было/стало
+forest-finished-header = 🌲 { $nick } вернулся из леса!
+forest-finished-length =
+    📏 Длина: +{ NUMBER($length_delta_cm, useGrouping: 0) } см (было { NUMBER($length_before_cm, useGrouping: 0) }, стало { NUMBER($length_after_cm, useGrouping: 0) })
+
+# Получен титул «Новичок» (первое возвращение из леса, ГДД §8.2).
+forest-finished-title-granted = 🎖 Получен титул: Новичок
+
+# Параметр `$item_name` — display_name предмета,
+# `$rarity` — локализованная редкость (см. forest-rarity-*).
+forest-finished-item-found = 🎩 Нашёл: { $item_name } [{ $rarity }]
+
+# Имя выдано автоматически (новичок без имени). Параметр `$name`.
+forest-finished-name-granted = 🪪 Получено имя: { $name }
+
+# Имя предложено заменить (у игрока уже есть имя). Параметр `$name`.
+forest-finished-name-found = 🪪 Нашёл имя: { $name }
+
+# Локализованные редкости (UI «Нашёл: <предмет> [<редкость>]»).
+forest-rarity-common = обычный
+forest-rarity-rare = редкий
+forest-rarity-epic = эпический
+
+# Подписи инлайн-кнопок под сообщением «вернулся из леса».
+forest-button-equip = Надеть
+forest-button-drop-item = Выбросить
+forest-button-replace-name = Заменить
+forest-button-drop-name = Выбросить
+
+# Toast-ы для callback-ответов (Telegram-лимит ≤ 200 символов).
+forest-toast-name-applied = Имя заменено.
+forest-toast-name-already-applied = Имя уже было применено.
+forest-toast-name-dropped = Имя выброшено.
+forest-toast-item-dropped = Предмет выброшен.
+forest-toast-item-equipped-placeholder = Экипировка появится позже — предмет пока в инвентаре.
+forest-toast-foreign-button = Эта кнопка не для тебя.
+forest-toast-run-not-found = Этот лес уже неактивен.
+forest-toast-drop-mismatch = Кнопка устарела.
+forest-toast-player-not-found = Сначала нажми /start.

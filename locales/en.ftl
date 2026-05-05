@@ -159,3 +159,66 @@ upgrade-insufficient-short =
     You have: { NUMBER($current_length_cm, useGrouping: 0) } cm
     Minimum remaining: { NUMBER($min_after_spend_cm, useGrouping: 0) } cm
     Short by: { NUMBER($deficit_cm, useGrouping: 0) } cm
+
+## /forest (Sprint 1.3.D → 1.5.E)
+
+forest-group = 🍆 The /forest command is only available in the bot's private chat. Open the DM and try again.
+
+forest-other = 🍆 The /forest command is only available in the bot's private chat.
+
+forest-not-registered = 🍆 Looks like you're not registered yet. Tap /start in this chat — then you'll be able to go to the forest.
+
+forest-already-in = 🌲 You're already in the forest — wait for your return. The bot will send a message when the trip ends.
+
+# "Went to the forest" start message (GDD §8.2). Parameters:
+# - `$nick` — assembled "Title Name PlayerName" (via presenter)
+# - `$cooldown_minutes` — integer, minutes until return
+forest-started = 🌲 { $nick } went to the forest for { NUMBER($cooldown_minutes, useGrouping: 0) } minutes...
+
+# Fallback message when `GetProfile` couldn't find the player right after
+# `StartForestRun` — parameter `$cooldown_minutes`.
+forest-started-fallback = 🌲 You went to the forest for { NUMBER($cooldown_minutes, useGrouping: 0) } minutes...
+
+# "Returned from forest" message — header and length line (GDD §8.2).
+# Parameters:
+# - `$nick` — full nick "Title Name PlayerName" with recomputed DisplayName
+# - `$length_delta_cm` — integer, +N cm gained in the forest
+# - `$length_before_cm` / `$length_after_cm` — integers, before/after
+forest-finished-header = 🌲 { $nick } returned from the forest!
+forest-finished-length =
+    📏 Length: +{ NUMBER($length_delta_cm, useGrouping: 0) } cm (was { NUMBER($length_before_cm, useGrouping: 0) }, now { NUMBER($length_after_cm, useGrouping: 0) })
+
+# Title "Newbie" granted (first forest return, GDD §8.2).
+forest-finished-title-granted = 🎖 Title earned: Newbie
+
+# Parameter `$item_name` — display_name of the item,
+# `$rarity` — localized rarity (see forest-rarity-*).
+forest-finished-item-found = 🎩 Found: { $item_name } [{ $rarity }]
+
+# Name granted automatically (newbie without a name yet). Parameter `$name`.
+forest-finished-name-granted = 🪪 Name received: { $name }
+
+# Name offered for replacement (player already has a name). Parameter `$name`.
+forest-finished-name-found = 🪪 Name found: { $name }
+
+# Localized rarities (UI "Found: <item> [<rarity>]").
+forest-rarity-common = common
+forest-rarity-rare = rare
+forest-rarity-epic = epic
+
+# Inline button labels under the "returned from forest" message.
+forest-button-equip = Equip
+forest-button-drop-item = Drop
+forest-button-replace-name = Replace
+forest-button-drop-name = Drop
+
+# Toasts for callback responses (Telegram limit ≤ 200 chars).
+forest-toast-name-applied = Name replaced.
+forest-toast-name-already-applied = Name was already applied.
+forest-toast-name-dropped = Name dropped.
+forest-toast-item-dropped = Item dropped.
+forest-toast-item-equipped-placeholder = Equipment is coming later — the item is in your inventory for now.
+forest-toast-foreign-button = This button isn't for you.
+forest-toast-run-not-found = This forest run is no longer active.
+forest-toast-drop-mismatch = Button is outdated.
+forest-toast-player-not-found = Tap /start first.

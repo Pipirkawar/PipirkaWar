@@ -1,4 +1,4 @@
-"""Handler-ы похода в лес (Спринт 1.3.D, ГДД §8.2).
+"""Handler-ы похода в лес (Спринт 1.3.D → 1.5.E, ГДД §8.2).
 
 Команда `/forest` (1.3.1) в ЛС:
 - Зовёт `StartForestRun` use-case (Спринт 1.3.B).
@@ -24,6 +24,9 @@ Callback-handler-ы инлайн-кнопок «вернулся из леса»
   кнопок больше нет, второй клик в Telegram-UI невозможен.
 - `ApplyForestNameDrop` сам идемпотентен (проверка `player.name == new_name`),
   так что race-конфликт двух quick-кликов разрешается без мутации.
+
+С 1.5.E все ответы (тексты + toast-ы) идут через `ForestPresenter` +
+`IMessageBundle` с локалью, резолвенной `LocaleMiddleware`-ом.
 """
 
 from __future__ import annotations
@@ -40,12 +43,13 @@ from pipirik_wars.application.dto.inputs import (
     StartForestRunInput,
 )
 from pipirik_wars.application.forest import ApplyForestNameDrop, StartForestRun
+from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.application.player import GetProfile
 from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters import (
     ForestCallbackData,
+    ForestPresenter,
     parse_forest_callback_data,
-    render_forest_started,
 )
 from pipirik_wars.domain.forest import (
     AlreadyInForestError,
@@ -58,27 +62,6 @@ from pipirik_wars.domain.player import PlayerNotFoundError
 router = Router(name="forest")
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
-REPLY_GROUP_RU = "🍆 Команда /forest доступна только в личке бота. Открой приватный чат и повтори."
-REPLY_OTHER_RU = "🍆 Команда /forest доступна только в личке бота."
-REPLY_NOT_REGISTERED_RU = (
-    "🍆 Похоже, ты ещё не зарегистрирован. Нажми /start в этом чате — и тогда сможешь идти в лес."
-)
-REPLY_ALREADY_IN_FOREST_RU = (
-    "🌲 Ты уже в лесу — дождись возвращения. Бот пришлёт сообщение, когда поход закончится."
-)
-
-# Callback-toast-ы (`answer(text)`). Telegram ограничивает 200 символов;
-# этого достаточно для коротких ack-ов.
-TOAST_NAME_APPLIED = "Имя заменено."
-TOAST_NAME_ALREADY_APPLIED = "Имя уже было применено."
-TOAST_NAME_DROPPED = "Имя выброшено."
-TOAST_ITEM_DROPPED = "Предмет выброшен."
-TOAST_ITEM_EQUIPPED_PLACEHOLDER = "Экипировка появится позже — предмет пока в инвентаре."
-TOAST_FOREIGN_BUTTON = "Эта кнопка не для тебя."
-TOAST_RUN_NOT_FOUND = "Этот лес уже неактивен."
-TOAST_DROP_MISMATCH = "Кнопка устарела."
-TOAST_PLAYER_NOT_FOUND = "Сначала нажми /start."
-
 
 @router.message(Command("forest"))
 async def handle_forest(
@@ -86,6 +69,8 @@ async def handle_forest(
     tg_identity: TgIdentity | None,
     start_forest_run: StartForestRun,
     get_profile: GetProfile,
+    bundle: IMessageBundle,
+    locale: Locale | None = None,
 ) -> None:
     """Команда `/forest` — отправить игрока в лес.
 
@@ -94,22 +79,24 @@ async def handle_forest(
     handler в синхронизации с тем, что покажет `/profile` — единая
     точка вычисления `DisplayName` (`IBalanceConfig.display_name_for`).
     """
+    presenter = ForestPresenter(bundle=bundle)
+    effective_locale = locale or DEFAULT_LOCALE
     chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
 
     if chat_kind in ("group", "supergroup"):
-        await message.answer(REPLY_GROUP_RU)
+        await message.answer(presenter.group(locale=effective_locale))
         return
     if chat_kind != "private" or tg_identity is None:
-        await message.answer(REPLY_OTHER_RU)
+        await message.answer(presenter.other(locale=effective_locale))
         return
 
     try:
         started = await start_forest_run.execute(StartForestRunInput(tg_id=tg_identity.tg_user_id))
     except PlayerNotFoundError:
-        await message.answer(REPLY_NOT_REGISTERED_RU)
+        await message.answer(presenter.not_registered(locale=effective_locale))
         return
     except AlreadyInForestError:
-        await message.answer(REPLY_ALREADY_IN_FOREST_RU)
+        await message.answer(presenter.already_in(locale=effective_locale))
         return
 
     # Полный ник = текущая длина игрока (новая длина начисляется только
@@ -124,13 +111,19 @@ async def handle_forest(
             "forest.start: profile not found right after start",
             extra={"tg_id": tg_identity.tg_user_id, "run_id": started.run.id},
         )
-        await message.answer(f"🌲 Ты ушёл в лес на {started.cooldown_minutes} минут...")
+        await message.answer(
+            presenter.started_fallback(
+                cooldown_minutes=started.cooldown_minutes,
+                locale=effective_locale,
+            )
+        )
         return
 
-    text = render_forest_started(
+    text = presenter.started(
         player=view.player,
         display_name=view.display_name,
         cooldown_minutes=started.cooldown_minutes,
+        locale=effective_locale,
     )
     await message.answer(text)
 
@@ -140,6 +133,8 @@ async def handle_forest_callback(
     callback: CallbackQuery,
     tg_identity: TgIdentity | None,
     apply_forest_name_drop: ApplyForestNameDrop,
+    bundle: IMessageBundle,
+    locale: Locale | None = None,
 ) -> None:
     """Обработчик инлайн-кнопок под сообщением «вернулся из леса»."""
     if tg_identity is None or callback.data is None or callback.message is None:
@@ -149,6 +144,9 @@ async def handle_forest_callback(
         # клиент таймаутит сам.
         return
 
+    presenter = ForestPresenter(bundle=bundle)
+    effective_locale = locale or DEFAULT_LOCALE
+
     try:
         parsed = parse_forest_callback_data(callback.data)
     except ValueError:
@@ -156,21 +154,40 @@ async def handle_forest_callback(
             "forest.callback: invalid callback_data",
             extra={"data": callback.data, "tg_id": tg_identity.tg_user_id},
         )
-        await callback.answer(TOAST_DROP_MISMATCH, show_alert=False)
+        await callback.answer(
+            presenter.toast_drop_mismatch(locale=effective_locale),
+            show_alert=False,
+        )
         await _strip_keyboard(callback)
         return
 
     action = parsed.action
     if action == "apply_name":
-        await _handle_apply_name(callback, tg_identity, parsed, apply_forest_name_drop)
+        await _handle_apply_name(
+            callback,
+            tg_identity,
+            parsed,
+            apply_forest_name_drop,
+            presenter=presenter,
+            locale=effective_locale,
+        )
     elif action == "drop_name":
-        await callback.answer(TOAST_NAME_DROPPED, show_alert=False)
+        await callback.answer(
+            presenter.toast_name_dropped(locale=effective_locale),
+            show_alert=False,
+        )
         await _strip_keyboard(callback)
     elif action == "equip_item":
-        await callback.answer(TOAST_ITEM_EQUIPPED_PLACEHOLDER, show_alert=False)
+        await callback.answer(
+            presenter.toast_item_equipped_placeholder(locale=effective_locale),
+            show_alert=False,
+        )
         await _strip_keyboard(callback)
     elif action == "drop_item":
-        await callback.answer(TOAST_ITEM_DROPPED, show_alert=False)
+        await callback.answer(
+            presenter.toast_item_dropped(locale=effective_locale),
+            show_alert=False,
+        )
         await _strip_keyboard(callback)
 
 
@@ -179,6 +196,9 @@ async def _handle_apply_name(
     tg_identity: TgIdentity,
     parsed: ForestCallbackData,
     apply_forest_name_drop: ApplyForestNameDrop,
+    *,
+    presenter: ForestPresenter,
+    locale: Locale,
 ) -> None:
     """Обработать клик «Заменить» — заменить имя через `ApplyForestNameDrop`."""
     try:
@@ -189,11 +209,11 @@ async def _handle_apply_name(
             )
         )
     except ForestRunNotFoundError:
-        await callback.answer(TOAST_RUN_NOT_FOUND, show_alert=False)
+        await callback.answer(presenter.toast_run_not_found(locale=locale), show_alert=False)
         await _strip_keyboard(callback)
         return
     except PlayerNotFoundError:
-        await callback.answer(TOAST_PLAYER_NOT_FOUND, show_alert=True)
+        await callback.answer(presenter.toast_player_not_found(locale=locale), show_alert=True)
         return
     except ForestRunOwnershipError:
         # Чужой `tg_id` тыкает в чужую кнопку — это аномалия (callback
@@ -206,7 +226,7 @@ async def _handle_apply_name(
                 "tg_id": tg_identity.tg_user_id,
             },
         )
-        await callback.answer(TOAST_FOREIGN_BUTTON, show_alert=False)
+        await callback.answer(presenter.toast_foreign_button(locale=locale), show_alert=False)
         return
     except ForestDropMismatchError:
         # Кнопка `apply_name` пришла на `ItemDrop`/`NoDrop` — формат
@@ -215,14 +235,17 @@ async def _handle_apply_name(
             "forest.callback: drop mismatch",
             extra={"run_id": parsed.run_id, "tg_id": tg_identity.tg_user_id},
         )
-        await callback.answer(TOAST_DROP_MISMATCH, show_alert=False)
+        await callback.answer(presenter.toast_drop_mismatch(locale=locale), show_alert=False)
         await _strip_keyboard(callback)
         return
 
     if result.was_already_applied:
-        await callback.answer(TOAST_NAME_ALREADY_APPLIED, show_alert=False)
+        await callback.answer(
+            presenter.toast_name_already_applied(locale=locale),
+            show_alert=False,
+        )
     else:
-        await callback.answer(TOAST_NAME_APPLIED, show_alert=False)
+        await callback.answer(presenter.toast_name_applied(locale=locale), show_alert=False)
     await _strip_keyboard(callback)
 
 

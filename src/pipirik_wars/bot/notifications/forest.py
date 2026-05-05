@@ -14,6 +14,13 @@ APScheduler-callback-ом (`infrastructure/scheduler/aps.py`) сразу
 `bot → infrastructure` соблюдается; обратные ссылки запрещены
 `import-linter`-ом.
 
+С 1.5.E текст и подписи кнопок берутся из `IMessageBundle` через
+`ForestPresenter`. Локаль игрока в этом фоновом нотификаторе ещё не
+известна (нет `update.from_user` — событие пришло из APScheduler),
+поэтому используется `DEFAULT_LOCALE`. Когда в следующем PR
+1.5-серии появится `players.locale_override`, notifier получит
+`IPlayerLocaleResolver` и сможет резолвить per-player-локаль.
+
 Контракт `IForestFinishNotifier.notify(...)`:
 - Если `result.was_already_finished is True` — no-op (повторный
   finish-job, рестарт воркера).
@@ -28,10 +35,8 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 
 from pipirik_wars.application.forest import ForestRunFinished, IForestFinishNotifier
-from pipirik_wars.bot.presenters.forest import (
-    build_finish_keyboard,
-    render_forest_finished,
-)
+from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
+from pipirik_wars.bot.presenters.forest import ForestPresenter
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.player import DisplayName, IPlayerRepository
 from pipirik_wars.domain.shared.ports import IUnitOfWork
@@ -46,7 +51,15 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
     появится `IClanBroadcaster`, тут менять не придётся.
     """
 
-    __slots__ = ("_balance", "_bot", "_logger", "_players", "_uow")
+    __slots__ = (
+        "_balance",
+        "_bot",
+        "_default_locale",
+        "_logger",
+        "_players",
+        "_presenter",
+        "_uow",
+    )
 
     def __init__(
         self,
@@ -55,12 +68,16 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
         players: IPlayerRepository,
         balance: IBalanceConfig,
         uow: IUnitOfWork,
+        bundle: IMessageBundle,
+        default_locale: Locale = DEFAULT_LOCALE,
         logger: logging.Logger | None = None,
     ) -> None:
         self._bot = bot
         self._players = players
         self._balance = balance
         self._uow = uow
+        self._presenter = ForestPresenter(bundle=bundle)
+        self._default_locale = default_locale
         self._logger = logger or logging.getLogger(__name__)
 
     async def notify(self, result: ForestRunFinished) -> None:
@@ -80,11 +97,12 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
             )
             return
 
-        text = render_forest_finished(
+        text = self._presenter.finished(
             result=result,
             display_name_after=display_name,
+            locale=self._default_locale,
         )
-        keyboard = build_finish_keyboard(result)
+        keyboard = self._presenter.finish_keyboard(result, locale=self._default_locale)
 
         try:
             await self._bot.send_message(

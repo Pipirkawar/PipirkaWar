@@ -23,6 +23,71 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.5.E: `/forest` через `IMessageBundle` (handler + презентер + нотификатор)
+
+**Автор:** Devin (по запросу sufficientdorette)
+**Тип:** feature (i18n-прогон последнего handler-а + nitidication-презентера + удаление legacy `render_full_nick(...)`)
+**Связано:** Текущий PR (Спринт 1.5.E), [development_plan.md §3 / Спринт 1.5, задача 1.5.1](development_plan.md), [current_tasks.md Спринт 1.5 → 1.5.E](current_tasks.md). Продолжение Спринта 1.5 после смерженного 1.5.D (PR #28).
+
+Что сделано:
+- **Локали (`locales/{ru,en}.ftl`):** добавлена секция `## /forest` с полным набором ключей: `forest-group/-other/-not-registered/-already-in/-started/-started-fallback/-finished-header/-finished-length/-finished-title-granted/-finished-item-found/-finished-name-granted/-finished-name-found/-rarity-{common,rare,epic}/-button-{equip,drop-item,replace-name,drop-name}/-toast-*` (9 toast-ов). Числовые параметры (`$cooldown_minutes`, `$length_delta_cm`, `$length_before_cm`, `$length_after_cm`) обёрнуты в `NUMBER($x, useGrouping: 0)` — без этого Fluent для RU вставляет `\xa0` (NBSP) между разрядами, и проверки точного совпадения текста ломаются (тот же фикс, что в 1.5.C/D).
+- **`ForestPresenter` (`bot/presenters/forest.py`):** `__init__(*, bundle: IMessageBundle)`, методы по группам:
+    - **chat-ветки:** `group/other/not_registered/already_in(*, locale)`;
+    - **started-сообщение:** `started(*, player, display_name, cooldown_minutes, locale)` (рендерит `[Локализованный титул] [Название] [Имя]` через приватный `_render_full_nick(...)`, потом передаёт собранный ник как `$nick` в `forest-started`) + `started_fallback(*, cooldown_minutes, locale)` (короткий безниковый вариант для случая, когда `GetProfile` после `StartForestRun` отдал `None`);
+    - **finished-сообщение:** `finished(*, result, display_name_after, locale)` собирает строки `header / length / title_granted? / item_found? / name_granted_or_found?` и склеивает через `\n`. Локализованная редкость подставляется как готовая строка в параметр `$rarity` ключа `forest-finished-item-found`;
+    - **finish-клавиатура:** `finish_keyboard(result, *, locale)` возвращает `InlineKeyboardMarkup | None` для `ItemDrop` и `NameDrop` (кроме случая, когда имя авто-применилось — `granted_name=True`). Подписи локализованы (`forest-button-{equip,drop-item,replace-name,drop-name}`); `callback_data` — invariant-формат `forest:<action>:<run_id>` через pure-функцию `forest_callback_data(action, run_id)` (не зависит от локали);
+    - **toast-ы для коллбэков:** 9 методов `toast_*(*, locale)` (`name_applied/name_already_applied/name_dropped/item_dropped/item_equipped_placeholder/foreign_button/run_not_found/drop_mismatch/player_not_found`);
+    - **`localized_rarity(rarity, *, locale)`:** маппинг `Rarity → forest-rarity-{common,rare,epic}` с резолвом через `IMessageBundle`.
+  Pure-функции `forest_callback_data(...)`, `parse_forest_callback_data(...)`, `has_finish_keyboard(...)` оставлены вне класса — они не локализованы (это сериализация / business-логика), и тесты к ним не требуют bundle-а.
+- **`bot/handlers/forest.py`:** handler `handle_forest` теперь принимает `bundle: IMessageBundle` и `locale: Locale | None = None` через DI middleware-а; `effective_locale = locale or DEFAULT_LOCALE`. Все ответы (`group/other/not_registered/already_in/started/started_fallback`) идут через `ForestPresenter.<...>(locale=effective_locale)`. Callback-handler `handle_forest_callback` (на `F.data.startswith("forest:")`) тоже принимает `bundle` + `locale`, парсит `callback_data` через `parse_forest_callback_data(...)`, и для каждого `action` (`apply_name/drop_name/equip_item/drop_item`) шлёт локализованный toast и (где надо) снимает клавиатуру через `_strip_keyboard(...)` (idempotent, поглощает любые `edit_reply_markup`-ошибки). Логика `apply_name` вынесена в приватный `_handle_apply_name(...)` для читаемости.
+- **`bot/notifications/forest.py`:** `TelegramForestFinishNotifier` получил `bundle: IMessageBundle` и `default_locale: Locale = DEFAULT_LOCALE` через DI. Локаль игрока в фоновом APScheduler-job-е недоступна (нет `update.from_user`), поэтому notifier рендерит **всё** в `default_locale`. Это компромисс: per-player-локаль в нотификаторе требует `players.locale_override` (миграция) и `IPlayerLocaleResolver`-порт — это вынесено в **1.5.F** как явный pending-item. До 1.5.F finished-сообщение приходит игроку в `DEFAULT_LOCALE = "en"`, что уже корректно для большинства новых игроков (язык Telegram-клиента у них чаще всего English).
+- **`bot/main.py`:** `TelegramForestFinishNotifier(...)` в композиционном корне теперь получает `bundle=bundle` (тот же `FluentMessageBundle`, что у handler-ов). Это единственная пересборка root-а: notifier явно зависит от bundle-а, других путей пройти инициализацию нет.
+- **Удалён legacy `render_full_nick(...)` из `bot/presenters/profile.py`:** функция оставалась как RU-only pure-функция в 1.5.C → 1.5.D ради forest-презентера. Теперь forest-презентер сам собирает ник через приватный `_render_full_nick(...)` с локализованным титулом, поэтому `render_full_nick` и сопутствующий dict `_TITLE_RU` удалены. Тесты `TestRenderFullNick` тоже удалены (4 теста).
+- **`bot/presenters/__init__.py`:** добавлены экспорты `ForestPresenter`, `ForestCallbackAction`, `ForestCallbackData`, `forest_callback_data`, `parse_forest_callback_data`. Удалён экспорт `render_full_nick`. Все презентеры теперь идут через `IMessageBundle`.
+
+Тесты:
+- **`tests/unit/bot/presenters/test_forest.py`** (полностью переписан под новый паттерн, **62 теста**):
+  - `TestCallbackData` — 11 тестов pure-функций (round-trip, формат, ≤ 64 байт, отказ на zero/negative run_id, отказ на bad format, отказ на unknown action);
+  - `TestHasFinishKeyboard` — 4 теста на `has_finish_keyboard(...)` для `NoDrop/ItemDrop/NameDrop(auto)/NameDrop(replace)`;
+  - `TestForestPresenterFakeBundle` — 21 тест через `FakeMessageBundle` (маркер `<locale>:<key>[k=v,...]`): покрывает все методы (`group/other/not_registered/already_in/started/started_fallback/finished/finish_keyboard/toast_*/localized_rarity`), включая отдельный тест **«callback_data invariant между локалями»** (подписи кнопок RU vs EN различаются, `callback_data` — нет);
+  - `TestForestPresenterFluent` — 11 тестов через `FluentMessageBundle` (RU + EN), интеграционная проверка реальных переводов: `started`-сообщение в обеих локалях, `finished`-сообщение для `NoDrop/ItemDrop/NameDrop(replace)`, локализованные подписи кнопок, `localized_rarity` для всех `Rarity` × `Locale`. Отдельный safety-test: **в EN-выводе нет ни одного кириллического символа** (`U+0400-U+04FF`) — защита от случайной утечки RU-строк.
+- **`tests/unit/bot/handlers/test_forest.py`** (полностью переписан, **22 теста**):
+  - `TestHandleForest` — 9 тестов: success-ветка с `started`-сообщением, `not_registered/already_in` через ключи, `group/supergroup/channel`-чаты через `group/other`, отсутствие `tg_identity`, fallback `DEFAULT_LOCALE = "en"` при `locale=None`, fallback на `started_fallback` если `GetProfile` отдал `None`;
+  - `TestForestCallback` — 13 тестов: успех `apply_name`, повторное применение, ownership mismatch, drop mismatch, run not found, player not found, `drop_name/equip_item/drop_item`-actions, malformed `callback_data` (toast `drop_mismatch` + клавиатура снята), отсутствие `tg_identity`/`data` (silent return), `_strip_keyboard(...)` поглощает `edit_reply_markup`-ошибки, fallback на `DEFAULT_LOCALE` при `locale=None`.
+- **`tests/unit/bot/notifications/test_forest.py`** (обновлены сигнатуры и assertions, **+2 новых теста**):
+  - `_make_notifier(...)` теперь принимает опциональный `bundle` (по умолчанию реальный `FluentMessageBundle`) и `default_locale`;
+  - старые ассерты текста (`"вернулся из леса" / "Шлём Берсерка" / "Нашёл имя: Новое"`) переведены в RU-режим через `default_locale=Locale("ru")`;
+  - **новый `test_sends_message_default_locale_en`**: убеждается, что без override `default_locale = DEFAULT_LOCALE = "en"`, и в выводе нет кириллицы;
+  - **новый `test_uses_fake_bundle_marker_for_finished_header`**: проверяет, что нотификатор берёт ключи `forest-finished-header` и `forest-finished-length` (страховка от регресса при будущих рефакторингах);
+  - тест проверки локализованных подписей кнопок в keyboard.
+- **`tests/unit/bot/presenters/test_profile.py`:** удалён `TestRenderFullNick` (4 теста), импорт `render_full_nick` из публичного модуля убран. `TestTitleMessageKey` оставлен.
+
+Локально:
+- `pre-commit run --all-files` — все хуки зелёные.
+- `make ci` — `ruff` + `mypy` + `lint-imports` + `pytest`: **1020 passed, 1 skipped, 96.95%** покрытие. Контракты `import-linter` (3) — kept. Никаких новых `# type: ignore`/`noqa` не добавлено.
+
+Результат / артефакты:
+- `locales/{ru,en}.ftl` (+ ~60 строк в каждом — секция `## /forest`).
+- `src/pipirik_wars/bot/presenters/forest.py` (полностью переписан под `ForestPresenter`).
+- `src/pipirik_wars/bot/handlers/forest.py` (handler + callback-handler с `bundle`/`locale` DI).
+- `src/pipirik_wars/bot/notifications/forest.py` (`bundle` + `default_locale` через DI).
+- `src/pipirik_wars/bot/main.py` (notifier теперь получает `bundle`).
+- `src/pipirik_wars/bot/presenters/profile.py` (удалён `render_full_nick` + `_TITLE_RU`).
+- `src/pipirik_wars/bot/presenters/__init__.py` (новые экспорты `ForestPresenter` и др., удалён `render_full_nick`).
+- `tests/unit/bot/presenters/test_forest.py` (полностью переписан, 62 теста).
+- `tests/unit/bot/handlers/test_forest.py` (полностью переписан, 22 теста).
+- `tests/unit/bot/notifications/test_forest.py` (обновлены сигнатуры + 2 новых теста).
+- `tests/unit/bot/presenters/test_profile.py` (удалён `TestRenderFullNick`).
+
+Заметки / решения:
+- **Почему `ForestPresenter` — класс, а pure-функции остались отдельно.** Тот же паттерн, что в 1.5.B-D: класс с `__slots__ = ("_bundle",)` и DI-параметром `bundle: IMessageBundle` нужен для **локализованного UI**. Pure-функции `forest_callback_data(...)`/`parse_forest_callback_data(...)` — это сериализация, не UI; они **не должны** зависеть от локали — `callback_data` инвариантно между перерегистрацией хэндлеров, перезагрузкой шаблонов, переключением локали игрока (`/lang ru` не должен «протухать» уже отправленные кнопки), и deep-link-ами. Тест `test_finish_keyboard_item_callback_data_invariant_across_locales` явно фиксирует этот контракт: подписи кнопок RU и EN различаются, `callback_data` — нет.
+- **Почему notifier рендерит в `DEFAULT_LOCALE`, а не в `player.locale`.** В 1.5.B мы добавили запись `Locale` в `RegisterPlayerInput.locale` (хранение per-player языка), но в `Player`-aggregate этого поля **ещё нет** — это будет миграция `players.locale_override TEXT NULL` в 1.5.F. До этого notifier не имеет источника, откуда взять язык игрока: `update.from_user` отсутствует (это фоновый APScheduler-job, а не chat-event), `tg.language_code` — тоже нет. Hardcode в `DEFAULT_LOCALE = "en"` корректнее, чем угадывать. В 1.5.F notifier получит `IPlayerLocaleResolver`-порт и сможет резолвить `player.locale_override → tg.language_code → DEFAULT_LOCALE` (тот же приоритет, что в `LocaleMiddleware`).
+- **Почему 1.5.E не включает `/lang` и 300+ JSON-логов.** Изначально 1.5.E был задуман как «всё про forest-локализацию + audit + 300+ шаблонов + `/lang` + `players.locale_override`». Но это четыре независимых задачи, и каждая несёт свою миграцию / порт / use-case. Чтобы PR оставался обозримым (≤500 строк дифа на «эталон»), 1.5.E ограничен **только** прогоном forest через `IMessageBundle`. `/lang ru|en` + миграция вынесены в 1.5.F (это связано: `IPlayerLocaleResolver` нужен и `/lang`-handler-у, и notifier-у). 300+ JSON-шаблонов забавных логов + ревизия audit-логов вынесены в 1.5.G (это про content и про audit_log, а не про i18n как таковую). README/CONTRIBUTING + docker-compose + деплой — в 1.5.H.
+- **Почему `_render_full_nick(...)` приватный.** В 1.5.C функция `render_full_nick(...)` была публичной pure-функцией (RU-only), потому что forest-презентер ещё не был прогон через `IMessageBundle`. Теперь forest-презентер использует `bundle.format(title_message_key(title), locale=locale)` для титула и собирает ник внутри собственного метода `_render_full_nick`. Это deliberate encapsulation: сигнатура внутреннего метода (`title/display_name/name/locale`) — деталь имплементации, а не публичный контракт. Если в Фазе 2+ появится отдельный `NickPresenter` или ник-формат изменится, мы перекроим внутри `ForestPresenter` без затрагивания тестов на handler.
+- **Почему `useGrouping: 0` сохраняется и для forest-сообщений.** Тот же фикс, что в 1.5.C/D: Fluent для RU в `NUMBER($x)` без `useGrouping: 0` вставляет `\xa0` (non-breaking space) между разрядами, и тесты, которые ассертят точный вывод (`"+5 см (было 2, стало 7)"`), ломаются. Параметр `useGrouping: 0` отключает разделение разрядов на уровне CLDR-формата.
+
+---
+
 ## 2026-05-05 — Спринт 1.5.D: `/oracle` и `/upgrade` через `IMessageBundle`
 
 **Автор:** Devin (по запросу sufficientdorette)
