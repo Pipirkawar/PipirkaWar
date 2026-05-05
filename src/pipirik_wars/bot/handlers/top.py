@@ -12,9 +12,6 @@
 
 from __future__ import annotations
 
-import logging
-from typing import Final
-
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
@@ -23,7 +20,6 @@ from pipirik_wars.application.top import GetTopPlayers
 from pipirik_wars.bot.presenters import render_top
 
 router = Router(name="top")
-_LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 
 @router.message(Command("top"))
@@ -34,11 +30,9 @@ async def handle_top(
     """`/top` — топ-100 игроков по длине.
 
     Кэш на стороне use-case-а гарантирует, что массовая «спам-кнопка»
-    из чата не нагрузит БД больше одного раза в 60 секунд.
+    из чата не нагрузит БД больше одного раза в 60 секунд. Заголовок
+    содержит HTML-тег `<b>` — используется глобальный
+    `DefaultBotProperties(parse_mode="HTML")`.
     """
     entries = await get_top_players.execute()
-    await message.answer(
-        render_top(entries),
-        # Заголовок — HTML <b>; parse_mode из DefaultBotProperties (HTML),
-        # на тестовый stub-bot подействует так же.
-    )
+    await message.answer(render_top(entries))
