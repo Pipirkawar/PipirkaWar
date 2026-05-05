@@ -18,7 +18,22 @@ from typing import Self
 
 
 class IUnitOfWork(abc.ABC):
-    """Контекст транзакции."""
+    """Контекст транзакции.
+
+    Контракт «один контекст — одна транзакция». Вложенные `async with uow:`
+    запрещены (см. `__aenter__` реализаций). Use-case-ы, вызывающие другие
+    use-case-ы внутри своей транзакции (например, `InvokeOracle` →
+    `ILengthGranter.grant`), должны использовать **ambient-UoW**: внешний
+    use-case открывает контекст, вложенный лишь проверяет `is_active` и
+    работает с уже открытой сессией.
+    """
+
+    @property
+    @abc.abstractmethod
+    def is_active(self) -> bool:
+        """`True`, если контекст транзакции открыт (между `__aenter__` и
+        `__aexit__`). Используется вложенными use-case-ами как runtime-guard:
+        ``if not self._uow.is_active: raise RuntimeError(...)``."""
 
     @abc.abstractmethod
     async def __aenter__(self) -> Self:

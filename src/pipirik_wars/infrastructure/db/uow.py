@@ -37,6 +37,10 @@ class SqlAlchemyUnitOfWork(IUnitOfWork):
             raise RuntimeError("UnitOfWork is not entered")
         return self._session
 
+    @property
+    def is_active(self) -> bool:
+        return self._session is not None
+
     async def __aenter__(self) -> Self:
         if self._session is not None:
             raise RuntimeError("Nested UnitOfWork is not allowed")

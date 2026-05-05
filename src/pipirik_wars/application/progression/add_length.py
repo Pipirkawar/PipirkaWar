@@ -5,9 +5,17 @@
 с реферальным бонусом и т. п.) через DI-порт `ILengthGranter`. Перевод
 существующих use-cases на `AddLength` — отдельная задача (Спринт 1.6.F).
 
-Алгоритм (всё внутри одной `IUnitOfWork`-транзакции):
+Транзакционная модель — **ambient-UoW**: вызывающий use-case (`InvokeOracle`,
+`FinishForestRun`, в будущем — реферальный бонус и т. п.) обязан открыть
+`async with self._uow:` сам, а `AddLength.grant(...)` вызывается **внутри**
+этого контекста. Это позволяет одной транзакции охватить как «бизнес-вставки»
+вызывающего (например, `oracle_invocations.add(...)`), так и mutate / audit /
+trip-wire длины — всё атомарно, либо ничего. Прямой вызов `grant(...)` без
+открытого `IUnitOfWork`-контекста бросает `RuntimeError`.
 
-1. **Валидация входа** (вне транзакции, до `__aenter__`):
+Алгоритм (вызывается **внутри** `async with caller_uow:`):
+
+1. **Валидация входа** (до проверки UoW-контекста):
    * `source = AuditSource.UNKNOWN` → `LengthDeltaInvalidError`
      (backfill-маркер, не реальный источник).
    * `delta_cm = 0` → `LengthDeltaInvalidError` (no-op симптом бага).
@@ -151,109 +159,122 @@ class AddLength(ILengthGranter):
         reason: str,
         idempotency_key: str | None = None,
     ) -> LengthGrantResult:
-        """См. `ILengthGranter.grant`."""
-        # 1. Validate input (вне транзакции — это инварианты вызова).
+        """См. `ILengthGranter.grant`.
+
+        **Требует уже открытый `IUnitOfWork`-контекст у вызывающего**
+        (`async with caller_uow:`). См. модуль-docstring (ambient-UoW).
+        Прямой вызов вне открытого контекста → `RuntimeError`.
+        """
+        # 1. Validate input (инварианты вызова — до проверки UoW-контекста,
+        # чтобы caller получал стабильную семантику ошибки).
         self._validate_input(delta_cm=delta_cm, source=source)
 
-        async with self._uow:
-            # 2. Idempotency check.
-            if idempotency_key is not None and await self._idempotency.is_seen(idempotency_key):
-                player = await self._players.get_by_id(player_id=player_id)
-                if player is None:
-                    raise PlayerNotFoundError(tg_id=player_id)
-                return LengthGrantResult(
-                    applied_delta_cm=0,
-                    clamped_from=None,
-                    triggered_soft_ban=False,
-                    new_length_cm=player.length.cm,
-                )
+        # 2. Ambient-UoW guard. Вложенный `async with self._uow:` запрещён
+        # контрактом `IUnitOfWork`; вызывающий должен открыть UoW сам.
+        if not self._uow.is_active:
+            raise RuntimeError(
+                "AddLength.grant requires an active IUnitOfWork context "
+                "(caller must open `async with uow:` before invoking grant)."
+            )
 
-            # 3. Load player.
+        # 3. Idempotency check.
+        if idempotency_key is not None and await self._idempotency.is_seen(idempotency_key):
             player = await self._players.get_by_id(player_id=player_id)
             if player is None:
                 raise PlayerNotFoundError(tg_id=player_id)
-
-            # 4. Soft-ban gate.
-            now = self._clock.now()
-            if player.is_anticheat_banned(now=now):
-                assert player.anticheat_ban_until is not None
-                raise AnticheatSoftBanError(
-                    tg_id=player.tg_id,
-                    banned_until=player.anticheat_ban_until,
-                )
-
-            anticheat_cfg = self._balance.get().anticheat
-            organic_sources = anticheat_cfg.organic_sources
-            is_organic = source in organic_sources
-
-            # 5. Determine applied delta.
-            if is_organic:
-                applied_delta, clamped_from = await self._compute_clamp(
-                    player_id=player_id,
-                    delta_cm=delta_cm,
-                    daily_cap_cm=anticheat_cfg.daily_cap_cm,
-                    weekly_cap_cm=anticheat_cfg.weekly_cap_cm,
-                    organic_sources=organic_sources,
-                    now=now,
-                )
-            else:
-                applied_delta = delta_cm
-                clamped_from = None
-
-            # 6. Mutate (если есть что применять).
-            length_before_cm = player.length.cm
-            if applied_delta != 0:
-                new_length = Length(cm=length_before_cm + applied_delta)
-                player_after = player.with_length(new_length, now=now)
-                saved = await self._players.save(player_after)
-            else:
-                saved = player
-
-            # 7. Audit LENGTH_GRANT.
-            assert player.id is not None
-            await self._audit.record(
-                AuditEntry(
-                    action=AuditAction.LENGTH_GRANT,
-                    actor_id=player.tg_id,
-                    target_kind="player",
-                    target_id=str(player.id),
-                    before={"length_cm": length_before_cm},
-                    after={"length_cm": saved.length.cm},
-                    reason=reason,
-                    idempotency_key=idempotency_key,
-                    occurred_at=now,
-                    source=source,
-                    clamped_from=clamped_from,
-                    delta_cm=applied_delta,
-                )
-            )
-
-            # 8. Mark idempotency.
-            if idempotency_key is not None:
-                await self._idempotency.mark(idempotency_key, namespace=_IDEMPOTENCY_NAMESPACE)
-
-            # 9. Trip-wire (только для organic + applied > 0).
-            triggered_soft_ban = False
-            if is_organic and applied_delta > 0:
-                triggered_soft_ban = await self._maybe_trip_wire(
-                    player_id=player_id,
-                    daily_cap_cm=anticheat_cfg.daily_cap_cm,
-                    weekly_cap_cm=anticheat_cfg.weekly_cap_cm,
-                    soft_ban_duration_days=anticheat_cfg.soft_ban_duration_days,
-                    organic_sources=organic_sources,
-                    source=source,
-                    saved_player=saved,
-                    now=now,
-                )
-                if triggered_soft_ban:
-                    saved = await self._players.get_by_id(player_id=player_id) or saved
-
             return LengthGrantResult(
-                applied_delta_cm=applied_delta,
-                clamped_from=clamped_from,
-                triggered_soft_ban=triggered_soft_ban,
-                new_length_cm=saved.length.cm,
+                applied_delta_cm=0,
+                clamped_from=None,
+                triggered_soft_ban=False,
+                new_length_cm=player.length.cm,
             )
+
+        # 4. Load player.
+        player = await self._players.get_by_id(player_id=player_id)
+        if player is None:
+            raise PlayerNotFoundError(tg_id=player_id)
+
+        # 5. Soft-ban gate.
+        now = self._clock.now()
+        if player.is_anticheat_banned(now=now):
+            assert player.anticheat_ban_until is not None
+            raise AnticheatSoftBanError(
+                tg_id=player.tg_id,
+                banned_until=player.anticheat_ban_until,
+            )
+
+        anticheat_cfg = self._balance.get().anticheat
+        organic_sources = anticheat_cfg.organic_sources
+        is_organic = source in organic_sources
+
+        # 6. Determine applied delta.
+        if is_organic:
+            applied_delta, clamped_from = await self._compute_clamp(
+                player_id=player_id,
+                delta_cm=delta_cm,
+                daily_cap_cm=anticheat_cfg.daily_cap_cm,
+                weekly_cap_cm=anticheat_cfg.weekly_cap_cm,
+                organic_sources=organic_sources,
+                now=now,
+            )
+        else:
+            applied_delta = delta_cm
+            clamped_from = None
+
+        # 7. Mutate (если есть что применять).
+        length_before_cm = player.length.cm
+        if applied_delta != 0:
+            new_length = Length(cm=length_before_cm + applied_delta)
+            player_after = player.with_length(new_length, now=now)
+            saved = await self._players.save(player_after)
+        else:
+            saved = player
+
+        # 8. Audit LENGTH_GRANT.
+        assert player.id is not None
+        await self._audit.record(
+            AuditEntry(
+                action=AuditAction.LENGTH_GRANT,
+                actor_id=player.tg_id,
+                target_kind="player",
+                target_id=str(player.id),
+                before={"length_cm": length_before_cm},
+                after={"length_cm": saved.length.cm},
+                reason=reason,
+                idempotency_key=idempotency_key,
+                occurred_at=now,
+                source=source,
+                clamped_from=clamped_from,
+                delta_cm=applied_delta,
+            )
+        )
+
+        # 9. Mark idempotency.
+        if idempotency_key is not None:
+            await self._idempotency.mark(idempotency_key, namespace=_IDEMPOTENCY_NAMESPACE)
+
+        # 10. Trip-wire (только для organic + applied > 0).
+        triggered_soft_ban = False
+        if is_organic and applied_delta > 0:
+            triggered_soft_ban = await self._maybe_trip_wire(
+                player_id=player_id,
+                daily_cap_cm=anticheat_cfg.daily_cap_cm,
+                weekly_cap_cm=anticheat_cfg.weekly_cap_cm,
+                soft_ban_duration_days=anticheat_cfg.soft_ban_duration_days,
+                organic_sources=organic_sources,
+                source=source,
+                saved_player=saved,
+                now=now,
+            )
+            if triggered_soft_ban:
+                saved = await self._players.get_by_id(player_id=player_id) or saved
+
+        return LengthGrantResult(
+            applied_delta_cm=applied_delta,
+            clamped_from=clamped_from,
+            triggered_soft_ban=triggered_soft_ban,
+            new_length_cm=saved.length.cm,
+        )
 
     @staticmethod
     def _validate_input(*, delta_cm: int, source: AuditSource) -> None:
