@@ -20,6 +20,7 @@ from pipirik_wars.bot.notifications import TelegramForestFinishNotifier
 from pipirik_wars.domain.balance.config import BalanceConfig
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.forest import (
+    ForestLogTemplate,
     ForestRun,
     ForestRunStatus,
     Item,
@@ -45,7 +46,9 @@ from tests.fakes import (
     FakeMessageBundle,
     FakePlayerLocaleResolver,
     FakePlayerRepository,
+    FakeRandom,
 )
+from tests.fakes.forest_log_templates import FakeForestLogTemplateProvider
 
 _NOW = datetime(2026, 5, 4, 12, 0, tzinfo=UTC)
 
@@ -174,6 +177,26 @@ def _fluent_bundle() -> IMessageBundle:
     return FluentMessageBundle(locales_dir=Path(__file__).resolve().parents[4] / "locales")
 
 
+def _default_log_templates() -> FakeForestLogTemplateProvider:
+    """Минимальный fake-каталог forest-логов для notifier-тестов."""
+    return FakeForestLogTemplateProvider(
+        catalog={
+            "ru": (
+                ForestLogTemplate(
+                    id="forest.ru.test01",
+                    text="{user} зацепился за корягу и нашёл {delta} в кустах!",
+                ),
+            ),
+            "en": (
+                ForestLogTemplate(
+                    id="forest.en.test01",
+                    text="{user} stumbled over a root and found {delta} in the bushes!",
+                ),
+            ),
+        }
+    )
+
+
 def _make_notifier(
     *,
     bot: _FakeBot,
@@ -182,6 +205,8 @@ def _make_notifier(
     default_locale: Locale | None = None,
     bundle: IMessageBundle | None = None,
     locale_resolver: FakePlayerLocaleResolver | None = None,
+    log_templates: FakeForestLogTemplateProvider | None = None,
+    random: FakeRandom | None = None,
 ) -> TelegramForestFinishNotifier:
     kwargs: dict[str, Any] = {
         "bot": cast(Bot, bot),
@@ -189,6 +214,8 @@ def _make_notifier(
         "balance": balance if balance is not None else _FakeBalanceConfig(),
         "uow": _FakeUnitOfWork(),
         "bundle": bundle if bundle is not None else _fluent_bundle(),
+        "log_templates": log_templates if log_templates is not None else _default_log_templates(),
+        "random": random if random is not None else FakeRandom(seed=42),
         "logger": logger,
     }
     if default_locale is not None:
@@ -344,6 +371,8 @@ async def test_uses_default_logger_when_none_provided() -> None:
         balance=_FakeBalanceConfig(),
         uow=_FakeUnitOfWork(),
         bundle=FakeMessageBundle(),
+        log_templates=_default_log_templates(),
+        random=FakeRandom(seed=42),
     )
     # Конструктор не падает без logger; notify работает.
     await notifier.notify(_result())

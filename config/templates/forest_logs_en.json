@@ -1,0 +1,1405 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "id": "forest.en.0001",
+      "text": "🌿 {user} was startling a fox with a whistle, slipped on pine needles and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0002",
+      "text": "🐿️ {user} was watching the moss grow, heard a rustle in the bushes and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0003",
+      "text": "🪶 {user} was patrolling the edge of the glade, ran into a hedgehog and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0004",
+      "text": "🦉 {user} was digging a stash beneath driftwood, tripped on a root and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0005",
+      "text": "🐺 {user} was watching a squirrel on a pine tree, took a wrong turn and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0006",
+      "text": "🪶 {user} was carving a willow whistle, reached for a mushroom and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0007",
+      "text": "🦌 {user} was rebraiding sandals by a stump, stumbled into a hollow and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0008",
+      "text": "🌳 {user} was digging a stash beneath driftwood, scattered the butterflies and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0009",
+      "text": "🦡 {user} was rebraiding sandals by a stump, picked up a strange pebble and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0010",
+      "text": "🍂 {user} was poking an anthill with a twig, decided to take a breather and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0011",
+      "text": "🐿️ {user} was weaving a fern crown, ran into a hedgehog and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0012",
+      "text": "🌿 {user} was singing sad songs to spruce trees, remembered a childhood tune and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0013",
+      "text": "🐗 {user} was trudging through the underbrush, decided to take a breather and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0014",
+      "text": "🍂 {user} was startling a fox with a whistle, remembered a childhood tune and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0015",
+      "text": "🌿 {user} was sharpening an axe on a boulder, slipped on pine needles and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0016",
+      "text": "🪶 {user} was chasing echoes near the cliff, stumbled into a hollow and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0017",
+      "text": "🪵 {user} was sharpening an axe on a boulder, picked up a strange pebble and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0018",
+      "text": "🌳 {user} was hunting the roundest acorn, dug into a mole tunnel and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0019",
+      "text": "🦉 {user} was watching the moss grow, scattered the butterflies and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0020",
+      "text": "🌿 {user} was rebraiding sandals by a stump, remembered a childhood tune and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0021",
+      "text": "🐗 {user} was watching a squirrel on a pine tree, took a wrong turn and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0022",
+      "text": "🍄 {user} was rebraiding sandals by a stump, dug into a mole tunnel and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0023",
+      "text": "🌲 {user} was kindling a fire in the gully, picked up a strange pebble and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0024",
+      "text": "🍂 {user} was chasing echoes near the cliff, dug into a mole tunnel and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0025",
+      "text": "🦉 {user} was learning wisdom from a barn owl, tripped on a root and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0026",
+      "text": "🍄 {user} was watching the moss grow, reached for a mushroom and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0027",
+      "text": "🌲 {user} was digging a stash beneath driftwood, decided to take a breather and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0028",
+      "text": "🦡 {user} was patrolling the edge of the glade, took a wrong turn and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0029",
+      "text": "🦊 {user} was listening to a cuckoo by the stream, remembered a childhood tune and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0030",
+      "text": "🍂 {user} was kindling a fire in the gully, decided to take a breather and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0031",
+      "text": "🦡 {user} was carving a willow whistle, reached for a mushroom and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0032",
+      "text": "🍄 {user} was watching the moss grow, took a wrong turn and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0033",
+      "text": "🌿 {user} was watching the moss grow, scattered the butterflies and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0034",
+      "text": "🦌 {user} was digging a stash beneath driftwood, remembered a childhood tune and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0035",
+      "text": "🍂 {user} was carving a willow whistle, reached for a mushroom and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0036",
+      "text": "🍄 {user} was weaving a fern crown, hugged a birch and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0037",
+      "text": "🍂 {user} was sharpening an axe on a boulder, heard a rustle in the bushes and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0038",
+      "text": "🪵 {user} was rebraiding sandals by a stump, picked up a strange pebble and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0039",
+      "text": "🐺 {user} was watching a squirrel on a pine tree, stumbled into a hollow and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0040",
+      "text": "🪵 {user} was carving a willow whistle, picked up a strange pebble and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0041",
+      "text": "🪶 {user} was digging a stash beneath driftwood, reached for a mushroom and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0042",
+      "text": "🦡 {user} was singing sad songs to spruce trees, took a wrong turn and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0043",
+      "text": "🪵 {user} was digging a stash beneath driftwood, heard a rustle in the bushes and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0044",
+      "text": "🦊 {user} was hunting the roundest acorn, picked up a strange pebble and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0045",
+      "text": "🐗 {user} was lacing boots at a rest stop, took a wrong turn and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0046",
+      "text": "🐻 {user} was rebraiding sandals by a stump, reached for a mushroom and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0047",
+      "text": "🐗 {user} was chasing echoes near the cliff, ran into a hedgehog and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0048",
+      "text": "🦌 {user} was listening to a cuckoo by the stream, stumbled into a hollow and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0049",
+      "text": "🌳 {user} was learning wisdom from a barn owl, hugged a birch and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0050",
+      "text": "🐗 {user} was trudging through the underbrush, remembered a childhood tune and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0051",
+      "text": "🌲 {user} was listening to a cuckoo by the stream, slipped on pine needles and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0052",
+      "text": "🦊 {user} was foraging mushrooms by an old stump, decided to take a breather and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0053",
+      "text": "🐗 {user} was foraging mushrooms by an old stump, stumbled into a hollow and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0054",
+      "text": "🦊 {user} was watching the moss grow, reached for a mushroom and traded their whistle to a barn owl for {delta}!"
+    },
+    {
+      "id": "forest.en.0055",
+      "text": "🌳 {user} was digging a stash beneath driftwood, scattered the butterflies and traded their whistle to a barn owl for {delta}!"
+    },
+    {
+      "id": "forest.en.0056",
+      "text": "🌿 {user} was watching a squirrel on a pine tree, decided to take a breather and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0057",
+      "text": "🦉 {user} was kindling a fire in the gully, ran into a hedgehog and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0058",
+      "text": "🦉 {user} was digging a stash beneath driftwood, slipped on pine needles and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0059",
+      "text": "🍂 {user} was singing sad songs to spruce trees, stumbled into a hollow and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0060",
+      "text": "🦉 {user} was watching a squirrel on a pine tree, hugged a birch and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0061",
+      "text": "🦊 {user} was foraging mushrooms by an old stump, stumbled into a hollow and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0062",
+      "text": "🪵 {user} was foraging mushrooms by an old stump, heard a rustle in the bushes and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0063",
+      "text": "🐗 {user} was singing sad songs to spruce trees, heard a rustle in the bushes and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0064",
+      "text": "🪶 {user} was whittling a campfire stick, tripped on a root and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0065",
+      "text": "🦊 {user} was patrolling the edge of the glade, dug into a mole tunnel and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0066",
+      "text": "🦊 {user} was watching the moss grow, peeked under the spruce twigs and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0067",
+      "text": "🌳 {user} was learning wisdom from a barn owl, picked up a strange pebble and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0068",
+      "text": "🦉 {user} was rebraiding sandals by a stump, ran into a hedgehog and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0069",
+      "text": "🐗 {user} was trudging through the underbrush, dug into a mole tunnel and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0070",
+      "text": "🐗 {user} was digging a stash beneath driftwood, tripped on a root and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0071",
+      "text": "🌲 {user} was sharpening an axe on a boulder, decided to take a breather and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0072",
+      "text": "🌲 {user} was watching a squirrel on a pine tree, tripped on a root and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0073",
+      "text": "🦌 {user} was lacing boots at a rest stop, decided to take a breather and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0074",
+      "text": "🦡 {user} was sharpening an axe on a boulder, took a wrong turn and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0075",
+      "text": "🍂 {user} was chasing echoes near the cliff, slipped on pine needles and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0076",
+      "text": "🐻 {user} was poking an anthill with a twig, tripped on a root and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0077",
+      "text": "🦡 {user} was chasing echoes near the cliff, scattered the butterflies and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0078",
+      "text": "🦌 {user} was singing sad songs to spruce trees, dug into a mole tunnel and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0079",
+      "text": "🦉 {user} was sharpening an axe on a boulder, slipped on pine needles and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0080",
+      "text": "🪵 {user} was listening to a cuckoo by the stream, ran into a hedgehog and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0081",
+      "text": "🌿 {user} was watching the moss grow, remembered a childhood tune and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0082",
+      "text": "🦡 {user} was carving a willow whistle, hugged a birch and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0083",
+      "text": "🍄 {user} was listening to a cuckoo by the stream, stumbled into a hollow and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0084",
+      "text": "🌿 {user} was foraging mushrooms by an old stump, scattered the butterflies and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0085",
+      "text": "🐗 {user} was chasing echoes near the cliff, ran into a hedgehog and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0086",
+      "text": "🦊 {user} was hunting the roundest acorn, decided to take a breather and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0087",
+      "text": "🌳 {user} was rebraiding sandals by a stump, remembered a childhood tune and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0088",
+      "text": "🦡 {user} was weaving a fern crown, slipped on pine needles and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0089",
+      "text": "🦊 {user} was singing sad songs to spruce trees, tripped on a root and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0090",
+      "text": "🪵 {user} was rebraiding sandals by a stump, peeked under the spruce twigs and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0091",
+      "text": "🐻 {user} was learning wisdom from a barn owl, picked up a strange pebble and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0092",
+      "text": "🦊 {user} was foraging mushrooms by an old stump, ran into a hedgehog and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0093",
+      "text": "🦌 {user} was trudging through the underbrush, took a wrong turn and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0094",
+      "text": "🐿️ {user} was chasing echoes near the cliff, hugged a birch and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0095",
+      "text": "🍄 {user} was learning wisdom from a barn owl, picked up a strange pebble and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0096",
+      "text": "🐺 {user} was patrolling the edge of the glade, picked up a strange pebble and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0097",
+      "text": "🍄 {user} was poking an anthill with a twig, slipped on pine needles and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0098",
+      "text": "🍂 {user} was singing sad songs to spruce trees, stumbled into a hollow and traded their whistle to a barn owl for {delta}!"
+    },
+    {
+      "id": "forest.en.0099",
+      "text": "🦌 {user} was startling a fox with a whistle, dug into a mole tunnel and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0100",
+      "text": "🪶 {user} was kindling a fire in the gully, stumbled into a hollow and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0101",
+      "text": "🐻 {user} was kindling a fire in the gully, hugged a birch and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0102",
+      "text": "🪵 {user} was hunting the roundest acorn, slipped on pine needles and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0103",
+      "text": "🐻 {user} was sharpening an axe on a boulder, stumbled into a hollow and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0104",
+      "text": "🦡 {user} was rebraiding sandals by a stump, decided to take a breather and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0105",
+      "text": "🐻 {user} was singing sad songs to spruce trees, picked up a strange pebble and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0106",
+      "text": "🍄 {user} was poking an anthill with a twig, dug into a mole tunnel and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0107",
+      "text": "🦡 {user} was carving a willow whistle, ran into a hedgehog and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0108",
+      "text": "🦡 {user} was whittling a campfire stick, decided to take a breather and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0109",
+      "text": "🦉 {user} was lacing boots at a rest stop, tripped on a root and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0110",
+      "text": "🌳 {user} was watching the moss grow, took a wrong turn and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0111",
+      "text": "🪶 {user} was sharpening an axe on a boulder, picked up a strange pebble and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0112",
+      "text": "🍂 {user} was whittling a campfire stick, decided to take a breather and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0113",
+      "text": "🦉 {user} was weaving a fern crown, dug into a mole tunnel and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0114",
+      "text": "🍂 {user} was listening to a cuckoo by the stream, reached for a mushroom and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0115",
+      "text": "🪵 {user} was lacing boots at a rest stop, slipped on pine needles and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0116",
+      "text": "🦊 {user} was rebraiding sandals by a stump, scattered the butterflies and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0117",
+      "text": "🐻 {user} was kindling a fire in the gully, dug into a mole tunnel and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0118",
+      "text": "🦉 {user} was singing sad songs to spruce trees, reached for a mushroom and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0119",
+      "text": "🐗 {user} was listening to a cuckoo by the stream, took a wrong turn and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0120",
+      "text": "🌿 {user} was poking an anthill with a twig, ran into a hedgehog and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0121",
+      "text": "🐗 {user} was learning wisdom from a barn owl, picked up a strange pebble and traded their whistle to a barn owl for {delta}!"
+    },
+    {
+      "id": "forest.en.0122",
+      "text": "🐺 {user} was sharpening an axe on a boulder, decided to take a breather and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0123",
+      "text": "🍂 {user} was weaving a fern crown, heard a rustle in the bushes and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0124",
+      "text": "🌳 {user} was watching a squirrel on a pine tree, reached for a mushroom and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0125",
+      "text": "🌿 {user} was weaving a fern crown, ran into a hedgehog and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0126",
+      "text": "🌳 {user} was sharpening an axe on a boulder, picked up a strange pebble and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0127",
+      "text": "🍂 {user} was startling a fox with a whistle, tripped on a root and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0128",
+      "text": "🐺 {user} was rebraiding sandals by a stump, reached for a mushroom and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0129",
+      "text": "🌿 {user} was foraging mushrooms by an old stump, tripped on a root and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0130",
+      "text": "🐺 {user} was rebraiding sandals by a stump, tripped on a root and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0131",
+      "text": "🍄 {user} was learning wisdom from a barn owl, reached for a mushroom and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0132",
+      "text": "🐿️ {user} was learning wisdom from a barn owl, decided to take a breather and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0133",
+      "text": "🐗 {user} was rebraiding sandals by a stump, reached for a mushroom and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0134",
+      "text": "🐿️ {user} was weaving a fern crown, dug into a mole tunnel and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0135",
+      "text": "🪵 {user} was carving a willow whistle, tripped on a root and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0136",
+      "text": "🐿️ {user} was kindling a fire in the gully, hugged a birch and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0137",
+      "text": "🌳 {user} was patrolling the edge of the glade, scattered the butterflies and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0138",
+      "text": "🌲 {user} was kindling a fire in the gully, peeked under the spruce twigs and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0139",
+      "text": "🐿️ {user} was patrolling the edge of the glade, hugged a birch and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0140",
+      "text": "🐗 {user} was whittling a campfire stick, took a wrong turn and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0141",
+      "text": "🌿 {user} was sharpening an axe on a boulder, picked up a strange pebble and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0142",
+      "text": "🍂 {user} was carving a willow whistle, ran into a hedgehog and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0143",
+      "text": "🍄 {user} was singing sad songs to spruce trees, heard a rustle in the bushes and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0144",
+      "text": "🍄 {user} was poking an anthill with a twig, tripped on a root and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0145",
+      "text": "🐺 {user} was weaving a fern crown, remembered a childhood tune and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0146",
+      "text": "🦊 {user} was patrolling the edge of the glade, scattered the butterflies and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0147",
+      "text": "🪶 {user} was whittling a campfire stick, took a wrong turn and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0148",
+      "text": "🌲 {user} was listening to a cuckoo by the stream, peeked under the spruce twigs and traded their whistle to a barn owl for {delta}!"
+    },
+    {
+      "id": "forest.en.0149",
+      "text": "🦉 {user} was poking an anthill with a twig, heard a rustle in the bushes and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0150",
+      "text": "🐻 {user} was watching the moss grow, tripped on a root and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0151",
+      "text": "🌿 {user} was carving a willow whistle, picked up a strange pebble and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0152",
+      "text": "🦡 {user} was trudging through the underbrush, heard a rustle in the bushes and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0153",
+      "text": "🦡 {user} was learning wisdom from a barn owl, ran into a hedgehog and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0154",
+      "text": "🍄 {user} was lacing boots at a rest stop, peeked under the spruce twigs and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0155",
+      "text": "🦡 {user} was learning wisdom from a barn owl, slipped on pine needles and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0156",
+      "text": "🍂 {user} was lacing boots at a rest stop, decided to take a breather and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0157",
+      "text": "🐿️ {user} was weaving a fern crown, ran into a hedgehog and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0158",
+      "text": "🐺 {user} was rebraiding sandals by a stump, heard a rustle in the bushes and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0159",
+      "text": "🐗 {user} was trudging through the underbrush, dug into a mole tunnel and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0160",
+      "text": "🐻 {user} was lacing boots at a rest stop, picked up a strange pebble and traded their whistle to a barn owl for {delta}!"
+    },
+    {
+      "id": "forest.en.0161",
+      "text": "🐻 {user} was hunting the roundest acorn, remembered a childhood tune and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0162",
+      "text": "🐺 {user} was weaving a fern crown, decided to take a breather and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0163",
+      "text": "🦉 {user} was patrolling the edge of the glade, ran into a hedgehog and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0164",
+      "text": "🐻 {user} was poking an anthill with a twig, stumbled into a hollow and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0165",
+      "text": "🦌 {user} was patrolling the edge of the glade, remembered a childhood tune and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0166",
+      "text": "🪵 {user} was hunting the roundest acorn, dug into a mole tunnel and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0167",
+      "text": "🦌 {user} was carving a willow whistle, reached for a mushroom and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0168",
+      "text": "🦊 {user} was rebraiding sandals by a stump, hugged a birch and traded their whistle to a barn owl for {delta}!"
+    },
+    {
+      "id": "forest.en.0169",
+      "text": "🐗 {user} was lacing boots at a rest stop, scattered the butterflies and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0170",
+      "text": "🦊 {user} was singing sad songs to spruce trees, dug into a mole tunnel and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0171",
+      "text": "🌲 {user} was startling a fox with a whistle, decided to take a breather and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0172",
+      "text": "🐻 {user} was hunting the roundest acorn, slipped on pine needles and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0173",
+      "text": "🦡 {user} was rebraiding sandals by a stump, reached for a mushroom and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0174",
+      "text": "🪶 {user} was poking an anthill with a twig, remembered a childhood tune and traded their whistle to a barn owl for {delta}!"
+    },
+    {
+      "id": "forest.en.0175",
+      "text": "🦊 {user} was watching a squirrel on a pine tree, dug into a mole tunnel and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0176",
+      "text": "🐿️ {user} was poking an anthill with a twig, took a wrong turn and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0177",
+      "text": "🍄 {user} was weaving a fern crown, ran into a hedgehog and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0178",
+      "text": "🍂 {user} was whittling a campfire stick, reached for a mushroom and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0179",
+      "text": "🍂 {user} was weaving a fern crown, remembered a childhood tune and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0180",
+      "text": "🪶 {user} was digging a stash beneath driftwood, decided to take a breather and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0181",
+      "text": "🌳 {user} was patrolling the edge of the glade, hugged a birch and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0182",
+      "text": "🐻 {user} was startling a fox with a whistle, slipped on pine needles and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0183",
+      "text": "🐿️ {user} was kindling a fire in the gully, hugged a birch and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0184",
+      "text": "🐺 {user} was whittling a campfire stick, ran into a hedgehog and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0185",
+      "text": "🐺 {user} was chasing echoes near the cliff, scattered the butterflies and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0186",
+      "text": "🌲 {user} was singing sad songs to spruce trees, tripped on a root and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0187",
+      "text": "🐗 {user} was weaving a fern crown, remembered a childhood tune and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0188",
+      "text": "🦡 {user} was trudging through the underbrush, hugged a birch and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0189",
+      "text": "🌲 {user} was lacing boots at a rest stop, heard a rustle in the bushes and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0190",
+      "text": "🦡 {user} was sharpening an axe on a boulder, picked up a strange pebble and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0191",
+      "text": "🦊 {user} was startling a fox with a whistle, decided to take a breather and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0192",
+      "text": "🦊 {user} was watching the moss grow, decided to take a breather and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0193",
+      "text": "🐻 {user} was startling a fox with a whistle, stumbled into a hollow and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0194",
+      "text": "🦉 {user} was whittling a campfire stick, scattered the butterflies and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0195",
+      "text": "🍂 {user} was chasing echoes near the cliff, ran into a hedgehog and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0196",
+      "text": "🍂 {user} was startling a fox with a whistle, hugged a birch and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0197",
+      "text": "🌳 {user} was startling a fox with a whistle, scattered the butterflies and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0198",
+      "text": "🐺 {user} was watching a squirrel on a pine tree, scattered the butterflies and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0199",
+      "text": "🌲 {user} was whittling a campfire stick, tripped on a root and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0200",
+      "text": "🪵 {user} was sharpening an axe on a boulder, tripped on a root and traded their whistle to a barn owl for {delta}!"
+    },
+    {
+      "id": "forest.en.0201",
+      "text": "🪶 {user} was watching a squirrel on a pine tree, ran into a hedgehog and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0202",
+      "text": "🍄 {user} was chasing echoes near the cliff, ran into a hedgehog and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0203",
+      "text": "🍂 {user} was learning wisdom from a barn owl, slipped on pine needles and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0204",
+      "text": "🍂 {user} was digging a stash beneath driftwood, heard a rustle in the bushes and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0205",
+      "text": "🍄 {user} was carving a willow whistle, decided to take a breather and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0206",
+      "text": "🦉 {user} was learning wisdom from a barn owl, stumbled into a hollow and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0207",
+      "text": "🌿 {user} was singing sad songs to spruce trees, reached for a mushroom and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0208",
+      "text": "🦌 {user} was whittling a campfire stick, dug into a mole tunnel and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0209",
+      "text": "🪶 {user} was watching a squirrel on a pine tree, heard a rustle in the bushes and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0210",
+      "text": "🌳 {user} was learning wisdom from a barn owl, stumbled into a hollow and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0211",
+      "text": "🪵 {user} was patrolling the edge of the glade, dug into a mole tunnel and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0212",
+      "text": "🪶 {user} was carving a willow whistle, slipped on pine needles and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0213",
+      "text": "🐻 {user} was weaving a fern crown, ran into a hedgehog and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0214",
+      "text": "🌳 {user} was singing sad songs to spruce trees, scattered the butterflies and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0215",
+      "text": "🐿️ {user} was singing sad songs to spruce trees, slipped on pine needles and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0216",
+      "text": "🐻 {user} was hunting the roundest acorn, hugged a birch and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0217",
+      "text": "🍂 {user} was hunting the roundest acorn, remembered a childhood tune and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0218",
+      "text": "🪵 {user} was patrolling the edge of the glade, picked up a strange pebble and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0219",
+      "text": "🐿️ {user} was sharpening an axe on a boulder, ran into a hedgehog and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0220",
+      "text": "🐻 {user} was whittling a campfire stick, stumbled into a hollow and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0221",
+      "text": "🐻 {user} was sharpening an axe on a boulder, took a wrong turn and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0222",
+      "text": "🌳 {user} was hunting the roundest acorn, ran into a hedgehog and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0223",
+      "text": "🦊 {user} was rebraiding sandals by a stump, ran into a hedgehog and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0224",
+      "text": "🌿 {user} was watching the moss grow, picked up a strange pebble and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0225",
+      "text": "🪵 {user} was kindling a fire in the gully, ran into a hedgehog and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0226",
+      "text": "🐗 {user} was rebraiding sandals by a stump, peeked under the spruce twigs and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0227",
+      "text": "🪶 {user} was singing sad songs to spruce trees, peeked under the spruce twigs and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0228",
+      "text": "🌳 {user} was carving a willow whistle, ran into a hedgehog and traded their whistle to a barn owl for {delta}!"
+    },
+    {
+      "id": "forest.en.0229",
+      "text": "🌳 {user} was foraging mushrooms by an old stump, heard a rustle in the bushes and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0230",
+      "text": "🍂 {user} was digging a stash beneath driftwood, dug into a mole tunnel and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0231",
+      "text": "🦡 {user} was whittling a campfire stick, dug into a mole tunnel and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0232",
+      "text": "🐻 {user} was rebraiding sandals by a stump, reached for a mushroom and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0233",
+      "text": "🪶 {user} was trudging through the underbrush, scattered the butterflies and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0234",
+      "text": "🍂 {user} was watching a squirrel on a pine tree, heard a rustle in the bushes and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0235",
+      "text": "🌿 {user} was foraging mushrooms by an old stump, peeked under the spruce twigs and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0236",
+      "text": "🌿 {user} was watching a squirrel on a pine tree, remembered a childhood tune and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0237",
+      "text": "🌿 {user} was foraging mushrooms by an old stump, ran into a hedgehog and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0238",
+      "text": "🦊 {user} was singing sad songs to spruce trees, dug into a mole tunnel and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0239",
+      "text": "🌳 {user} was chasing echoes near the cliff, decided to take a breather and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0240",
+      "text": "🦌 {user} was sharpening an axe on a boulder, dug into a mole tunnel and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0241",
+      "text": "🐺 {user} was poking an anthill with a twig, remembered a childhood tune and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0242",
+      "text": "🦌 {user} was weaving a fern crown, picked up a strange pebble and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0243",
+      "text": "🐿️ {user} was hunting the roundest acorn, hugged a birch and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0244",
+      "text": "🪵 {user} was patrolling the edge of the glade, hugged a birch and traded their whistle to a barn owl for {delta}!"
+    },
+    {
+      "id": "forest.en.0245",
+      "text": "🪵 {user} was sharpening an axe on a boulder, picked up a strange pebble and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0246",
+      "text": "🍄 {user} was weaving a fern crown, remembered a childhood tune and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0247",
+      "text": "🪵 {user} was patrolling the edge of the glade, decided to take a breather and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0248",
+      "text": "🐿️ {user} was singing sad songs to spruce trees, dug into a mole tunnel and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0249",
+      "text": "🌲 {user} was poking an anthill with a twig, stumbled into a hollow and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0250",
+      "text": "🦌 {user} was lacing boots at a rest stop, picked up a strange pebble and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0251",
+      "text": "🐻 {user} was rebraiding sandals by a stump, tripped on a root and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0252",
+      "text": "🐺 {user} was trudging through the underbrush, slipped on pine needles and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0253",
+      "text": "🐺 {user} was watching a squirrel on a pine tree, picked up a strange pebble and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0254",
+      "text": "🌿 {user} was chasing echoes near the cliff, scattered the butterflies and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0255",
+      "text": "🦉 {user} was hunting the roundest acorn, heard a rustle in the bushes and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0256",
+      "text": "🪵 {user} was watching the moss grow, hugged a birch and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0257",
+      "text": "🐗 {user} was startling a fox with a whistle, stumbled into a hollow and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0258",
+      "text": "🌿 {user} was carving a willow whistle, decided to take a breather and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0259",
+      "text": "🍄 {user} was sharpening an axe on a boulder, remembered a childhood tune and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0260",
+      "text": "🌲 {user} was watching the moss grow, heard a rustle in the bushes and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0261",
+      "text": "🦉 {user} was rebraiding sandals by a stump, scattered the butterflies and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0262",
+      "text": "🦉 {user} was kindling a fire in the gully, heard a rustle in the bushes and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0263",
+      "text": "🦌 {user} was lacing boots at a rest stop, scattered the butterflies and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0264",
+      "text": "🌿 {user} was poking an anthill with a twig, slipped on pine needles and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0265",
+      "text": "🪶 {user} was lacing boots at a rest stop, picked up a strange pebble and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0266",
+      "text": "🍄 {user} was kindling a fire in the gully, heard a rustle in the bushes and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0267",
+      "text": "🍄 {user} was kindling a fire in the gully, picked up a strange pebble and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0268",
+      "text": "🐗 {user} was singing sad songs to spruce trees, decided to take a breather and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0269",
+      "text": "🦊 {user} was foraging mushrooms by an old stump, peeked under the spruce twigs and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0270",
+      "text": "🌳 {user} was kindling a fire in the gully, decided to take a breather and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0271",
+      "text": "🪵 {user} was foraging mushrooms by an old stump, reached for a mushroom and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0272",
+      "text": "🐻 {user} was foraging mushrooms by an old stump, slipped on pine needles and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0273",
+      "text": "🦡 {user} was chasing echoes near the cliff, picked up a strange pebble and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0274",
+      "text": "🦌 {user} was sharpening an axe on a boulder, picked up a strange pebble and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0275",
+      "text": "🌲 {user} was rebraiding sandals by a stump, tripped on a root and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0276",
+      "text": "🦉 {user} was trudging through the underbrush, heard a rustle in the bushes and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0277",
+      "text": "🦌 {user} was singing sad songs to spruce trees, stumbled into a hollow and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0278",
+      "text": "🦌 {user} was startling a fox with a whistle, took a wrong turn and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0279",
+      "text": "🪶 {user} was trudging through the underbrush, tripped on a root and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0280",
+      "text": "🍄 {user} was watching the moss grow, tripped on a root and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0281",
+      "text": "🐗 {user} was watching the moss grow, dug into a mole tunnel and traded their whistle to a barn owl for {delta}!"
+    },
+    {
+      "id": "forest.en.0282",
+      "text": "🦊 {user} was listening to a cuckoo by the stream, reached for a mushroom and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0283",
+      "text": "🐺 {user} was carving a willow whistle, reached for a mushroom and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0284",
+      "text": "🦊 {user} was carving a willow whistle, scattered the butterflies and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0285",
+      "text": "🐗 {user} was watching a squirrel on a pine tree, stumbled into a hollow and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0286",
+      "text": "🐻 {user} was learning wisdom from a barn owl, reached for a mushroom and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0287",
+      "text": "🐗 {user} was rebraiding sandals by a stump, slipped on pine needles and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0288",
+      "text": "🦌 {user} was kindling a fire in the gully, ran into a hedgehog and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0289",
+      "text": "🍂 {user} was kindling a fire in the gully, stumbled into a hollow and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0290",
+      "text": "🍂 {user} was whittling a campfire stick, heard a rustle in the bushes and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0291",
+      "text": "🐗 {user} was learning wisdom from a barn owl, ran into a hedgehog and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0292",
+      "text": "🌿 {user} was learning wisdom from a barn owl, tripped on a root and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0293",
+      "text": "🐻 {user} was singing sad songs to spruce trees, took a wrong turn and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0294",
+      "text": "🌲 {user} was singing sad songs to spruce trees, tripped on a root and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0295",
+      "text": "🦌 {user} was startling a fox with a whistle, hugged a birch and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0296",
+      "text": "🌳 {user} was weaving a fern crown, took a wrong turn and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0297",
+      "text": "🐻 {user} was poking an anthill with a twig, decided to take a breather and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0298",
+      "text": "🌲 {user} was whittling a campfire stick, tripped on a root and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0299",
+      "text": "🌲 {user} was singing sad songs to spruce trees, picked up a strange pebble and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0300",
+      "text": "🐗 {user} was watching the moss grow, remembered a childhood tune and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0301",
+      "text": "🌳 {user} was whittling a campfire stick, heard a rustle in the bushes and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0302",
+      "text": "🪵 {user} was watching the moss grow, decided to take a breather and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0303",
+      "text": "🐻 {user} was learning wisdom from a barn owl, heard a rustle in the bushes and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0304",
+      "text": "🪵 {user} was weaving a fern crown, peeked under the spruce twigs and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0305",
+      "text": "🦌 {user} was lacing boots at a rest stop, decided to take a breather and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0306",
+      "text": "🌿 {user} was singing sad songs to spruce trees, scattered the butterflies and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0307",
+      "text": "🪶 {user} was whittling a campfire stick, dug into a mole tunnel and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0308",
+      "text": "🌲 {user} was hunting the roundest acorn, reached for a mushroom and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0309",
+      "text": "🐿️ {user} was whittling a campfire stick, decided to take a breather and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0310",
+      "text": "🦉 {user} was kindling a fire in the gully, hugged a birch and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0311",
+      "text": "🐿️ {user} was rebraiding sandals by a stump, hugged a birch and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0312",
+      "text": "🪵 {user} was kindling a fire in the gully, took a wrong turn and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0313",
+      "text": "🐻 {user} was whittling a campfire stick, ran into a hedgehog and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0314",
+      "text": "🪵 {user} was carving a willow whistle, decided to take a breather and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0315",
+      "text": "🐗 {user} was watching a squirrel on a pine tree, picked up a strange pebble and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0316",
+      "text": "🪶 {user} was watching the moss grow, took a wrong turn and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0317",
+      "text": "🐺 {user} was weaving a fern crown, remembered a childhood tune and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0318",
+      "text": "🐗 {user} was rebraiding sandals by a stump, tripped on a root and snagged {delta} on the toe of their boot!"
+    },
+    {
+      "id": "forest.en.0319",
+      "text": "🐺 {user} was patrolling the edge of the glade, picked up a strange pebble and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0320",
+      "text": "🌲 {user} was lacing boots at a rest stop, decided to take a breather and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0321",
+      "text": "🐻 {user} was digging a stash beneath driftwood, stumbled into a hollow and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0322",
+      "text": "🌿 {user} was startling a fox with a whistle, heard a rustle in the bushes and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0323",
+      "text": "🦡 {user} was singing sad songs to spruce trees, stumbled into a hollow and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0324",
+      "text": "🐗 {user} was weaving a fern crown, stumbled into a hollow and uncovered {delta} right in the moss!"
+    },
+    {
+      "id": "forest.en.0325",
+      "text": "🌲 {user} was rebraiding sandals by a stump, remembered a childhood tune and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0326",
+      "text": "🐺 {user} was carving a willow whistle, hugged a birch and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0327",
+      "text": "🪶 {user} was lacing boots at a rest stop, took a wrong turn and traded their whistle to a barn owl for {delta}!"
+    },
+    {
+      "id": "forest.en.0328",
+      "text": "🪶 {user} was trudging through the underbrush, picked up a strange pebble and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0329",
+      "text": "🌿 {user} was poking an anthill with a twig, remembered a childhood tune and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0330",
+      "text": "🪵 {user} was watching a squirrel on a pine tree, took a wrong turn and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0331",
+      "text": "🐿️ {user} was hunting the roundest acorn, remembered a childhood tune and remembered the secret word — and instantly stretched by {delta}!"
+    },
+    {
+      "id": "forest.en.0332",
+      "text": "🪶 {user} was sharpening an axe on a boulder, ran into a hedgehog and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0333",
+      "text": "🌳 {user} was startling a fox with a whistle, decided to take a breather and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0334",
+      "text": "🦉 {user} was sharpening an axe on a boulder, remembered a childhood tune and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0335",
+      "text": "🌳 {user} was trudging through the underbrush, dug into a mole tunnel and found {delta} in the thick foliage!"
+    },
+    {
+      "id": "forest.en.0336",
+      "text": "🐻 {user} was sharpening an axe on a boulder, dug into a mole tunnel and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0337",
+      "text": "🐗 {user} was whittling a campfire stick, picked up a strange pebble and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0338",
+      "text": "🐺 {user} was sharpening an axe on a boulder, tripped on a root and dug {delta} out from under the driftwood!"
+    },
+    {
+      "id": "forest.en.0339",
+      "text": "🌲 {user} was watching the moss grow, stumbled into a hollow and measured up {delta} by the very stump!"
+    },
+    {
+      "id": "forest.en.0340",
+      "text": "🦌 {user} was sharpening an axe on a boulder, ran into a hedgehog and fished {delta} out of a tree hollow!"
+    },
+    {
+      "id": "forest.en.0341",
+      "text": "🦌 {user} was listening to a cuckoo by the stream, picked up a strange pebble and heard the fern whisper — and grew {delta} longer!"
+    },
+    {
+      "id": "forest.en.0342",
+      "text": "🐻 {user} was carving a willow whistle, reached for a mushroom and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0343",
+      "text": "🍂 {user} was weaving a fern crown, scattered the butterflies and shook {delta} off a branch — straight onto their head!"
+    },
+    {
+      "id": "forest.en.0344",
+      "text": "🍂 {user} was weaving a fern crown, scattered the butterflies and shook {delta} out of their cap!"
+    },
+    {
+      "id": "forest.en.0345",
+      "text": "🪶 {user} was watching the moss grow, tripped on a root and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0346",
+      "text": "🌿 {user} was chasing echoes near the cliff, ran into a hedgehog and scooped {delta} off the trail!"
+    },
+    {
+      "id": "forest.en.0347",
+      "text": "🍄 {user} was patrolling the edge of the glade, stumbled into a hollow and got {delta} as a gift from the woodwight!"
+    },
+    {
+      "id": "forest.en.0348",
+      "text": "🪶 {user} was watching the moss grow, picked up a strange pebble and spotted {delta} in the grass and beamed!"
+    },
+    {
+      "id": "forest.en.0349",
+      "text": "🌳 {user} was singing sad songs to spruce trees, tripped on a root and haggled {delta} out of a forest spirit!"
+    },
+    {
+      "id": "forest.en.0350",
+      "text": "🦡 {user} was watching the moss grow, scattered the butterflies and shook {delta} out of their cap!"
+    }
+  ]
+}

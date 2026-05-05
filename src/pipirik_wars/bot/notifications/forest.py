@@ -34,7 +34,11 @@ import logging
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 
-from pipirik_wars.application.forest import ForestRunFinished, IForestFinishNotifier
+from pipirik_wars.application.forest import (
+    ForestRunFinished,
+    IForestFinishNotifier,
+    IForestLogTemplateProvider,
+)
 from pipirik_wars.application.i18n import (
     DEFAULT_LOCALE,
     IMessageBundle,
@@ -43,8 +47,13 @@ from pipirik_wars.application.i18n import (
 )
 from pipirik_wars.bot.presenters.forest import ForestPresenter
 from pipirik_wars.domain.balance.ports import IBalanceConfig
+from pipirik_wars.domain.forest import (
+    ForestLogNoTemplatesError,
+    ForestLogTemplate,
+    pick_forest_log_template,
+)
 from pipirik_wars.domain.player import DisplayName, IPlayerRepository
-from pipirik_wars.domain.shared.ports import IUnitOfWork
+from pipirik_wars.domain.shared.ports import IRandom, IUnitOfWork
 
 
 class TelegramForestFinishNotifier(IForestFinishNotifier):
@@ -61,9 +70,11 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
         "_bot",
         "_default_locale",
         "_locale_resolver",
+        "_log_templates",
         "_logger",
         "_players",
         "_presenter",
+        "_random",
         "_uow",
     )
 
@@ -75,6 +86,8 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
         balance: IBalanceConfig,
         uow: IUnitOfWork,
         bundle: IMessageBundle,
+        log_templates: IForestLogTemplateProvider,
+        random: IRandom,
         locale_resolver: IPlayerLocaleResolver | None = None,
         default_locale: Locale = DEFAULT_LOCALE,
         logger: logging.Logger | None = None,
@@ -84,6 +97,8 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
         self._balance = balance
         self._uow = uow
         self._presenter = ForestPresenter(bundle=bundle)
+        self._log_templates = log_templates
+        self._random = random
         self._locale_resolver = locale_resolver
         self._default_locale = default_locale
         self._logger = logger or logging.getLogger(__name__)
@@ -106,10 +121,12 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
             return
 
         locale = await self._resolve_locale(player_after.tg_id)
+        flavor_template = self._pick_flavor_template(locale=locale)
         text = self._presenter.finished(
             result=result,
             display_name_after=display_name,
             locale=locale,
+            flavor_template=flavor_template,
         )
         keyboard = self._presenter.finish_keyboard(result, locale=locale)
 
@@ -158,6 +175,29 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
             )
             return self._default_locale
         return resolved or self._default_locale
+
+    def _pick_flavor_template(self, *, locale: Locale) -> ForestLogTemplate | None:
+        """Выбрать один шаблон забавного лога (ГДД §15, ПД 1.5.3).
+
+        Best-effort: если каталог пуст / провайдер бросил неожиданное
+        исключение — flavour-строку просто не показываем. Игрок всё
+        равно получит основное сообщение «вернулся из леса».
+        """
+        try:
+            templates = self._log_templates.get_templates(locale=locale.code)
+            return pick_forest_log_template(random=self._random, templates=templates)
+        except ForestLogNoTemplatesError:
+            self._logger.warning(
+                "forest_notifier: empty flavour templates catalog",
+                extra={"locale": locale.code},
+            )
+            return None
+        except Exception:
+            self._logger.exception(
+                "forest_notifier: unexpected error picking flavour template",
+                extra={"locale": locale.code},
+            )
+            return None
 
 
 __all__ = ["TelegramForestFinishNotifier"]

@@ -8,6 +8,7 @@ from pipirik_wars.application.forest.finish_run import (
     FinishForestRun,
     ForestRunFinished,
 )
+from pipirik_wars.application.forest.log_templates import IForestLogTemplateProvider
 from pipirik_wars.application.forest.notifier import IForestFinishNotifier
 from pipirik_wars.application.forest.start_run import (
     ForestRunStarted,
@@ -21,5 +22,6 @@ __all__ = [
     "ForestRunFinished",
     "ForestRunStarted",
     "IForestFinishNotifier",
+    "IForestLogTemplateProvider",
     "StartForestRun",
 ]

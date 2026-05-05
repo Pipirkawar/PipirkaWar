@@ -34,6 +34,7 @@ from pipirik_wars.bot.presenters.forest import (
     parse_forest_callback_data,
 )
 from pipirik_wars.domain.forest import (
+    ForestLogTemplate,
     ForestRun,
     ForestRunStatus,
     Item,
@@ -473,6 +474,58 @@ class TestForestPresenterFakeBundle:
         assert presenter.localized_rarity(Rarity.COMMON, locale=_RU) == "ru:forest-rarity-common"
         assert presenter.localized_rarity(Rarity.RARE, locale=_EN) == "en:forest-rarity-rare"
         assert presenter.localized_rarity(Rarity.EPIC, locale=_RU) == "ru:forest-rarity-epic"
+
+    # ---- 1.5.G: flavour-line из каталога forest-логов ----
+
+    def test_finished_without_flavor_template_is_unchanged(self) -> None:
+        presenter = ForestPresenter(bundle=FakeMessageBundle())
+        before = _player(length_cm=2)
+        after = _player(length_cm=7, title=Title.NEWBIE)
+        result = _finished(before=before, after=after, drop=NoDrop(), length_delta_cm=5)
+        text = presenter.finished(
+            result=result,
+            display_name_after=DisplayName(value="Пипирик"),
+            locale=_RU,
+        )
+        # без template — flavour-строка не появляется
+        assert "{user}" not in text
+        assert "{delta}" not in text
+
+    def test_finished_with_flavor_template_substitutes_user_and_delta(self) -> None:
+        presenter = ForestPresenter(bundle=FakeMessageBundle())
+        before = _player(length_cm=2)
+        after = _player(length_cm=7, title=Title.NEWBIE)
+        result = _finished(before=before, after=after, drop=NoDrop(), length_delta_cm=5)
+        template = ForestLogTemplate(
+            id="forest.ru.test01",
+            text="{user} зацепился за корягу и нашёл {delta} в кустах!",
+        )
+        text = presenter.finished(
+            result=result,
+            display_name_after=DisplayName(value="Пипирик"),
+            locale=_RU,
+            flavor_template=template,
+        )
+        # ник = «Локализованный титул» + display_name = «ru:profile-title-newbie Пипирик»
+        assert "ru:profile-title-newbie Пипирик зацепился за корягу" in text
+        # delta — из bundle-ключа `forest-flavour-delta` (FakeBundle = маркер).
+        assert "ru:forest-flavour-delta[length_delta_cm=5]" in text
+
+    def test_finished_with_flavor_template_swallows_unknown_placeholder(self) -> None:
+        presenter = ForestPresenter(bundle=FakeMessageBundle())
+        before = _player(length_cm=2)
+        after = _player(length_cm=7)
+        result = _finished(before=before, after=after, drop=NoDrop(), length_delta_cm=5)
+        # `{usr}` — невалидный плейсхолдер; презентер должен отдать сырой
+        # текст и не упасть.
+        broken = ForestLogTemplate(id="forest.ru.broken01", text="{usr} нашёл сюрприз!")
+        text = presenter.finished(
+            result=result,
+            display_name_after=DisplayName(value="Пипирик"),
+            locale=_RU,
+            flavor_template=broken,
+        )
+        assert "{usr} нашёл сюрприз!" in text
 
 
 # ============================================================

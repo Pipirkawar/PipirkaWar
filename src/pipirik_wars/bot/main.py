@@ -121,7 +121,10 @@ from pipirik_wars.infrastructure.rate_limit import (
 )
 from pipirik_wars.infrastructure.scheduler import APSchedulerDelayedJobScheduler
 from pipirik_wars.infrastructure.settings import Settings
-from pipirik_wars.infrastructure.templates import JsonOracleTemplateProvider
+from pipirik_wars.infrastructure.templates import (
+    JsonForestLogTemplateProvider,
+    JsonOracleTemplateProvider,
+)
 
 # Путь к балансовому файлу по умолчанию (относительно cwd процесса).
 # Деплой кладёт `config/balance.yaml` рядом с бинарём; локально
@@ -253,6 +256,9 @@ def build_container(
     oracle_templates = JsonOracleTemplateProvider(
         templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
     )
+    forest_log_templates = JsonForestLogTemplateProvider(
+        templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
+    )
     bundle = FluentMessageBundle(locales_dir=locales_dir or _DEFAULT_LOCALES_DIR)
     player_locale_resolver = PlayerLocaleResolverDB(uow=uow)
     top_players_query = TopPlayersCache(
@@ -362,6 +368,8 @@ def build_container(
             balance=balance,
             uow=uow,
             bundle=bundle,
+            log_templates=forest_log_templates,
+            random=RealRandom(),
             locale_resolver=player_locale_resolver,
         )
     delayed_jobs = APSchedulerDelayedJobScheduler(

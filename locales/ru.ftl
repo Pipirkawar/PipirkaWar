@@ -189,6 +189,12 @@ forest-finished-header = 🌲 { $nick } вернулся из леса!
 forest-finished-length =
     📏 Длина: +{ NUMBER($length_delta_cm, useGrouping: 0) } см (было { NUMBER($length_before_cm, useGrouping: 0) }, стало { NUMBER($length_after_cm, useGrouping: 0) })
 
+# Подстановка `{delta}` в шаблон забавного лога (Спринт 1.5.G, ГДД §15).
+# Параметр `$length_delta_cm` — целое; формат идентичен «+N см» в
+# `forest-finished-length`. Отдельный ключ нужен, чтобы локализаторы
+# могли поменять единицы / знак для будущих языков без правки темплейтов.
+forest-flavour-delta = +{ NUMBER($length_delta_cm, useGrouping: 0) } см
+
 # Получен титул «Новичок» (первое возвращение из леса, ГДД §8.2).
 forest-finished-title-granted = 🎖 Получен титул: Новичок
 

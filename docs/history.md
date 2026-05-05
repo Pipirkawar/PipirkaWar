@@ -23,6 +23,48 @@
 
 ---
 
+## 2026-05-05 — Спринт 1.5.G: каталог 300+ JSON-шаблонов забавных логов леса (RU+EN)
+
+**Автор:** Devin (продолжение работы предыдущего агента)
+**Тип:** feature
+**Связано:** PR [#TBD], `current_tasks.md` Спринт 1.5.G, ПД 1.5.3.
+
+Что сделано:
+- **Стадии 1+2 (предыдущий агент, см. коммиты `c2b8569`, `cdf62a2`)** — фундамент уже был:
+  - доменный picker `pick_forest_log_template(*, random, templates)` — чистая функция через `IRandom`, без I/O;
+  - `ForestLogTemplate` (frozen dataclass с валидацией id/text);
+  - `ForestLogNoTemplatesError` в `domain/forest/errors.py`;
+  - порт `IForestLogTemplateProvider.get_templates(*, locale: str) -> Sequence[...]` (lazy кэш per locale, RU-фолбэк, `ForestLogNoTemplatesError` если каталог пуст);
+  - адаптер `JsonForestLogTemplateProvider` (зеркало oracle-провайдера: lazy load, дедуп id, валидация формата);
+  - подключение к `TelegramForestFinishNotifier` — picker зовётся **вне транзакции** после коммита `FinishForestRun` (best-effort: каталог пуст / провайдер упал → flavour не показываем, основное «вернулся из леса» уходит как было);
+  - `ForestPresenter.finished(*, flavor_template: ForestLogTemplate | None = None)` — рендерит flavour-строку через `_render_flavor`, подставляя `{user}` (полный ник) и `{delta}` (берётся из bundle-ключа `forest-flavour-delta`); defensive `try/except (KeyError, IndexError, ValueError)` — кривой плейсхолдер в JSON-каталоге не сломает сообщение игрока;
+  - locale-ключ `forest-flavour-delta` в `locales/{ru,en}.ftl`;
+  - DI-провязка в `bot/main.py` (`JsonForestLogTemplateProvider(templates_dir=_DEFAULT_TEMPLATES_DIR)` + `RealRandom()` в notifier).
+
+- **Стадии 3+4 (этот PR):**
+  - сгенерированы прод-каталоги `config/templates/forest_logs_ru.json` и `config/templates/forest_logs_en.json` — по **350 уникальных шаблонов** на локаль через декартово произведение «эмодзи × сцена × связка × развязка» (грамматика-генератор разово, в коммит не уходит);
+  - все шаблоны содержат **только** allowed-плейсхолдеры `{user}` и `{delta}` (валидируется integration-тестом);
+  - integration-тест `tests/integration/templates/test_forest_log_loader.py` — зеркало `test_oracle_loader.py`, 22 кейса:
+    - прод-файлы грузятся, ≥ 300 шаблонов на локаль, уникальные id, тримнутый текст;
+    - `str.format(user=..., delta=...)` проходит без исключений на каждом шаблоне (regex-проверка на отсутствие illegal-плейсхолдеров);
+    - lazy-кэш per locale (повторный `get_templates` отдаёт ту же tuple-инстанс);
+    - fallback на `"ru"` для неизвестной локали;
+    - error-paths: пустой каталог / отсутствие файлов / дубликат id / битый JSON / корень-массив / `templates` не список / запись без `text` / запись не объект → `ForestLogNoTemplatesError` или `ConfigError`.
+
+Результат / артефакты:
+- `config/templates/forest_logs_ru.json` (350 шаблонов).
+- `config/templates/forest_logs_en.json` (350 шаблонов).
+- `tests/integration/templates/test_forest_log_loader.py` (22 теста).
+- Локально `make ci` зелёный: ruff/mypy/import-linter/pytest — **1094 passed + 1 skipped**, coverage **96.91 %**.
+
+Заметки / решения:
+- **`{user}` и `{delta}` — единственные допустимые плейсхолдеры** в каталоге. Любой другой `{...}` ломает `str.format` → invariant-нарушение, integration-тест на этом падает. Это ставит жёсткий contract между JSON-каталогом и презентером: миграция нумерации / добавление новых параметров требует осознанного PR с обновлением и каталога, и теста, и презентера.
+- **Audit `LENGTH_GRANT.source` — отложен в Спринт 1.6** (anti-cheat hardcap). В development_plan.md изначально стояло требование расширить audit полем `source: "forest" | "donate" | ...` в задаче 1.5.4, но `audit_log.source` сам по себе нужен только под античит-агрегацию — так что переезжает в 1.6.A (БД-фундамент античита). Идемпотентность начислений за лес уже обеспечена через `idempotency_key=f"forest_run_finished:length:{run_id}"`.
+- **Скрипт-генератор не коммитится** (по требованию HANDOFF.md из стадии 1+2). Только результат — JSON-каталоги.
+- **RU и EN — независимые каталоги**, не машинный перевод. Локализация культуры: можно делать ≥ 300 в каждом без жёсткого id-соответствия.
+
+---
+
 ## 2026-05-05 — Спецификация: анти-чит хардкап роста длины (3000/14000 см, soft-ban 14 дней)
 
 **Автор:** Devin (по запросу jorey7467)
