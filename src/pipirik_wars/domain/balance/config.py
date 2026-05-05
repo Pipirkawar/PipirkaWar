@@ -312,6 +312,41 @@ class AnticheatConfig(_Frozen):
         return self
 
 
+class PvpDuel1v1Config(_Frozen):
+    """Конфиг боя PvP 1×1 (ГДД §7.1, Спринт 2.1.A).
+
+    * `rounds` — количество раундов в одном бою. По ГДД §7.1 — `3`,
+      но параметр оставлен балансируемым для будущих режимов
+      («блиц 1 раунд», «epic 5 раундов»).
+    * `hit_pct` — целочисленный процент урона от длины защитника при
+      успешном попадании (`floor(L * pct / 100)`). Целочисленный, чтобы
+      исключить float-drift в тестах: 10% от 100 см = 10 см ровно.
+    * `min_length_cm` — порог входа в PvP по длине (ГДД §7.1: «≥ 20 см»).
+    * `min_thickness_level` — порог входа по толщине (ГДД §3.2: «PvP 1×1
+      разблокируется на уровне 2»). Дублируется в `thickness.unlock_levels`
+      для обратной совместимости и table-driven-проверок, но конфиг
+      хранит «локальную» копию для прямого читаемого `balance.pvp.duel_1v1`-доступа.
+    """
+
+    rounds: int = Field(ge=1, le=10)
+    hit_pct: int = Field(ge=0, le=100)
+    min_length_cm: int = Field(ge=0)
+    min_thickness_level: int = Field(ge=1)
+
+
+class PvpConfig(_Frozen):
+    """Корневой PvP-конфиг (ГДД §7).
+
+    Сейчас содержит только `duel_1v1` (Спринт 2.1.A). Будущие режимы:
+    `mass_pvp` (Спринт 2.2, ГДД §7.2). Раздельная секция, чтобы
+    `balance.pvp.duel_1v1` и `balance.pvp.mass_pvp` имели независимые
+    параметры (rounds, hit_pct и т. п.) и валидировались каждый своей
+    pydantic-моделью.
+    """
+
+    duel_1v1: PvpDuel1v1Config
+
+
 class ContentPolicyClanQuotes(_Frozen):
     """Контент-полиси для каталога цитат главы клана (ГДД §6.1, Q9 v9)."""
 
@@ -362,6 +397,7 @@ class BalanceConfig(_Frozen):
     dau_gate: DauGateConfig
     daily_head: DailyHeadConfig
     anticheat: AnticheatConfig
+    pvp: PvpConfig
     content_policy: ContentPolicy
     items_catalog: tuple[ItemEntry, ...] = Field(min_length=_MIN_ITEMS_CATALOG_SIZE)
     names_catalog: tuple[str, ...] = Field(min_length=_MIN_NAMES_CATALOG_SIZE)

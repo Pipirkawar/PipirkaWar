@@ -115,6 +115,14 @@ def valid_balance_payload() -> dict[str, Any]:
             "active_within_days": 7,
             "avoid_last_n": 3,
         },
+        "pvp": {
+            "duel_1v1": {
+                "rounds": 3,
+                "hit_pct": 10,
+                "min_length_cm": 20,
+                "min_thickness_level": 2,
+            },
+        },
         "content_policy": {
             "clan_quotes": {
                 "mild_profanity": True,
