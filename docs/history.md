@@ -23,6 +23,60 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.2.C: доменный агрегат `MassDuel` (lifecycle state machine)
+
+**Автор:** Devin (по запросу shirline89)
+**Тип:** feature (domain aggregate + lifecycle + новые доменные ошибки)
+**Связано:** `current_tasks.md` Спринт 2.2.C, ПД 2.2.2 + домен-часть 2.2.4 (`development_plan.md` §6), ГДД §7.2.
+
+После 2.2.B (чистые VO + `pair_attackers` / `resolve_mass_*`) — следующий шаг 2.2-фазы: доменный агрегат, который оборачивает чистые функции движка в жизненный цикл от старта боя до итогового `MassDuelOutcome`. Симметрично 1×1-аналогу `Duel` из 2.1.B, но без `PENDING_ACCEPT` (массовый бой не требует подтверждения оппонентом — обе стороны автозаписываются на use-case-уровне 2.2.D) и без раундов (бой одно-тиковый, ГДД §7.2 / 2.2.4).
+
+Что сделано:
+
+- **Новые доменные ошибки** (`src/pipirik_wars/domain/pvp/errors.py`):
+    - `InvalidMassDuelStateError(*, expected, actual, op)` — операция запрошена из неподходящего состояния (например, `submit_move` после `COMPLETED`).
+    - `NotAMassDuelParticipantError(*, player_id)` — игрок не входит ни в один из ростеров боя.
+    - `MassMoveAlreadySubmittedError(*, player_id)` — повторный `submit_move` от игрока, у которого выбор уже зафиксирован.
+    - `MassDuelNotReadyError(*, missing_count)` — `resolve` вызван, когда не все участники отправили выбор (use-case обязан сначала `force_submit_missing(...)`).
+    - `NoMissingMassMovesError` — `force_submit_missing` вызван, когда AFK-фоллбэчить нечего (баг в таймере 2.2.E).
+    - Все 5 экспортированы из `domain/pvp/__init__.py` и добавлены в `__all__`.
+- **`MassDuelState` enum** (`src/pipirik_wars/domain/pvp/mass_duel.py`):
+    - Состояния: `IN_PROGRESS` (бой стартовал, ростер заморожен, ждём `submit_move`-ы) → `COMPLETED` (через `resolve(...)`) либо `CANCELLED` (через `cancel(...)`). Терминальные — `COMPLETED` и `CANCELLED`.
+- **`MassDuel` агрегат** (`src/pipirik_wars/domain/pvp/mass_duel.py`):
+    - Frozen-датакласс, snapshot-ы на старте: `clan{1,2}_id`, `hit_pct`, `clan{1,2}_member_ids: tuple[int, ...]` (sorted ascending, unique, >0), `clan{1,2}_initial_lengths: tuple[int, ...]` (parallel-array той же длины и порядка), `clan{1,2}_choices: tuple[MassRoundChoice | None, ...]` (parallel; `None` = ещё не отправил), `created_at`/`completed_at`/`cancelled_at`, `final_outcome`.
+    - `__post_init__`-инварианты (повторно валидируются при `replace(...)`): clan-id-ы разные положительные, `hit_pct ∈ [0,100]`, ростеры непустые/sorted/unique/disjoint (ГДД §7.2 / 2.2.3 — игрок в обоих кланах должен быть отфильтрован use-case-ом до `create_battle`), длины ≥ 0, `clan{1,2}_choices[i].player_id == clan{1,2}_member_ids[i]` для не-`None`, COMPLETED ⇒ `final_outcome != None ∧ completed_at != None`, не-COMPLETED ⇒ `final_outcome is None`, CANCELLED ⇒ `cancelled_at != None`.
+    - Конструктор `MassDuel.create_battle(*, clan1_id, clan2_id, clan1_lengths, clan2_lengths, hit_pct, now)`: нормализует входные dict-ы в parallel-tuple-ы (sorted by player_id), стартует в `IN_PROGRESS` со всеми `choices = (None, ...)`.
+    - Lifecycle-мутаторы (immutable, `dataclasses.replace`): `submit_move(*, player_id, choice, now)` (валидирует state, participation, no-double-submit, `choice.player_id == player_id`), `force_submit_missing(*, fallback_choices, now)` (AFK-фоллбэк; требует ровно `missing_player_ids` ключи в `fallback_choices`), `resolve(*, random, now)` (требует `is_ready_to_resolve`, иначе `MassDuelNotReadyError`; делегирует чистой функции `resolve_mass_duel(...)` 2.2.B; переходит в COMPLETED), `cancel(*, now)` (идемпотентен; запрещён из COMPLETED).
+    - Свойства: `is_in_progress` / `is_completed` / `is_cancelled` / `is_terminal` / `is_ready_to_resolve` / `missing_player_ids: tuple[int, ...]` / `is_participant(player_id)`.
+    - Никаких `random.*` — `IRandom` приходит снаружи (нужен `pair_attackers` внутри `resolve_mass_duel`); AFK-фоллбэк-выборы передаются как `Mapping[player_id, MassRoundChoice]` (use-case 2.2.E генерит их через `IRandom`).
+- **Re-export** в `domain/pvp/__init__.py`: добавлены `MassDuel`, `MassDuelState`, `InvalidMassDuelStateError`, `NotAMassDuelParticipantError`, `MassMoveAlreadySubmittedError`, `MassDuelNotReadyError`, `NoMissingMassMovesError`. Обновлён module-docstring (добавлен абзац про 2.2.C).
+- **Тесты** (`tests/unit/domain/pvp/test_mass_duel.py`) — **+56 unit-тестов**:
+    - `TestCreateBattle` (12) — happy-path 2×2, 1×1, sorted-output на unsorted-input, валидация: same clan-id, non-positive clan-id, hit_pct out-of-range, empty roster, non-positive player_id, negative length, zero length allowed, overlapping rosters rejected.
+    - `TestPostInitInvariantsOnReplace` (5) — COMPLETED без outcome / без completed_at, IN_PROGRESS с outcome, CANCELLED без cancelled_at, unsorted member_ids, choice player_id mismatch на `replace(...)`.
+    - `TestSubmitMove` (8) — clan1/clan2-стороны, all-submit → ready, double-submit, non-participant, choice.player_id mismatch, отказ из COMPLETED / CANCELLED.
+    - `TestForceSubmitMissing` (7) — fills all missing, no-missing → error, extra keys → error, partial fallback → error, choice.player_id mismatch → error, отказ из COMPLETED / CANCELLED.
+    - `TestResolve` (6) — happy-path completes, deterministic by seed, full-block → DRAW, not-ready → error, double-resolve → error, resolve-from-cancelled → error.
+    - `TestCancel` (3) — IN_PROGRESS → CANCELLED, идемпотентен из CANCELLED, отказ из COMPLETED.
+    - `TestProperties` (3) — `is_participant` для обеих сторон, `is_ready_to_resolve` False вне IN_PROGRESS, `missing_player_ids` пуст в COMPLETED.
+    - `TestEndToEndScenarios` (4) — полный 2×2 цикл, partial-submit + force + resolve, 3×1 unequal, path-independence на 3×1 (3 атаки в одного защитника длиной 100 при `hit_pct=10` дают ровно 30 — 3 × 10 — а не 10+9+8).
+    - `TestImmutability` (3) — `submit_move` / `cancel` / `resolve` возвращают новый инстанс, старый не мутируется.
+
+Результат / артефакты:
+- `src/pipirik_wars/domain/pvp/mass_duel.py` — 600+ строк, чистый домен без I/O / aiogram / `random.*`.
+- `tests/unit/domain/pvp/test_mass_duel.py` — 800+ строк, 56 unit-тестов.
+- `make ci` зелёный: 2160 passed, 1 skipped (pre-existing); coverage 95.94%; mass_duel.py — 94% (165 lines, 7 missing — всё в редких defensive-ветках).
+
+Заметки / решения:
+- Параллельные кортежи (`member_ids` / `lengths` / `choices`) вместо `dict` — потому что dict не вписывается в `frozen=True, slots=True` (mutable). Сортировка по `player_id` даёт детерминированный порядок и стабильный persistence-mapping для будущей таблицы 2.2.D.
+- Disjoint-rosters-инвариант поддуплируется в `__post_init__` и в `create_battle` отдельно — ГДД §7.2 / 2.2.3 («игрок в обоих кланах пропускается»). Use-case 2.2.D обязан фильтровать ростер ДО `create_battle`; сам агрегат не молчит, если фильтрация нарушена.
+- `force_submit_missing` принимает `Mapping[int, MassRoundChoice]`, а не сам генерит выборы — RNG живёт в use-case-е 2.2.E (вместе с конфигом «какие позиции дефолтить»). Агрегат остаётся pure: одна и та же входящая `fallback_choices` всегда даёт одинаковый агрегат.
+- `_validate_terminal_state_invariants` вынесен из `__post_init__` отдельным методом, чтобы ruff не ругался на `PLR0912` (too many branches).
+- `resolve(...)` пересоздаёт `Mapping[int, int]` для длин из parallel-tuple-ов и вызывает `resolve_mass_duel(...)` — никакого дублирования механики 1×1/массовой матрицы.
+
+Следующий шаг — Спринт 2.2.D: persistence-таблицы (`pvp_mass_duels`, `pvp_mass_duel_choices`, `pvp_mass_duel_damage_entries`) + SQL-репозиторий + use-case `StartMassDuel` / `SubmitMassMove` / `ResolveMassDuel` / `ForceResolveMassDuel`.
+
+---
+
 ## 2026-05-05 — Спринт 2.2.B: чистый доменный движок массового PvP клан×клан
 
 **Автор:** Devin (по запросу shirline89)
