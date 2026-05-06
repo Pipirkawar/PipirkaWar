@@ -15,9 +15,9 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный спринт — **2.5-C** ([PR #83](https://github.com/Pipirkawar/PipirkaWar/pull/83), коммит `10b3ee6`) «Команды экономики в боте» — `/grant_length`, `/grant_thickness` (обе TOTP, через анти-чит-clamp `source="admin_grant"`/`"admin_refund"`), `/balance_get` (read-only), `/balance_set` (TOTP, atomic YAML-write + flock + hot-reload). Введён `IBalanceWriter` + `YamlBalanceWriter` (atomic + `fcntl.flock`), `IIdempotencyKey` (`sha256(admin_id|command|target|minute_floor(ts))`), refactor `/confirm`-handler-а на **registry-pattern** (`CONFIRM_DISPATCHERS: dict[command_kind, dispatcher]`), новые `AdminAuditAction.ADMIN_GRANT_LENGTH/_THICKNESS/_BALANCE_GET/_BALANCE_SET`. DI 4 новых use-case-ов + регистрация `admin_economy_router`. Завершены Фазы 0, 1 (MVP), 1.6 (анти-чит) полностью; из Фазы 2 закрыты 2.1–2.4 целиком и **2.5-A + 2.5-B + 2.5-C** из Спринта 2.5. Идёт **Спринт 2.5-D** (финал — кланы + `/announce` + `/audit` + `/admin_setup_totp` + миграция старых admin-команд).
+**На `main`:** последний смерженный спринт — **2.5-C** ([PR #83](https://github.com/Pipirkawar/PipirkaWar/pull/83), коммит `10b3ee6`) «Команды экономики в боте» — `/grant_length`, `/grant_thickness` (обе TOTP, через анти-чит-clamp `source="admin_grant"`/`"admin_refund"`), `/balance_get` (read-only), `/balance_set` (TOTP, atomic YAML-write + flock + hot-reload). Введён `IBalanceWriter` + `YamlBalanceWriter` (atomic + `fcntl.flock`), `IIdempotencyKey` (`sha256(admin_id|command|target|minute_floor(ts))`), refactor `/confirm`-handler-а на **registry-pattern** (`CONFIRM_DISPATCHERS: dict[command_kind, dispatcher]`), новые `AdminAuditAction.ADMIN_GRANT_LENGTH/_THICKNESS/_BALANCE_GET/_BALANCE_SET`. DI 4 новых use-case-ов + регистрация `admin_economy_router`. Поверх `main` смержен PR #84 (`d2f7cb4`) — postmerge-доки 2.5-C (запись в `history.md` + переразметка `current_tasks.md`). Завершены Фазы 0, 1 (MVP), 1.6 (анти-чит) полностью; из Фазы 2 закрыты 2.1–2.4 целиком и **2.5-A + 2.5-B + 2.5-C** из Спринта 2.5. Идёт **Спринт 2.5-D** (финал — кланы + `/announce` + `/audit` + `/admin_setup_totp` + миграция старых admin-команд).
 
-**Активная feature-ветка:** _будет создана_ под 2.5-D (от свежего `main` = `10b3ee6`). Текущая ветка `devin/1778100986-sprint-2-5-c-postmerge-docs` — это **postmerge-докс** (запись 2.5-C в `history.md` + переразметка `current_tasks.md` под 2.5-D), а не сам 2.5-D.
+**Активная feature-ветка:** `devin/1778101600-sprint-2-5-d-final` (от `main = d2f7cb4`). На ней уже закоммичен и запушен **2.5-D.9** (`3ef53b7`) — перенос `command_kind="ban"` из inline-кейса в `CONFIRM_DISPATCHERS` registry (`bot/handlers/admin_economy.py` теперь содержит `_dispatch_ban` + регистрацию; `bot/handlers/admin_support.py` чище — inline-логика `ban` удалена). Дальше — D.1–D.8, D.10–D.12.
 
 **Что уже есть в коде после 2.5-C:**
 - `domain/admin/ports/admin_audit.py` — расширенный `AdminAuditAction` (с 2.5-C: `ADMIN_GRANT_LENGTH/_THICKNESS/_BALANCE_GET/_BALANCE_SET`; с 2.5-B: `ADMIN_PLAYER_LOOKUP/FROZEN/UNFROZEN/BANNED`).
@@ -26,7 +26,7 @@
 - `infrastructure/balance/writer.py` — `YamlBalanceWriter` (atomic + flock + hot-reload через `IBalanceReloader`).
 - `bot/handlers/admin_economy.py` — 4 handler-а + 3 dispatch-функции + `CONFIRM_DISPATCHERS` registry + `ConfirmDispatchDeps`.
 - `bot/handlers/_idempotency.py` — `build_admin_idempotency_key(admin_tg_id, command, target, when)`.
-- `bot/handlers/admin_support.py` — `handle_confirm` теперь делегирует на `CONFIRM_DISPATCHERS` для 3 новых kind-ов; для `command_kind="ban"` — старая inline-логика (перенесём в registry в 2.5-D).
+- `bot/handlers/admin_support.py` — `handle_confirm` теперь делегирует на `CONFIRM_DISPATCHERS` для всех kind-ов, включая `"ban"` (с 2.5-D.9 / коммит `3ef53b7`); inline-логика удалена.
 - `bot/presenters/admin_economy.py` — 5 презентеров (`GrantLength/Thickness/GetBalance/SetBalance/IdempotencyReplay`).
 - `bot/main.py::Container` — DI всех 11 admin-use-case-ов (с 2.5-A: `request_admin_confirm`/`verify_admin_confirm`; с 2.5-B: `find_players`/`get_player_card`/`freeze_player`/`unfreeze_player`/`ban_player`; с 2.5-C: `grant_length`/`grant_thickness`/`get_balance_value`/`set_balance_value`).
 - Старые `bot/handlers/admin.py` (`/balance_reload`, `/admin_stats`, `/set_max_dau`, `/anticheat_unban`) — пока на старой авторизации use-case-уровня; в 2.5-D будут перенесены под `AdminGuard` + RBAC.
@@ -37,7 +37,7 @@
 - ~~**2.5-C**~~ ✅ закрыт PR #83 (`10b3ee6`) — команды экономики + registry-pattern в `/confirm` + atomic balance-writer + idempotency.
 - **2.5-D** (текущий PR / финал): кланы (`/clan`, `/freeze_clan`, `/unfreeze_clan`, `/clan_daily_head_history`) + `/announce` + `/audit` + `/admin_setup_totp` + миграция старых `/balance_reload` / `/admin_stats` / `/set_max_dau` / `/anticheat_unban` под `AdminGuard` + RBAC + `docs/admin_runbook.md`.
 
-**`make ci` на main:** зелёный (последний прогон в PR #83: 3118 passed / 1 skipped, coverage 95.81%).
+**`make ci` локально на feature-ветке (`3ef53b7`):** зелёный — 3118 passed / 1 skipped, coverage 95.84%.
 
 **`AGENT_HANDOFF.md`:** нет.
 
@@ -49,11 +49,12 @@
 |---|---|
 | **Активный спринт** | `2.5 — Расширенный админ-интерфейс в боте` |
 | **Активный PR / шаг** | **2.5-D** (финал): кланы (`/clan`, `/freeze_clan`, `/unfreeze_clan`, `/clan_daily_head_history`) + `/announce` + `/audit` + `/admin_setup_totp` + миграция старых admin-команд под `AdminGuard` + RBAC + `docs/admin_runbook.md` |
-| **Активная feature-ветка** | _ещё не создана_ — будет ветвиться от свежего `main` (`10b3ee6`); сейчас идёт docs-PR с этой переразметкой на ветке `devin/1778100986-sprint-2-5-c-postmerge-docs` |
+| **Активная feature-ветка** | `devin/1778101600-sprint-2-5-d-final` (создана от `main = d2f7cb4`) |
 | **Базовая ветка** | `main` |
-| **Последний коммит на main** | `10b3ee6` (мерж PR #83 «Спринт 2.5-C: команды экономики в боте») |
-| **PR (если открыт)** | _docs-PR (postmerge 2.5-C) — будет открыт этим коммитом; сам 2.5-D — ещё не открыт_ |
-| **CI статус** | зелёный (последний прогон в PR #83: 3118 passed / 1 skipped, coverage 95.81%) |
+| **Последний коммит на main** | `d2f7cb4` (мерж PR #84 «postmerge-доки 2.5-C») |
+| **Последний коммит на feature-ветке** | `3ef53b7` Sprint 2.5-D.9: command_kind="ban" → CONFIRM_DISPATCHERS registry |
+| **PR (если открыт)** | ещё не открыт (D.9 — единственный коммит на ветке; PR откроется после фактической работы по D.1…D.8/D.10…D.12) |
+| **CI статус** | зелёный локально на `3ef53b7` (`make ci`: 3118 passed / 1 skipped, coverage 95.84%) |
 | **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задачи 2.5.3 (кланы), 2.5.6 (`/announce`), 2.5.7 (`/audit`), 2.5.8 (RBAC + `/admin_setup_totp`), 2.5.9 (миграция старых команд) |
 | **Связанная спецификация в `game_design.md`** | §18.6 (RBAC + 2FA для всех ролей), §10–11 (клановая механика), §17 (моратории / `/announce` для broadcast), §18.6.5 (`/audit` — last 50 records по фильтрам) |
 | **`AGENT_HANDOFF.md` существует?** | нет |
@@ -74,7 +75,7 @@
 - [ ] **2.5-D.6 — `/admin_setup_totp`** — выдача нового TOTP-секрета админу: генерация secret через `pyotp.random_base32()`, сохранение в `Admin.totp_secret_encrypted` (через `IAdminRepository.set_totp_secret`), отправка QR-кода (или otpauth-URL) в личку админу. **Защищена паролем-инициализатором** (`bootstrap_admin_password` из `BootstrapSettings` — единоразовый пароль из ENV, который ломается после первого использования). Audit: `ADMIN_TOTP_SETUP`. Локаль `admin-setup-totp-*`. ⚠ опасно — выдача QR-кода через Telegram-канал; рассмотреть alternative: вывод только в логи бота (читаемые только из VM).
 - [ ] **2.5-D.7 — Миграция старых admin-команд под `AdminGuard` + RBAC.** В коде сейчас `bot/handlers/admin.py` содержит `/balance_reload`, `/admin_stats`, `/set_max_dau`, `/anticheat_unban` — они авторизуются через `IAdminRepository.get_by_tg_id` внутри use-case-ов (legacy-путь, до 2.5-A). Переписать так, чтобы `IsAdminFilter` работал на router-е (как в 2.5-B/C), а use-case-ы получали `Admin` из `data["admin"]` (от `AdminGuard`). По возможности — добавить в `CONFIRM_DISPATCHERS` registry (`/balance_reload` уже мутирующая → возможно стоит сделать TOTP-обязательной).
 - [ ] **2.5-D.8 — RBAC** (`game_design.md` §18.6.2): `Admin.role: enum('owner', 'support', 'economist', 'moderator')`. Каждой команде — минимальная требуемая роль (owner может всё; economist — экономика; moderator — поддержка; support — read-only). Реализация: новый порт `IAdminAuthorizationPolicy.can(admin, command_kind) -> bool`, читается в handler-ах перед любым `RequestAdminConfirm` или вызовом use-case. Audit: `ADMIN_AUTHORIZATION_DENIED` (для отказов). Миграция `0017_admin_role` (enum-колонка с дефолтом `owner` для существующих админов).
-- [ ] **2.5-D.9 — Перенести `command_kind="ban"` из inline в `CONFIRM_DISPATCHERS` registry.** В 2.5-C мы оставили `"ban"` как inline-кейс, потому что `BanPlayer` не вписывался в `ConfirmDispatchDeps` (4 use-case-а экономики). Решение: либо расширить `ConfirmDispatchDeps` ещё одним полем (`ban_player`) — но тогда зависимость растёт, либо сделать `ConfirmDispatchDeps` опциональным (некоторым диспатчерам нужны не все use-case-ы). Решить в первом коммите 2.5-D.
+- [x] **2.5-D.9 — Перенести `command_kind="ban"` из inline в `CONFIRM_DISPATCHERS` registry.** ✅ закрыт коммитом `3ef53b7` на ветке `devin/1778101600-sprint-2-5-d-final`: `_dispatch_ban` добавлен в `bot/handlers/admin_economy.py`, зарегистрирован в `CONFIRM_DISPATCHERS`, inline-кейс из `bot/handlers/admin_support.py` удалён.
 - [ ] **2.5-D.10 — `docs/admin_runbook.md`** — документация для команды поддержки/экономистов: список всех админ-команд, какая роль нужна, какие требуют TOTP, как настроить `pyotp` в их Authenticator, что делать при потере 2FA, как читать `/audit`. Не дублировать `game_design.md §18.6` — runbook это операционная инструкция, а не спека.
 - [ ] **2.5-D.11 — Тесты:** unit на каждый новый use-case (≥4 кейса), integration-тесты на repo-методы (clan freeze/unfreeze, audit query), e2e на handler-ы и TOTP-flow `/announce`. Покрытие RBAC: каждая команда тестируется на отказ для недостаточной роли.
 - [ ] **2.5-D.12 — Локали** всех новых ключей `admin-clan-*` / `admin-freeze-clan-*` / `admin-unfreeze-clan-*` / `admin-clan-daily-head-history-*` / `admin-announce-*` / `admin-audit-*` / `admin-setup-totp-*` / `admin-rbac-*` в `locales/{ru,en}.ftl`.
