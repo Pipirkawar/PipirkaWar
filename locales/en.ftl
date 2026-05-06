@@ -448,3 +448,15 @@ pvp-mass-toast-already-submitted = You already made your move.
 pvp-mass-toast-outdated = This button is outdated.
 pvp-mass-toast-attack-selected = Attack chosen. Now pick a block.
 pvp-mass-toast-move-accepted = Move accepted!
+
+## /clan_history (Sprint 2.2.G — clan attack journal)
+
+clan-history-needs-group-chat = 📜 The `/clan_history` command only works in a clan group chat.
+clan-history-not-registered = 📜 This chat is not registered as a clan. Use /start to register.
+clan-history-header = 📜 <b>Clan attack journal</b> ({ $clan_title })
+clan-history-empty = 📜 Clan <b>{ $clan_title }</b> has no completed mass battles yet.
+# One journal row: "<idx>. ⚔ Opponent — victory +20 cm (3×3)".
+clan-history-entry-victory = { $idx }. ⚔ { $opponent_clan_title } — 🏆 victory +{ NUMBER($our_delta_cm, useGrouping: 0) } cm ({ NUMBER($our_count, useGrouping: 0) }×{ NUMBER($opponent_count, useGrouping: 0) }, { $when })
+clan-history-entry-defeat = { $idx }. ⚔ { $opponent_clan_title } — 💀 defeat { NUMBER($our_delta_cm, useGrouping: 0) } cm ({ NUMBER($our_count, useGrouping: 0) }×{ NUMBER($opponent_count, useGrouping: 0) }, { $when })
+clan-history-entry-draw = { $idx }. ⚔ { $opponent_clan_title } — 🤝 draw ({ NUMBER($our_count, useGrouping: 0) }×{ NUMBER($opponent_count, useGrouping: 0) }, { $when })
+clan-history-entry-cancelled = { $idx }. ⚔ { $opponent_clan_title } — ⛔ cancelled ({ $when })

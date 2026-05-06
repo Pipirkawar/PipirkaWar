@@ -73,6 +73,8 @@ from pipirik_wars.application.pvp import (
     EscalateChatToGlobal,
     ExpireLobbyEntry,
     ForceResolveMassDuel,
+    GetClanAttackHistory,
+    IClanMassDuelHistoryQuery,
     IDuelLogTemplateProvider,
     MatchFromLobby,
     ResolveAfkRound,
@@ -127,6 +129,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyActivityLockRepository,
     SqlAlchemyAdminRepository,
     SqlAlchemyAnticheatRepository,
+    SqlAlchemyClanMassDuelHistoryQuery,
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
     SqlAlchemyDuelRepository,
@@ -216,6 +219,7 @@ class Container:
     # Запросы (Спринт 1.4.C / 2.2.A)
     top_players_query: ITopPlayersQuery
     top_clans_query: IClanTopQuery
+    clan_mass_duel_history_query: IClanMassDuelHistoryQuery
 
     # Планировщик отложенных задач (Спринт 1.3.C)
     delayed_jobs: IDelayedJobScheduler
@@ -245,6 +249,7 @@ class Container:
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
     get_top_clans: GetTopClans
+    get_clan_attack_history: GetClanAttackHistory
     add_length: ILengthGranter
     lift_anticheat_ban: LiftAnticheatBan
 
@@ -345,6 +350,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clock=clock,
         ttl_seconds=60,
     )
+    clan_mass_duel_history_query = SqlAlchemyClanMassDuelHistoryQuery(uow=uow)
     dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=settings.bot.max_dau)
     dau_threshold_alerter = StructlogDauThresholdAlerter()
@@ -513,6 +519,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     )
     get_top_players = GetTopPlayers(query=top_players_query)
     get_top_clans = GetTopClans(query=top_clans_query)
+    get_clan_attack_history = GetClanAttackHistory(query=clan_mass_duel_history_query)
     set_player_locale = SetPlayerLocale(
         uow=uow,
         players=players,
@@ -700,6 +707,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         player_locale_resolver=player_locale_resolver,
         top_players_query=top_players_query,
         top_clans_query=top_clans_query,
+        clan_mass_duel_history_query=clan_mass_duel_history_query,
         delayed_jobs=delayed_jobs,
         dau_counter=dau_counter,
         dau_limit=dau_limit,
@@ -723,6 +731,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,
         get_top_clans=get_top_clans,
+        get_clan_attack_history=get_clan_attack_history,
         add_length=add_length,
         lift_anticheat_ban=lift_anticheat_ban,
         challenge_duel=challenge_duel,
@@ -801,6 +810,8 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["submit_mass_move"] = container.submit_mass_move
     dispatcher["resolve_mass_duel"] = container.resolve_mass_duel
     dispatcher["clans"] = container.clans
+    # Журнал клановых атак (Спринт 2.2.G) — read-side use-case для handler-а.
+    dispatcher["get_clan_attack_history"] = container.get_clan_attack_history
     return dispatcher
 
 

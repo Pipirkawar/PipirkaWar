@@ -450,3 +450,15 @@ pvp-mass-toast-already-submitted = Ты уже сделал ход.
 pvp-mass-toast-outdated = Кнопка устарела.
 pvp-mass-toast-attack-selected = Атака выбрана. Теперь выбери блок.
 pvp-mass-toast-move-accepted = Ход принят!
+
+## /clan_history (Спринт 2.2.G — журнал клановых атак)
+
+clan-history-needs-group-chat = 📜 Команда `/clan_history` работает только в групповом чате клана.
+clan-history-not-registered = 📜 Этот чат не привязан к зарегистрированному клану. Используй /start для регистрации.
+clan-history-header = 📜 <b>Журнал клановых атак</b> ({ $clan_title })
+clan-history-empty = 📜 У клана <b>{ $clan_title }</b> пока нет завершённых массовых боёв.
+# Один ряд журнала: «<idx>. ⚔ Противник — победа +20 см (3×3)».
+clan-history-entry-victory = { $idx }. ⚔ { $opponent_clan_title } — 🏆 победа +{ NUMBER($our_delta_cm, useGrouping: 0) } см ({ NUMBER($our_count, useGrouping: 0) }×{ NUMBER($opponent_count, useGrouping: 0) }, { $when })
+clan-history-entry-defeat = { $idx }. ⚔ { $opponent_clan_title } — 💀 поражение { NUMBER($our_delta_cm, useGrouping: 0) } см ({ NUMBER($our_count, useGrouping: 0) }×{ NUMBER($opponent_count, useGrouping: 0) }, { $when })
+clan-history-entry-draw = { $idx }. ⚔ { $opponent_clan_title } — 🤝 ничья ({ NUMBER($our_count, useGrouping: 0) }×{ NUMBER($opponent_count, useGrouping: 0) }, { $when })
+clan-history-entry-cancelled = { $idx }. ⚔ { $opponent_clan_title } — ⛔ отменён ({ $when })

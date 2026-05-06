@@ -10,6 +10,7 @@
 `forest_callback_data` / `upgrade_callback_data`).
 """
 
+from pipirik_wars.bot.presenters.clan_history import ClanHistoryPresenter
 from pipirik_wars.bot.presenters.clantop import ClanTopPresenter
 from pipirik_wars.bot.presenters.duel import (
     AcceptCallbackData,
@@ -60,6 +61,7 @@ __all__ = [
     "AcceptCallbackData",
     "AttackCallbackData",
     "BlockCallbackData",
+    "ClanHistoryPresenter",
     "ClanTopPresenter",
     "DuelPresenter",
     "ForestCallbackAction",
