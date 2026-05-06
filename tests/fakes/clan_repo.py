@@ -107,6 +107,11 @@ class FakeClanRepository(IClanRepository):
         entries.sort(key=lambda e: (-e.total_length_cm, e.clan_id))
         return tuple(entries[:limit])
 
+    async def list_active(self) -> Sequence[Clan]:
+        active = [c for c in self.rows if c.status is ClanStatus.ACTIVE]
+        active.sort(key=lambda c: c.id or 0)
+        return tuple(active)
+
 
 @dataclass
 class FakeClanMembershipRepository(IClanMembershipRepository):
