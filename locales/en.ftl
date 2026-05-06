@@ -460,3 +460,17 @@ clan-history-entry-victory = { $idx }. ⚔ { $opponent_clan_title } — 🏆 vic
 clan-history-entry-defeat = { $idx }. ⚔ { $opponent_clan_title } — 💀 defeat { NUMBER($our_delta_cm, useGrouping: 0) } cm ({ NUMBER($our_count, useGrouping: 0) }×{ NUMBER($opponent_count, useGrouping: 0) }, { $when })
 clan-history-entry-draw = { $idx }. ⚔ { $opponent_clan_title } — 🤝 draw ({ NUMBER($our_count, useGrouping: 0) }×{ NUMBER($opponent_count, useGrouping: 0) }, { $when })
 clan-history-entry-cancelled = { $idx }. ⚔ { $opponent_clan_title } — ⛔ cancelled ({ $when })
+
+## /clan_head (Sprint 2.3.E — daily clan head)
+
+clan-head-needs-group-chat = 👑 The /clan_head command only works in a clan group chat.
+clan-head-not-registered = 👑 This chat is not linked to a registered clan. Use /start to register.
+clan-head-frozen-clan = 👑 The clan is temporarily frozen. Cannot assign a head.
+clan-head-not-enough-active = 👑 Too few active members in the clan over the last 7 days (need at least { NUMBER($required, useGrouping: 0) }, active: { NUMBER($active_count, useGrouping: 0) }).
+clan-head-success = 👑 <b>Clan head of the day</b> — { $head_display_name }!
+  +{ NUMBER($bonus_cm, useGrouping: 0) } cm to length (now { NUMBER($new_length_cm, useGrouping: 0) } cm).
+
+  💬 <i>{ $quote_text }</i>
+clan-head-already-assigned = 👑 The clan head for today is already assigned — { $head_display_name } (+{ NUMBER($bonus_cm, useGrouping: 0) } cm).
+
+  💬 <i>{ $quote_text }</i>

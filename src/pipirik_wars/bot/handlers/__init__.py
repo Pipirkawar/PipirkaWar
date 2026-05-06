@@ -15,6 +15,7 @@ InvokeOracle) и `top` (Спринт 1.4.C: /top → GetTopPlayers с TTL-кэш
 from aiogram import Dispatcher
 
 from pipirik_wars.bot.handlers.admin import router as admin_router
+from pipirik_wars.bot.handlers.clan_head import router as clan_head_router
 from pipirik_wars.bot.handlers.clan_history import router as clan_history_router
 from pipirik_wars.bot.handlers.clantop import router as clantop_router
 from pipirik_wars.bot.handlers.duel import router as duel_router
@@ -41,6 +42,7 @@ def register_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(oracle_router)
     dispatcher.include_router(top_router)
     dispatcher.include_router(clantop_router)
+    dispatcher.include_router(clan_head_router)
     dispatcher.include_router(clan_history_router)
     dispatcher.include_router(admin_router)
     dispatcher.include_router(registration_router)

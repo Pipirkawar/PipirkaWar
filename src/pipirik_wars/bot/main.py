@@ -43,6 +43,7 @@ from pipirik_wars.application.clan import (
     RegisterClan,
 )
 from pipirik_wars.application.daily_head import (
+    IClanQuoteTemplateProvider,
     RequestDailyHead,
     RunDailyHeadCron,
 )
@@ -168,6 +169,7 @@ from pipirik_wars.infrastructure.rate_limit import (
 from pipirik_wars.infrastructure.scheduler import APSchedulerDelayedJobScheduler
 from pipirik_wars.infrastructure.settings import Settings
 from pipirik_wars.infrastructure.templates import (
+    JsonClanQuoteTemplateProvider,
     JsonDuelLogTemplateProvider,
     JsonForestLogTemplateProvider,
     JsonOracleTemplateProvider,
@@ -290,6 +292,7 @@ class Container:
     daily_head_service: DailyHeadService
     request_daily_head: RequestDailyHead
     run_daily_head_cron: RunDailyHeadCron
+    clan_quote_provider: IClanQuoteTemplateProvider
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -351,6 +354,9 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
     )
     duel_log_templates = JsonDuelLogTemplateProvider(
+        templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
+    )
+    clan_quote_provider = JsonClanQuoteTemplateProvider(
         templates_dir=templates_dir or _DEFAULT_TEMPLATES_DIR,
     )
     bundle = FluentMessageBundle(locales_dir=locales_dir or _DEFAULT_LOCALES_DIR)
@@ -809,6 +815,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         daily_head_service=daily_head_service,
         request_daily_head=request_daily_head,
         run_daily_head_cron=run_daily_head_cron,
+        clan_quote_provider=clan_quote_provider,
     )
 
 
@@ -878,6 +885,7 @@ def build_dispatcher(container: Container) -> Dispatcher:
     # доступен в dispatcher для админ-команд / диагностики.
     dispatcher["request_daily_head"] = container.request_daily_head
     dispatcher["run_daily_head_cron"] = container.run_daily_head_cron
+    dispatcher["clan_quote_provider"] = container.clan_quote_provider
     return dispatcher
 
 
