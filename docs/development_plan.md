@@ -640,7 +640,7 @@ ORDER BY occurred_at DESC;
 | 3.4.2 | Persistence: миграция Alembic `add_enchant_level_to_items` + ORM-маппинг + `IItemRepository.update_enchant_level(...)`. | Integration-тесты: round-trip, default `enchant_level=0` для legacy-предметов |
 | 3.4.3 | Application: use-case `EnchantItem(*, player_id, item_id, scroll_id) -> EnchantOutcome`. Внутри: load + check category + roll исход через `IRandom` + audit `ITEM_ENCHANT_ATTEMPT` + idempotency-key. Отдельный use-case для blessed (или enum-флаг). | Юнит: всех 4 (regular) и 5 (blessed) исходов; idempotency повторного применения; категория-mismatch → `WrongScrollCategory` |
 | 3.4.4 | Доменный picker `pick_enchant_outcome(*, level, blessed, weights)` — чистая функция. | Юнит-тесты на: (a) safe-zone forced-success, (b) все 4/5 исходов в каждом тире, (c) `clamp(0, 30)` на нижней границе |
-| 3.4.5 | Балансовый конфиг: pydantic `EnchantmentConfig` с инвариантами (см. ГДД §2.8.6: сумма весов = 1.0, safe-zone-zero для drop/destroy). | Юнит-тесты на pydantic-валидаторы; интеграционный тест на `balance.yaml` стартового баланса |
+| 3.4.5 | Балансовый конфиг: pydantic `EnchantmentConfig` с инвариантами (см. ГДД §2.8.6: сумма весов = 1.0; safe-zone-zero для drop/destroy; `blessed_outcomes_per_level["29"].success_2 == 0.0`, см. ГДД §2.8.4). Стартовые дефолты для всех уровней `0..29` уже зафиксированы в ГДД §2.8.6 — копируются в `balance.yaml` как есть. | Юнит-тесты на pydantic-валидаторы; интеграционный тест: дефолтный `balance.yaml` парсится без ошибок и сумма весов на каждом уровне = 1.0 ± ε |
 | 3.4.6 | Bot-handler `/enchant <item_id> <scroll_id>` или callback из карточки предмета. UX: предупреждение → подтверждение → ролл → результат с emoji-индикатором тира (см. ГДД §2.8.7). | Handler-тесты; визуальная проверка предупреждений в RU+EN |
 | 3.4.7 | Локализация ключей `enchant-*` (RU+EN): `enchant-warning-regular`, `enchant-warning-blessed`, `enchant-success`, `enchant-no-effect`, `enchant-drop`, `enchant-destroy`, `enchant-tier-{safe,easy,hard,very-hard,extreme,impossible}`, `enchant-wrong-category`. | Все ключи присутствуют в обоих файлах; e2e-snapshot |
 | 3.4.8 | Отображение `+N` рядом с именем предмета во всех местах: `/profile`, инвентарь, нотификации о дропе, audit-лог. | Снэпшот-тесты презентеров |
@@ -654,7 +654,7 @@ ORDER BY occurred_at DESC;
 |---|---|---|
 | 3.5.1 | Domain: порт `IRouletteEngine.spin(*, player, kind: RouletteKind) -> SpinResult`. Доменные исходы: `LengthGain`, `ItemDrop`, `ScrollDrop`, `BlessedScrollDrop`. (Крипто-исход добавится в 4.1.) | Юнит-тесты picker-а; mypy strict |
 | 3.5.2 | Application: use-case `SpinFreeRoulette(*, player_id) -> SpinResult`. Внутри: `progression.spend_length(player, 100, reason="roulette_spin")` → `engine.spin(...)` → применение исхода. Audit-trail. | Юнит-тесты + integration: спин с балансом 100 и 99 см |
-| 3.5.3 | Конфиг рулетки в `balance.yaml`: `roulette.free.cost_cm`, `roulette.free.outcomes` с весами для всех 4 исходов (length, item, scroll, blessed_scroll). | Pydantic-валидаторы; сумма весов = 1.0 |
+| 3.5.3 | Конфиг рулетки в `balance.yaml` (стартовые дефолты — в ГДД §12.4.2): `roulette.free.cost_cm`, `roulette.free.outcomes` (5 исходов: length / item / scroll_regular / scroll_blessed / crypto_lot), `roulette.free.length_buckets` (4 бакета СМ для скоса к малым). Доп. инвариант: при пустом крипто-пуле вес `crypto_lot` перетекает на `length`. | Pydantic-валидаторы; сумма весов = 1.0 на каждой группе; интеграционный тест 10000 спинов: `E[CM | spin]` ≈ 50 ± 5 см (sink работает) |
 | 3.5.4 | Эксклюзивный шмот `roulette_only: true` в каталоге предметов (минимум 5 предметов на каждую категорию слотов на старте). | Catalogue smoke-test: для каждого слота есть ≥ 1 roulette_only-предмет |
 | 3.5.5 | Bot-handler `/roulette_free` + кнопка из `/profile` + анимация-крутилка (3-5 промежуточных сообщений с задержкой) + финальная карточка результата. | Handler-тесты + manual smoke в RU+EN |
 | 3.5.6 | Локализация `roulette-free-*` (RU+EN). | Все ключи в обоих файлах |
@@ -668,7 +668,7 @@ ORDER BY occurred_at DESC;
 
 | # | Задача | Критерий приёмки |
 |---|---|---|
-| 4.1.1 | Telegram Stars: **платная рулетка** за 1 ⭐ (1 спин) и 9 ⭐ (10 спинов, 10-pack). См. ГДД §12.5. | Расчёт случайного выигрыша; чек-лог транзакций; 10-pack идёт одной транзакцией |
+| 4.1.1 | Telegram Stars: **платная рулетка** за 1 ⭐ (1 спин) и 9 ⭐ (10 спинов, 10-pack). См. ГДД §12.5; стартовые веса призов и бакеты СМ — §12.5.2. | Расчёт случайного выигрыша; чек-лог транзакций; 10-pack идёт одной транзакцией; integration 10000 спинов: `E[CM | spin]` ≈ 27 см (баланс смещён к не-CM призам и blessed-скроллам) |
 | 4.1.2 | TON Connect: фикс длина за TON | Sandbox + продакшн-сеть; webhook/poll платежей |
 | 4.1.3 | USDT (через TON-сеть/процессор) | Параметризованные суммы → длина |
 | 4.1.4 | Антифрод платежей, проверка двойных зачислений | Idempotency-key на платёж |
@@ -812,13 +812,14 @@ ORDER BY occurred_at DESC;
 11. **Финальный триггер титула «Нежный»** — после v9 он стал TBD (открытый вопрос геймдизу).
 12. **Расширенная таблица титулов** — формулировки и условия остальных титулов (в v9 фиксирован только «Новичок»).
 13. **Канал-анонсы (Спринт 4.9)** — какой именно контент туда автопостится (итоги недели / лидерборды / релиз-ноты / всё)? Можно решить позже, ближе к Фазе 4.
-14. **Заточка — точные `success_probability` на каждом уровне** (см. ГДД §2.8.6) — финальные числа в `balance.yaml` после альфа-теста; ГДД фиксирует только тиры и качественные диапазоны.
+14. **Заточка — финальные `success_probability`** — стартовые дефолты для всех уровней `0..29` зафиксированы в ГДД §2.8.6 (полные таблицы regular/blessed). После альфа-теста подбираются по метрикам; настройка через `balance.yaml` без релиза кода.
 15. **Заточка — bad-luck protection** — нужна ли «гарантированный успех после N подряд провалов» в MVP механики или только в Фазе 4? (Сейчас не предусмотрена, см. ГДД §2.8.8.)
 16. **Эксклюзивный шмот рулетки** — сколько и каких именно `roulette_only` предметов готовить на старте (минимум 5 на категорию слотов в Спринте 3.5.4)? Финальный список — от геймдиза.
 17. **Лимит выплат по крипто-пулу** — `max 50 USDT-экв за 30 дней` (Спринт 4.1.11) — это разумный потолок? Нужно посмотреть на регуляторные ограничения и средний AOV.
 18. **`IFeeEstimator` стратегия** — P95 за 7 дней vs более агрессивный (P99 / max за 24 часа) — какой кончик оптимизировать: запас или эффективность пула? (Спринт 4.1.7.)
 19. **Bad-luck protection для крипто-приза** — после скольких сотен спинов без крипто-приза гарантировать выплату? (Сейчас не предусмотрено; решение по метрикам.)
 20. **Переход поля `equipment.kind` enum при добавлении `right_hand`/`left_hand`** — когда именно ввести миграцию: вместе со Спринтом 3.1 (тогда же дроп оружия) или раньше как «зарезервировать слоты»? Решается на старте Фазы 3.
+21. **Веса призов рулеток** — стартовые дефолты для free и paid зафиксированы в ГДД §12.4.2 / §12.5.2 (включая бакеты СМ). Подтвердить после альфа-теста: `E[CM | spin]` free ≈ 50 см (sink ~50/спин при цене 100), paid ≈ 27 см.
 
 ---
 
