@@ -67,6 +67,7 @@ from pipirik_wars.application.referral import (
     GrantReferralSignupBonus,
     GrantReferralThicknessMilestone,
     RegisterReferral,
+    RunWeeklyClanReferralSummary,
 )
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
@@ -617,6 +618,13 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
             length_granter=add_length,
             balance=balance,
         ),
+        run_weekly_clan_referral_summary=RunWeeklyClanReferralSummary(
+            uow=uow,
+            clans=clans,
+            players=players,
+            referrals=referrals,
+            clock=clock,
+        ),
     )
 
 
@@ -700,6 +708,14 @@ class TestContainer:
         assert isinstance(c.daily_head_service, DailyHeadService)
         assert isinstance(c.request_daily_head, RequestDailyHead)
         assert isinstance(c.run_daily_head_cron, RunDailyHeadCron)
+
+    def test_container_holds_referral_use_cases(self) -> None:
+        """Реферальная система (Спринт 2.4.D + 2.4.E)."""
+        c = _container_with_fakes()
+        assert isinstance(c.register_referral, RegisterReferral)
+        assert isinstance(c.grant_referral_signup_bonus, GrantReferralSignupBonus)
+        assert isinstance(c.grant_referral_thickness_milestone, GrantReferralThicknessMilestone)
+        assert isinstance(c.run_weekly_clan_referral_summary, RunWeeklyClanReferralSummary)
 
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()

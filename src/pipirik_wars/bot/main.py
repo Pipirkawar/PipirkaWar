@@ -93,7 +93,9 @@ from pipirik_wars.application.pvp import (
 from pipirik_wars.application.referral import (
     GrantReferralSignupBonus,
     GrantReferralThicknessMilestone,
+    IWeeklyClanReferralSummaryNotifier,
     RegisterReferral,
+    RunWeeklyClanReferralSummary,
 )
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
@@ -105,7 +107,10 @@ from pipirik_wars.application.top import (
 )
 from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import register_middlewares
-from pipirik_wars.bot.notifications import TelegramForestFinishNotifier
+from pipirik_wars.bot.notifications import (
+    TelegramForestFinishNotifier,
+    TelegramWeeklyClanReferralSummaryNotifier,
+)
 from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.anticheat import IAnticheatAdminAlerter, IAnticheatRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
@@ -306,10 +311,11 @@ class Container:
     clan_quote_provider: IClanQuoteTemplateProvider
     schedule_daily_head_cron_jobs: ScheduleDailyHeadCronJobs
 
-    # Реферальная система (Спринт 2.4.D)
+    # Реферальная система (Спринт 2.4.D + 2.4.E)
     register_referral: RegisterReferral
     grant_referral_signup_bonus: GrantReferralSignupBonus
     grant_referral_thickness_milestone: GrantReferralThicknessMilestone
+    run_weekly_clan_referral_summary: RunWeeklyClanReferralSummary
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -500,6 +506,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clock=clock,
     )
     forest_notifier: IForestFinishNotifier | None = None
+    weekly_referral_summary_notifier: IWeeklyClanReferralSummaryNotifier | None = None
     if bot is not None:
         forest_notifier = TelegramForestFinishNotifier(
             bot=bot,
@@ -510,6 +517,11 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
             log_templates=forest_log_templates,
             random=RealRandom(),
             locale_resolver=player_locale_resolver,
+        )
+        weekly_referral_summary_notifier = TelegramWeeklyClanReferralSummaryNotifier(
+            bot=bot,
+            bundle=bundle,
+            balance=balance,
         )
     # Late-bound фабрики для PvP-lobby job-ов: scheduler нужен раньше,
     # чем `escalate_chat_to_global` / `expire_lobby_entry`, поэтому передаём
@@ -525,6 +537,9 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         mass_duel_afk_factory=lambda: force_resolve_mass_duel,
         daily_head_cron_factory=lambda: run_daily_head_cron,
         daily_reschedule_factory=lambda: schedule_daily_head_cron_jobs,
+        weekly_referral_summary_factory=lambda: run_weekly_clan_referral_summary,
+        weekly_referral_summary_notifier=weekly_referral_summary_notifier,
+        clans=clans,
     )
     start_forest_run = StartForestRun(
         uow=uow,
@@ -793,6 +808,13 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         length_granter=add_length,
         balance=balance,
     )
+    run_weekly_clan_referral_summary = RunWeeklyClanReferralSummary(
+        uow=uow,
+        clans=clans,
+        players=players,
+        referrals=referrals,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -875,6 +897,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         register_referral=register_referral,
         grant_referral_signup_bonus=grant_referral_signup_bonus,
         grant_referral_thickness_milestone=grant_referral_thickness_milestone,
+        run_weekly_clan_referral_summary=run_weekly_clan_referral_summary,
     )
 
 
@@ -1002,6 +1025,9 @@ async def run(
         # который сам перепланирует на новые сутки (Спринт 2.3.F.2).
         await container.schedule_daily_head_cron_jobs.execute()
         scheduler.schedule_daily_head_reschedule_cron()
+        # Глобальный weekly cron «итоги недели по рефералам клана»
+        # (вс. 18:00 UTC, Спринт 2.4.E).
+        await scheduler.schedule_weekly_clan_referral_summary_cron()
     try:
         await dispatcher.start_polling(
             bot,
