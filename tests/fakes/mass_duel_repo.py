@@ -45,6 +45,16 @@ class FakeMassDuelRepository(IMassDuelRepository):
                 return d
         return None
 
+    async def find_most_recent_for_clan(self, *, clan_id: int) -> MassDuel | None:
+        candidates = [d for d in self.rows if clan_id in (d.clan1_id, d.clan2_id)]
+        if not candidates:
+            return None
+        candidates.sort(
+            key=lambda d: (d.created_at, d.id or 0),
+            reverse=True,
+        )
+        return candidates[0]
+
     async def save(self, duel: MassDuel) -> MassDuel:
         if duel.id is None:
             raise IntegrityError(

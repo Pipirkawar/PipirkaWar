@@ -390,6 +390,25 @@ class SqlAlchemyMassDuelRepository(IMassDuelRepository):
         damage_rows = await self._load_damage_rows(duel_id=duel.id)
         return _row_to_mass_duel(row=row, choice_rows=choice_rows, damage_rows=damage_rows)
 
+    async def find_most_recent_for_clan(self, *, clan_id: int) -> MassDuel | None:
+        result = await self._uow.session.execute(
+            select(PvpMassDuelORM)
+            .where(
+                (PvpMassDuelORM.clan1_id == clan_id) | (PvpMassDuelORM.clan2_id == clan_id),
+            )
+            .order_by(
+                PvpMassDuelORM.created_at.desc(),
+                PvpMassDuelORM.id.desc(),
+            )
+            .limit(1),
+        )
+        row = result.scalars().first()
+        if row is None:
+            return None
+        choice_rows = await self._load_choice_rows(duel_id=row.id)
+        damage_rows = await self._load_damage_rows(duel_id=row.id)
+        return _row_to_mass_duel(row=row, choice_rows=choice_rows, damage_rows=damage_rows)
+
     async def _load_choice_rows(self, *, duel_id: int) -> list[PvpMassDuelChoiceORM]:
         result = await self._uow.session.execute(
             select(PvpMassDuelChoiceORM)

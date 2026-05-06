@@ -125,3 +125,23 @@ class IMassDuelRepository(abc.ABC):
         участников после `add(...)`) или БД-уровневые инварианты
         нарушены.
         """
+
+    @abc.abstractmethod
+    async def find_most_recent_for_clan(self, *, clan_id: int) -> MassDuel | None:
+        """Найти самый свежий mass-duel для указанного клана (любая сторона).
+
+        Используется в use-case `StartMassDuel` (Спринт 2.2.E) для
+        проверки cooldown-а 6 часов (ГДД §7.2 / 2.2.2): если у клана
+        был mass-duel за последние `pvp.mass_duel.cooldown_hours` —
+        отказ в новой атаке.
+
+        Контракт реализаций:
+        - возвращает запись с максимальным `created_at` среди всех
+          mass-duel-ов, где `clan{1,2}_id == clan_id` (любая роль —
+          атакующий или защитник);
+        - сортирует по `created_at DESC, id DESC` для детерминизма
+          при совпадающих timestamp-ах;
+        - возвращает `None`, если у клана нет ни одного mass-duel-а
+          (включая отменённые/завершённые — cooldown тикается с
+          момента старта боя независимо от исхода).
+        """
