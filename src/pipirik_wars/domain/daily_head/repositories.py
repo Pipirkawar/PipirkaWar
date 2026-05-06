@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Sequence
-from datetime import date
+from datetime import date, datetime
 
 from pipirik_wars.domain.daily_head.entities import DailyHeadAssignment
 
@@ -95,4 +95,36 @@ class IDailyActivityRepository(abc.ABC):
         - заморозкенные / удалённые из клана игроки исключаются;
         - порядок не гарантирован (вызывающий код применяет свой
           фильтр + `IRandom.choice`).
+        """
+
+    @abc.abstractmethod
+    async def record_active(
+        self,
+        *,
+        user_id: int,
+        last_at: datetime,
+        moscow_date: date,
+    ) -> None:
+        """Идемпотентно отметить «игрок был активен в этот день».
+
+        Запись по `(moscow_date, user_id)` (PK таблицы `daily_active`).
+        При повторных вызовах в те же сутки (множество сообщений) —
+        UPSERT с обновлением `last_at`. Метод используется bot-middleware-ом
+        `DailyActivityMiddleware` (Спринт 2.3.F.1) на каждое входящее
+        Telegram-сообщение от игрока в групповом чате клана; результат
+        затем читается `list_active_member_ids(...)` для preflight-проверки
+        `min_active_members` в `DailyHeadService` (Спринт 2.3.A).
+
+        Контракт реализаций:
+        - целевая запись по PK `(moscow_date, user_id)`; при конфликте —
+          UPDATE `last_at` на новое значение (всегда позднее или равно
+          существующему, инвариант гарантируется монотонно растущим
+          `IClock`);
+        - реализация **не** валидирует FK: вызывающий код должен убедиться,
+          что `user_id` соответствует существующей записи в `users` (иначе
+          PG бросит `IntegrityError`); use-case `RecordPlayerActivity`
+          (2.3.F.1) делает явный lookup игрока и no-op-ит для незнакомых
+          tg-id;
+        - выполняется внутри активного `IUnitOfWork`, без собственного
+          коммита.
         """

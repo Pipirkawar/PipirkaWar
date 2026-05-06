@@ -474,3 +474,22 @@ class RunDailyHeadCronInput(_StrictBase):
     """
 
     clan_id: int = Field(gt=0, description="Внутренний clans.id")
+
+
+class RecordPlayerActivityInput(_StrictBase):
+    """Запись активности игрока в `daily_active` (Спринт 2.3.F.1).
+
+    Зовётся middleware-ом `DailyActivityMiddleware` на каждое входящее
+    Telegram-сообщение от пользователя в групповом / супергрупповом
+    чате. Use-case делает lookup игрока по `tg_user_id` (если игрок
+    не зарегистрирован — no-op без ошибки) и UPSERT в `daily_active`
+    по PK `(moscow_date, user_id)`.
+
+    `tg_user_id` — Telegram user_id отправителя сообщения; реальный
+    `users.id` (DB primary key) резолвится use-case-ом.
+    """
+
+    tg_user_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id игрока, проявившего активность",
+    )
