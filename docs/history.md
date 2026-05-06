@@ -23,6 +23,42 @@
 
 ---
 
+## 2026-05-07 — Спринт 2.5-A: каркас расширенного админ-интерфейса (admin_audit_log + AdminGuard + TOTP-confirm)
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 2.5 ([`current_tasks.md`](current_tasks.md), ПД §5 / задачи 2.5.1, 2.5.2, 2.5.5, 2.5.8, 2.5.9 в части каркаса), ГДД §18.6 (основной канал администрирования — Telegram-бот), [PR #79](https://github.com/Pipirkawar/PipirkaWar/pull/79) (мерж — `b358349`)
+
+Что сделано:
+- **2.5-A.1 — таблица `admin_audit_log`** (`046ad62`). Отдельная от общего `audit_log` (чтобы `/audit <admin>` в 2.5-D был быстрым; `admin_id` обязателен; добавлены `tg_chat_id` / `ip` / `source ENUM('bot','web')`). Миграция `0016_admin_audit_log` (descends from `0015_referrals`), ORM `AdminAuditLogORM` с тремя индексами (`(admin_id, occurred_at)`, `(target_kind, target_id)`, `(action)`) + `CHECK source IN ('bot','web')`, доменный port `IAdminAuditLogger` + VO `AdminAuditEntry` + enum-ы `AdminAuditAction` / `AdminAuditSource`, `SqlAlchemyAdminAuditLogger` + `FakeAdminAuditLogger`. 6 integration-тестов + 4 unit-теста + расширение `test_migrations`.
+- **2.5-A.2 — `AdminGuard` aiogram outer-middleware** (`43186c3`). Enrichment-middleware: читает `data["auth_data"]` (от `AuthMiddleware`), ищет `Admin` через `IAdminRepository.get_by_tg_id`, кладёт `data["admin"] = Admin | None`. Деактивированные админы → `None` (соответствует ГДД §18.6 revoke-семантике). DI-композиция в `build_dispatcher()` — встаёт между `AuthMiddleware` и `LocaleMiddleware` на всех 3 observer-ах (`message`, `callback_query`, `my_chat_member`). 7 unit-тестов + апдейт `test_composition_root` (стек +1 middleware).
+- **2.5-A.3 — TOTP-confirm scaffold** (`0bc3fdc`). Однократный токен + 6-значный TOTP — для опасных команд в 2.5-B/C/D. Токен сжигается до проверки (atomic `pop` из store-а) — защита от brute-force.
+  - Миграция `0017_admins_totp_secret` (новая колонка `admins.totp_secret VARCHAR(64) NULL`; `NULL` = 2FA не настроено).
+  - Domain: `AdminConfirmRequest` / `AdminConfirmEntry` + ошибки (`Confirm{TokenNotFound,TokenExpired,CodeInvalid,AdminMismatch}Error`, `TotpNotConfiguredError`) + порты `IAdminConfirmStore` / `ITotpVerifier`.
+  - Application: `RequestAdminConfirm` (генерит token + пишет `ADMIN_CONFIRM_REQUESTED` в audit) + `VerifyAdminConfirm` (`pop` → проверка → `ADMIN_CONFIRM_VERIFIED`/`FAILED` в audit).
+  - Infrastructure: `InMemoryAdminConfirmStore` (TTL 60 сек, `cleanup_expired`) + `PyOtpTotpVerifier` (RFC 6238, `valid_window=1` для дрейфа часов).
+  - Локали `admin-confirm-*` в `ru.ftl` + `en.ftl`.
+  - `pyotp>=2.9,<3` добавлен в runtime-зависимости + `mypy` override (нет stub-ов).
+  - 35 новых unit-тестов + 2 integration-теста на `totp_secret`-roundtrip.
+
+Результат / артефакты:
+- Миграции: `infrastructure/db/migrations/versions/20260507_0016_admin_audit_log.py`, `20260507_0017_admins_totp_secret.py`.
+- Domain: `domain/admin/audit.py`, `domain/admin/confirm.py`, `domain/admin/ports/{admin_audit,admin_confirm}.py`.
+- Application: `application/admin/{request_confirm,verify_confirm}.py`.
+- Infrastructure: `infrastructure/db/models/admin_audit.py`, `infrastructure/db/repositories/admin_audit.py`, `infrastructure/admin/{in_memory_confirm_store,pyotp_totp_verifier}.py`.
+- Bot: `bot/middlewares/admin_guard.py`, DI-доводка в `bot/main.py`.
+- Локали: новые ключи в `locales/{ru,en}.ftl` (`admin-confirm-*`).
+- Тесты: `tests/integration/db/test_admin_audit_logger.py`, расширение `test_admin_repository.py` и `test_migrations.py`, `tests/unit/{application,infrastructure,domain}/admin/`.
+
+Заметки / решения:
+- **DI use-case-ов в `Container` не делали.** Реальные handler-ы (`/ban`, `/grant_length`, `/grant_thickness`, `/balance_set`, `/announce`) появятся в 2.5-B / 2.5-C / 2.5-D — там же подключим `RequestAdminConfirm` и `VerifyAdminConfirm` к `Container`. Так не плодим мёртвую инжекцию и легче ревьюить каждый спринт.
+- **TOTP-секрет хранится в plain-text BASE32**, как принято в большинстве OSS-проектов того же класса (jenkins-totp, pgadmin, mattermost). Шифрование на уровне приложения добавлять не стали — это перенесёт корень доверия в KMS, что без полноценного KMS-сетапа в проекте не имеет смысла. Если решение пересмотрят — поменять `Admin.totp_secret` тип на «зашифрованную строку» можно за один спринт без слома схемы.
+- **`AdminGuard` — enrichment, а не gate-keeper.** «Тихий игнор не-админов» делается на уровне router-фильтра при привязке handler-а (появится в 2.5-B). Иначе middleware светил бы факт существования `/admin_*`-команды через тайминг-разницу.
+- **Token-фабрика — параметр.** Use-case `RequestAdminConfirm` принимает `TokenFactory: () -> str`, что позволяет тесту подменять её детерминированно. В композиционном корне в 2.5-B будет `secrets.token_urlsafe(16)`.
+- **Локальный `make ci` после мерджа:** 2901 passed / 1 skipped, coverage 96.19%.
+
+---
+
 ## 2026-05-06 — Спринт 2.4: реферальная система и шеринг (полное закрытие — A→F)
 
 **Автор:** Devin (агент)
