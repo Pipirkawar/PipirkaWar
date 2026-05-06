@@ -482,3 +482,31 @@ clan-head-success = 👑 <b>Clan head of the day</b> — { $head_display_name }!
 clan-head-already-assigned = 👑 The clan head for today is already assigned — { $head_display_name } (+{ NUMBER($bonus_cm, useGrouping: 0) } cm).
 
   💬 <i>{ $quote_text }</i>
+
+## Referral-share button (Sprint 2.4.D-b, GDD §13.2)
+# Button label under duel / forest results — shares result with referral link.
+referral-share-button = 🔗 Share
+
+# Text posted to chat when user clicks "Share" after a duel (victory).
+# Parameters: $winner, $loser, $delta_cm, $winner_length_cm, $deeplink.
+referral-share-duel-victory = ⚔️ PIPIRIK WARS — Battle Result!
+    { $winner } 🏆 won!
+    Stole { NUMBER($delta_cm, useGrouping: 0) } cm from { $loser }!
+    📏 New length: { NUMBER($winner_length_cm, useGrouping: 0) } cm
+
+    🎮 Play too → { $deeplink }
+
+# Text for a draw.
+# Parameters: $p1, $p2, $deeplink.
+referral-share-duel-draw = ⚔️ PIPIRIK WARS — Battle Result!
+    Draw: { $p1 } and { $p2 } parted on equal terms.
+
+    🎮 Play too → { $deeplink }
+
+# Text posted to chat when user clicks "Share" after a forest run.
+# Parameters: $player, $delta_cm, $length_cm, $deeplink.
+referral-share-forest = 🌲 PIPIRIK WARS — Forest Run!
+    { $player } returned from the forest with { NUMBER($delta_cm, useGrouping: 0) } cm!
+    📏 New length: { NUMBER($length_cm, useGrouping: 0) } cm
+
+    🎮 Play too → { $deeplink }

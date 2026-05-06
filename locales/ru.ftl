@@ -484,3 +484,31 @@ clan-head-success = 👑 <b>Глава клана дня</b> — { $head_display
 clan-head-already-assigned = 👑 На сегодня глава уже назначен — { $head_display_name } (+{ NUMBER($bonus_cm, useGrouping: 0) } см).
 
   💬 <i>{ $quote_text }</i>
+
+## Referral-share кнопка (Спринт 2.4.D-b, ГДД §13.2)
+# Кнопка подписи под результатом дуэли / похода — шарит результат с реферальной ссылкой.
+referral-share-button = 🔗 Поделиться
+
+# Текст, постящийся в чат при нажатии кнопки «Поделиться» после дуэли (победа).
+# Параметры: $winner, $loser, $delta_cm, $winner_length_cm, $deeplink.
+referral-share-duel-victory = ⚔️ ПИПИРИК ВАРС — Результат боя!
+    { $winner } 🏆 победил!
+    Украл { NUMBER($delta_cm, useGrouping: 0) } см у { $loser }!
+    📏 Новая длина: { NUMBER($winner_length_cm, useGrouping: 0) } см
+
+    🎮 Играй тоже → { $deeplink }
+
+# Текст для ничьей.
+# Параметры: $p1, $p2, $deeplink.
+referral-share-duel-draw = ⚔️ ПИПИРИК ВАРС — Результат боя!
+    Ничья: { $p1 } и { $p2 } разошлись с миром.
+
+    🎮 Играй тоже → { $deeplink }
+
+# Текст, постящийся в чат при нажатии кнопки «Поделиться» после похода.
+# Параметры: $player, $delta_cm, $length_cm, $deeplink.
+referral-share-forest = 🌲 ПИПИРИК ВАРС — Поход в лес!
+    { $player } вернулся из леса с { NUMBER($delta_cm, useGrouping: 0) } см!
+    📏 Новая длина: { NUMBER($length_cm, useGrouping: 0) } см
+
+    🎮 Играй тоже → { $deeplink }
