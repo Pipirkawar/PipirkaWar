@@ -711,3 +711,24 @@ admin-clan-card-no-leader = 👑 Лидер: —
 # Одна строка участника. Параметры: $tg_id, $username, $name, $length_cm, $thickness_level, $status, $role, $joined_at.
 admin-clan-card-member-row = • @{ $username } ({ $name }, tg_id <code>{ $tg_id }</code>) · { $length_cm } см · t{ $thickness_level } · { $status } · { $role } · с { $joined_at }
 admin-clan-card-no-members = (в клане нет участников)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Спринт 2.5-D.2 — `/freeze_clan` / `/unfreeze_clan` (ГДД §18.6.5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /freeze_clan <id|chat_id> [reason]
+admin-freeze-clan-usage = ⚠ Использование: <code>/freeze_clan &lt;id|chat_id&gt; [reason]</code>.
+admin-freeze-clan-not-authorized = ❌Только активные админы могут замораживать кланы.
+admin-freeze-clan-bad-id = ⚠ <code>{ $value }</code> не похож на id клана (целое число).
+admin-freeze-clan-not-found = 🔍Клан с id/chat_id <code>{ $query }</code> не найден.
+admin-freeze-clan-already = ℹ Клан #{ $clan_id } уже заморожен.
+admin-freeze-clan-ok = ❄ Клан #{ $clan_id } заморожен.{ $reason_suffix }
+admin-freeze-clan-reason-suffix = Причина: { $reason }.
+
+# /unfreeze_clan <id|chat_id>
+admin-unfreeze-clan-usage = ⚠ Использование: <code>/unfreeze_clan &lt;id|chat_id&gt;</code>.
+admin-unfreeze-clan-not-authorized = ❌Только активные админы могут размораживать кланы.
+admin-unfreeze-clan-bad-id = ⚠ <code>{ $value }</code> не похож на id клана (целое число).
+admin-unfreeze-clan-not-found = 🔍Клан с id/chat_id <code>{ $query }</code> не найден.
+admin-unfreeze-clan-already = ℹ Клан #{ $clan_id } уже активен.
+admin-unfreeze-clan-ok = 🔥 Клан #{ $clan_id } разморожен.

@@ -18,6 +18,7 @@ from pydantic import SecretStr
 from pipirik_wars.application.admin import (
     BanPlayer,
     FindPlayers,
+    FreezeClanAdmin,
     FreezePlayer,
     GetAdminAuditTrail,
     GetBalanceValue,
@@ -27,6 +28,7 @@ from pipirik_wars.application.admin import (
     GrantThickness,
     RequestAdminConfirm,
     SetBalanceValue,
+    UnfreezeClanAdmin,
     UnfreezePlayer,
     VerifyAdminConfirm,
 )
@@ -560,6 +562,20 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         audit=admin_audit,
         clock=clock,
     )
+    freeze_clan_admin_uc = FreezeClanAdmin(
+        uow=uow,
+        admins=admins,
+        clans=clans,
+        audit=admin_audit,
+        clock=clock,
+    )
+    unfreeze_clan_admin_uc = UnfreezeClanAdmin(
+        uow=uow,
+        admins=admins,
+        clans=clans,
+        audit=admin_audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -779,6 +795,8 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         set_balance_value=set_balance_value_uc,
         get_admin_audit_trail=get_admin_audit_trail_uc,
         get_clan_card=get_clan_card_uc,
+        freeze_clan_admin=freeze_clan_admin_uc,
+        unfreeze_clan_admin=unfreeze_clan_admin_uc,
     )
 
 

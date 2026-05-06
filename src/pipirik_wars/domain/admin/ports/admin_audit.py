@@ -102,6 +102,12 @@ class AdminAuditAction(str, enum.Enum):
     # Пишем по аналогии с `ADMIN_PLAYER_LOOKUP` — каждая «пробивка» клана
     # тоже видна в `/audit`.
     ADMIN_CLAN_LOOKUP = "admin_clan_lookup"
+    # Write-side: ручная заморозка клана админом (`/freeze_clan`).
+    # Отличается от автоматической `CLAN_FREEZE` (общий аудит) тем, что
+    # пишется в admin-аудит и привязана к конкретному админу. Идемпотентна.
+    ADMIN_CLAN_FROZEN = "admin_clan_frozen"
+    # Write-side: ручная разморозка клана админом (`/unfreeze_clan`).
+    ADMIN_CLAN_UNFROZEN = "admin_clan_unfrozen"
 
 
 class AdminAuditSource(str, enum.Enum):

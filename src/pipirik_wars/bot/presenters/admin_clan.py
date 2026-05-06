@@ -142,4 +142,126 @@ class GetClanCardPresenter:
         )
 
 
-__all__ = ["GetClanCardPresenter"]
+# ── /freeze_clan ─────────────────────────────────────────────────────────────
+
+_KEY_FREEZE_USAGE: Final[MessageKey] = MessageKey("admin-freeze-clan-usage")
+_KEY_FREEZE_NOT_AUTHORIZED: Final[MessageKey] = MessageKey(
+    "admin-freeze-clan-not-authorized",
+)
+_KEY_FREEZE_BAD_ID: Final[MessageKey] = MessageKey("admin-freeze-clan-bad-id")
+_KEY_FREEZE_NOT_FOUND: Final[MessageKey] = MessageKey("admin-freeze-clan-not-found")
+_KEY_FREEZE_ALREADY: Final[MessageKey] = MessageKey("admin-freeze-clan-already")
+_KEY_FREEZE_OK: Final[MessageKey] = MessageKey("admin-freeze-clan-ok")
+_KEY_FREEZE_REASON_SUFFIX: Final[MessageKey] = MessageKey(
+    "admin-freeze-clan-reason-suffix",
+)
+
+
+class FreezeClanAdminPresenter:
+    """Локализованные ответы `/freeze_clan`."""
+
+    __slots__ = ("_bundle",)
+
+    def __init__(self, *, bundle: IMessageBundle) -> None:
+        self._bundle = bundle
+
+    def usage(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_FREEZE_USAGE, locale=locale)
+
+    def not_authorized(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_FREEZE_NOT_AUTHORIZED, locale=locale)
+
+    def bad_id(self, *, locale: Locale, value: str) -> str:
+        return self._bundle.format(_KEY_FREEZE_BAD_ID, locale=locale, value=value)
+
+    def not_found(self, *, locale: Locale, query: int) -> str:
+        return self._bundle.format(
+            _KEY_FREEZE_NOT_FOUND,
+            locale=locale,
+            query=str(query),
+        )
+
+    def already(self, *, locale: Locale, clan_id: int) -> str:
+        return self._bundle.format(
+            _KEY_FREEZE_ALREADY,
+            locale=locale,
+            clan_id=str(clan_id),
+        )
+
+    def ok(self, *, locale: Locale, clan_id: int, reason: str | None) -> str:
+        suffix = (
+            " "
+            + self._bundle.format(
+                _KEY_FREEZE_REASON_SUFFIX,
+                locale=locale,
+                reason=reason,
+            )
+            if reason is not None and reason
+            else ""
+        )
+        return self._bundle.format(
+            _KEY_FREEZE_OK,
+            locale=locale,
+            clan_id=str(clan_id),
+            reason_suffix=suffix,
+        )
+
+
+# ── /unfreeze_clan ───────────────────────────────────────────────────────────
+
+_KEY_UNFREEZE_USAGE: Final[MessageKey] = MessageKey("admin-unfreeze-clan-usage")
+_KEY_UNFREEZE_NOT_AUTHORIZED: Final[MessageKey] = MessageKey(
+    "admin-unfreeze-clan-not-authorized",
+)
+_KEY_UNFREEZE_BAD_ID: Final[MessageKey] = MessageKey("admin-unfreeze-clan-bad-id")
+_KEY_UNFREEZE_NOT_FOUND: Final[MessageKey] = MessageKey(
+    "admin-unfreeze-clan-not-found",
+)
+_KEY_UNFREEZE_ALREADY: Final[MessageKey] = MessageKey("admin-unfreeze-clan-already")
+_KEY_UNFREEZE_OK: Final[MessageKey] = MessageKey("admin-unfreeze-clan-ok")
+
+
+class UnfreezeClanAdminPresenter:
+    """Локализованные ответы `/unfreeze_clan`."""
+
+    __slots__ = ("_bundle",)
+
+    def __init__(self, *, bundle: IMessageBundle) -> None:
+        self._bundle = bundle
+
+    def usage(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_UNFREEZE_USAGE, locale=locale)
+
+    def not_authorized(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_UNFREEZE_NOT_AUTHORIZED, locale=locale)
+
+    def bad_id(self, *, locale: Locale, value: str) -> str:
+        return self._bundle.format(_KEY_UNFREEZE_BAD_ID, locale=locale, value=value)
+
+    def not_found(self, *, locale: Locale, query: int) -> str:
+        return self._bundle.format(
+            _KEY_UNFREEZE_NOT_FOUND,
+            locale=locale,
+            query=str(query),
+        )
+
+    def already(self, *, locale: Locale, clan_id: int) -> str:
+        return self._bundle.format(
+            _KEY_UNFREEZE_ALREADY,
+            locale=locale,
+            clan_id=str(clan_id),
+        )
+
+    def ok(self, *, locale: Locale, clan_id: int) -> str:
+        return self._bundle.format(
+            _KEY_UNFREEZE_OK,
+            locale=locale,
+            clan_id=str(clan_id),
+        )
+
+
+__all__ = [
+    "FreezeClanAdminPresenter",
+    "GetClanCardPresenter",
+    "UnfreezeClanAdminPresenter",
+]

@@ -25,6 +25,11 @@ from pipirik_wars.application.admin.find_players import (
     PlayerSummary,
     player_to_summary,
 )
+from pipirik_wars.application.admin.freeze_clan import (
+    FreezeClanAdmin,
+    FreezeClanAdminInput,
+    FreezeClanAdminOutput,
+)
 from pipirik_wars.application.admin.freeze_player import (
     FreezePlayer,
     FreezePlayerInput,
@@ -82,6 +87,11 @@ from pipirik_wars.application.admin.set_balance_value import (
     SetBalanceValueInput,
     SetBalanceValueOutput,
 )
+from pipirik_wars.application.admin.unfreeze_clan import (
+    UnfreezeClanAdmin,
+    UnfreezeClanAdminInput,
+    UnfreezeClanAdminOutput,
+)
 from pipirik_wars.application.admin.unfreeze_player import (
     UnfreezePlayer,
     UnfreezePlayerInput,
@@ -110,6 +120,9 @@ __all__ = [
     "FindPlayersInput",
     "FindPlayersOutput",
     "ForestCardInfo",
+    "FreezeClanAdmin",
+    "FreezeClanAdminInput",
+    "FreezeClanAdminOutput",
     "FreezePlayer",
     "FreezePlayerInput",
     "FreezePlayerOutput",
@@ -143,6 +156,9 @@ __all__ = [
     "SetBalanceValueOutput",
     "ThicknessLevelInvalidError",
     "TokenFactory",
+    "UnfreezeClanAdmin",
+    "UnfreezeClanAdminInput",
+    "UnfreezeClanAdminOutput",
     "UnfreezePlayer",
     "UnfreezePlayerInput",
     "UnfreezePlayerOutput",

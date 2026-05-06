@@ -38,6 +38,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pipirik_wars.application.admin import (
     BanPlayer,
     FindPlayers,
+    FreezeClanAdmin,
     FreezePlayer,
     GetAdminAuditTrail,
     GetBalanceValue,
@@ -47,6 +48,7 @@ from pipirik_wars.application.admin import (
     GrantThickness,
     RequestAdminConfirm,
     SetBalanceValue,
+    UnfreezeClanAdmin,
     UnfreezePlayer,
     VerifyAdminConfirm,
 )
@@ -382,6 +384,9 @@ class Container:
     get_admin_audit_trail: GetAdminAuditTrail
     # Спринт 2.5-D.1: read-side карточка клана — `/clan`.
     get_clan_card: GetClanCard
+    # Спринт 2.5-D.2: ручная заморозка/разморозка клана админом.
+    freeze_clan_admin: FreezeClanAdmin
+    unfreeze_clan_admin: UnfreezeClanAdmin
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -1002,6 +1007,20 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=admin_audit,
         clock=clock,
     )
+    freeze_clan_admin = FreezeClanAdmin(
+        uow=uow,
+        admins=admins,
+        clans=clans,
+        audit=admin_audit,
+        clock=clock,
+    )
+    unfreeze_clan_admin = UnfreezeClanAdmin(
+        uow=uow,
+        admins=admins,
+        clans=clans,
+        audit=admin_audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -1102,6 +1121,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         set_balance_value=set_balance_value,
         get_admin_audit_trail=get_admin_audit_trail,
         get_clan_card=get_clan_card,
+        freeze_clan_admin=freeze_clan_admin,
+        unfreeze_clan_admin=unfreeze_clan_admin,
     )
 
 
@@ -1208,6 +1229,9 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["get_admin_audit_trail"] = container.get_admin_audit_trail
     # Спринт 2.5-D.1 — read-side карточка клана `/clan`.
     dispatcher["get_clan_card"] = container.get_clan_card
+    # Спринт 2.5-D.2 — `/freeze_clan`, `/unfreeze_clan` (admin-side).
+    dispatcher["freeze_clan_admin"] = container.freeze_clan_admin
+    dispatcher["unfreeze_clan_admin"] = container.unfreeze_clan_admin
     return dispatcher
 
 

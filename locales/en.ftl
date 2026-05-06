@@ -705,3 +705,24 @@ admin-clan-card-no-leader = 👑 Leader: —
 # One member row. Params: $tg_id, $username, $name, $length_cm, $thickness_level, $status, $role, $joined_at.
 admin-clan-card-member-row = • @{ $username } ({ $name }, tg_id <code>{ $tg_id }</code>) · { $length_cm } cm · t{ $thickness_level } · { $status } · { $role } · since { $joined_at }
 admin-clan-card-no-members = (clan has no members)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 2.5-D.2 — `/freeze_clan` / `/unfreeze_clan` (GDD §18.6.5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /freeze_clan <id|chat_id> [reason]
+admin-freeze-clan-usage = ⚠ Usage: <code>/freeze_clan &lt;id|chat_id&gt; [reason]</code>.
+admin-freeze-clan-not-authorized = ❌Only active admins can freeze clans.
+admin-freeze-clan-bad-id = ⚠ <code>{ $value }</code> is not a clan id (integer).
+admin-freeze-clan-not-found = 🔍Clan with id/chat_id <code>{ $query }</code> not found.
+admin-freeze-clan-already = ℹ Clan #{ $clan_id } is already frozen.
+admin-freeze-clan-ok = ❄ Clan #{ $clan_id } frozen.{ $reason_suffix }
+admin-freeze-clan-reason-suffix = Reason: { $reason }.
+
+# /unfreeze_clan <id|chat_id>
+admin-unfreeze-clan-usage = ⚠ Usage: <code>/unfreeze_clan &lt;id|chat_id&gt;</code>.
+admin-unfreeze-clan-not-authorized = ❌Only active admins can unfreeze clans.
+admin-unfreeze-clan-bad-id = ⚠ <code>{ $value }</code> is not a clan id (integer).
+admin-unfreeze-clan-not-found = 🔍Clan with id/chat_id <code>{ $query }</code> not found.
+admin-unfreeze-clan-already = ℹ Clan #{ $clan_id } is already active.
+admin-unfreeze-clan-ok = 🔥 Clan #{ $clan_id } unfrozen.
