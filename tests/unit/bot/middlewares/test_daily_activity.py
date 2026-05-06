@@ -53,7 +53,9 @@ class TestDailyActivityMiddleware:
         assert result == "handler-result"
         use_case.assert_awaited_once()
         # Argument: RecordPlayerActivityInput(tg_user_id=42).
-        call_arg = use_case.await_args.args[0]
+        await_args = use_case.await_args
+        assert await_args is not None
+        call_arg = await_args.args[0]
         assert call_arg.tg_user_id == 42
 
     async def test_records_activity_for_message_in_supergroup(self) -> None:

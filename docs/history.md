@@ -23,6 +23,58 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.3.F.1: запись активности игроков в `daily_active` (middleware + use-case)
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 2.3.F.1 ([`current_tasks.md` 2.3.F.1](current_tasks.md), ПД §5 / Спринт 2.3.7), ГДД §6.1.2 (preflight «активные за 7 дней» для назначения Главы клана дня)
+
+Что сделано:
+- **Domain — write-метод в порту `IDailyActivityRepository`:** добавлен абстрактный `record_active(*, user_id: int, last_at: datetime, moscow_date: date) -> None`. До 2.3.F.1 порт был read-only (`list_active_member_ids` для preflight-чтения). Запись производится только через middleware на каждое сообщение игрока — domain-слой остаётся чистым.
+- **Infrastructure — UPSERT `record_active`:** `SqlAlchemyDailyActivityRepository.record_active(...)` использует `pg_insert.on_conflict_do_update` (PostgreSQL) и `sqlite_insert.on_conflict_do_update` (SQLite) с `index_elements=[date, user_id]` (PK таблицы `daily_active`) и `set_={"last_at": EXCLUDED.last_at}`. Семантика: первый раз за день — INSERT; повторное сообщение в тот же день — UPDATE `last_at` на свежее значение (без дублей строк).
+- **Application — use-case `RecordPlayerActivity`** (`application/daily_head/record_activity.py`, `RecordPlayerActivity(uow, players, daily_activity, clock)`): `execute(input_dto: RecordPlayerActivityInput) -> bool`. Внутри ambient-UoW: `IPlayerRepository.get_by_tg_id(tg_user_id)` → если `None` / `player.id is None` / `player.status is not PlayerStatus.ACTIVE` → возврат `False` (no-op для незарегистрированных / FROZEN); иначе `daily_activity.record_active(user_id=player.id, last_at=clock.now(), moscow_date=clock.moscow_date())` + `return True`. DTO `RecordPlayerActivityInput(tg_user_id: PositiveTgId)` в `application/dto/inputs.py`.
+- **Bot middleware `DailyActivityMiddleware`** (`bot/middlewares/daily_activity.py`):
+  - Принимает `RecordPlayerActivity` use-case в конструкторе.
+  - На каждое входящее `Message` извлекает `TgIdentity` из `data[AUTH_DATA_KEY]`; если identity отсутствует — пропускает.
+  - Skip: не-`Message` события (`callback_query`, `chat_member`, `my_chat_member`), `private`/`channel` чаты — только `group`/`supergroup` считаются «активностью в клан-чате» для preflight-а Главы клана дня.
+  - Зовёт `use_case.execute(RecordPlayerActivityInput(tg_user_id=...))`.
+  - Ловит исключения use-case-а через `try/except` + `_log.warning(exc_info=True)` — handler выполняется даже если запись провалилась («выживаемость > точность» — спам в RPS-лимит / DB hiccup не должен ронять команду пользователя).
+  - **Не** записывает активность для callback-кликов / chat-member-апдейтов: цель `daily_active` — «писал ли игрок в клан-чат», а не «нажимал ли в боте кнопки».
+- **`register_middlewares(...)`** расширен опциональным параметром `record_player_activity: RecordPlayerActivity | None`. При `None` middleware не подключается (для unit-тестов composition-root). При наличии — `dp.message.middleware(DailyActivityMiddleware(...))` вызывается **отдельно** от общего цикла (только `dp.message`, не `dp.callback_query` и не `dp.my_chat_member`).
+- **DI в `bot/main.py`:** `Container.record_player_activity: RecordPlayerActivity` (рядом с `request_daily_head`/`run_daily_head_cron`); инстанс в `build_container()`; проброс в `register_middlewares(...)` и в `dispatcher["record_player_activity"]` workflow-data.
+- **Тесты:**
+  - **+4 integration** (`tests/integration/db/daily_head/test_daily_activity_repository.py::TestRecordActive`): `test_inserts_new_row`, `test_upsert_updates_last_at_on_same_day`, `test_separate_rows_per_day`, `test_record_then_list_returns_player`. SQLite-naive `last_at` сравнивается через `.replace(tzinfo=None)` (стандартное поведение SQLite, документировано в коде).
+  - **+7 unit-тестов use-case** (`tests/unit/application/daily_head/test_record_player_activity.py`): unknown player no-op, active player records with clock values, frozen no-op, no-id no-op, repeated record uses fresh clock (`FakeClock.set`), input validation отвергает `tg_user_id=0` и `tg_user_id<0` (`pydantic.ValidationError`).
+  - **+9 unit-тестов middleware** (`tests/unit/bot/middlewares/test_daily_activity.py`): records group / records supergroup / skips private / skips channel / skips no-identity / skips callback / skips chat_member / handler runs even when use_case raises / use_case returning False is silent.
+  - **+2 composition-root** assertion-update (`tests/unit/bot/test_composition_root.py`): `_container_with_fakes` создаёт `record_player_activity`; `test_build_dispatcher_assembles_full_stack` проверяет middleware count = 5 у `dp.message` (4 у `callback_query`/`my_chat_member` + дополнительный `DailyActivityMiddleware`).
+  - `FakeDailyActivityRepository` (tests/fakes) расширен полями `record_calls: list[tuple[user_id, last_at, moscow_date]]` + `activity: dict[(date, user_id), datetime]` + методом `record_active`.
+
+Результат / артефакты:
+- `src/pipirik_wars/domain/daily_head/repositories.py` (write-метод `record_active`).
+- `src/pipirik_wars/infrastructure/db/repositories/daily_activity.py` (PostgreSQL + SQLite UPSERT).
+- `src/pipirik_wars/application/daily_head/record_activity.py` (новый use-case).
+- `src/pipirik_wars/application/dto/inputs.py` (`RecordPlayerActivityInput`).
+- `src/pipirik_wars/bot/middlewares/daily_activity.py` (новый middleware).
+- `src/pipirik_wars/bot/middlewares/__init__.py` (опциональный `record_player_activity` параметр).
+- `src/pipirik_wars/bot/main.py` (Container + DI).
+- `tests/fakes/daily_head.py` (write-side fake).
+- `tests/integration/db/daily_head/test_daily_activity_repository.py` (TestRecordActive).
+- `tests/unit/application/daily_head/test_record_player_activity.py` (новый).
+- `tests/unit/bot/middlewares/test_daily_activity.py` (новый).
+- `tests/unit/bot/test_composition_root.py` (обновление под новое поле).
+
+Заметки / решения:
+- **`bool`-возврат вместо исключения для no-op:** use-case возвращает `False` для unknown / no-id / FROZEN — это _не_ ошибка, это легитимный «нечего записывать». Middleware ничего с возвратом не делает (даже не логирует), потому что middleware вызывается на _каждое_ сообщение и подавляющая часть будет `True`-возвратом.
+- **Skip для private/channel:** preflight Главы клана дня требует «активные **в клан-чате**». Личные команды (`/profile` в DM с ботом) и каналы не должны учитываться. Middleware фильтрует на уровне `chat_kind`.
+- **`try/except Exception` в middleware:** сознательный broad-catch. Запись активности — best-effort (наличие/отсутствие записи влияет только на preflight Главы клана дня раз в сутки). DB hiccup / unexpected ошибка не должны ронять основную команду пользователя — handler выполняется в любом случае. Ошибка пишется в лог через `logging.warning(exc_info=True)`.
+- **Throttle сработает _до_ middleware-записи:** в текущем порядке `error → auth → locale → throttle → daily_activity → handler` rate-limit-нутый игрок не зарегистрирует активность. Это сознательный выбор — спам в RPS-лимит не должен заводить активность (исходно планировалось «до throttle», но в aiogram middleware на observer применяются в порядке регистрации, а throttle уже зарегистрирован циклом для всех observer-ов до отдельной регистрации DailyActivity для message-observer-а).
+- **Идемпотентность по PK:** UPSERT по `(date, user_id)` — повторное сообщение в тот же день обновляет `last_at`, не создаёт дубль. Это позволяет middleware быть «глупым» (без локального кэша «уже писал сегодня?») — БД сама обеспечивает корректность.
+- **APScheduler-cron (2.3.F.2)** будет в отдельном PR-е. `RunDailyHeadCron` use-case уже готов в Sprint 2.3.C — нужен только wiring в scheduler с per-clan deterministic offset (sha256-hash от `clan_id + moscow_date_str` modulo 24*60 минут).
+
+Тесты: `make ci` зелёный (TBD после push); локально все 4 integration + 7 use-case + 9 middleware + 6 composition-root тестов проходят.
+
+---
+
 ## 2026-05-06 — Спринт 2.3.E: bot-слой «Главы клана дня» (`/clan_head` handler + presenter + DI каталога цитат)
 
 **Автор:** Devin (агент)
