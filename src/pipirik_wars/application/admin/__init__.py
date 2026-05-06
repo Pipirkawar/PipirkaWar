@@ -12,6 +12,7 @@ Use-case-ы, общие для всех опасных команд:
 живут в `application/admin/<command>/` и появятся в Спринтах 2.5-B/C/D.
 """
 
+from pipirik_wars.application.admin._balance_path import BalanceKeyError
 from pipirik_wars.application.admin.ban_player import (
     BanPlayer,
     BanPlayerInput,
@@ -29,6 +30,11 @@ from pipirik_wars.application.admin.freeze_player import (
     FreezePlayer,
     FreezePlayerInput,
     FreezePlayerOutput,
+)
+from pipirik_wars.application.admin.get_balance_value import (
+    GetBalanceValue,
+    GetBalanceValueInput,
+    GetBalanceValueOutput,
 )
 from pipirik_wars.application.admin.get_player_card import (
     ClanCardInfo,
@@ -70,6 +76,7 @@ from pipirik_wars.application.admin.verify_confirm import (
 
 __all__ = [
     "DEFAULT_FIND_PLAYERS_LIMIT",
+    "BalanceKeyError",
     "BanPlayer",
     "BanPlayerInput",
     "BanPlayerOutput",
@@ -81,6 +88,9 @@ __all__ = [
     "FreezePlayer",
     "FreezePlayerInput",
     "FreezePlayerOutput",
+    "GetBalanceValue",
+    "GetBalanceValueInput",
+    "GetBalanceValueOutput",
     "GetPlayerCard",
     "GetPlayerCardInput",
     "GetPlayerCardOutput",
