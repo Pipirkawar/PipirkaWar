@@ -43,6 +43,13 @@ from pipirik_wars.application.admin.get_balance_value import (
     GetBalanceValueInput,
     GetBalanceValueOutput,
 )
+from pipirik_wars.application.admin.get_clan_card import (
+    ClanCard,
+    ClanMemberCardInfo,
+    GetClanCard,
+    GetClanCardInput,
+    GetClanCardOutput,
+)
 from pipirik_wars.application.admin.get_player_card import (
     ClanCardInfo,
     ForestCardInfo,
@@ -96,7 +103,9 @@ __all__ = [
     "BanPlayer",
     "BanPlayerInput",
     "BanPlayerOutput",
+    "ClanCard",
     "ClanCardInfo",
+    "ClanMemberCardInfo",
     "FindPlayers",
     "FindPlayersInput",
     "FindPlayersOutput",
@@ -110,6 +119,9 @@ __all__ = [
     "GetBalanceValue",
     "GetBalanceValueInput",
     "GetBalanceValueOutput",
+    "GetClanCard",
+    "GetClanCardInput",
+    "GetClanCardOutput",
     "GetPlayerCard",
     "GetPlayerCardInput",
     "GetPlayerCardOutput",

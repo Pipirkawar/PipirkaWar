@@ -682,3 +682,26 @@ admin-audit-filter-action-suffix = Action filter: <code>{ $action }</code>.
 # One list row. Params:
 # $id, $occurred_at (ISO-8601 UTC), $actor_tg_id, $action, $target_kind, $target_id, $source, $reason.
 admin-audit-row = • #{ $id } · { $occurred_at } · @{ $actor_tg_id } · <code>{ $action }</code> · { $target_kind }=<code>{ $target_id }</code> · src={ $source } · { $reason }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 2.5-D.1 — `/clan` read-only clan card (GDD §18.6.5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /clan <id|chat_id>
+admin-clan-usage = ⚠ Usage: <code>/clan &lt;id|chat_id&gt;</code>.
+admin-clan-not-authorized = ❌Only active admins can view clan cards.
+admin-clan-bad-id = ⚠ <code>{ $value }</code> is not a clan id (integer).
+admin-clan-not-found = 🔍Clan with id/chat_id <code>{ $query }</code> not found.
+# Card header. Params: $clan_id, $chat_id, $chat_kind, $title, $status, $created_at, $updated_at, $member_count, $active_member_count, $total_length_cm.
+admin-clan-card-summary =
+    🛡 Clan #{ $clan_id }: <b>{ $title }</b>
+    chat_id: <code>{ $chat_id }</code> ({ $chat_kind })
+    Status: { $status }
+    Created: { $created_at } · updated: { $updated_at }
+    Members: { $member_count } (active { $active_member_count }) · total length: { $total_length_cm } cm.
+# Caravan leader. Params: $tg_id, $username, $name, $length_cm, $joined_at.
+admin-clan-card-leader = 👑 Leader: @{ $username } ({ $name }, tg_id <code>{ $tg_id }</code>) · length { $length_cm } cm · since { $joined_at }.
+admin-clan-card-no-leader = 👑 Leader: —
+# One member row. Params: $tg_id, $username, $name, $length_cm, $thickness_level, $status, $role, $joined_at.
+admin-clan-card-member-row = • @{ $username } ({ $name }, tg_id <code>{ $tg_id }</code>) · { $length_cm } cm · t{ $thickness_level } · { $status } · { $role } · since { $joined_at }
+admin-clan-card-no-members = (clan has no members)

@@ -688,3 +688,26 @@ admin-audit-filter-action-suffix = Фильтр action: <code>{ $action }</code>
 # Одна строка списка. Параметры:
 # $id, $occurred_at (ISO-8601 UTC), $actor_tg_id, $action, $target_kind, $target_id, $source, $reason.
 admin-audit-row = • #{ $id } · { $occurred_at } · @{ $actor_tg_id } · <code>{ $action }</code> · { $target_kind }=<code>{ $target_id }</code> · src={ $source } · { $reason }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Спринт 2.5-D.1 — read-only карточка клана `/clan` (ГДД §18.6.5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /clan <id|chat_id>
+admin-clan-usage = ⚠ Использование: <code>/clan &lt;id|chat_id&gt;</code>.
+admin-clan-not-authorized = ❌Только активные админы могут смотреть карточку клана.
+admin-clan-bad-id = ⚠ <code>{ $value }</code> не похож на id клана (целое число).
+admin-clan-not-found = 🔍Клан с id/chat_id <code>{ $query }</code> не найден.
+# Шапка карточки. Параметры: $clan_id, $chat_id, $chat_kind, $title, $status, $created_at, $updated_at, $member_count, $active_member_count, $total_length_cm.
+admin-clan-card-summary =
+    🛡 Клан #{ $clan_id }: <b>{ $title }</b>
+    chat_id: <code>{ $chat_id }</code> ({ $chat_kind })
+    Статус: { $status }
+    Создан: { $created_at } · обновлён: { $updated_at }
+    Участников: { $member_count } (активных { $active_member_count }) · сумма длин: { $total_length_cm } см.
+# Лидер каравана. Параметры: $tg_id, $username, $name, $length_cm, $joined_at.
+admin-clan-card-leader = 👑 Лидер: @{ $username } ({ $name }, tg_id <code>{ $tg_id }</code>) · длина { $length_cm } см · с { $joined_at }.
+admin-clan-card-no-leader = 👑 Лидер: —
+# Одна строка участника. Параметры: $tg_id, $username, $name, $length_cm, $thickness_level, $status, $role, $joined_at.
+admin-clan-card-member-row = • @{ $username } ({ $name }, tg_id <code>{ $tg_id }</code>) · { $length_cm } см · t{ $thickness_level } · { $status } · { $role } · с { $joined_at }
+admin-clan-card-no-members = (в клане нет участников)

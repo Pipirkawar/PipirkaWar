@@ -41,6 +41,7 @@ from pipirik_wars.application.admin import (
     FreezePlayer,
     GetAdminAuditTrail,
     GetBalanceValue,
+    GetClanCard,
     GetPlayerCard,
     GrantLength,
     GrantThickness,
@@ -379,6 +380,8 @@ class Container:
     set_balance_value: SetBalanceValue
     # Спринт 2.5-D.5: read-side observability — `/audit`-листинг.
     get_admin_audit_trail: GetAdminAuditTrail
+    # Спринт 2.5-D.1: read-side карточка клана — `/clan`.
+    get_clan_card: GetClanCard
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -990,6 +993,15 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=admin_audit,
         clock=clock,
     )
+    get_clan_card = GetClanCard(
+        uow=uow,
+        admins=admins,
+        players=players,
+        clans=clans,
+        clan_members=clan_members,
+        audit=admin_audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -1089,6 +1101,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         get_balance_value=get_balance_value,
         set_balance_value=set_balance_value,
         get_admin_audit_trail=get_admin_audit_trail,
+        get_clan_card=get_clan_card,
     )
 
 
@@ -1193,6 +1206,8 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["set_balance_value"] = container.set_balance_value
     # Спринт 2.5-D.5 — read-side observability `/audit`.
     dispatcher["get_admin_audit_trail"] = container.get_admin_audit_trail
+    # Спринт 2.5-D.1 — read-side карточка клана `/clan`.
+    dispatcher["get_clan_card"] = container.get_clan_card
     return dispatcher
 
 

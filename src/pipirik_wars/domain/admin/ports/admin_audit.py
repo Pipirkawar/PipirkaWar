@@ -97,6 +97,12 @@ class AdminAuditAction(str, enum.Enum):
     # видеть, кто и какой срез аудита смотрел (ГДД §18.6.4).
     ADMIN_AUDIT_QUERIED = "admin_audit_queried"
 
+    # ── Спринт 2.5-D (команды поддержки кланов) ──
+    # Read-side lookup карточки клана (`/clan`, `/clan_daily_head_history`).
+    # Пишем по аналогии с `ADMIN_PLAYER_LOOKUP` — каждая «пробивка» клана
+    # тоже видна в `/audit`.
+    ADMIN_CLAN_LOOKUP = "admin_clan_lookup"
+
 
 class AdminAuditSource(str, enum.Enum):
     """Источник админ-команды.
