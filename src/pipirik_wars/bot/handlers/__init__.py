@@ -15,6 +15,7 @@ InvokeOracle) и `top` (Спринт 1.4.C: /top → GetTopPlayers с TTL-кэш
 from aiogram import Dispatcher
 
 from pipirik_wars.bot.handlers.admin import router as admin_router
+from pipirik_wars.bot.handlers.admin_economy import router as admin_economy_router
 from pipirik_wars.bot.handlers.admin_support import router as admin_support_router
 from pipirik_wars.bot.handlers.clan_head import router as clan_head_router
 from pipirik_wars.bot.handlers.clan_history import router as clan_history_router
@@ -53,6 +54,9 @@ def register_routers(dispatcher: Dispatcher) -> None:
     # на самом router-е (см. `admin_support.router.message.filter(...)`),
     # поэтому здесь — обычный `include_router`.
     dispatcher.include_router(admin_support_router)
+    # Спринт 2.5-C.6: economy router (`/grant_length`, `/grant_thickness`,
+    # `/balance_get`, `/balance_set`). Фильтр `is_admin` — на самом router-е.
+    dispatcher.include_router(admin_economy_router)
     dispatcher.include_router(registration_router)
 
 

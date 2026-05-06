@@ -25,6 +25,13 @@ class TestAdminAuditAction:
         """Чтобы можно было сериализовать без `.value`."""
         assert isinstance(AdminAuditAction.ADMIN_CONFIRM_REQUESTED, str)
 
+    def test_economy_actions_present(self) -> None:
+        """Спринт 2.5-C: команды экономики (`/grant_*`, `/balance_*`)."""
+        assert AdminAuditAction.ADMIN_GRANT_LENGTH.value == "admin_grant_length"
+        assert AdminAuditAction.ADMIN_GRANT_THICKNESS.value == "admin_grant_thickness"
+        assert AdminAuditAction.ADMIN_BALANCE_GET.value == "admin_balance_get"
+        assert AdminAuditAction.ADMIN_BALANCE_SET.value == "admin_balance_set"
+
 
 class TestAdminAuditSource:
     def test_only_bot_and_web_allowed(self) -> None:

@@ -70,6 +70,26 @@ class AdminAuditAction(str, enum.Enum):
     # звать `BanPlayer.execute()`).
     ADMIN_BAN_BLOCKED = "admin_ban_blocked"
 
+    # ── Спринт 2.5-C (команды экономики) ──
+    # Write-side: ручной грант / отзыв длины (TOTP-обязательная). Положительная
+    # дельта проходит через `AddLength` с `AuditSource.ADMIN_GRANT`, отрицательная —
+    # с `AuditSource.ADMIN_REFUND`; обе попадают в anti-cheat rolling-окно
+    # (ГДД §6 / table «положительные `LENGTH_DELTA`»).
+    ADMIN_GRANT_LENGTH = "admin_grant_length"
+    # Write-side: установка нового уровня толщины (TOTP-обязательная). НЕ дельта,
+    # а абсолютное значение (ГДД §16). Не попадает в anti-cheat-окно (длина и
+    # толщина — разные оси прогрессии, ГДД §3.2).
+    ADMIN_GRANT_THICKNESS = "admin_grant_thickness"
+    # Read-side чтение балансового ключа (`/balance_get`). Логируется по аналогии
+    # с `ADMIN_PLAYER_LOOKUP` — super-admin в `/audit` должен видеть, кто
+    # пробивал балансовые константы (ГДД §18.6.4).
+    ADMIN_BALANCE_GET = "admin_balance_get"
+    # Write-side: правка балансового ключа в `config/balance.yaml` (TOTP-обязательная).
+    # Audit пишется ДО `IBalanceReloader.reload()` — иначе при сбое reload-а
+    # мы бы потеряли запись о попытке. Откат YAML-файла при сбое reload-а — на
+    # стороне `IBalanceWriter`-а (записывает atomic `tmp + os.replace`).
+    ADMIN_BALANCE_SET = "admin_balance_set"
+
 
 class AdminAuditSource(str, enum.Enum):
     """Источник админ-команды.

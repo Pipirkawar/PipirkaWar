@@ -39,8 +39,12 @@ from pipirik_wars.application.admin import (
     BanPlayer,
     FindPlayers,
     FreezePlayer,
+    GetBalanceValue,
     GetPlayerCard,
+    GrantLength,
+    GrantThickness,
     RequestAdminConfirm,
+    SetBalanceValue,
     UnfreezePlayer,
     VerifyAdminConfirm,
 )
@@ -159,6 +163,7 @@ from pipirik_wars.infrastructure.admin import (
 )
 from pipirik_wars.infrastructure.anticheat import StructlogAnticheatAdminAlerter
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
+from pipirik_wars.infrastructure.balance.writer import YamlBalanceWriter
 from pipirik_wars.infrastructure.cache import ClanTopCache, TopPlayersCache
 from pipirik_wars.infrastructure.clock import RealClock
 from pipirik_wars.infrastructure.dau import (
@@ -364,6 +369,10 @@ class Container:
     ban_player: BanPlayer
     request_admin_confirm: RequestAdminConfirm
     verify_admin_confirm: VerifyAdminConfirm
+    grant_length: GrantLength
+    grant_thickness: GrantThickness
+    get_balance_value: GetBalanceValue
+    set_balance_value: SetBalanceValue
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -930,6 +939,43 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=admin_audit,
         clock=clock,
     )
+    grant_length = GrantLength(
+        uow=uow,
+        admins=admins,
+        players=players,
+        length_granter=add_length,
+        audit=admin_audit,
+        clock=clock,
+    )
+    grant_thickness = GrantThickness(
+        uow=uow,
+        admins=admins,
+        players=players,
+        balance=balance,
+        idempotency=idempotency,
+        audit=admin_audit,
+        clock=clock,
+    )
+    get_balance_value = GetBalanceValue(
+        uow=uow,
+        admins=admins,
+        balance=balance,
+        audit=admin_audit,
+        clock=clock,
+    )
+    balance_writer = YamlBalanceWriter(
+        path=balance_yaml_path or _DEFAULT_BALANCE_YAML,
+        loader=balance,
+    )
+    set_balance_value = SetBalanceValue(
+        uow=uow,
+        admins=admins,
+        balance=balance,
+        writer=balance_writer,
+        idempotency=idempotency,
+        audit=admin_audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -1023,6 +1069,10 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         ban_player=ban_player,
         request_admin_confirm=request_admin_confirm,
         verify_admin_confirm=verify_admin_confirm,
+        grant_length=grant_length,
+        grant_thickness=grant_thickness,
+        get_balance_value=get_balance_value,
+        set_balance_value=set_balance_value,
     )
 
 
@@ -1120,6 +1170,11 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["ban_player"] = container.ban_player
     dispatcher["request_admin_confirm"] = container.request_admin_confirm
     dispatcher["verify_admin_confirm"] = container.verify_admin_confirm
+    # Спринт 2.5-C — команды экономики.
+    dispatcher["grant_length"] = container.grant_length
+    dispatcher["grant_thickness"] = container.grant_thickness
+    dispatcher["get_balance_value"] = container.get_balance_value
+    dispatcher["set_balance_value"] = container.set_balance_value
     return dispatcher
 
 

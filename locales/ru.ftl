@@ -612,3 +612,56 @@ admin-confirm-code-invalid = ❌ Неверный 6-значный код.
 admin-confirm-success-ban = ✅ Игрок <code>{ $tg_id }</code> забанен.
 admin-confirm-success-ban-already = 🛑 Игрок <code>{ $tg_id }</code> уже был забанен.
 admin-confirm-unknown-command-kind = ⚠️ Неизвестный тип команды <code>{ $command_kind }</code> — обновите бота.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Спринт 2.5-C — команды экономики (TOTP-обязательные кроме /balance_get)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /grant_length <tg_id> <±delta_cm> <reason>
+admin-grant-length-usage = ⚠️ Использование: <code>/grant_length &lt;tg_id&gt; &lt;±delta_cm&gt; &lt;причина&gt;</code>. Все три параметра обязательны.
+admin-grant-length-not-authorized = ❌ Только активные админы могут менять длину.
+admin-grant-length-totp-not-configured = ❌ У тебя не настроен TOTP. `/grant_length` без него недоступен.
+admin-grant-length-bad-id = ⚠️ <code>{ $value }</code> не похож на tg_id (целое число).
+admin-grant-length-bad-delta = ⚠️ <code>{ $value }</code> не похож на ±целое и ≠ 0.
+admin-grant-length-no-reason = ⚠️ Причина обязательна. Использование: <code>/grant_length &lt;tg_id&gt; &lt;±delta_cm&gt; &lt;причина&gt;</code>.
+admin-grant-length-not-found = 🔍 Игрок с tg_id <code>{ $tg_id }</code> не найден.
+admin-grant-length-blocked = 🚫 Невозможно править длину игрока <code>{ $tg_id }</code>: { $reason }.
+admin-grant-length-confirm-issued = 🛡️ Подтверди операцию. Отправь: <code>/confirm { $token } &lt;6-значный код&gt;</code>. Токен живёт { $ttl_seconds } секунд.
+admin-grant-length-success = ✅ Игроку <code>{ $tg_id }</code> применено { $delta } см. Новая длина: { $new_length_cm } см.
+admin-grant-length-success-clamped = ⚠️ Игроку <code>{ $tg_id }</code> запрошено { $requested } см, по 24-h окну применено { $applied } см. Новая длина: { $new_length_cm } см.
+admin-grant-length-soft-ban = 🚫 Игрок <code>{ $tg_id }</code> в anti-cheat soft-ban — операция отклонена.
+
+# /grant_thickness <tg_id> <new_level> <reason>
+admin-grant-thickness-usage = ⚠️ Использование: <code>/grant_thickness &lt;tg_id&gt; &lt;new_level&gt; &lt;причина&gt;</code>.
+admin-grant-thickness-not-authorized = ❌ Только активные админы могут менять толщину.
+admin-grant-thickness-totp-not-configured = ❌ У тебя не настроен TOTP. `/grant_thickness` без него недоступен.
+admin-grant-thickness-bad-id = ⚠️ <code>{ $value }</code> не похож на tg_id (целое число).
+admin-grant-thickness-bad-level = ⚠️ <code>{ $value }</code> не похож на уровень (целое ≥ 1).
+admin-grant-thickness-no-reason = ⚠️ Причина обязательна. Использование: <code>/grant_thickness &lt;tg_id&gt; &lt;new_level&gt; &lt;причина&gt;</code>.
+admin-grant-thickness-not-found = 🔍 Игрок с tg_id <code>{ $tg_id }</code> не найден.
+admin-grant-thickness-blocked = 🚫 Невозможно править толщину игрока <code>{ $tg_id }</code>: { $reason }.
+admin-grant-thickness-level-invalid = ⚠️ Уровень <code>{ $level }</code> вне диапазона [1, { $max_level }] ({ $reason_code }).
+admin-grant-thickness-confirm-issued = 🛡️ Подтверди операцию. Отправь: <code>/confirm { $token } &lt;6-значный код&gt;</code>. Токен живёт { $ttl_seconds } секунд.
+admin-grant-thickness-success = ✅ Игроку <code>{ $tg_id }</code> установлен уровень толщины { $new_level } (был { $previous_level }).
+admin-grant-thickness-already-at-level = ℹ️ Игрок <code>{ $tg_id }</code> уже на уровне толщины { $level }.
+
+# /balance_get <key>
+admin-balance-get-usage = ⚠️ Использование: <code>/balance_get &lt;dotted.key&gt;</code>.
+admin-balance-get-not-authorized = ❌ Только активные админы могут читать баланс.
+admin-balance-get-key-not-found = ⚠️ Ключ <code>{ $path }</code> не найден ({ $reason } на сегменте <code>{ $segment }</code>).
+admin-balance-get-result = 📦 <code>{ $path }</code> = <code>{ $value }</code> (balance v{ $version }).
+
+# /balance_set <key> <value> <reason>
+admin-balance-set-usage = ⚠️ Использование: <code>/balance_set &lt;dotted.key&gt; &lt;json_value&gt; &lt;причина&gt;</code>.
+admin-balance-set-not-authorized = ❌ Только активные админы могут менять баланс.
+admin-balance-set-totp-not-configured = ❌ У тебя не настроен TOTP. `/balance_set` без него недоступен.
+admin-balance-set-no-reason = ⚠️ Причина обязательна.
+admin-balance-set-bad-value = ⚠️ <code>{ $value }</code> не парсится как JSON-фрагмент.
+admin-balance-set-key-not-found = ⚠️ Ключ <code>{ $path }</code> не найден ({ $reason } на сегменте <code>{ $segment }</code>).
+admin-balance-set-validation-error = ❌ Значение для <code>{ $path }</code> не прошло валидацию: { $error }.
+admin-balance-set-confirm-issued = 🛡️ Подтверди операцию. Отправь: <code>/confirm { $token } &lt;6-значный код&gt;</code>. Токен живёт { $ttl_seconds } секунд.
+admin-balance-set-success = ✅ Ключ <code>{ $path }</code>: <code>{ $previous }</code> → <code>{ $new }</code> (balance v{ $version }).
+admin-balance-set-already-at-value = ℹ️ Ключ <code>{ $path }</code> уже равен <code>{ $value }</code>.
+
+# Общая для /confirm idempotency-replay
+admin-idempotency-replay = ℹ️ Эта команда (<code>{ $command_kind }</code>) уже выполнялась минуту назад — повторное выполнение пропущено.

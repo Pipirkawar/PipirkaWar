@@ -606,3 +606,56 @@ admin-confirm-code-invalid = ❌ Invalid 6-digit code.
 admin-confirm-success-ban = ✅ Player <code>{ $tg_id }</code> has been banned.
 admin-confirm-success-ban-already = 🛑 Player <code>{ $tg_id }</code> was already banned.
 admin-confirm-unknown-command-kind = ⚠️ Unknown command kind <code>{ $command_kind }</code> — please update the bot.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 2.5-C — economy commands (TOTP-protected except /balance_get)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /grant_length <tg_id> <±delta_cm> <reason>
+admin-grant-length-usage = ⚠️ Usage: <code>/grant_length &lt;tg_id&gt; &lt;±delta_cm&gt; &lt;reason&gt;</code>. All three are required.
+admin-grant-length-not-authorized = ❌ Only active admins may modify length.
+admin-grant-length-totp-not-configured = ❌ Your TOTP is not configured. `/grant_length` is unavailable.
+admin-grant-length-bad-id = ⚠️ <code>{ $value }</code> is not a valid tg_id (integer).
+admin-grant-length-bad-delta = ⚠️ <code>{ $value }</code> is not ±integer or equals 0.
+admin-grant-length-no-reason = ⚠️ Reason is required. Usage: <code>/grant_length &lt;tg_id&gt; &lt;±delta_cm&gt; &lt;reason&gt;</code>.
+admin-grant-length-not-found = 🔍 No player with tg_id <code>{ $tg_id }</code>.
+admin-grant-length-blocked = 🚫 Cannot modify length of player <code>{ $tg_id }</code>: { $reason }.
+admin-grant-length-confirm-issued = 🛡️ Confirm this operation. Send: <code>/confirm { $token } &lt;6-digit code&gt;</code>. Token TTL: { $ttl_seconds } sec.
+admin-grant-length-success = ✅ Player <code>{ $tg_id }</code>: applied { $delta } cm. New length: { $new_length_cm } cm.
+admin-grant-length-success-clamped = ⚠️ Player <code>{ $tg_id }</code>: requested { $requested } cm, applied { $applied } cm (24h cap). New length: { $new_length_cm } cm.
+admin-grant-length-soft-ban = 🚫 Player <code>{ $tg_id }</code> is in anti-cheat soft-ban — operation rejected.
+
+# /grant_thickness <tg_id> <new_level> <reason>
+admin-grant-thickness-usage = ⚠️ Usage: <code>/grant_thickness &lt;tg_id&gt; &lt;new_level&gt; &lt;reason&gt;</code>.
+admin-grant-thickness-not-authorized = ❌ Only active admins may modify thickness.
+admin-grant-thickness-totp-not-configured = ❌ Your TOTP is not configured. `/grant_thickness` is unavailable.
+admin-grant-thickness-bad-id = ⚠️ <code>{ $value }</code> is not a valid tg_id (integer).
+admin-grant-thickness-bad-level = ⚠️ <code>{ $value }</code> is not a level (integer ≥ 1).
+admin-grant-thickness-no-reason = ⚠️ Reason is required. Usage: <code>/grant_thickness &lt;tg_id&gt; &lt;new_level&gt; &lt;reason&gt;</code>.
+admin-grant-thickness-not-found = 🔍 No player with tg_id <code>{ $tg_id }</code>.
+admin-grant-thickness-blocked = 🚫 Cannot modify thickness of player <code>{ $tg_id }</code>: { $reason }.
+admin-grant-thickness-level-invalid = ⚠️ Level <code>{ $level }</code> out of range [1, { $max_level }] ({ $reason_code }).
+admin-grant-thickness-confirm-issued = 🛡️ Confirm this operation. Send: <code>/confirm { $token } &lt;6-digit code&gt;</code>. Token TTL: { $ttl_seconds } sec.
+admin-grant-thickness-success = ✅ Player <code>{ $tg_id }</code>: thickness level set to { $new_level } (was { $previous_level }).
+admin-grant-thickness-already-at-level = ℹ️ Player <code>{ $tg_id }</code> is already at thickness level { $level }.
+
+# /balance_get <key>
+admin-balance-get-usage = ⚠️ Usage: <code>/balance_get &lt;dotted.key&gt;</code>.
+admin-balance-get-not-authorized = ❌ Only active admins may read balance values.
+admin-balance-get-key-not-found = ⚠️ Key <code>{ $path }</code> not found ({ $reason } at segment <code>{ $segment }</code>).
+admin-balance-get-result = 📦 <code>{ $path }</code> = <code>{ $value }</code> (balance v{ $version }).
+
+# /balance_set <key> <value> <reason>
+admin-balance-set-usage = ⚠️ Usage: <code>/balance_set &lt;dotted.key&gt; &lt;json_value&gt; &lt;reason&gt;</code>.
+admin-balance-set-not-authorized = ❌ Only active admins may modify balance values.
+admin-balance-set-totp-not-configured = ❌ Your TOTP is not configured. `/balance_set` is unavailable.
+admin-balance-set-no-reason = ⚠️ Reason is required.
+admin-balance-set-bad-value = ⚠️ <code>{ $value }</code> is not a valid JSON fragment.
+admin-balance-set-key-not-found = ⚠️ Key <code>{ $path }</code> not found ({ $reason } at segment <code>{ $segment }</code>).
+admin-balance-set-validation-error = ❌ Value for <code>{ $path }</code> failed validation: { $error }.
+admin-balance-set-confirm-issued = 🛡️ Confirm this operation. Send: <code>/confirm { $token } &lt;6-digit code&gt;</code>. Token TTL: { $ttl_seconds } sec.
+admin-balance-set-success = ✅ Key <code>{ $path }</code>: <code>{ $previous }</code> → <code>{ $new }</code> (balance v{ $version }).
+admin-balance-set-already-at-value = ℹ️ Key <code>{ $path }</code> is already <code>{ $value }</code>.
+
+# Shared /confirm idempotency-replay
+admin-idempotency-replay = ℹ️ This command (<code>{ $command_kind }</code>) was already executed within the last minute — replay skipped.

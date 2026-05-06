@@ -33,11 +33,17 @@ from pipirik_wars.domain.balance.config import (
     ReferralOnSignup,
     ThicknessConfig,
 )
-from pipirik_wars.domain.balance.ports import IBalanceConfig, IBalanceReloader
+from pipirik_wars.domain.balance.errors import BalanceKeyError
+from pipirik_wars.domain.balance.ports import (
+    IBalanceConfig,
+    IBalanceReloader,
+    IBalanceWriter,
+)
 
 __all__ = [
     "AnticheatConfig",
     "BalanceConfig",
+    "BalanceKeyError",
     "ContentPolicy",
     "ContentPolicyClanQuotes",
     "DailyHeadConfig",
@@ -49,6 +55,7 @@ __all__ = [
     "ForestRarityWeights",
     "IBalanceConfig",
     "IBalanceReloader",
+    "IBalanceWriter",
     "ItemEntry",
     "OracleConfig",
     "PvpConfig",

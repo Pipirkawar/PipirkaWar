@@ -24,10 +24,13 @@ from pipirik_wars.application.admin import (
     FreezePlayerOutput,
     GetPlayerCard,
     GetPlayerCardOutput,
+    GrantLength,
+    GrantThickness,
     PlayerCard,
     PlayerSummary,
     RequestAdminConfirm,
     RequestAdminConfirmOutput,
+    SetBalanceValue,
     UnfreezePlayer,
     UnfreezePlayerOutput,
     VerifyAdminConfirm,
@@ -56,6 +59,7 @@ from pipirik_wars.domain.clan import ClanMemberRole, ClanStatus
 from pipirik_wars.domain.forest import ForestRunStatus
 from pipirik_wars.domain.player import PlayerStatus
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
+from pipirik_wars.domain.shared.ports import IClock
 
 _RU = Locale("ru")
 
@@ -658,6 +662,40 @@ def _stub_ban(*, output: BanPlayerOutput | None = None) -> BanPlayer:
     return cast(BanPlayer, fake)
 
 
+def _stub_grant_length() -> GrantLength:
+    fake = MagicMock(spec=GrantLength)
+    fake.execute = AsyncMock()
+    return cast(GrantLength, fake)
+
+
+def _stub_grant_thickness() -> GrantThickness:
+    fake = MagicMock(spec=GrantThickness)
+    fake.execute = AsyncMock()
+    return cast(GrantThickness, fake)
+
+
+def _stub_set_balance_value() -> SetBalanceValue:
+    fake = MagicMock(spec=SetBalanceValue)
+    fake.execute = AsyncMock()
+    return cast(SetBalanceValue, fake)
+
+
+def _stub_clock() -> object:
+    fake = MagicMock(spec=IClock)
+    fake.now = MagicMock(return_value=datetime(2026, 5, 8, 12, 0, 0, tzinfo=UTC))
+    return fake
+
+
+def _confirm_extra_kwargs() -> dict[str, object]:
+    """Дефолты новых параметров `handle_confirm` (Спринт 2.5-C)."""
+    return {
+        "grant_length": _stub_grant_length(),
+        "grant_thickness": _stub_grant_thickness(),
+        "set_balance_value": _stub_set_balance_value(),
+        "clock": _stub_clock(),
+    }
+
+
 def _command_ban(args: str | None) -> CommandObject:
     return CommandObject(prefix="/", command="ban", mention=None, args=args)
 
@@ -795,6 +833,7 @@ class TestHandleConfirm:
             verify_admin_confirm=_stub_verify_confirm(),
             ban_player=_stub_ban(),
             bundle=bundle,
+            **_confirm_extra_kwargs(),
             locale=_RU,
         )
         msg.answer.assert_awaited_once_with(REPLY_NON_PRIVATE_RU)
@@ -808,6 +847,7 @@ class TestHandleConfirm:
             verify_admin_confirm=_stub_verify_confirm(),
             ban_player=_stub_ban(),
             bundle=bundle,
+            **_confirm_extra_kwargs(),
             locale=_RU,
         )
         assert "admin-confirm-usage" in msg.answer.await_args.args[0]
@@ -821,6 +861,7 @@ class TestHandleConfirm:
             verify_admin_confirm=_stub_verify_confirm(),
             ban_player=_stub_ban(),
             bundle=bundle,
+            **_confirm_extra_kwargs(),
             locale=_RU,
         )
         assert "admin-confirm-usage" in msg.answer.await_args.args[0]
@@ -838,6 +879,7 @@ class TestHandleConfirm:
             verify_admin_confirm=verify,
             ban_player=_stub_ban(),
             bundle=bundle,
+            **_confirm_extra_kwargs(),
             locale=_RU,
         )
         text = msg.answer.await_args.args[0]
@@ -857,6 +899,7 @@ class TestHandleConfirm:
             verify_admin_confirm=verify,
             ban_player=_stub_ban(),
             bundle=bundle,
+            **_confirm_extra_kwargs(),
             locale=_RU,
         )
         assert "admin-confirm-token-expired" in msg.answer.await_args.args[0]
@@ -874,6 +917,7 @@ class TestHandleConfirm:
             verify_admin_confirm=verify,
             ban_player=_stub_ban(),
             bundle=bundle,
+            **_confirm_extra_kwargs(),
             locale=_RU,
         )
         assert "admin-confirm-admin-mismatch" in msg.answer.await_args.args[0]
@@ -891,6 +935,7 @@ class TestHandleConfirm:
             verify_admin_confirm=verify,
             ban_player=_stub_ban(),
             bundle=bundle,
+            **_confirm_extra_kwargs(),
             locale=_RU,
         )
         assert "admin-confirm-code-invalid" in msg.answer.await_args.args[0]
@@ -908,6 +953,7 @@ class TestHandleConfirm:
             verify_admin_confirm=verify,
             ban_player=_stub_ban(),
             bundle=bundle,
+            **_confirm_extra_kwargs(),
             locale=_RU,
         )
         assert "admin-confirm-totp-not-configured" in msg.answer.await_args.args[0]
@@ -932,6 +978,7 @@ class TestHandleConfirm:
             verify_admin_confirm=verify,
             ban_player=ban,
             bundle=bundle,
+            **_confirm_extra_kwargs(),
             locale=_RU,
         )
         text = msg.answer.await_args.args[0]
@@ -965,6 +1012,7 @@ class TestHandleConfirm:
             verify_admin_confirm=verify,
             ban_player=ban,
             bundle=bundle,
+            **_confirm_extra_kwargs(),
             locale=_RU,
         )
         assert "admin-confirm-success-ban-already" in msg.answer.await_args.args[0]
@@ -987,6 +1035,7 @@ class TestHandleConfirm:
             verify_admin_confirm=verify,
             ban_player=ban,
             bundle=bundle,
+            **_confirm_extra_kwargs(),
             locale=_RU,
         )
         text = msg.answer.await_args.args[0]
@@ -1013,6 +1062,7 @@ class TestHandleConfirm:
             verify_admin_confirm=verify,
             ban_player=ban,
             bundle=bundle,
+            **_confirm_extra_kwargs(),
             locale=_RU,
         )
         assert "admin-confirm-unknown-command-kind" in msg.answer.await_args.args[0]
@@ -1040,6 +1090,7 @@ class TestHandleConfirm:
             verify_admin_confirm=verify,
             ban_player=ban,
             bundle=bundle,
+            **_confirm_extra_kwargs(),
             locale=_RU,
         )
         assert "admin-ban-not-found" in msg.answer.await_args.args[0]
