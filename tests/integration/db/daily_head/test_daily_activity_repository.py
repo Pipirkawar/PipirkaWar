@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
+from sqlalchemy import select as _sa_select
 
 from pipirik_wars.domain.clan import (
     ChatKind,
@@ -292,3 +293,110 @@ class TestSqlAlchemyDailyActivityRepository:
         with pytest.raises(ValueError, match="within_days must be >= 1"):
             async with uow:
                 await repo.list_active_member_ids(clan_id=1, within_days=0)
+
+
+class TestRecordActive:
+    """`record_active` (Спринт 2.3.F.1) — UPSERT в `daily_active`."""
+
+    @pytest.mark.asyncio
+    async def test_inserts_new_row(self, uow: SqlAlchemyUnitOfWork) -> None:
+        player = await _seed_player(uow, tg_id=42)
+        assert player.id is not None
+        repo = SqlAlchemyDailyActivityRepository(
+            uow=uow,
+            clock=_FakeClock(moscow_date=TODAY),
+        )
+
+        async with uow:
+            await repo.record_active(user_id=player.id, last_at=NOW, moscow_date=TODAY)
+
+        # После коммита — есть ровно одна запись `daily_active`.
+        async with uow:
+            rows = (
+                await uow.session.execute(
+                    _sa_select(DailyActiveORM).where(DailyActiveORM.user_id == player.id),
+                )
+            ).all()
+        assert len(rows) == 1
+        row = rows[0][0]
+        assert row.date == TODAY
+        assert row.user_id == player.id
+        # SQLite не сохраняет tzinfo; сравниваем по naive-полям.
+        assert row.last_at.replace(tzinfo=None) == NOW.replace(tzinfo=None)
+
+    @pytest.mark.asyncio
+    async def test_upsert_updates_last_at_on_same_day(self, uow: SqlAlchemyUnitOfWork) -> None:
+        """Повторный `record_active` в те же сутки — UPDATE `last_at`, без дубля."""
+        player = await _seed_player(uow, tg_id=42)
+        assert player.id is not None
+        repo = SqlAlchemyDailyActivityRepository(
+            uow=uow,
+            clock=_FakeClock(moscow_date=TODAY),
+        )
+
+        first_ts = NOW
+        second_ts = NOW + timedelta(hours=2)
+
+        async with uow:
+            await repo.record_active(user_id=player.id, last_at=first_ts, moscow_date=TODAY)
+        async with uow:
+            await repo.record_active(user_id=player.id, last_at=second_ts, moscow_date=TODAY)
+
+        async with uow:
+            rows = (
+                await uow.session.execute(
+                    _sa_select(DailyActiveORM).where(DailyActiveORM.user_id == player.id),
+                )
+            ).all()
+        assert len(rows) == 1, "PK (date, user_id) — дубль не должен был создаться"
+        assert rows[0][0].last_at.replace(tzinfo=None) == second_ts.replace(tzinfo=None)
+
+    @pytest.mark.asyncio
+    async def test_separate_rows_per_day(self, uow: SqlAlchemyUnitOfWork) -> None:
+        """`record_active` в разные сутки → разные строки."""
+        player = await _seed_player(uow, tg_id=42)
+        assert player.id is not None
+        repo = SqlAlchemyDailyActivityRepository(
+            uow=uow,
+            clock=_FakeClock(moscow_date=TODAY),
+        )
+
+        async with uow:
+            await repo.record_active(
+                user_id=player.id,
+                last_at=NOW - timedelta(days=1),
+                moscow_date=TODAY - timedelta(days=1),
+            )
+        async with uow:
+            await repo.record_active(user_id=player.id, last_at=NOW, moscow_date=TODAY)
+
+        async with uow:
+            rows = (
+                await uow.session.execute(
+                    _sa_select(DailyActiveORM)
+                    .where(DailyActiveORM.user_id == player.id)
+                    .order_by(DailyActiveORM.date.asc()),
+                )
+            ).all()
+        assert len(rows) == 2
+        assert rows[0][0].date == TODAY - timedelta(days=1)
+        assert rows[1][0].date == TODAY
+
+    @pytest.mark.asyncio
+    async def test_record_then_list_returns_player(self, uow: SqlAlchemyUnitOfWork) -> None:
+        """End-to-end: `record_active` → потом `list_active_member_ids` видит игрока."""
+        clan = await _seed_clan(uow, chat_id=-100123)
+        player = await _seed_player(uow, tg_id=42)
+        assert clan.id is not None and player.id is not None
+        await _add_membership(uow, clan_id=clan.id, player_id=player.id)
+
+        repo = SqlAlchemyDailyActivityRepository(
+            uow=uow,
+            clock=_FakeClock(moscow_date=TODAY),
+        )
+        async with uow:
+            await repo.record_active(user_id=player.id, last_at=NOW, moscow_date=TODAY)
+        async with uow:
+            ids = await repo.list_active_member_ids(clan_id=clan.id, within_days=7)
+
+        assert ids == (player.id,)

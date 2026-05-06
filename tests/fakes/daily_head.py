@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from datetime import date
+from datetime import date, datetime
 
 from pipirik_wars.domain.daily_head import (
     DailyHeadAlreadyAssignedError,
@@ -78,10 +78,20 @@ class FakeDailyActivityRepository(IDailyActivityRepository):
     Тест задаёт словарь `{clan_id: [player_id, ...]}` — все они
     считаются «активными» за окно. Логика «within_days» в фейке
     не воспроизводится, тест явно подменяет данные.
+
+    Для записи (`record_active`, Спринт 2.3.F.1) фейк хранит словарь
+    `{(moscow_date, user_id): last_at}` — UPSERT-семантика: каждый
+    повторный вызов перезаписывает `last_at`. Тесты проверяют либо
+    наличие ключа, либо точное значение `last_at`. Фейк **не** обновляет
+    `by_clan` автоматически — это намеренно: write-side тестов
+    (use-case `RecordPlayerActivity`) не должен непреднамеренно
+    влиять на read-side тестов (`list_active_member_ids`).
     """
 
     by_clan: dict[int, list[int]] = field(default_factory=dict)
     calls: list[tuple[int, int]] = field(default_factory=list)
+    activity: dict[tuple[date, int], datetime] = field(default_factory=dict)
+    record_calls: list[tuple[int, datetime, date]] = field(default_factory=list)
 
     async def list_active_member_ids(
         self,
@@ -91,6 +101,16 @@ class FakeDailyActivityRepository(IDailyActivityRepository):
     ) -> Sequence[int]:
         self.calls.append((clan_id, within_days))
         return tuple(self.by_clan.get(clan_id, []))
+
+    async def record_active(
+        self,
+        *,
+        user_id: int,
+        last_at: datetime,
+        moscow_date: date,
+    ) -> None:
+        self.record_calls.append((user_id, last_at, moscow_date))
+        self.activity[(moscow_date, user_id)] = last_at
 
 
 __all__ = [

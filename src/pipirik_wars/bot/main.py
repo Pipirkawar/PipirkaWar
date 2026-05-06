@@ -44,6 +44,7 @@ from pipirik_wars.application.clan import (
 )
 from pipirik_wars.application.daily_head import (
     IClanQuoteTemplateProvider,
+    RecordPlayerActivity,
     RequestDailyHead,
     RunDailyHeadCron,
 )
@@ -292,6 +293,7 @@ class Container:
     daily_head_service: DailyHeadService
     request_daily_head: RequestDailyHead
     run_daily_head_cron: RunDailyHeadCron
+    record_player_activity: RecordPlayerActivity
     clan_quote_provider: IClanQuoteTemplateProvider
 
 
@@ -740,6 +742,12 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=audit,
         clock=clock,
     )
+    record_player_activity = RecordPlayerActivity(
+        uow=uow,
+        players=players,
+        daily_activity=daily_activity,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -815,6 +823,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         daily_head_service=daily_head_service,
         request_daily_head=request_daily_head,
         run_daily_head_cron=run_daily_head_cron,
+        record_player_activity=record_player_activity,
         clan_quote_provider=clan_quote_provider,
     )
 
@@ -829,6 +838,7 @@ def build_dispatcher(container: Container) -> Dispatcher:
     register_middlewares(
         dispatcher,
         limiter=container.rate_limiter,
+        record_player_activity=container.record_player_activity,
         player_locale_resolver=container.player_locale_resolver,
     )
     register_routers(dispatcher)
@@ -885,6 +895,7 @@ def build_dispatcher(container: Container) -> Dispatcher:
     # доступен в dispatcher для админ-команд / диагностики.
     dispatcher["request_daily_head"] = container.request_daily_head
     dispatcher["run_daily_head_cron"] = container.run_daily_head_cron
+    dispatcher["record_player_activity"] = container.record_player_activity
     dispatcher["clan_quote_provider"] = container.clan_quote_provider
     return dispatcher
 

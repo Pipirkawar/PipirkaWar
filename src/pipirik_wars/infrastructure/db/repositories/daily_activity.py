@@ -1,11 +1,14 @@
-"""Реализация `IDailyActivityRepository` поверх таблицы `daily_active` (Спринт 2.3.B)."""
+"""Реализация `IDailyActivityRepository` поверх таблицы `daily_active` (Спринт 2.3.B + 2.3.F.1)."""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import timedelta
+from datetime import date as date_t, datetime, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import Insert as PgInsert, insert as pg_insert
+from sqlalchemy.dialects.sqlite import Insert as SqliteInsert, insert as sqlite_insert
+from sqlalchemy.sql.dml import Insert as DialectInsert
 
 from pipirik_wars.domain.clan import ClanStatus
 from pipirik_wars.domain.daily_head import IDailyActivityRepository
@@ -80,3 +83,40 @@ class SqlAlchemyDailyActivityRepository(IDailyActivityRepository):
         )
         result = await self._uow.session.execute(stmt)
         return tuple(int(row.id) for row in result.all())
+
+    async def record_active(
+        self,
+        *,
+        user_id: int,
+        last_at: datetime,
+        moscow_date: date_t,
+    ) -> None:
+        """UPSERT в `daily_active` по PK `(date, user_id)`.
+
+        На PostgreSQL — `INSERT ... ON CONFLICT (date, user_id) DO UPDATE
+        SET last_at = EXCLUDED.last_at`. На SQLite — аналогично через
+        `sqlite_insert.on_conflict_do_update`. UPDATE используется
+        (а не `do_nothing`), чтобы `last_at` отражал свежее сообщение
+        для последующей аналитики «когда был последний раз активен».
+        """
+        session = self._uow.session
+        values = {
+            "date": moscow_date,
+            "user_id": user_id,
+            "last_at": last_at,
+        }
+        dialect = session.bind.dialect.name if session.bind is not None else ""
+        stmt: DialectInsert
+        if dialect == "postgresql":
+            pg_stmt: PgInsert = pg_insert(DailyActiveORM).values(values)
+            stmt = pg_stmt.on_conflict_do_update(
+                index_elements=[DailyActiveORM.date, DailyActiveORM.user_id],
+                set_={"last_at": pg_stmt.excluded.last_at},
+            )
+        else:
+            sl_stmt: SqliteInsert = sqlite_insert(DailyActiveORM).values(values)
+            stmt = sl_stmt.on_conflict_do_update(
+                index_elements=[DailyActiveORM.date, DailyActiveORM.user_id],
+                set_={"last_at": sl_stmt.excluded.last_at},
+            )
+        await session.execute(stmt)
