@@ -539,3 +539,17 @@ admin-confirm-token-not-found = ⚠️Token not found. It may have already been 
 admin-confirm-token-expired = ⏰Time to enter the code has run out. Repeat the command.
 admin-confirm-code-invalid = ❌Invalid code. For safety the token has been burned — repeat the command from scratch.
 admin-confirm-admin-mismatch = 🚫This token belongs to another admin. Each confirmation is bound to its initiator.
+
+
+## Admin — support commands (Sprint 2.5-B, GDD §18.6.5)
+# Used by `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban` and the
+# shared `/confirm` handler.
+
+# /find_player <text>
+admin-find-player-usage = ⚠️ Usage: <code>/find_player &lt;tg_id | @username | substring&gt;</code>. The query is required.
+admin-find-player-not-authorized = ❌ Only active admins may search for players.
+admin-find-player-empty = 🔍 No players found for query <code>{ $query }</code>.
+admin-find-player-header = 🔍 Found { $count } player(s) for query <code>{ $query }</code>.
+# Single row. Parameters: $tg_id, $username (or "—"), $name (or "—"),
+#  $title (or "—"), $length_cm, $thickness_level, $status.
+admin-find-player-row = • <code>{ $tg_id }</code> · @{ $username } · «{ $name }» · { $title } · L{ $length_cm }/T{ $thickness_level } · { $status }

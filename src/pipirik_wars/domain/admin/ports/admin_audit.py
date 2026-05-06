@@ -48,13 +48,27 @@ class AdminAuditAction(str, enum.Enum):
     """
 
     # ── Спринт 2.5-A (каркас) ──
-    # Использования пока нет — категории нужны, чтобы integration-тесты
-    # `IAdminAuditLogger` могли вставить хотя бы одну валидную запись
-    # без ожидания закрытия 2.5-B/C/D. Категории будут переиспользованы
-    # в следующих PR-ах спринта 2.5.
+    # Категории TOTP-подтверждения опасных команд. Применяются `RequestAdminConfirm` /
+    # `VerifyAdminConfirm` независимо от конкретной команды (`ban`, `grant_*`, ...).
     ADMIN_CONFIRM_REQUESTED = "admin_confirm_requested"
     ADMIN_CONFIRM_VERIFIED = "admin_confirm_verified"
     ADMIN_CONFIRM_FAILED = "admin_confirm_failed"
+
+    # ── Спринт 2.5-B (команды поддержки) ──
+    # Read-side lookup: `/find_player`, `/player`. Пишем even-on-read,
+    # чтобы super-admin в `/audit` видел, кто и кого «пробивал».
+    ADMIN_PLAYER_LOOKUP = "admin_player_lookup"
+    # Write-side, обратимые мутации (без TOTP).
+    ADMIN_PLAYER_FROZEN = "admin_player_frozen"
+    ADMIN_PLAYER_UNFROZEN = "admin_player_unfrozen"
+    # Write-side, необратимый бан после успешной TOTP-проверки.
+    ADMIN_PLAYER_BANNED = "admin_player_banned"
+    # TOTP-подтверждение `/ban` провалилось (неверный код / просрочен и т.п.) —
+    # сама `ConfirmAdminMismatchError` / `ConfirmCodeInvalidError` уже пишет
+    # `ADMIN_CONFIRM_FAILED`, а `ADMIN_BAN_BLOCKED` маркирует, что именно
+    # бан игрока не был выполнен (handler-у нужно понять, что он не должен
+    # звать `BanPlayer.execute()`).
+    ADMIN_BAN_BLOCKED = "admin_ban_blocked"
 
 
 class AdminAuditSource(str, enum.Enum):

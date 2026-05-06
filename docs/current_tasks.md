@@ -17,7 +17,7 @@
 
 **На `main`:** последний смерженный спринт — **2.5-A** ([PR #79](https://github.com/Pipirkawar/PipirkaWar/pull/79), коммит `b358349`) «Каркас расширенного админ-интерфейса в боте» — `admin_audit_log` table + `AdminGuard` aiogram-middleware + TOTP-confirm scaffold (миграция `0017_admins_totp_secret`, доменные VO/порты, use-case-ы `RequestAdminConfirm`/`VerifyAdminConfirm`, in-memory store + `pyotp`-verifier, локали `admin-confirm-*`). Завершены Фазы 0, 1 (MVP), 1.6 (анти-чит) полностью; из Фазы 2 закрыты 2.1–2.4 целиком и **2.5-A** — каркас идущего сейчас спринта 2.5. Идёт **Спринт 2.5-B** (команды поддержки в боте: `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban`).
 
-**Активная feature-ветка:** _будет создана_ под 2.5-B (от свежего `b358349`).
+**Активная feature-ветка:** `devin/1778094141-sprint-2-5-b-support-commands` (от `a967197`).
 
 **Что уже есть в коде после 2.5-A:**
 - `domain/admin/{audit,confirm,entities,repositories}.py` + `domain/admin/ports/{admin_audit,admin_confirm}.py` — доменные VO `Admin` / `AdminAuditEntry` / `AdminConfirm{Request,Entry}` + ошибки + enum-ы + порты `IAdminAuditLogger` / `IAdminConfirmStore` / `ITotpVerifier`.
@@ -48,11 +48,11 @@
 |---|---|
 | **Активный спринт** | `2.5 — Расширенный админ-интерфейс в боте` |
 | **Активный PR / шаг** | **2.5-B**: команды поддержки (`/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban`) |
-| **Активная feature-ветка** | _ещё не создана_ — будет ветвиться от свежего `main` (`b358349`) |
+| **Активная feature-ветка** | `devin/1778094141-sprint-2-5-b-support-commands` |
 | **Базовая ветка** | `main` |
-| **Последний коммит на main** | `b358349` (мерж PR #79 «Спринт 2.5-A: Каркас расширенного админ-интерфейса») |
+| **Последний коммит на main** | `a967197` (мерж PR #80 «Спринт 2.5-A postmerge docs sync») |
 | **PR (если открыт)** | _ещё не открыт_ |
-| **CI статус** | зелёный (последний прогон в PR #79: 2901 passed / 1 skipped, coverage 96.19%) |
+| **CI статус** | _будет проверен после первого пуша_ |
 | **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задачи 2.5.3 (find_player/player/freeze/unfreeze/ban), 2.5.5 (TOTP на /ban), 2.5.9 (use-case каркас) |
 | **Связанная спецификация в `game_design.md`** | §18.6 (основной канал администрирования — Telegram-бот) |
 | **`AGENT_HANDOFF.md` существует?** | нет |
@@ -65,7 +65,7 @@
 
 **PR 2.5-B — команды поддержки:**
 
-- [ ] **2.5-B.1 — `/find_player <text>`** — поиск игрока по `tg_username` (точно), `tg_id` (точно), `tg_full_name` (подстрока, ILIKE). Use-case `FindPlayers(query, limit) -> Sequence[PlayerSummary]`. Без TOTP. Запись `ADMIN_PLAYER_LOOKUP` в `admin_audit_log`. Локаль `admin-find-player-*` (RU+EN).
+- [x] **2.5-B.1 — `/find_player <text>`** — поиск игрока по `tg_id` (точно), `@username` (точно), либо подстроке (ILIKE по `username`/`name`). Use-case `FindPlayers(query, limit) -> Sequence[PlayerSummary]`. Без TOTP. Запись `ADMIN_PLAYER_LOOKUP` в `admin_audit_log`. Локаль `admin-find-player-*` (RU+EN).
 - [ ] **2.5-B.2 — `/player <tg_id>`** — карточка игрока: длина, толщина, клан, бан-статус, лесные блок-таймеры, последние 5 PvP/PvE-боёв (использует существующие репо-методы). Use-case `GetPlayerCard(tg_id) -> PlayerCard`. Без TOTP. Запись `ADMIN_PLAYER_LOOKUP`.
 - [ ] **2.5-B.3 — `/freeze <tg_id> [reason]`** / **`/unfreeze <tg_id>`** — установка `is_frozen=True/False` через `IPlayerRepository`. Use-cases `FreezePlayer` / `UnfreezePlayer`. Без TOTP (обратимая операция). Запись `ADMIN_PLAYER_FROZEN` / `ADMIN_PLAYER_UNFROZEN` с `before/after`. Локали.
 - [ ] **2.5-B.4 — `/ban <tg_id> <reason>`** — необратимый бан через `IPlayerRepository.ban()`. Use-case `BanPlayer`. **TOTP-обязателен**: handler сначала зовёт `RequestAdminConfirm(command_kind="ban", target=...)`, отвечает «отправь /confirm <token> <code>»; на втором шаге `/confirm` зовёт `VerifyAdminConfirm`, и если ОК — `BanPlayer.execute()`. Запись `ADMIN_PLAYER_BANNED` (после успешного бана) и `ADMIN_BAN_BLOCKED` (если TOTP-подтверждение провалилось).

@@ -543,3 +543,19 @@ admin-confirm-token-not-found = ⚠️Токен не найден. Возмож
 admin-confirm-token-expired = ⏰Время на ввод кода истекло. Повтори команду.
 admin-confirm-code-invalid = ❌Неверный код. Из соображений безопасности токен сожжён — повтори команду заново.
 admin-confirm-admin-mismatch = 🚫Этот токен подтверждает не ты. Каждое подтверждение принадлежит конкретному админу.
+
+
+## Admin — команды поддержки (Спринт 2.5-B, ГДД §18.6.5)
+# Используются `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban` и общим
+# `/confirm`-handler-ом. Тексты намеренно компактные — админ-чаты обычно
+# заполнены одной командой за другой, длинные простыни шумят.
+
+# /find_player <text>
+admin-find-player-usage = ⚠️ Использование: <code>/find_player &lt;tg_id | @username | подстрока&gt;</code>. Запрос обязателен.
+admin-find-player-not-authorized = ❌ Только активные админы могут пользоваться поиском игроков.
+admin-find-player-empty = 🔍 По запросу <code>{ $query }</code> игроки не найдены.
+# Заголовок выдачи (count — сколько строк ниже).
+admin-find-player-header = 🔍 Найдено игроков: { $count } (по запросу <code>{ $query }</code>).
+# Одна строка списка. Параметры: $tg_id, $username (или "—"), $name (или "—"),
+#  $title (или "—"), $length_cm, $thickness_level, $status (текстовая метка).
+admin-find-player-row = • <code>{ $tg_id }</code> · @{ $username } · «{ $name }» · { $title } · L{ $length_cm }/T{ $thickness_level } · { $status }
