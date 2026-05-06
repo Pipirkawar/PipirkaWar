@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pipirik-wars"
 version = "0.0.0"
-description = "Telegram-game «Пипирик Варс». Clean architecture, SOLID, security-first. See docs/pipirik_wars_plan.md (GDD v9)."
+description = "Telegram-game «Пипирик Варс». Clean architecture, SOLID, security-first. See docs/game_design.md (GDD v9)."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Proprietary" }
