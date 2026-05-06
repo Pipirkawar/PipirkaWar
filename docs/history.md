@@ -23,6 +23,50 @@
 
 ---
 
+## 2026-05-06 — Спринт 2.3.F.2: per-clan APScheduler-cron «Главы клана дня» (deterministic offset + bootstrap + midnight reschedule)
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 2.3.F.2 ([`current_tasks.md` 2.3.F.2](current_tasks.md), ПД §5 / Спринт 2.3.6), ГДД §6.1 (cron-trigger «Главы клана дня»)
+
+Что сделано:
+- **Domain helper `compute_daily_head_cron_offset_minutes(*, clan_id, moscow_date)`** (`domain/daily_head/scheduling.py`): детерминированный `sha256(clan_id_bytes + moscow_date.isoformat())` → `int.from_bytes()` modulo `1440` (минут в сутках). Один и тот же `(clan_id, date)` всегда даёт один offset; разные кланы получают равномерно-распределённые offset-ы по суткам, чтобы избежать «грозы» в 00:00 МСК.
+- **Domain helper `compute_daily_head_cron_run_at_utc(*, clan_id, moscow_date)`**: возвращает `datetime` (UTC) срабатывания cron-а — `00:00 Europe/Moscow + offset_minutes`, переведённое в UTC через `.astimezone(UTC)`. Используется и application-use-case-ом, и шедулер-адаптером.
+- **Расширение `IDelayedJobScheduler` (domain port)**: добавлены абстрактные методы `schedule_daily_head_cron(*, clan_id, run_at)` и `cancel_daily_head_cron(*, clan_id)`. Идемпотентность по `clan_id` (повторный schedule перезаписывает существующий job; cancel несуществующего — no-op).
+- **Infrastructure `APSchedulerDelayedJobScheduler`**: реализация двух новых методов через `add_job(self._run_daily_head_cron_job, trigger=DateTrigger(run_at), id=f"daily_head_cron:{clan_id}", replace_existing=True)` / `remove_job(...)`. Optional ctor-фабрика `daily_head_cron_factory: Callable[[], RunDailyHeadCron]` + callback `_run_daily_head_cron_job(clan_id)` (зовёт `RunDailyHeadCron.execute(RunDailyHeadCronInput(clan_id=clan_id))`, swallows exceptions с `_logger.exception(...)`; frozen-кланы возвращают `None` — корректное no-op-поведение, т.к. use-case 2.3.C сам обрабатывает frozen-кланы).
+- **Расширение `IClanRepository` (domain port)**: новый метод `list_active() -> Sequence[Clan]` — возвращает только не-замороженные (`ClanStatus.ACTIVE`) кланы. Sql-impl `SqlAlchemyClanRepository.list_active`: `SELECT * FROM clans WHERE status = 'active'`. Fake-impl `FakeClanRepository.list_active`: фильтрует `_clans` по статусу.
+- **Application use-case `ScheduleDailyHeadCronJobs(uow, clans, scheduler, clock)`** (`application/daily_head/schedule_cron_jobs.py`): `execute()` обходит `clans.list_active()`, для каждого клана вычисляет `run_at = compute_daily_head_cron_run_at_utc(clan_id, clock.moscow_date())`, скипает прошедшие (`run_at <= clock.now()`), регистрирует APScheduler-job через `scheduler.schedule_daily_head_cron(...)`. Возвращает `ScheduleDailyHeadCronJobsResult(scheduled, skipped_past, skipped_no_id)` для observability и тестируемости.
+- **DI в `bot/main.py.build_container`**: новое поле `Container.schedule_daily_head_cron_jobs: ScheduleDailyHeadCronJobs` + late-bound фабрики `daily_head_cron_factory=lambda: run_daily_head_cron` и `daily_reschedule_factory=lambda: schedule_daily_head_cron_jobs` для `APSchedulerDelayedJobScheduler`.
+- **Bootstrap в `bot/main.py.run()`**: после `scheduler.start()` вызывается `await container.schedule_daily_head_cron_jobs.execute()` (re-bootstrap сегодняшних per-clan job-ов после рестарта процесса — APScheduler in-memory job-store пуст). Затем `scheduler.schedule_daily_head_reschedule_cron()` регистрирует ежедневный `CronTrigger(hour=0, minute=1, timezone="Europe/Moscow")`, который вечером каждого дня зовёт `ScheduleDailyHeadCronJobs.execute()` для перепланирования на новые сутки. Минута лага (`00:01` вместо `00:00`) — гарантия, что `IClock.moscow_date()` уже вернёт новую дату.
+- **+12 unit-тестов** scheduling-helper-а (deterministic / range / utc-conversion / window).
+- **+10 unit-тестов** `ScheduleDailyHeadCronJobs` (active-clans / past-skip / no-id-skip / idempotency / boundary).
+- **+5 unit-тестов** `schedule_daily_head_reschedule_cron` (callback invokes use-case / swallows errors / no-op without factory / cron-trigger settings / no-factory warning).
+- **3 callback-теста** `_run_daily_head_cron_job`.
+- **Расширенный composition-root тест** (`Container` теперь конструируется с новым полем).
+- **`make ci` зелёный**: 2666 passed, coverage 96.01%; mypy 552 source files, lint-imports 3 contracts kept.
+
+Результат / артефакты:
+- `src/pipirik_wars/domain/daily_head/scheduling.py` — оба helper-а.
+- `src/pipirik_wars/domain/daily_head/__init__.py` — экспорты.
+- `src/pipirik_wars/domain/clan/repositories.py` — `list_active`.
+- `src/pipirik_wars/domain/shared/ports/scheduler.py` — `schedule/cancel_daily_head_cron`.
+- `src/pipirik_wars/infrastructure/scheduler/aps.py` — реализация + callback + reschedule-cron.
+- `src/pipirik_wars/infrastructure/db/repositories/clan.py` — `list_active`-impl.
+- `tests/fakes/clan.py` — `FakeClanRepository.list_active`.
+- `src/pipirik_wars/application/daily_head/schedule_cron_jobs.py` — use-case + result.
+- `src/pipirik_wars/application/daily_head/__init__.py` — экспорты.
+- `src/pipirik_wars/bot/main.py` — DI + bootstrap + reschedule-cron.
+- Тесты: `tests/unit/domain/daily_head/test_scheduling.py`, `tests/unit/application/daily_head/test_schedule_cron_jobs.py`, `tests/unit/infrastructure/scheduler/test_aps.py` (новые классы), `tests/unit/bot/test_composition_root.py` (расширение).
+
+Заметки / решения:
+- **Почему `00:01` вместо `00:00` для reschedule-cron-а:** `IClock.moscow_date()` мог бы вернуть старую дату при срабатывании ровно в `00:00:00.000` из-за clock-skew или микросекундных задержек. Лаг в одну минуту устраняет проблему без видимых последствий для UX (бонус «Глава клана дня» можно получить в любой момент суток).
+- **Почему bootstrap в `run()` отдельно от reschedule-cron-а:** APScheduler-job-store in-memory, после рестарта пуст. Bootstrap нужен, чтобы сегодняшние job-ы существовали; reschedule-cron сработает только в `00:01` следующих суток.
+- **Почему `daily_reschedule_factory` — фабрика, а не прямой инстанс:** замыкание `lambda: schedule_daily_head_cron_jobs` решает проблему циклической зависимости в `build_container` (use-case создаётся ПОСЛЕ scheduler-а, поэтому прямой ссылки на момент конструирования scheduler-а ещё нет).
+- **Почему `IClanRepository.list_active`, а не `list_all` + фильтр на стороне use-case-а:** SQL `WHERE status='active'` гораздо эффективнее, чем загрузка всех кланов и фильтрация в Python; контракт также чётко выражает namespace use-case-а.
+- **Per-clan offset через sha256:** даёт равномерное распределение по суткам без необходимости хранить state. Один и тот же `(clan_id, moscow_date)` детерминирован, что важно для тестируемости и debugging-а.
+
+---
+
 ## 2026-05-05 — Спринт 2.3.F.1: запись активности игроков в `daily_active` (middleware + use-case)
 
 **Автор:** Devin (агент)
