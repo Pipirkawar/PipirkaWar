@@ -493,3 +493,93 @@ class RecordPlayerActivityInput(_StrictBase):
         gt=0,
         description="Telegram user_id игрока, проявившего активность",
     )
+
+
+class RegisterReferralInput(_StrictBase):
+    """Регистрация реферальной связи (Спринт 2.4.C, ГДД §13.1).
+
+    Зовётся `/start`-handler-ом сразу **после** успешного `RegisterPlayer`,
+    если в payload-е был `start=ref_<id>`. `referrer_tg_id` извлекается
+    из payload-а; `referred_tg_id` — это сам новичок.
+
+    Use-case `RegisterReferral` валидирует:
+    - `referrer_tg_id != referred_tg_id` (само-реферал → ошибка);
+    - реферер существует в `users` (иначе тихий no-op);
+    - игрок ещё не имеет реферальной записи (UNIQUE по `referred_id`);
+    - и затем создаёт запись в `referrals` (без начисления длины).
+
+    Начисление signup-бонуса (+5 см новичку, +1 см рефереру) — отдельный
+    use-case `GrantReferralSignupBonus`, который handler зовёт сразу
+    после `RegisterReferral`. Разделение нужно, чтобы failure начисления
+    не откатил саму реферальную связь (или наоборот).
+    """
+
+    referrer_tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id пригласившего (из start=ref_<id>)",
+    )
+    referred_tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id новичка (только что прошедший RegisterPlayer)",
+    )
+
+    @model_validator(mode="after")
+    def _no_self_referral(self) -> Self:
+        if self.referrer_tg_id == self.referred_tg_id:
+            raise ValueError(
+                f"referrer_tg_id ({self.referrer_tg_id}) "
+                f"must differ from referred_tg_id ({self.referred_tg_id})"
+            )
+        return self
+
+
+class GrantReferralSignupBonusInput(_StrictBase):
+    """Начисление signup-бонуса по реферальной связи (Спринт 2.4.C, ГДД §13.1).
+
+    Зовётся `/start`-handler-ом **после** `RegisterReferral`. Use-case
+    `GrantReferralSignupBonus` идемпотентен по `signup_granted_at`:
+    повторный вызов на уже-обработанной записи бросает
+    `SignupBonusAlreadyGrantedError` (handler swallow-ит в no-op).
+
+    Бонусы из `balance.referral.on_signup`:
+    - `newbie_bonus_cm` см → новичку (`source=REFERRAL_SIGNUP`);
+    - `referrer_bonus_cm` см → рефереру (`source=REFERRAL_SIGNUP`).
+
+    Идемпотентность через `IIdempotencyKey`-ключи (namespace `add_length`):
+    - `add_length:referral:signup:newbie:{referred_id}`;
+    - `add_length:referral:signup:referrer:{referrer_id}:{referred_id}`.
+
+    Все начисления — внутри одной транзакции через `ILengthGranter`,
+    audit `LENGTH_GRANT` с `source=REFERRAL_SIGNUP` пишется автоматически.
+    """
+
+    referred_tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id новичка, которому начисляем signup-бонус",
+    )
+
+
+class GrantReferralThicknessMilestoneInput(_StrictBase):
+    """Начисление milestone-бонуса по достижению толщины (Спринт 2.4.C, ГДД §13.1).
+
+    Зовётся handler-ом `/upgrade_thickness` (Спринт 2.4.D) **после**
+    успешного апгрейда толщины — но только если новый уровень совпадает
+    с одним из `balance.referral.on_thickness_milestones`. Use-case
+    проверяет:
+    - реферальная запись существует (no-op если игрока никто не рефнул);
+    - `last_milestone_thickness < new_thickness_level` (no-op иначе —
+      `MilestoneAlreadyGrantedError`).
+
+    Бонус начисляется **рефереру** через `ILengthGranter` с
+    `source=REFERRAL_THICKNESS`. Идемпотентность через ключ
+    `add_length:referral:thickness:{thickness}:{referrer_id}:{referred_id}`.
+    """
+
+    referred_tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id игрока, достигшего нового уровня толщины",
+    )
+    new_thickness_level: int = Field(
+        ge=1,
+        description="Новый уровень толщины (после успешного апгрейда)",
+    )
