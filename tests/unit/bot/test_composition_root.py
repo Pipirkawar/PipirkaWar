@@ -123,6 +123,7 @@ from tests.fakes import (
     FakeBalanceConfig,
     FakeClanMassDuelHistoryQuery,
     FakeClanMembershipRepository,
+    FakeClanQuoteTemplateProvider,
     FakeClanRepository,
     FakeClanTopQuery,
     FakeClock,
@@ -209,6 +210,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
     anticheat_admin_alerter = FakeAnticheatAdminAlerter()
     oracle_templates = FakeOracleTemplateProvider()
     duel_log_templates = FakeDuelLogTemplateProvider()
+    clan_quote_provider = FakeClanQuoteTemplateProvider()
     top_players_query = FakeTopPlayersQuery()
     top_clans_query = FakeClanTopQuery()
     clan_mass_duel_history_query = FakeClanMassDuelHistoryQuery()
@@ -518,6 +520,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         anticheat_admin_alerter=anticheat_admin_alerter,
         oracle_templates=oracle_templates,
         duel_log_templates=duel_log_templates,
+        clan_quote_provider=clan_quote_provider,
         invoke_oracle=InvokeOracle(
             uow=uow,
             players=players,

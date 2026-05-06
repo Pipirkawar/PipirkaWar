@@ -23,6 +23,53 @@
 
 ---
 
+## 2026-05-06 — Спринт 2.3.E: bot-слой «Главы клана дня» (`/clan_head` handler + presenter + DI каталога цитат)
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 2.3.E ([`current_tasks.md` 2.3.E](current_tasks.md), ПД §5 / Спринт 2.3.5)
+
+Что сделано:
+- **Handler `bot/handlers/clan_head.py`** — `@router.message(Command("clan_head"))`, group-only (в ЛС / канале → `clan-head-needs-group-chat`), резолв клана по `chat_id` через `IClanRepository.get_by_chat_id` (нет привязки или `clan.id is None` → `clan-head-not-registered`), вызов use-case `RequestDailyHead.execute(RequestDailyHeadInput(chat_id, actor_tg_id))` (Спринт 2.3.C). Конвертация доменных ошибок в локализованные ответы: `ClanFrozenError` → `clan-head-frozen-clan`; `DailyHeadInsufficientActivityError(active_count, required)` → `clan-head-not-enough-active{active_count, required}`. На успех — выбор случайного шаблона цитаты через `IClanQuoteTemplateProvider.get_templates(locale=effective_locale.code)` + `IRandom.choice(...)` (DI пробрасывает `pvp_random`, тот же `RealRandom`-инстанс что для PvP), подстановка имени главы в плейсхолдер `{user}` (приоритет: `Player.username` → `@username`, fallback `"глава"`), и рендер `clan-head-success{head_display_name, bonus_cm, new_length_cm, quote_text}` для нового назначения / `clan-head-already-assigned{head_display_name, bonus_cm, quote_text}` для идемпотентного возврата (`was_new=False`). Пустой каталог цитат → fallback `_FALLBACK_QUOTE = "👑"` + warn-лог `clan_head_quote_catalog_empty` (handler никогда не падает на рендере).
+- **Presenter `bot/presenters/clan_head.py`** — `ClanHeadPresenter(bundle: IMessageBundle)` с 6 методами: `needs_group_chat`, `not_registered`, `frozen_clan`, `not_enough_active`, `success`, `already_assigned`. Все ключи lifted в `Final[MessageKey]` для статической проверки.
+- **Локали** в `locales/{ru,en}.ftl` (14 строк): `clan-head-needs-group-chat`, `-not-registered`, `-frozen-clan`, `-not-enough-active{active_count, required}`, `-success{head_display_name, bonus_cm, new_length_cm, quote_text}` (мульти-строчный шаблон с цитатой), `-already-assigned{head_display_name, bonus_cm, quote_text}`. Числа через `NUMBER($x, useGrouping: 0)` чтобы Fluent не вставлял NBSP-разделители.
+- **DI-провязка в `bot/main.py`:**
+  - В `Container` добавлено поле `clan_quote_provider: IClanQuoteTemplateProvider` (рядом с `oracle_templates`/`duel_log_templates`/`forest_log_templates`).
+  - В `build_container()` создаётся инстанс `JsonClanQuoteTemplateProvider(templates_dir=...)` (lazy-кэш per-локаль из 2.3.D).
+  - В `build_dispatcher()` пробрасывается `dispatcher["clan_quote_provider"] = container.clan_quote_provider` — aiogram автоматически инжектит в handler как параметр `clan_quote_provider: IClanQuoteTemplateProvider`.
+- **Регистрация роутера** в `bot/handlers/__init__.py.register_routers()` (стандартный паттерн).
+- **Tests:**
+  - `tests/unit/bot/presenters/test_clan_head.py` — **6 unit-тестов** через `FakeMessageBundle` (маркерный формат `locale:key[k=v,...]`): `needs_group_chat`, `not_registered`, `frozen_clan`, `not_enough_active` с placeholder-проверкой, `success`/`already_assigned` с проверкой всех плейсхолдеров.
+  - `tests/unit/bot/handlers/test_clan_head.py` — **15 unit-тестов** handler-а: `tg_identity is None` / `chat_kind="private"` / `chat_kind="channel"` / `clan is None` / `clan.id is None` / `ClanFrozenError` / `DailyHeadInsufficientActivityError` / happy-path success с цитатой + username / already_assigned (was_new=False) без `new_length_cm` / пустой каталог цитат → fallback `👑` / `Player.username is None` → fallback `"глава"` + подстановка в `{user}` / `locale=None` → `DEFAULT_LOCALE` (`en`) / `chat_kind="group"` тоже работает / use-case вызывается с правильным `chat_id`+`actor_tg_id` / провайдер вызывается с `locale=<code>`. Использует `MagicMock(spec=...)` + `AsyncMock` для `Message.answer`/`IClanRepository.get_by_chat_id`/`RequestDailyHead.execute`; реальные доменные `ClanFrozenError(chat_id=...)` и `DailyHeadInsufficientActivityError(clan_id, active_count, required)` для проверки error-веток.
+- **Fakes:** `tests/fakes/clan_quotes.py` — `FakeClanQuoteTemplateProvider(catalog: dict[str, tuple[ClanQuoteTemplate, ...]])` с реализацией `get_templates(*, locale)` зеркалящей реальный JSON-загрузчик (fallback на `"ru"` если локали нет). Реэкспорт из `tests.fakes`.
+- **Composition root:** `tests/unit/bot/test_composition_root.py` дополнен импортом `FakeClanQuoteTemplateProvider` + созданием инстанса + передачей в `Container(...)` (mypy-фикс — без него `make typecheck` падал на «Missing positional argument "clan_quote_provider"»).
+
+Результат / артефакты:
+- `src/pipirik_wars/bot/handlers/clan_head.py` (165 строк, новый файл).
+- `src/pipirik_wars/bot/presenters/clan_head.py` (92 строки, новый файл).
+- `src/pipirik_wars/bot/main.py` (+8 строк DI).
+- `src/pipirik_wars/bot/handlers/__init__.py`, `bot/presenters/__init__.py` (+2 строки регистрация).
+- `locales/ru.ftl`, `locales/en.ftl` (+14 строк каждая).
+- `tests/fakes/clan_quotes.py` (31 строка).
+- `tests/fakes/__init__.py` (+2 строки реэкспорт).
+- `tests/unit/bot/handlers/test_clan_head.py` (~470 строк, **15 тестов**).
+- `tests/unit/bot/presenters/test_clan_head.py` (65 строк, **6 тестов**).
+- `tests/unit/bot/test_composition_root.py` (+3 строки фикс mypy).
+- `make ci` зелёный: ruff format/check + mypy + lint-imports + 2606 passed (95+ unit + 30+ integration), coverage 96.02% (выше порога 80%).
+
+Заметки / решения:
+- **Где выбирать цитату — handler vs use-case?** Решение: handler. Оригинальный план предлагал два варианта: (A) handler берёт `IClanQuoteTemplateProvider` напрямую и зовёт `random.choice(...)`, (B) use-case `RequestDailyHead` сам выбирает цитату и кладёт в DTO. Выбран (A): use-case 2.3.C уже мержен в main с DTO `DailyHeadResolved(assignment, player, was_new)` — расширение DTO потребовало бы reopen 2.3.C-PR-а, чего избегаем. Кроме того, выбор цитаты — это чисто UX-решение (контент-policy `mild_profanity` потенциально живёт в bot-конфиге), а use-case остаётся pure-domain-orchestration без презентационных решений.
+- **Подстановка `{user}` в цитате** — handler делает `text.replace("{user}", head_display)` после рендера. Это не Fluent-плейсхолдер, а обычная Python-замена в самой цитате (которая потом передаётся в Fluent через `quote_text` placeholder). Альтернатива — заставлять JSON-цитаты использовать Fluent-синтаксис `{ $user }` — но это сломало бы стилистику каталогов и потребовало бы парсинга Fluent для каждой цитаты. Простая `str.replace` достаточна.
+- **`pvp_random` reuse** — handler принимает `IRandom` параметр с именем `pvp_random` (ключ aiogram-workflow-data), потому что в `bot/main.py` этим именем уже зарегистрирован `RealRandom`-инстанс для PvP. Создавать отдельный `clan_head_random` нет смысла — это тот же глобальный random.
+- **Fallback `_FALLBACK_QUOTE = "👑"`** — handler никогда не падает на рендере: даже если каталог пуст / отсутствует, он отдаёт корону + warn-лог. Прод-инвариант — каталог всегда непустой (валидируется в 2.3.D через `ClanQuoteCatalogEmptyError`), но handler устойчив на случай мисконфигурации.
+- **Author identity для audit_log** — handler берёт `tg_identity.tg_user_id` (Telegram user_id отправителя) и передаёт в `actor_tg_id` поле DTO `RequestDailyHeadInput`. Use-case 2.3.C по нему пишет `audit_log.actor_id` для аналитики «кто триггернул» (даже если глава — другой игрок).
+- **Не сделано в 2.3.E (вынесено в 2.3.F):**
+  - APScheduler-cron `RunDailyHeadCron` с per-clan `random_offset(0..24h)` от 00:00 МСК (use-case уже мержен в 2.3.C, но triggers ещё не подключены).
+  - Middleware-запись в `daily_active`-таблицу при каждом входящем Telegram-сообщении (нужно для preflight-проверки `min_active_members` в `DailyHeadService`).
+  - Inline-кнопка «🎲 Назначить главу дня» в карточке профиля клана (ГДД §6.1 — пока есть только slash-команда).
+
+---
+
 ## 2026-05-05 — Спринт 2.3.D: каталог иронично-смешных цитат «Главы клана дня» (≥ 100 RU + ≥ 100 EN, JSON-загрузчик)
 
 **Автор:** Devin (агент sufficientdorette)
