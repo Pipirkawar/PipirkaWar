@@ -17,7 +17,15 @@
 
 **На `main`:** последний смерженный спринт — **2.5-B** ([PR #81](https://github.com/Pipirkawar/PipirkaWar/pull/81), коммит `3653e40`) «Команды поддержки в боте» — `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban` (TOTP) + общий `/confirm`-dispatcher; добавлен `IsAdminFilter` на `admin_support_router`, расширены `IPlayerRepository` (`find_by_query`, `freeze`, `unfreeze`) + `Player.ban` + `PlayerStatus.BANNED`, новые `AdminAuditAction`-константы (`ADMIN_PLAYER_LOOKUP/FROZEN/UNFROZEN/BANNED`), DI всех 7 admin-use-case-ов в `Container`. Завершены Фазы 0, 1 (MVP), 1.6 (анти-чит) полностью; из Фазы 2 закрыты 2.1–2.4 целиком и **2.5-A + 2.5-B** из Спринта 2.5. Идёт **Спринт 2.5-C** (команды экономики в боте: `/grant_length`, `/grant_thickness`, `/balance_get`, `/balance_set`).
 
-**Активная feature-ветка:** _будет создана_ под 2.5-C (от свежего `main` = `3653e40`). Текущая ветка `devin/1778097868-sprint-2-5-b-postmerge-docs` — это **postmerge-докс** (синк `current_tasks.md` под 2.5-C + запись `history.md`), а не сам 2.5-C.
+**Активная feature-ветка:** `devin/1778098395-sprint-2-5-c-economy` (от `main` = `395e053`). На ветке 2 коммита Спринта 2.5-C; PR ещё не открыт. Делаются финальные шаги: проверить `make ci` целиком, открыть PR.
+
+**Что сделано на ветке 2.5-C (последний коммит `39d4c5d`):**
+- C.1–C.5, C.7 — use-case-ы `GrantLength`/`GrantThickness`/`GetBalanceValue`/`SetBalanceValue` + `IBalanceWriter`/`YamlBalanceWriter` (atomic-write + flock + hot-reload через `IBalanceReloader`) + `IIdempotencyKey` → `build_admin_idempotency_key` (sha256, minute-floor); `AdminAuditAction.ADMIN_GRANT_LENGTH/_THICKNESS/_BALANCE_GET/_BALANCE_SET`.
+- C.6 — рефактор `/confirm`-handler-а на **registry-pattern** (`CONFIRM_DISPATCHERS: dict[command_kind, dispatcher]`); `bot/handlers/admin_economy.py` (4 handler-а + 3 dispatch-функции + `ConfirmDispatchDeps`).
+- C.8 — DI всех 4 use-case-ов в `Container` (`bot/main.py`) + регистрация `admin_economy_router` в `dispatcher` + workflow-data injection (`grant_length`, `grant_thickness`, `get_balance_value`, `set_balance_value`).
+- C.10 — локали `admin-grant-length-*` (12 ключей), `admin-grant-thickness-*` (11), `admin-balance-get-*` (4), `admin-balance-set-*` (9), `admin-idempotency-replay-*` (1) в `locales/{ru,en}.ftl`.
+- C.9 — `tests/unit/bot/handlers/test_admin_economy.py` (48 тестов: 4 handler-а × валидация + 3 dispatch × все ветки + idempotency-replay + registry-проверка); правки `test_composition_root.py` под новый Container; integration-тесты `tests/integration/balance/test_yaml_writer.py` уже есть из C.4. Локально pytest целиком: 3118 passed / 1 skipped (без coverage-gate).
+- В ходе C.9 ослаблен тип `YamlBalanceWriter.loader` с `YamlBalanceLoader` до **порта** `IBalanceReloader` (мелкий refactor, mypy-clean — позволяет подсунуть `FakeBalanceConfig` в тестах composition_root, FakeBalanceConfig уже реализует и `IBalanceConfig`, и `IBalanceReloader`).
 
 **Что уже есть в коде после 2.5-B:**
 - `domain/player/{entities,repositories}.py` — `Player.ban(now)` (идемпотентный) + `PlayerStatus.BANNED`; `IPlayerRepository.find_by_query(query, limit)` / `freeze(tg_id, *, reason)` / `unfreeze(tg_id)`.

@@ -28,18 +28,15 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, ValidationError
 
 from pipirik_wars.domain.balance.config import BalanceConfig
 from pipirik_wars.domain.balance.errors import BalanceKeyError
-from pipirik_wars.domain.balance.ports import IBalanceWriter
+from pipirik_wars.domain.balance.ports import IBalanceReloader, IBalanceWriter
 from pipirik_wars.shared.errors import ConfigError
-
-if TYPE_CHECKING:
-    from pipirik_wars.infrastructure.balance.loader import YamlBalanceLoader
 
 try:
     import fcntl
@@ -62,7 +59,7 @@ class YamlBalanceWriter(IBalanceWriter):
 
     __slots__ = ("_loader", "_path")
 
-    def __init__(self, *, path: Path, loader: YamlBalanceLoader) -> None:
+    def __init__(self, *, path: Path, loader: IBalanceReloader) -> None:
         self._path = path
         self._loader = loader
 

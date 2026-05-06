@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import cast
 from unittest.mock import MagicMock
 
@@ -18,8 +19,12 @@ from pipirik_wars.application.admin import (
     BanPlayer,
     FindPlayers,
     FreezePlayer,
+    GetBalanceValue,
     GetPlayerCard,
+    GrantLength,
+    GrantThickness,
     RequestAdminConfirm,
+    SetBalanceValue,
     UnfreezePlayer,
     VerifyAdminConfirm,
 )
@@ -97,6 +102,7 @@ from pipirik_wars.infrastructure.admin import (
 )
 from pipirik_wars.infrastructure.anticheat import StructlogAnticheatAdminAlerter
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
+from pipirik_wars.infrastructure.balance.writer import YamlBalanceWriter
 from pipirik_wars.infrastructure.clock import RealClock
 from pipirik_wars.infrastructure.dau import (
     InMemoryDauCounter,
@@ -498,6 +504,42 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         audit=admin_audit,
         clock=clock,
     )
+    grant_length_uc = GrantLength(
+        uow=uow,
+        admins=admins,
+        players=players,
+        length_granter=add_length,
+        audit=admin_audit,
+        clock=clock,
+    )
+    grant_thickness_uc = GrantThickness(
+        uow=uow,
+        admins=admins,
+        players=players,
+        balance=balance,
+        idempotency=idempotency,
+        audit=admin_audit,
+        clock=clock,
+    )
+    get_balance_value_uc = GetBalanceValue(
+        uow=uow,
+        admins=admins,
+        balance=balance,
+        audit=admin_audit,
+        clock=clock,
+    )
+    set_balance_value_uc = SetBalanceValue(
+        uow=uow,
+        admins=admins,
+        balance=balance,
+        writer=YamlBalanceWriter(
+            path=Path("/tmp/__pw_test_balance.yaml"),
+            loader=balance,
+        ),
+        idempotency=idempotency,
+        audit=admin_audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -710,6 +752,10 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         ban_player=ban_player_uc,
         request_admin_confirm=request_admin_confirm_uc,
         verify_admin_confirm=verify_admin_confirm_uc,
+        grant_length=grant_length_uc,
+        grant_thickness=grant_thickness_uc,
+        get_balance_value=get_balance_value_uc,
+        set_balance_value=set_balance_value_uc,
     )
 
 
