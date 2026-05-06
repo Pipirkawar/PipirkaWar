@@ -23,6 +23,7 @@ from pipirik_wars.application.clan import (
     RegisterClan,
 )
 from pipirik_wars.application.daily_head import (
+    RecordPlayerActivity,
     RequestDailyHead,
     RunDailyHeadCron,
 )
@@ -403,6 +404,12 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         audit=audit,
         clock=clock,
     )
+    record_player_activity = RecordPlayerActivity(
+        uow=uow,
+        players=players,
+        daily_activity=daily_activity,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -572,6 +579,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         daily_head_service=daily_head_service,
         request_daily_head=request_daily_head,
         run_daily_head_cron=run_daily_head_cron,
+        record_player_activity=record_player_activity,
     )
 
 
@@ -749,10 +757,13 @@ class TestBuildDispatcher:
         c = _container_with_fakes()
         dp = build_dispatcher(c)
         assert isinstance(dp, Dispatcher)
-        # Каждый из observer-ов должен иметь 4 middleware-а:
+        # `dp.callback_query` и `dp.my_chat_member` имеют 4 middleware-а:
         # error / auth / locale / throttle.
-        for observer in (dp.message, dp.callback_query, dp.my_chat_member):
+        for observer in (dp.callback_query, dp.my_chat_member):
             assert len(list(observer.middleware)) == 4
+        # `dp.message` дополнительно содержит DailyActivityMiddleware
+        # (Спринт 2.3.F.1) — итого 5.
+        assert len(list(dp.message.middleware)) == 5
         # Минимум 4 router-а: `start`, `profile`, `admin`, `registration`.
         assert any(r.name == "start" for r in dp.sub_routers)
         assert any(r.name == "registration" for r in dp.sub_routers)
