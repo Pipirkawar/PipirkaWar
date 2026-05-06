@@ -33,7 +33,7 @@ from pipirik_wars.application.forest import (
     ForestRunFinished,
     IForestFinishNotifier,
 )
-from pipirik_wars.application.pvp import ResolveAfkRound
+from pipirik_wars.application.pvp import ForceResolveMassDuel, ResolveAfkRound
 from pipirik_wars.domain.forest import (
     ForestRun,
     ForestRunNotFoundError,
@@ -446,4 +446,116 @@ class TestRoundAfkCallback:
             logger=logger,
         )
         await adapter._run_round_afk_job(duel_id=42, round_num=1)
+        assert logger.exception.called
+
+
+@dataclass
+class _FakeMassDuelAfkUseCase:
+    """Stub `ForceResolveMassDuel`-use-case-а для тестов callback-а 2.2.F."""
+
+    calls: list[int] = field(default_factory=list)
+    raise_exc: BaseException | None = None
+
+    async def execute(self, input_dto):  # type: ignore[no-untyped-def]
+        self.calls.append(input_dto.duel_id)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+
+
+class TestMassDuelAfkSchedule:
+    """2.2.F: schedule/cancel `pvp_mass_duel_afk:{duel_id}`-job."""
+
+    @pytest.mark.asyncio
+    async def test_schedule_uses_per_duel_id(self) -> None:
+        adapter = _build_adapter(fake=_FakeFinishUseCase())
+        adapter.start()
+        try:
+            await adapter.schedule_mass_duel_afk_resolution(
+                duel_id=42,
+                run_at=_NOW + timedelta(days=365),
+            )
+            jobs = adapter._scheduler.get_jobs()
+            assert len(jobs) == 1
+            assert jobs[0].id == "pvp_mass_duel_afk:42"
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_schedule_replace_existing(self) -> None:
+        adapter = _build_adapter(fake=_FakeFinishUseCase())
+        adapter.start()
+        try:
+            first_at = _NOW + timedelta(days=365)
+            second_at = _NOW + timedelta(days=400)
+            await adapter.schedule_mass_duel_afk_resolution(duel_id=42, run_at=first_at)
+            await adapter.schedule_mass_duel_afk_resolution(duel_id=42, run_at=second_at)
+            jobs = adapter._scheduler.get_jobs()
+            assert len(jobs) == 1
+            assert jobs[0].next_run_time == second_at
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_cancel_removes_only_target(self) -> None:
+        adapter = _build_adapter(fake=_FakeFinishUseCase())
+        adapter.start()
+        try:
+            await adapter.schedule_mass_duel_afk_resolution(
+                duel_id=42, run_at=_NOW + timedelta(days=365)
+            )
+            await adapter.schedule_mass_duel_afk_resolution(
+                duel_id=43, run_at=_NOW + timedelta(days=365)
+            )
+            await adapter.cancel_mass_duel_afk_resolution(duel_id=42)
+            ids = sorted(j.id for j in adapter._scheduler.get_jobs())
+            assert ids == ["pvp_mass_duel_afk:43"]
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_cancel_missing_is_noop(self) -> None:
+        adapter = _build_adapter(fake=_FakeFinishUseCase())
+        adapter.start()
+        try:
+            await adapter.cancel_mass_duel_afk_resolution(duel_id=999)
+        finally:
+            adapter.shutdown(wait=False)
+
+
+class TestMassDuelAfkCallback:
+    """`_run_mass_duel_afk_job` callback (2.2.F)."""
+
+    @pytest.mark.asyncio
+    async def test_callback_invokes_use_case(self) -> None:
+        fake = _FakeMassDuelAfkUseCase()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            mass_duel_afk_factory=lambda: cast(ForceResolveMassDuel, fake),
+        )
+        await adapter._run_mass_duel_afk_job(duel_id=42)
+        assert fake.calls == [42]
+
+    @pytest.mark.asyncio
+    async def test_callback_logs_when_factory_missing(self) -> None:
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            logger=logger,
+        )
+        await adapter._run_mass_duel_afk_job(duel_id=42)
+        assert logger.warning.called
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_unexpected_error(self) -> None:
+        fake = _FakeMassDuelAfkUseCase(raise_exc=RuntimeError("kaboom"))
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            mass_duel_afk_factory=lambda: cast(ForceResolveMassDuel, fake),
+            logger=logger,
+        )
+        await adapter._run_mass_duel_afk_job(duel_id=42)
         assert logger.exception.called

@@ -130,6 +130,7 @@ def valid_balance_payload() -> dict[str, Any]:
                 "min_length_cm": 20,
                 "min_thickness_level": 2,
                 "min_clan_members": 1,
+                "move_timer_seconds": 180,
             },
         },
         "content_policy": {

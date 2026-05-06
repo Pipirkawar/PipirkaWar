@@ -13,6 +13,15 @@ from pipirik_wars.infrastructure.db.repositories.clan import (
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.clan_mass_duel_history_query import (
+    SqlAlchemyClanMassDuelHistoryQuery,
+)
+from pipirik_wars.infrastructure.db.repositories.daily_activity import (
+    SqlAlchemyDailyActivityRepository,
+)
+from pipirik_wars.infrastructure.db.repositories.daily_head import (
+    SqlAlchemyDailyHeadRepository,
+)
 from pipirik_wars.infrastructure.db.repositories.forest_run import (
     SqlAlchemyForestRunRepository,
 )
@@ -39,8 +48,11 @@ __all__ = [
     "SqlAlchemyActivityLockRepository",
     "SqlAlchemyAdminRepository",
     "SqlAlchemyAnticheatRepository",
+    "SqlAlchemyClanMassDuelHistoryQuery",
     "SqlAlchemyClanMembershipRepository",
     "SqlAlchemyClanRepository",
+    "SqlAlchemyDailyActivityRepository",
+    "SqlAlchemyDailyHeadRepository",
     "SqlAlchemyDuelRepository",
     "SqlAlchemyForestRunRepository",
     "SqlAlchemyGlobalLobbyRepository",

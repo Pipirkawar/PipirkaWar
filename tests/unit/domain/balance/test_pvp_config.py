@@ -177,6 +177,7 @@ def _build_mass(**overrides: int) -> PvpMassDuelConfig:
         "min_length_cm": 20,
         "min_thickness_level": 2,
         "min_clan_members": 1,
+        "move_timer_seconds": 180,
     }
     base.update(overrides)
     return PvpMassDuelConfig(**base)
@@ -191,6 +192,17 @@ class TestPvpMassDuelConfig:
         assert cfg.min_length_cm == 20
         assert cfg.min_thickness_level == 2
         assert cfg.min_clan_members == 1
+        assert cfg.move_timer_seconds == 180
+
+    @pytest.mark.parametrize("value", [59, 0, -1, 601, 1000])
+    def test_move_timer_seconds_out_of_range(self, value: int) -> None:
+        with pytest.raises(ValidationError):
+            _build_mass(move_timer_seconds=value)
+
+    @pytest.mark.parametrize("value", [60, 180, 300, 600])
+    def test_move_timer_seconds_in_range(self, value: int) -> None:
+        cfg = _build_mass(move_timer_seconds=value)
+        assert cfg.move_timer_seconds == value
 
     @pytest.mark.parametrize("value", [0, -1, 73, 200])
     def test_cooldown_hours_out_of_range(self, value: int) -> None:
@@ -238,6 +250,7 @@ class TestPvpMassDuelConfig:
                     "min_length_cm": 20,
                     "min_thickness_level": 2,
                     "min_clan_members": 1,
+                    "move_timer_seconds": 180,
                     "unknown_field": 42,
                 }
             )
@@ -277,6 +290,7 @@ class TestBalanceConfigPvpRequired:
         assert cfg.pvp.mass_duel.min_length_cm == 20
         assert cfg.pvp.mass_duel.min_thickness_level == 2
         assert cfg.pvp.mass_duel.min_clan_members == 1
+        assert cfg.pvp.mass_duel.move_timer_seconds == 180
 
     def test_balance_config_rejects_missing_pvp(self) -> None:
         payload = copy.deepcopy(valid_balance_payload())

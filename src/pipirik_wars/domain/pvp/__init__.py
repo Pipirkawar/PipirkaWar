@@ -29,6 +29,10 @@ lifecycle-методами `submit_move` / `force_submit_missing` / `resolve` /
 `cancel`, см. `mass_duel.py`. Symmetricaly to 1×1-`Duel`.
 """
 
+from pipirik_wars.domain.pvp.clan_history import (
+    ClanMassDuelHistoryEntry,
+    ClanMassDuelOutcomeForUs,
+)
 from pipirik_wars.domain.pvp.duel import (
     Duel,
     DuelMode,
@@ -96,6 +100,8 @@ from pipirik_wars.domain.pvp.services import (
 
 __all__ = [
     "DEFAULT_DUEL_ROUNDS",
+    "ClanMassDuelHistoryEntry",
+    "ClanMassDuelOutcomeForUs",
     "Duel",
     "DuelLogNoTemplatesError",
     "DuelLogTemplate",

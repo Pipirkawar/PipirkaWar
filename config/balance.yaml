@@ -169,6 +169,7 @@ anticheat:
     - caravan_reward
     - raid_reward
     - admin_grant
+    - daily_head
   donate_sources:             # blacklist: эти источники игнорируются хардкапом
     - stars_payment
     - ton_payment
@@ -200,6 +201,7 @@ pvp:
     min_length_cm: 20                # ГДД §7.2 / 2.2.2: участники с длиной ≥ 20 см
     min_thickness_level: 2           # ГДД §3.2: масс-PvP открывается на уровне 2 толщины
     min_clan_members: 1              # ГДД §7.2: бой возможен при ≥ 1 участнике на сторону
+    move_timer_seconds: 180          # Спринт 2.2.F: 3 мин на ход всех участников; затем AFK-фоллбэк
 
 # -----------------------------------------------------------------------------
 # Контент-полиси для каталога цитат главы клана (templates/clan_quotes_*.json).

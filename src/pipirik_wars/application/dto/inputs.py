@@ -438,3 +438,39 @@ class ExpireLobbyEntryInput(_StrictBase):
     """
 
     duel_id: int = Field(gt=0, description="pvp_duels.id")
+
+
+class RequestDailyHeadInput(_StrictBase):
+    """Запрос «Главы клана дня» из bot-handler-а (Спринт 2.3.C).
+
+    Игрок жмёт кнопку «🎲 Назначить главу дня» или вводит `/clan_head`
+    в клан-чате. Use-case резолвит клан по `chat_id`, проверяет
+    `is_frozen`, и зовёт `DailyHeadService.assign_or_get(...,
+    source=BUTTON)`. Идемпотентен по `(clan_id, moscow_date)` —
+    повторный запрос в те же сутки вернёт уже-назначенную главу
+    (этот же `Assignment`, без новых side-effects).
+
+    `chat_id` — Telegram chat_id клан-чата (отрицательный для групп);
+    нужен для резолва клана. `actor_tg_id` идёт в `audit_log.actor_id`,
+    чтобы было видно, кто триггернул запись (для аналитики и расследований).
+    """
+
+    chat_id: int = Field(
+        description="Telegram chat_id клан-чата (отрицательный для групп)",
+    )
+    actor_tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id игрока, нажавшего кнопку",
+    )
+
+
+class RunDailyHeadCronInput(_StrictBase):
+    """Cron-триггер назначения «Главы клана дня» (Спринт 2.3.C).
+
+    APScheduler в `random_offset(0..24h)`-час с 00:00 МСК зовёт этот
+    use-case на каждый `clan_id` (Спринт 2.3.F). Use-case идемпотентен
+    по `(clan_id, moscow_date)` — если глава уже назначен (например,
+    кнопка сработала раньше), cron вернёт без повторного присвоения.
+    """
+
+    clan_id: int = Field(gt=0, description="Внутренний clans.id")

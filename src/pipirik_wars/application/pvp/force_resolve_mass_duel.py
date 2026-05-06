@@ -55,6 +55,7 @@ from pipirik_wars.domain.pvp import (
 from pipirik_wars.domain.shared.ports import (
     IAuditLogger,
     IClock,
+    IDelayedJobScheduler,
     IRandom,
     IUnitOfWork,
 )
@@ -84,6 +85,7 @@ class ForceResolveMassDuel:
         "_locks",
         "_players",
         "_random",
+        "_scheduler",
         "_uow",
     )
 
@@ -98,6 +100,7 @@ class ForceResolveMassDuel:
         random: IRandom,
         audit: IAuditLogger,
         clock: IClock,
+        scheduler: IDelayedJobScheduler | None = None,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -107,6 +110,7 @@ class ForceResolveMassDuel:
         self._random = random
         self._audit = audit
         self._clock = clock
+        self._scheduler = scheduler
 
     async def execute(self, input_dto: ForceResolveMassDuelInput) -> MassDuelForceResolved:
         """AFK-резолв. Бросает:
@@ -159,7 +163,16 @@ class ForceResolveMassDuel:
                 now=now,
                 afk_fallback=True,
             )
-            return MassDuelForceResolved(duel=saved, was_already_resolved=False)
+            saved_id = saved.id
+            assert saved_id is not None
+
+        # AFK-таймер снимаем снаружи UoW. Это best-effort cleanup на случай
+        # повторного срабатывания (обычно job уже выполнился и был удалён из
+        # job-store-а автоматически, но cancel идемпотентен по контракту).
+        if self._scheduler is not None:
+            await self._scheduler.cancel_mass_duel_afk_resolution(duel_id=saved_id)
+
+        return MassDuelForceResolved(duel=saved, was_already_resolved=False)
 
 
 __all__ = [

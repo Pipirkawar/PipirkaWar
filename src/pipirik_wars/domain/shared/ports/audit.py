@@ -97,6 +97,8 @@ class AuditSource(str, enum.Enum):
     STARS_PAYMENT = "stars_payment"
     TON_PAYMENT = "ton_payment"
     USDT_PAYMENT = "usdt_payment"
+    # ── Спринт 2.3 (Глава клана дня, ГДД §6.1) ──
+    DAILY_HEAD = "daily_head"
     UNKNOWN = "unknown"
 
 

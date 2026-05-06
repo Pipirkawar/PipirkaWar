@@ -43,6 +43,7 @@ from pipirik_wars.domain.shared.ports import (
     AuditEntry,
     IAuditLogger,
     IClock,
+    IDelayedJobScheduler,
     IRandom,
     IUnitOfWork,
 )
@@ -66,6 +67,7 @@ class ResolveMassDuel:
         "_locks",
         "_players",
         "_random",
+        "_scheduler",
         "_uow",
     )
 
@@ -80,6 +82,7 @@ class ResolveMassDuel:
         random: IRandom,
         audit: IAuditLogger,
         clock: IClock,
+        scheduler: IDelayedJobScheduler | None = None,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -89,6 +92,7 @@ class ResolveMassDuel:
         self._random = random
         self._audit = audit
         self._clock = clock
+        self._scheduler = scheduler
 
     async def execute(self, input_dto: ResolveMassDuelInput) -> MassDuelResolved:
         """Разрешить бой. Бросает:
@@ -122,7 +126,14 @@ class ResolveMassDuel:
                 now=now,
                 afk_fallback=False,
             )
-            return MassDuelResolved(duel=saved)
+            saved_id = saved.id
+            assert saved_id is not None
+
+        # AFK-таймер снимаем снаружи UoW (идемпотентная операция шедулера).
+        if self._scheduler is not None:
+            await self._scheduler.cancel_mass_duel_afk_resolution(duel_id=saved_id)
+
+        return MassDuelResolved(duel=saved)
 
 
 async def release_mass_duel_locks(duel: MassDuel, *, locks: ActivityLockService) -> None:

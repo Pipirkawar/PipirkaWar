@@ -398,3 +398,65 @@ duel-anticheat-blocked = Anti-cheat check is active until { $banned-until }. Due
 
 # Player is busy with another activity (forest etc.).
 duel-lock-already-held = 🔒 You're busy (e.g., in /forest). Finish the current activity first.
+
+# === Mass PvP clan×clan (Sprint 2.2.F, GDD §7.2) ===
+
+# /clan_attack — usage and base errors.
+pvp-mass-needs-group-chat = ⚔️The `/clan_attack` command only works in clan group chats. Run it from the chat of the clan you want to attack.
+pvp-mass-not-registered = 🍆Register first via `/start` in the bot's DM.
+pvp-mass-attacker-not-found = ❌This chat is not linked to a registered clan.
+pvp-mass-attacker-not-member = 🚫Only members of this clan can attack other clans.
+pvp-mass-target-not-found = ❌Target chat not found or not linked to a registered clan.
+pvp-mass-target-needed = Usage: `/clan_attack <chat_id>` or reply to a message from the defender clan's chat.
+pvp-mass-self-attack = 🤝You cannot attack your own clan.
+pvp-mass-clan-frozen = 🧊One of the clans is frozen — mass duel is impossible.
+pvp-mass-cooldown = ⏳Cooldown is still active: next attack possible in { NUMBER($cooldown_hours, useGrouping: 0) } h.
+pvp-mass-no-participants = 🪶One side has no participants meeting the requirements (length ≥ { NUMBER($min_length_cm, useGrouping: 0) } cm, thickness ≥ { NUMBER($min_thickness_level, useGrouping: 0) }).
+pvp-mass-lock-already-held = 🔒Some participants are busy with another activity. Try again in a minute.
+
+# Start card in the group chat.
+pvp-mass-started = ⚔️Clan battle: <b>{ $attacker }</b> × <b>{ $defender }</b>! Lineup: { NUMBER($attacker_size, useGrouping: 0) } × { NUMBER($defender_size, useGrouping: 0) }. All participants got instructions in DM. Move timer — { NUMBER($timer_seconds, useGrouping: 0) } sec.
+
+# DM prompts.
+pvp-mass-prompt-attack = ⚔️Clan × clan battle. Where do you strike?
+pvp-mass-prompt-block = 🛡Attack chosen: { $attack }. What do you block?
+pvp-mass-waiting = ⏳Your move is accepted. Waiting for others…
+
+# Final result in DM to each participant.
+pvp-mass-result-victory = 🏆Victory! Clan <b>{ $clan }</b> won and took { NUMBER($total_dealt, useGrouping: 0) } cm. Your delta: { $delta_sign }{ NUMBER($delta_cm, useGrouping: 0) } cm.
+pvp-mass-result-defeat = 💀Defeat. Clan <b>{ $clan }</b> lost, { NUMBER($total_lost, useGrouping: 0) } cm went to the enemy. Your delta: { $delta_sign }{ NUMBER($delta_cm, useGrouping: 0) } cm.
+pvp-mass-result-draw = 🤝Draw. Nobody won by more. Your delta: { $delta_sign }{ NUMBER($delta_cm, useGrouping: 0) } cm.
+
+# Final card in chat.
+pvp-mass-result-chat-victory = 🏆Clan × clan battle is over! Clan <b>{ $clan }</b> won and took { NUMBER($total_dealt, useGrouping: 0) } cm.
+pvp-mass-result-chat-draw = 🤝Clan × clan battle ended in a draw ({ NUMBER($total_dealt, useGrouping: 0) } cm dealt by each side).
+
+# Buttons.
+pvp-mass-button-attack-high = ⬆️ Head
+pvp-mass-button-attack-mid = ↔ Body
+pvp-mass-button-attack-low = ⬇️ Legs
+pvp-mass-button-block-high = 🛡⬆ Head
+pvp-mass-button-block-mid = 🛡↔ Body
+pvp-mass-button-block-low = 🛡⬇ Legs
+
+# Toast notifications.
+pvp-mass-toast-not-found = This battle is no longer active.
+pvp-mass-toast-not-participant = You are not a participant in this battle.
+pvp-mass-toast-foreign-button = This button is not for you.
+pvp-mass-toast-invalid-state = The battle is already over.
+pvp-mass-toast-already-submitted = You already made your move.
+pvp-mass-toast-outdated = This button is outdated.
+pvp-mass-toast-attack-selected = Attack chosen. Now pick a block.
+pvp-mass-toast-move-accepted = Move accepted!
+
+## /clan_history (Sprint 2.2.G — clan attack journal)
+
+clan-history-needs-group-chat = 📜 The `/clan_history` command only works in a clan group chat.
+clan-history-not-registered = 📜 This chat is not registered as a clan. Use /start to register.
+clan-history-header = 📜 <b>Clan attack journal</b> ({ $clan_title })
+clan-history-empty = 📜 Clan <b>{ $clan_title }</b> has no completed mass battles yet.
+# One journal row: "<idx>. ⚔ Opponent — victory +20 cm (3×3)".
+clan-history-entry-victory = { $idx }. ⚔ { $opponent_clan_title } — 🏆 victory +{ NUMBER($our_delta_cm, useGrouping: 0) } cm ({ NUMBER($our_count, useGrouping: 0) }×{ NUMBER($opponent_count, useGrouping: 0) }, { $when })
+clan-history-entry-defeat = { $idx }. ⚔ { $opponent_clan_title } — 💀 defeat { NUMBER($our_delta_cm, useGrouping: 0) } cm ({ NUMBER($our_count, useGrouping: 0) }×{ NUMBER($opponent_count, useGrouping: 0) }, { $when })
+clan-history-entry-draw = { $idx }. ⚔ { $opponent_clan_title } — 🤝 draw ({ NUMBER($our_count, useGrouping: 0) }×{ NUMBER($opponent_count, useGrouping: 0) }, { $when })
+clan-history-entry-cancelled = { $idx }. ⚔ { $opponent_clan_title } — ⛔ cancelled ({ $when })

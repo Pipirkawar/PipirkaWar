@@ -42,6 +42,10 @@ from pipirik_wars.application.clan import (
     MigrateClanChatId,
     RegisterClan,
 )
+from pipirik_wars.application.daily_head import (
+    RequestDailyHead,
+    RunDailyHeadCron,
+)
 from pipirik_wars.application.dau import (
     CheckDauThreshold,
     GetDauStats,
@@ -73,6 +77,8 @@ from pipirik_wars.application.pvp import (
     EscalateChatToGlobal,
     ExpireLobbyEntry,
     ForceResolveMassDuel,
+    GetClanAttackHistory,
+    IClanMassDuelHistoryQuery,
     IDuelLogTemplateProvider,
     MatchFromLobby,
     ResolveAfkRound,
@@ -96,6 +102,11 @@ from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.anticheat import IAnticheatAdminAlerter, IAnticheatRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
+from pipirik_wars.domain.daily_head import (
+    DailyHeadService,
+    IDailyActivityRepository,
+    IDailyHeadRepository,
+)
 from pipirik_wars.domain.dau import IDauCounter, IDauLimit, IDauThresholdAlerter
 from pipirik_wars.domain.forest import IForestRunRepository
 from pipirik_wars.domain.oracle import IOracleHistoryRepository
@@ -127,8 +138,11 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyActivityLockRepository,
     SqlAlchemyAdminRepository,
     SqlAlchemyAnticheatRepository,
+    SqlAlchemyClanMassDuelHistoryQuery,
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
+    SqlAlchemyDailyActivityRepository,
+    SqlAlchemyDailyHeadRepository,
     SqlAlchemyDuelRepository,
     SqlAlchemyForestRunRepository,
     SqlAlchemyGlobalLobbyRepository,
@@ -216,6 +230,7 @@ class Container:
     # Запросы (Спринт 1.4.C / 2.2.A)
     top_players_query: ITopPlayersQuery
     top_clans_query: IClanTopQuery
+    clan_mass_duel_history_query: IClanMassDuelHistoryQuery
 
     # Планировщик отложенных задач (Спринт 1.3.C)
     delayed_jobs: IDelayedJobScheduler
@@ -245,6 +260,7 @@ class Container:
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
     get_top_clans: GetTopClans
+    get_clan_attack_history: GetClanAttackHistory
     add_length: ILengthGranter
     lift_anticheat_ban: LiftAnticheatBan
 
@@ -267,6 +283,13 @@ class Container:
     resolve_mass_duel: ResolveMassDuel
     force_resolve_mass_duel: ForceResolveMassDuel
     cancel_mass_duel: CancelMassDuel
+
+    # Daily Head «Глава клана дня» (Спринт 2.3)
+    daily_heads: IDailyHeadRepository
+    daily_activity: IDailyActivityRepository
+    daily_head_service: DailyHeadService
+    request_daily_head: RequestDailyHead
+    run_daily_head_cron: RunDailyHeadCron
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -345,6 +368,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clock=clock,
         ttl_seconds=60,
     )
+    clan_mass_duel_history_query = SqlAlchemyClanMassDuelHistoryQuery(uow=uow)
     dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=settings.bot.max_dau)
     dau_threshold_alerter = StructlogDauThresholdAlerter()
@@ -474,6 +498,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         escalate_factory=lambda: escalate_chat_to_global,
         expire_factory=lambda: expire_lobby_entry,
         afk_resolution_factory=lambda: resolve_afk_round,
+        mass_duel_afk_factory=lambda: force_resolve_mass_duel,
     )
     start_forest_run = StartForestRun(
         uow=uow,
@@ -512,6 +537,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     )
     get_top_players = GetTopPlayers(query=top_players_query)
     get_top_clans = GetTopClans(query=top_clans_query)
+    get_clan_attack_history = GetClanAttackHistory(query=clan_mass_duel_history_query)
     set_player_locale = SetPlayerLocale(
         uow=uow,
         players=players,
@@ -632,6 +658,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         balance=balance,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
     )
     submit_mass_move = SubmitMassMove(
         uow=uow,
@@ -648,6 +675,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         random=RealRandom(),
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
     )
     force_resolve_mass_duel = ForceResolveMassDuel(
         uow=uow,
@@ -658,11 +686,51 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         random=RealRandom(),
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
     )
     cancel_mass_duel = CancelMassDuel(
         uow=uow,
         duels=mass_duels,
         locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
+    )
+    # Daily Head «Глава клана дня» (Спринт 2.3.C). Доменный сервис
+    # `DailyHeadService` чистый — фактические side-effects (запись в
+    # `daily_heads`, +len через `add_length`, audit `DAILY_HEAD_ASSIGN`)
+    # выполняют use-case-ы.
+    daily_heads = SqlAlchemyDailyHeadRepository(uow=uow)
+    daily_activity = SqlAlchemyDailyActivityRepository(uow=uow, clock=clock)
+    # `DailyHeadService` принимает `BalanceConfig`-снапшот (а не loader-port),
+    # потому что доменный сервис должен быть чистым — `IBalanceConfig` живёт в
+    # domain.balance.ports, но снимок берём один раз на старте процесса.
+    # Hot-reload `daily_head`-секции потребует перезапуска бота — это
+    # сознательный trade-off (раздел 2.3 редко крутится).
+    daily_head_service = DailyHeadService(
+        balance=balance.get(),
+        clock=clock,
+        random=RealRandom(),
+        heads=daily_heads,
+        activity=daily_activity,
+    )
+    request_daily_head = RequestDailyHead(
+        uow=uow,
+        clans=clans,
+        players=players,
+        heads=daily_heads,
+        daily_head_service=daily_head_service,
+        length_granter=add_length,
+        audit=audit,
+        clock=clock,
+    )
+    run_daily_head_cron = RunDailyHeadCron(
+        uow=uow,
+        clans=clans,
+        players=players,
+        heads=daily_heads,
+        daily_head_service=daily_head_service,
+        length_granter=add_length,
         audit=audit,
         clock=clock,
     )
@@ -695,6 +763,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         player_locale_resolver=player_locale_resolver,
         top_players_query=top_players_query,
         top_clans_query=top_clans_query,
+        clan_mass_duel_history_query=clan_mass_duel_history_query,
         delayed_jobs=delayed_jobs,
         dau_counter=dau_counter,
         dau_limit=dau_limit,
@@ -718,6 +787,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,
         get_top_clans=get_top_clans,
+        get_clan_attack_history=get_clan_attack_history,
         add_length=add_length,
         lift_anticheat_ban=lift_anticheat_ban,
         challenge_duel=challenge_duel,
@@ -734,6 +804,11 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         resolve_mass_duel=resolve_mass_duel,
         force_resolve_mass_duel=force_resolve_mass_duel,
         cancel_mass_duel=cancel_mass_duel,
+        daily_heads=daily_heads,
+        daily_activity=daily_activity,
+        daily_head_service=daily_head_service,
+        request_daily_head=request_daily_head,
+        run_daily_head_cron=run_daily_head_cron,
     )
 
 
@@ -791,6 +866,18 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["duel_log_templates"] = container.duel_log_templates
     dispatcher["pvp_random"] = container.random
     dispatcher["duels"] = container.duels
+    # Mass-PvP клан×клан (Спринт 2.2.F) — use-cases + clans для handler-ов.
+    dispatcher["start_mass_duel"] = container.start_mass_duel
+    dispatcher["submit_mass_move"] = container.submit_mass_move
+    dispatcher["resolve_mass_duel"] = container.resolve_mass_duel
+    dispatcher["clans"] = container.clans
+    # Журнал клановых атак (Спринт 2.2.G) — read-side use-case для handler-а.
+    dispatcher["get_clan_attack_history"] = container.get_clan_attack_history
+    # Daily Head (Спринт 2.3.C) — button-trigger use-case для handler-а 2.3.E.
+    # `run_daily_head_cron` пробрасывается в шедулер (2.3.F), но также
+    # доступен в dispatcher для админ-команд / диагностики.
+    dispatcher["request_daily_head"] = container.request_daily_head
+    dispatcher["run_daily_head_cron"] = container.run_daily_head_cron
     return dispatcher
 
 

@@ -61,6 +61,7 @@ from pipirik_wars.domain.shared.ports import (
     AuditEntry,
     IAuditLogger,
     IClock,
+    IDelayedJobScheduler,
     IUnitOfWork,
 )
 from pipirik_wars.shared.errors import IntegrityError
@@ -91,6 +92,7 @@ class StartMassDuel:
         "_lock_ttl",
         "_locks",
         "_players",
+        "_scheduler",
         "_uow",
     )
 
@@ -106,6 +108,7 @@ class StartMassDuel:
         balance: IBalanceConfig,
         audit: IAuditLogger,
         clock: IClock,
+        scheduler: IDelayedJobScheduler | None = None,
         lock_ttl: timedelta = _DEFAULT_MASS_DUEL_LOCK_TTL,
     ) -> None:
         self._uow = uow
@@ -117,6 +120,7 @@ class StartMassDuel:
         self._balance = balance
         self._audit = audit
         self._clock = clock
+        self._scheduler = scheduler
         self._lock_ttl = lock_ttl
 
     async def execute(self, input_dto: StartMassDuelInput) -> MassDuelStarted:
@@ -207,7 +211,19 @@ class StartMassDuel:
                 )
             )
 
-            return MassDuelStarted(duel=stored)
+            run_at = now + timedelta(seconds=cfg.move_timer_seconds)
+            stored_id = stored.id
+
+        # AFK-таймер ставим снаружи UoW (идемпотентная операция шедулера).
+        # Если транзакция выше не упала — `stored_id` валиден, и таймер
+        # будет соответствовать только что закоммиченному бою.
+        if self._scheduler is not None:
+            await self._scheduler.schedule_mass_duel_afk_resolution(
+                duel_id=stored_id,
+                run_at=run_at,
+            )
+
+        return MassDuelStarted(duel=stored)
 
     async def _fetch_clan(self, *, chat_id: int) -> Clan:
         clan = await self._clans.get_by_chat_id(chat_id)

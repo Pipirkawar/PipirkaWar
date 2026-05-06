@@ -23,6 +23,238 @@
 
 ---
 
+## 2026-05-06 — Спринт 2.3.C: application use-cases «Главы клана дня» (`RequestDailyHead` + `RunDailyHeadCron`, 18 unit-тестов, миграция 0014 audit-source)
+
+**Автор:** Devin (агент urbanviola, recovery-агент завершил DI-провязку + docs)
+**Тип:** feature
+**Связано:** ПД §5 / Спринт 2.3.3, ГДД §6.1; ветка `devin/1778058870-sprint-2-3-c-daily-head-usecases` (PR следует)
+
+Что сделано:
+- Реализованы application use-cases «Главы клана дня» поверх доменного `DailyHeadService` (2.3.A) и репозиториев 2.3.B. Сценарий гибридного триггера (ГДД §6.1, Q4 v9) теперь полностью на месте на application-уровне.
+- **`RequestDailyHead(uow, clans, players, heads, daily_head_service, length_granter, audit, clock)`** — button-trigger (`/clan_head` или inline-кнопка из клан-чата). Резолвит клан по `chat_id` (бросает `NoClanRegisteredError` при отсутствии); валидирует `ClanStatus.ACTIVE` (бросает `ClanFrozenError`); вызывает общий хелпер.
+- **`RunDailyHeadCron(uow, clans, players, heads, daily_head_service, length_granter, audit, clock)`** — cron-trigger (под APScheduler 2.3.F, по `random_offset(0..24h)`-час с 00:00 МСК). Принимает `clan_id` напрямую (резолвит клан через `clans.get_by_id`); если клан удалён или FROZEN — возвращает `None` (no-op без ошибки, чтобы шедулер не падал на устаревшей записи); иначе вызывает общий хелпер.
+- **Общий хелпер `_resolve_or_create_assignment(...)`** в `application/daily_head/_common.py` — внутри активного UoW:
+  1. `service.assign_or_get(...)` — preflight + выбор кандидата. Если уже назначен (`assignment.id is not None`) — читает игрока и возвращает `DailyHeadResolved(was_new=False)`.
+  2. `heads.add(assignment)` — INSERT новой записи. На race (UNIQUE-violation) — `DailyHeadAlreadyAssignedError` ловится → `heads.get_by_clan_and_date(...)` возвращает запись победителя → `was_new=False` (длина уже начислена выигравшей транзакцией, повторно не делаем).
+  3. На happy-path: `length_granter.grant(player_id, delta_cm=saved.bonus_cm, source=AuditSource.DAILY_HEAD, idempotency_key=f"add_length:daily_head:{clan_id}:{moscow_date.isoformat()}")` — anti-cheat clamp + audit `LENGTH_GRANT` внутри `grant()`. Idempotency-key стабилен по `(clan_id, moscow_date)` — при ретрае в тех же сутках LENGTH_GRANT-дубликат не возникнет.
+  4. Отдельный `AuditEntry(action=AuditAction.DAILY_HEAD_ASSIGN, target_kind="clan", target_id=str(clan_id), after={player_id, moscow_date, source, bonus_cm}, idempotency_key=f"daily_head_assign:{clan_id}:{moscow_date.isoformat()}")` — для аналитики (отдельно от LENGTH_GRANT, чтобы видеть кто стал главой и от какого триггера).
+  5. Re-fetch игрока с применённой прибавкой → `DailyHeadResolved(assignment=saved, player=saved_player, was_new=True)`.
+- **Новый `AuditSource.DAILY_HEAD = "daily_head"`** в `domain/security/entities.py` (для anti-cheat) + в `domain/shared/ports/audit.py` (для audit-логгера) + добавлен в `anticheat.organic_sources` (premium-bonus считается organic для anti-cheat clamp; otherwise чёрный ящик 20-см clamp обрезал бы законную прибавку 1–20 см).
+- **Alembic-миграция `0014_audit_source_daily_head`** — drop+recreate CHECK-whitelist `source` колонки `audit_log` (PostgreSQL не поддерживает `ALTER TABLE ... ADD VALUE` для CHECK constraint, только для ENUM-типов, поэтому drop+recreate). Migration test обновлён.
+- **DI-провязка в `bot/main.py::build_container`** (Спринт 2.3.C, шаг #5):
+  - `daily_heads = SqlAlchemyDailyHeadRepository(uow=uow)`,
+  - `daily_activity = SqlAlchemyDailyActivityRepository(uow=uow, clock=clock)`,
+  - `daily_head_service = DailyHeadService(balance, clock, random=RealRandom(), heads, activity)`,
+  - `request_daily_head = RequestDailyHead(...)`, `run_daily_head_cron = RunDailyHeadCron(...)`,
+  - 5 новых полей в `Container` (`daily_heads`, `daily_activity`, `daily_head_service`, `request_daily_head`, `run_daily_head_cron`).
+- **Wiring в `build_dispatcher`**: `dispatcher["request_daily_head"]` + `dispatcher["run_daily_head_cron"]` для handler-а 2.3.E (cron use-case также доступен в dispatcher для admin-команд / диагностики; основной runner — APScheduler 2.3.F).
+- **+18 unit-тестов** (`tests/unit/application/daily_head/`):
+  - `test_request_daily_head.py` — **11 тестов**: success new (idempotency-key + LENGTH_GRANT + DAILY_HEAD_ASSIGN audit), success idempotent (was_new=False, нет дополнительных side-effects), no-clan, frozen-clan, insufficient-active-members, race UNIQUE→re-fetch, FakeRandom детерминирует выбор кандидата, FakeClock контролирует `moscow_date`.
+  - `test_run_daily_head_cron.py` — **7 тестов**: success new (без actor_tg_id), success idempotent (DAU не меняется), unknown clan_id → None, FROZEN clan → None (no-op), insufficient-active-members → пропускает domain-error через UoW (`DailyHeadInsufficientActivityError` всё-таки бросается, чтобы шедулер видел метрику), race-handling identical to button-trigger.
+  - `tests/unit/bot/test_composition_root.py` обновлён (5 fakes + RequestDailyHead/RunDailyHeadCron в `_container_with_fakes()` + assertion `test_container_holds_daily_head_use_cases` + assertions в `test_build_container_returns_real_adapters` + dispatcher-assertions для `request_daily_head` / `run_daily_head_cron`).
+
+Результат / артефакты:
+- `src/pipirik_wars/application/daily_head/{__init__,dto,inputs,request,run_cron,_common}.py` — 6 новых модулей.
+- `src/pipirik_wars/bot/main.py` — DI-провязка (`Container` + `build_container` + `build_dispatcher`).
+- `alembic/versions/0014_audit_source_daily_head.py` — миграция CHECK-whitelist.
+- `tests/unit/application/daily_head/{test_request_daily_head,test_run_daily_head_cron}.py` — 18 unit-тестов.
+- `tests/unit/bot/test_composition_root.py` — обновления fakes + assertions.
+- `docs/current_tasks.md` — `2.3.B` → ✅ смержено (PR #69), `2.3.C` → 🔄 в работе (PR будет создан этим коммитом).
+
+Заметки / решения:
+- **Frozen-кланы и cron-trigger**: cron возвращает `None` (no-op без ошибки), button-trigger бросает `ClanFrozenError`. Это намеренная асимметрия — APScheduler поднимает дико много задач (один per-clan per-day), и если один клан стал FROZEN, шедулер не должен падать или ретраить; UI же должен сказать пользователю явно.
+- **`DailyHeadInsufficientActivityError`**: пробрасывается наружу как button-trigger ошибка (UI покажет «недостаточно активных»), и **тоже пробрасывается** из cron-use-case-а (наружу) — так шедулер 2.3.F получит метрику, что для конкретного клана сегодня не получилось назначить, и сможет залогировать это (опционально retry next day). Альтернатива — поглощать в cron — отвергнута, потому что тихий no-op скрывает проблему «клан перестал быть активен» от админа.
+- **`AuditSource.DAILY_HEAD` в `organic_sources`**: премия 1–20 см от главы клана дня — это «органический» bonus для anti-cheat, поэтому клампинг не должен срезать его на 20-см floor. Альтернатива — отдельный enum / флаг — отвергнута, organic_sources уже решает эту задачу для других премий (forest, oracle).
+- **Idempotency-keys**: использованы стабильные `add_length:daily_head:<clan_id>:<moscow_date>` для LENGTH_GRANT и `daily_head_assign:<clan_id>:<moscow_date>` для DAILY_HEAD_ASSIGN. На race (button+cron одновременно) выигравшая транзакция сделает обе записи; проигравшая ловит UNIQUE-violation, делает re-fetch, возвращает `was_new=False` без дополнительных side-effects (length / audit не дублируются).
+- **DI-инстансы `RealRandom` для `DailyHeadService`**: создаём отдельный `RealRandom()` (не reuse из `container.random`) — это `IRandom` для domain-сервиса, в production-е mass-PvP / oracle / forest используют свой `container.random` (тоже `RealRandom`); прямой share не нужен, RNG-состояние независимо. Альтернатива через DI-singleton отвергнута — преждевременная оптимизация.
+- **`DailyHeadResolved.player`**: re-fetch после `length_granter.grant(...)` обязателен, потому что `add_length` модифицирует `Player`-aggregate, а у нас в use-case-е свежий объект игрока нужен для UI. Без re-fetch презентер 2.3.E увидел бы старую длину.
+
+---
+
+---
+
+## 2026-05-06 — Спринт 2.3.B: persistence-слой «Главы клана дня» (миграции 0012/0013 + ORM + 2 репо + 19 integration-тестов)
+
+**Автор:** Devin (агент urbanviola)
+**Тип:** feature
+**Связано:** ПД §5 / Спринт 2.3.2, ГДД §6.1; ветка `devin/1778057764-sprint-2-3-b-daily-head-persistence` (PR следует)
+
+Что сделано:
+- Реализован persistence-слой «Главы клана дня» (фундамент 2.3.A смержен в PR #68). Все side-эффекты на месте; следующий шаг — use-cases (2.3.C) и UI (2.3.E).
+- **Alembic-миграция `0012_daily_heads`**: таблица `daily_heads` (`id BigSerial PK, clan_id BigInt FK clans CASCADE, player_id BigInt FK users CASCADE, moscow_date Date, source VarChar(8), bonus_cm Int, assigned_at DateTime(tz=True)`):
+  - **UNIQUE `(clan_id, moscow_date)`** — last-line-of-defense от race кнопка-vs-cron. Доменный `DailyHeadService.assign_or_get` сначала делает preflight-проверку, но при гонке двух конкурентных транзакций (button+cron одновременно) UNIQUE-индекс отбросит дубль `IntegrityError`-ом, а репозиторий конвертирует его в `DailyHeadAlreadyAssignedError`.
+  - CHECK-инварианты на уровне БД: `bonus_cm > 0` (премия положительная), `source IN ('button', 'cron')` (только два допустимых триггера).
+  - **Index `(clan_id, assigned_at DESC, id DESC)`** — для `list_recent_for_clan` (anti-repeat-фильтр в `DailyHeadService._filter_avoid_recent`); сортировка с tie-breaker по `id` обязательна — `assigned_at` приходит из `IClock` и часто совпадает у соседних записей в тестах.
+- **Alembic-миграция `0013_daily_active`**: таблица `daily_active` (`date Date NOT NULL, user_id BigInt NOT NULL FK users CASCADE, last_at DateTime(tz=True) NOT NULL`) с **PK `(date, user_id)`** (идемпотентный upsert на каждое сообщение) и **Index `(user_id, date DESC)`** (для запроса «активность одного игрока за последние N дней» без сканирования).
+- **ORM-модели** `DailyHeadAssignmentORM` + `DailyActiveORM` (зеркало миграций) в `infrastructure/db/models/`. Регистрация в `models/__init__.py` (re-export для `Base.metadata.create_all` в conftest).
+- **`SqlAlchemyDailyHeadRepository`** (3 метода `IDailyHeadRepository`):
+  - `get_by_clan_and_date(*, clan_id, moscow_date)` — SELECT через UNIQUE; `_row_to_entity` маппинг с `ensure_utc(...)` (SQLite возвращает naive-datetime даже из `DateTime(timezone=True)` колонки, Postgres — tz-aware).
+  - `add(assignment)` — INSERT с конвертацией `SqlAlchemyIntegrityError` → доменный `DailyHeadAlreadyAssignedError(clan_id, moscow_date)` для race-handling в use-case-е.
+  - `list_recent_for_clan(*, clan_id, limit)` — ORDER BY `assigned_at DESC, id DESC` LIMIT N; `limit <= 0` → пустой tuple (не упасть).
+- **`SqlAlchemyDailyActivityRepository.list_active_member_ids(*, clan_id, within_days)`** (`IDailyActivityRepository`):
+  - Один SQL JOIN `users × clan_members × clans × daily_active` + DISTINCT.
+  - Фильтры: `ClanStatus.ACTIVE` (frozen-клан вообще не получает триггер главы — ПД 2.3.8) + `PlayerStatus.ACTIVE` (FROZEN-игроки исключаются автоматически по контракту 2.3.A) + окно `[clock.moscow_date() - (within_days - 1) ... clock.moscow_date()]` включительно.
+  - **`IClock` инъектится в конструктор** — порт `IDailyActivityRepository` намеренно не принимает `as_of` параметром (см. контракт 2.3.A); реализация сама знает «сегодня по МСК». Альтернатива через `func.current_date()` была бы привязана к TZ-сессии БД (хрупко).
+  - Запись в `daily_active` будет делать middleware в Спринте 2.3.E (`bot/middlewares/daily_activity.py`); на момент 2.3.B репозиторий read-only, integration-тесты прямым `session.add(DailyActiveORM(...))` готовят данные.
+- **+19 integration-тестов** (`tests/integration/db/daily_head/`):
+  - `test_daily_head_repository.py` — **10 тестов**: пустая БД (`get → None`), add→get round-trip с `ensure_utc`, UNIQUE-violation на race (`add` вторым `player_id` → `DailyHeadAlreadyAssignedError`), два разных клана могут иметь главу в один день, один клан — разные дни — независимы, `list_recent_for_clan` пусто/limit/limit=0/order DESC с tie-breaker по id, фильтр по clan_id (другие кланы не попадают), иммутабельность входного VO (id остаётся None после add, возврат — новый VO с id).
+  - `test_daily_activity_repository.py` — **9 тестов** + `_FakeClock`: пустой клан, активный внутри окна, не активный за окном (10 дней назад при `within_days=7`), граница окна (TODAY-6 включается, TODAY-7 нет), FROZEN-игрок исключён даже при наличии активности, чужой клан исключён, член клана без активности исключён, дубликаты активности (3 разных дня одного игрока) → DISTINCT, `within_days < 1` → ValueError.
+- **`tests/integration/db/test_migrations.py`**: добавлены revisions `0012_daily_heads` + `0013_daily_active` в `test_expected_revisions_exist`, два descends-from-теста, новые имена файлов в `test_versions_dir_lists_only_known_files`, `EXPECTED_TABLES` пополнен `daily_heads` + `daily_active`.
+- **`tests/integration/db/conftest.py`**: импорт `DailyHeadAssignmentORM` + `DailyActiveORM` в общем блоке (нужно для `Base.metadata.create_all`).
+
+Результат / артефакты:
+- `src/pipirik_wars/infrastructure/db/migrations/versions/20260506_0012_daily_heads.py` (118 строк).
+- `src/pipirik_wars/infrastructure/db/migrations/versions/20260506_0013_daily_active.py` (76 строк).
+- `src/pipirik_wars/infrastructure/db/models/daily_head.py` + `daily_active.py` (зеркала миграций).
+- `src/pipirik_wars/infrastructure/db/repositories/daily_head.py` + `daily_activity.py`.
+- `tests/integration/db/daily_head/test_daily_head_repository.py` (10 тестов).
+- `tests/integration/db/daily_head/test_daily_activity_repository.py` (9 тестов).
+- Локальный smoke на изолированных тестах: `test_daily_head_repository.py` 10/10 passed, `test_daily_activity_repository.py` 9/9 passed, `test_migrations.py` 19/19 passed (revisions/descends/files/EXPECTED_TABLES).
+
+Заметки / решения:
+- Порт `IDailyActivityRepository` контракта 2.3.A фиксирован — не принимает `as_of` параметром. Реализация инъектит `IClock` в конструктор. Это отличается от паттерна use-case-ов (где clock передаётся снаружи), но для read-репозитория с временной семантикой это самый чистый способ — вызывающему коду (доменному сервису) не нужно знать о TZ-конверсиях, а репо не привязан к TZ-сессии БД.
+- Race-handling в `SqlAlchemyDailyHeadRepository.add(...)` поднимает доменный `DailyHeadAlreadyAssignedError`, а не `IntegrityError` — use-case 2.3.C это перехватит, сделает повторный `get_by_clan_and_date(...)` и вернёт запись от победителя (см. контракт 2.3.A `assign_or_get`).
+- `daily_active` middleware **не реализована** в 2.3.B — это для Спринта 2.3.E (когда подключаем bot-обработчики и middleware-цепочку). На 2.3.B integration-тесты пишут в `daily_active` напрямую через `session.add(DailyActiveORM(...))`, что моделирует поведение middleware.
+- `clan_members` в JOIN-е не отфильтровывается по `joined_at` — текущая семантика «состою в клане сейчас» = есть row в `clan_members`. Если в будущем добавится `clan_members.left_at`, фильтр расширится.
+- Все DateTime-колонки `(timezone=True)`, `ensure_utc(...)` применяется на чтении для совместимости с SQLite (production — Postgres + asyncpg, там tzinfo приходит сразу).
+
+---
+
+## 2026-05-06 — Спринт 2.3.A: доменный слой «Главы клана дня» (47 тестов, фундамент гибридного триггера)
+
+**Автор:** Devin (агент урbanviola)
+**Тип:** feature
+**Связано:** ПД §5 / Спринт 2.3.1, ГДД §6.1; ветка `devin/1778056664-sprint-2-3-a-daily-head-domain` (PR следует)
+
+Что сделано:
+- Создан пакет `domain/daily_head/` — фундамент гибридного триггера «Главы клана дня» (ГДД §6.1, Q4 v9). VO + порты + сервис без I/O, чистый и детерминированно тестируемый.
+- VO `DailyHeadAssignment` (`id, clan_id, player_id, moscow_date, source, bonus_cm, assigned_at`) + enum `DailyHeadSource` (`BUTTON` / `CRON`). Frozen-датакласс с `__post_init__`-валидацией: positive id/clan/player/bonus, timezone-aware `assigned_at`. `id=None` валиден (запись до `add()`).
+- Доменные ошибки `DailyHeadInsufficientActivityError` (clan_id, active_count, required) и `DailyHeadAlreadyAssignedError` (clan_id, moscow_date) — наследуются от `DailyHeadError → DomainError`.
+- Порт `IDailyHeadRepository`: `get_by_clan_and_date(*, clan_id, moscow_date)` (UNIQUE-индекс гарантирует max 1), `add(assignment)` (`IntegrityError` на дубль `(clan_id, moscow_date)`), `list_recent_for_clan(*, clan_id, limit)` (порядок `assigned_at DESC, id DESC`, тай-брейкер обязателен).
+- Порт `IDailyActivityRepository`: `list_active_member_ids(*, clan_id, within_days)` — скрывает источник «активных за N дней» (реализация может смотреть `players.last_seen_at`, audit-лог за период и т.п.). Заморозкенные / удалённые из клана автоматически исключаются.
+- Доменный сервис `DailyHeadService.assign_or_get(*, clan_id, source)` через `IClock` + `IRandom`:
+  1. Идемпотентность по `(clan_id, moscow_date)` — повторный вызов = тот же `Assignment` (source не перезаписывается! Если cron сработал первым, кнопка получит запись с `source=CRON`).
+  2. Запрос «активные за `active_within_days` дней» из `IDailyActivityRepository`.
+  3. `min_active_members`-проверка (по умолчанию 5) → `DailyHeadInsufficientActivityError`.
+  4. Anti-repeat: исключаем `avoid_last_n` (по умолчанию 3) свежих глав через `list_recent_for_clan`.
+  5. Fail-open: если фильтр вычистил всех — берём всех активных (повтор лучше «никого»).
+  6. `IRandom.choice` из пула + `IRandom.randint(bonus_min, bonus_max)` (∈ [1, 20] по дефолту).
+  7. Возврат `DailyHeadAssignment` с `id=None` и `assigned_at=clock.now()`. Запись в БД делает use-case 2.3.C.
+- `BalanceConfig.daily_head` (`DailyHeadConfig`) уже существовал из ГДД-фазы; сервис читает из него все настройки. `IRandom.deterministic_uint(seed, modulo)` — тоже уже был, для cron-offset-логики 2.3.F.
+- **+47 unit-тестов** (~580 строк):
+  - **22 тесты VO/enum** (`tests/unit/domain/daily_head/test_entities.py`): happy-path для `BUTTON` / `CRON` source, frozen-семантика на 3 поля, инварианты (parametrize × bad_id/clan/player/bonus), naive `assigned_at` rejected, non-UTC tz allowed, `id=None` allowed.
+  - **7 тестов ошибок** (`test_errors.py`): inheritance chain, payload-поля, format-сообщений (clan_id, counts, moscow_date.isoformat).
+  - **18 тестов сервиса** (`test_service.py`): идемпотентность (returns existing с не-перезаписанным source); insufficient activity (3 vs min=5; zero active); avoid_last_n (3 свежих исключены, выбор из {4..7}); other-clan recent не влияет на фильтр; bonus всегда в `[bonus_min, bonus_max]` × 20 seed-ов; assigned_at = clock.now(); moscow_date = clock.moscow_date() (22:00 UTC = 01:00 МСК следующего дня); source preserved (BUTTON / CRON); activity-query вызвана с `within_days=7`; `list_recent_for_clan(limit=avoid_last_n)`; `avoid_last_n=0` → пул = все активные; existing с `id` ≠ None; service не пишет в repo (heads.items пуст после assign).
+- Helper-функция `_make_assignment(...)` в test_entities — типизированные kwargs (избегает mypy `dict[str, object]`-ошибок).
+- Фейки `FakeDailyHeadRepository` / `FakeDailyActivityRepository` в `tests/fakes/daily_head.py` + добавлены в `tests/fakes/__init__.py` (re-export). `FakeDailyHeadRepository.add()` бросает `IntegrityError` на UNIQUE-violation — точная имитация Postgres.
+- Фабрика `valid_balance_payload()` уже содержала секцию `daily_head` (min=5, avoid=3, bonus=[1,20], within=7) — изменений в balance/factories.py не потребовалось.
+
+Результат / артефакты:
+- `src/pipirik_wars/domain/daily_head/__init__.py` (re-export всего публичного API).
+- `src/pipirik_wars/domain/daily_head/entities.py` — `DailyHeadAssignment` + `DailyHeadSource`.
+- `src/pipirik_wars/domain/daily_head/errors.py` — `DailyHeadError` иерархия.
+- `src/pipirik_wars/domain/daily_head/repositories.py` — `IDailyHeadRepository` + `IDailyActivityRepository`.
+- `src/pipirik_wars/domain/daily_head/services.py` — `DailyHeadService.assign_or_get(...)`.
+- `tests/fakes/daily_head.py` (in-memory фейки).
+- `tests/unit/domain/daily_head/test_entities.py` (22 теста), `test_errors.py` (7), `test_service.py` (18).
+- `make ci` зелёный: **2483 passed**, 1 skipped, **coverage 95.88%**, `domain/daily_head/` — **100% coverage** (все 5 файлов: 6+28+18+7+29 строк).
+
+Заметки / решения:
+- **Источник сохраняется при идемпотентности**: если cron сработал в 03:00 МСК и игрок нажал кнопку в 09:00 МСК, у assignment остаётся `source=CRON`. Это нужно для аналитики «какой триггер был эффективнее» — не перезаписываем нечаянно.
+- **Fail-open вместо fail-closed**: если все активные оказались в last-N (теоретически возможно при `avoid_last_n >= active_count`), сервис всё равно назначает кого-то из активных, а не падает. Лучше повтор, чем «сегодня нет главы». В дефолтных настройках min_active=5 / avoid_last_n=3 эта ветка недостижима через нормальные данные, но порт `list_recent_for_clan` имеет `limit`-параметр, и реализация может вернуть >limit при ошибке — fail-open защищает.
+- **Не пишет в БД сам**: `assign_or_get` возвращает `DailyHeadAssignment` с `id=None`. Use-case 2.3.C обернёт в UoW и сделает `heads.add(...)`. Это разделение позволяет тестировать сервис без UoW / транзакций — чисто IO-агностично.
+- **Источник активности абстрагирован**: `IDailyActivityRepository` не принимает «откуда брать активность». Реализация (Спринт 2.3.B) выберет: либо `players.last_seen_at`, либо новая таблица `daily_active`, либо JOIN на audit-лог. Контракт фиксирует «player_id ∈ clan_members активен в окне».
+- **`avoid_last_n=0` отдельно протестирован**: anti-repeat-фильтр выключен, недавние главы могут быть выбраны снова. Это полезно для маленьких кланов или временно для тестов.
+- **`BUTTON` ≠ `CRON` через сравнение `set`**: mypy detects `is`/`!=` как non-overlapping когда левый и правый — разные literal-ы, поэтому в тесте distinct_members используется `{B, C} == set(DailyHeadSource)`.
+- **Async-helper `_filter_avoid_repeat`**: выделен для читаемости основного метода. Вызывается через `await`, потому что зовёт `await self._heads.list_recent_for_clan(...)`. Можно было бы синхронным, если предзагрузить recent в `assign_or_get` — но ленивая загрузка экономит запрос когда `avoid_last_n=0`.
+- **Дальнейшие шаги** (планы для серии 2.3.B-F):
+  - 2.3.B: alembic-миграция `0012_daily_heads` (UNIQUE `(clan_id, moscow_date)`, FK на `clans` / `players`) + ORM + `SqlAlchemyDailyHeadRepository`. Активность: либо отдельная `daily_active`-таблица + miграция, либо переиспользовать `players.last_seen_at` (если есть) / audit-лог.
+  - 2.3.C: use-case-ы `RequestDailyHead(clan_id, requester_id)` (button-trigger; проверка членства) и `RunDailyHeadCron(clan_id)` (cron-trigger; пропуск frozen / archived); UoW + `add_length(reason="daily_head")` через `ILengthGranter` + audit `DAILY_HEAD_ASSIGNED`.
+  - 2.3.D: `templates/clan_quotes_ru.json` + `_en.json` (≥100 цитат каждый) — стилистика «Стэтхем / паблики ВК / АУФ». `IClanQuoteProvider` + Fluent-loader.
+  - 2.3.E: bot handler `/clan_head` (group-only, проверка членства) + кнопка `🎲Назначить главу дня` + локали `clan-head-{header,empty,already-assigned,not-registered,needs-group-chat,quote}` RU+EN.
+  - 2.3.F: APScheduler-cron с per-clan `random_offset(0..24h)` от 00:00 МСК (`IRandom.deterministic_uint(seed=f"{clan_id}:{moscow_date}", modulo=24*3600)`); DI-провязка всех частей; cron не назначает повторно если кнопка сработала.
+
+---
+
+## 2026-05-06 — Спринт 2.2.G: журнал клановых атак (`/clan_history` + read-side SQL-проекция + 88 тестов)
+
+**Автор:** Devin (по запросу urbanviola)
+**Тип:** feature
+**Связано:** `current_tasks.md` Спринт 2.2.G, ПД 2.2.5 (`development_plan.md` §6), ГДД §7.2 (журнал клановых боёв в карточке клана).
+
+Что сделано:
+- **Domain VO `ClanMassDuelHistoryEntry`** (`src/pipirik_wars/domain/pvp/clan_history.py`) + enum `ClanMassDuelOutcomeForUs` (`VICTORY`/`DEFEAT`/`DRAW`/`CANCELLED`) с `outcome_from_winner(winner, our_side)` и full-`__post_init__`-валидацией: zero-sum дельт (`our_delta_cm + opponent_delta_cm == 0`), state↔outcome agreement (`CANCELLED` обоюдно), VICTORY ⇒ dealt > received, DEFEAT ⇒ dealt < received, DRAW ⇒ dealt == received, `completed_at` присутствует только для не-CANCELLED.
+- **Application-порт `IClanMassDuelHistoryQuery.get_recent(*, clan_id, limit)`** + read-only use-case `GetClanAttackHistory(query, default_limit=10)` — тонкая обёртка с валидацией входов (`clan_id > 0`, `limit > 0`), по аналогии с `GetTopClans`/`GetTopPlayers` (Спринт 2.2.A / 1.4.C).
+- **Infrastructure read-side `SqlAlchemyClanMassDuelHistoryQuery`**: один SQL-запрос по `pvp_mass_duels` с CASE-выражением для `opponent_id` (если `clan1_id == clan_id` ⇒ `clan2_id`, иначе `clan1_id`) + 2 коррелированных subquery к `pvp_mass_duel_choices` (counts on each side) + JOIN к `clans` для `opponent_title`; фильтр `state IN ('completed', 'cancelled')` (`IN_PROGRESS`-бои не показываются), сортировка `created_at DESC, id DESC`; денормализация в VO с маппингом `clan1`/`clan2` → `our`/`opponent` сторон.
+- **Bot-слой**: `ClanHistoryPresenter` через `IMessageBundle` (ключи `clan-history-{header,empty,needs-group-chat,not-registered,entry-{victory,defeat,draw,cancelled}}` RU+EN) с `dd.mm HH:MM`-форматом времени (берёт `completed_at` для COMPLETED, `created_at` для CANCELLED); handler `/clan_history` (group-only, ищет клан по `tg_identity.chat_id`, в ЛС → `needs-group-chat`, в чате без клана → `not-registered`).
+- **DI-провязка**: новый router `clan_history_router` в `register_routers`; `clan_mass_duel_history_query` + `get_clan_attack_history` в `Container` / `build_dispatcher`; `dispatcher["get_clan_attack_history"]` в `bot/main.py`.
+- **Локали**: 8 ключей `clan-history-*` × 2 локали = 16 строк (`locales/{ru,en}.ftl`).
+- **Тесты**: +88 (33 VO `tests/unit/domain/pvp/test_clan_history_entry.py` + 12 use-case `tests/unit/application/pvp/test_get_clan_attack_history.py` + 16 integration SQL `tests/integration/db/pvp/test_clan_mass_duel_history_query.py` + 18 presenter `tests/unit/bot/presenters/test_clan_history.py` + 9 handler `tests/unit/bot/handlers/test_clan_history.py`) + `FakeClanMassDuelHistoryQuery` (`tests/fakes/clan_history.py`).
+
+Результат / артефакты:
+- `make ci` зелёный (2431 passed, 1 skipped, coverage 95.84%).
+- ПР: см. PR-ссылку в session.
+
+Заметки / решения:
+- **Read-side, не доменный репо.** `IClanMassDuelHistoryQuery` живёт в `application/pvp/`, реализация в `infrastructure/db/repositories/`, но это не доменный `IMassDuelRepository` (он про write-side / load-by-id). VO `ClanMassDuelHistoryEntry` — это перспектива конкретного клана, а не агрегат. По CQRS-стилю — read-projection.
+- **Денормализация в SQL.** `opponent_clan_title` приходит из `clans.title` JOIN-ом (а не лайв-резолв на app-слое), `our/opponent_participants_count` — из коррелированных subquery к `pvp_mass_duel_choices` (на момент запроса = размер ростера, замороженный при `StartMassDuel`). Это даёт O(1) запрос на показ всего журнала клана, против O(N) live-резолва.
+- **`IN_PROGRESS`-фильтр в SQL.** Историю показываем только по завершённым/отменённым боям — текущий идущий бой клан видит через `started_card`, а не через `/clan_history`. Это устраняет «мерцание» (бой в журнале до его финала).
+- **`completed_at` для CANCELLED = NULL.** В миграции 0011 (Спринт 2.2.D) `completed_at` обнуляется при `CANCELLED`-state-е (CHECK-инварианте). Презентер берёт `created_at` для CANCELLED-боёв — единственное доступное поле.
+- **Сортировка `created_at DESC, id DESC`.** Тай-брейкер `id DESC` обязателен — `created_at` приходит из app-слоя (`IClock`) и в тестах часто совпадает у соседних боёв.
+
+---
+
+## 2026-05-06 — Спринт 2.2.F часть 2: bot-слой массового PvP (`/clan_attack` handler + callback-ы + 27 unit-тестов)
+
+**Автор:** Devin (по запросу urbanviola)
+**Тип:** feature
+**Связано:** `current_tasks.md` Спринт 2.2.F (часть 2), ПД 2.2.6 (`development_plan.md` §6), ГДД §7.2; продолжение `AGENT_HANDOFF.md` от предыдущего агента (часть 1 — PR #65 — поставила локали + `MassDuelPresenter`).
+
+### Что сделано
+
+- Новый `src/pipirik_wars/bot/handlers/mass_duel.py` — bot-слой массового PvP клан×клан:
+    - **`/clan_attack`** (group/supergroup-only): резолвит `attacker_chat_id` из `tg_identity.chat_id`, `defender_chat_id` из `command.args` (числовой `chat_id`) **или** `message.reply_to_message.forward_from_chat.id` (reply на forwarded-сообщение из чата защищающегося клана). Без аргументов и без forward-reply — usage-сообщение `pvp-mass-target-needed`. Проверка self-attack (`attacker_chat_id == defender_chat_id`) → `pvp-mass-self-attack`.
+    - Зовёт `StartMassDuel.execute(StartMassDuelInput(initiator_tg_id, attacker_chat_id, defender_chat_id))` и ловит:
+        - `IntegrityError` (клан не зарегистрирован) → `pvp-mass-target-not-found`;
+        - `ClanFrozenError` → `pvp-mass-clan-frozen`;
+        - `MassDuelCooldownError(cooldown_hours)` → `pvp-mass-cooldown`;
+        - `MassDuelNoParticipantsError` → `pvp-mass-no-participants` (с `min_length_cm` / `min_thickness_level` из `balance.pvp.mass_duel`);
+        - `LockAlreadyHeldError` → `pvp-mass-lock-already-held`.
+    - На успех: `IClanRepository.get_by_id(...)` для обеих сторон → `MassDuelPresenter.started_card(attacker_title, defender_title, attacker_size, defender_size, timer_seconds)` в групповой чат. Затем для каждого `player_id ∈ clan1_member_ids ∪ clan2_member_ids`: `IPlayerRepository.get_by_id(player_id=...)` → `IPlayerLocaleResolver.resolve_for_tg_id(player.tg_id)` → `bot.send_message(chat_id=player.tg_id, text=presenter.prompt_attack(locale=...), reply_markup=presenter.attack_keyboard(duel_id, locale=...))`.
+    - **Callback `pvpm-attack:<duel_id>:<position>`**: парсит `parse_mass_attack_callback_data(...)` (на `ValueError` → toast `pvp-mass-toast-outdated` + strip keyboard); `callback.answer(toast_attack_selected)`; редактирует текст на `presenter.prompt_block(attack=Position(parsed.position))` и заменяет клавиатуру на `presenter.block_keyboard(duel_id, attack)`. Use-case не вызывается — атака зашита в новый `callback_data`.
+    - **Callback `pvpm-block:<duel_id>:<attack>:<position>`**: парсит callback_data; зовёт `SubmitMassMove.execute(SubmitMassMoveInput(duel_id, tg_id, attack, block))`. Ошибки → toast-ы (`pvp-mass-toast-not-found` / `not-participant` show_alert=True / `invalid-state` / `already-submitted`). На успех: `callback.answer(toast_move_accepted)` + strip keyboard + edit text → `pvp-mass-waiting`. Если `submitted.is_ready_to_resolve` — зовёт `ResolveMassDuel.execute(ResolveMassDuelInput(duel_id))` (на `MassDuelNotFoundError` / `InvalidMassDuelStateError` — идемпотентный no-op без broadcast); затем `_broadcast_result(...)` рассылает каждому участнику персональную DM (`result_victory_dm` / `result_defeat_dm` / `result_draw_dm` в зависимости от `outcome.winner` и принадлежности игрока к стороне, с подстановкой `winner_clan_title` / `loser_clan_title` / `total_dealt` / `total_lost` / `delta_cm`) + публичную карточку `result_chat(winner, winner_clan_title, total_dealt)` в чаты обоих кланов.
+    - Helper-функции `_resolve_defender_chat_id`, `_broadcast_attack_prompt`, `_broadcast_result`, `_iter_participants`, `_build_personal_result`, `_strip_keyboard` / `_set_message_text` / `_set_message_keyboard`. `MassDuelPresenter` (427 строк) уже был в репо — не менялся.
+- DI-провязка в `src/pipirik_wars/bot/main.py`:
+    - Новый router `mass_duel_router` зарегистрирован в `register_routers(...)` (между `duel_router` и `oracle_router`).
+    - В `build_dispatcher(...)` добавлены workflow-data ключи: `start_mass_duel`, `submit_mass_move`, `resolve_mass_duel`, `clans` (use-case-ы и `IClanRepository` из контейнера). `players` / `bundle` / `player_locale_resolver` / `bot` уже были.
+- **+27 unit-тестов** в `tests/unit/bot/handlers/test_mass_duel.py`:
+    - 11 на `/clan_attack`: silent-no-identity, private-rejected, missing-target, invalid-arg, self-attack, forward-reply happy-path, `IntegrityError` / `ClanFrozenError` / `MassDuelCooldownError` / `MassDuelNoParticipantsError` / `LockAlreadyHeldError`, success-broadcast.
+    - 4 на `pvpm-attack`: silent-no-identity, silent-no-data, invalid callback_data → outdated, success.
+    - 12 на `pvpm-block`: silent, outdated, 4 use-case ошибки, not-ready-waiting, ready-to-resolve full broadcast (4 DM + 2 чата), resolve-not-found / invalid-state идемпотентный no-broadcast, draw-flow.
+
+### Результат / артефакты
+
+- Новые/обновлённые файлы:
+    - `src/pipirik_wars/bot/handlers/mass_duel.py` (~530 строк).
+    - `src/pipirik_wars/bot/handlers/__init__.py` (+2 строки: import + `include_router`).
+    - `src/pipirik_wars/bot/main.py` (+5 строк в `build_dispatcher`).
+    - `tests/unit/bot/handlers/test_mass_duel.py` (~770 строк, 27 тестов).
+    - `docs/current_tasks.md` (+1 строка: «2.2.F часть 2 → 🔄 в работе»).
+    - `docs/history.md` (текущая запись).
+- Удалён `AGENT_HANDOFF.md` (281 строка) — спецификация продолжения от предыдущего агента, выполнена полностью.
+- `make ci` зелёный: 2337 passed, 1 skipped, coverage **95.71%** (>= 80% порог).
+
+### Заметки / решения
+
+- **Резолв `defender_chat_id`**: HANDOFF предлагал 2 варианта — числовой аргумент команды или reply на forward-сообщение из защищающегося чата. Реализованы оба в `_resolve_defender_chat_id(...)`; приоритет — аргумент команды (если есть и парсится в `int`), иначе fallback на `reply_to_message.forward_from_chat.id`. Это даёт UX-симметрию `/duel @username` (1×1 reply) и `/clan_attack -100…` (mass attack reply) без необходимости копировать chat_id вручную.
+- **Идемпотентность резолва**: callback `pvpm-block` сам вызывает `ResolveMassDuel` если `is_ready_to_resolve=True`. Параллельно может сработать AFK-шедулер 2.2.F часть 1 (`ForceResolveMassDuel`) — он уже идемпотентный (`was_already_resolved=True` если не IN_PROGRESS). Если шедулер успел первым, callback ловит `InvalidMassDuelStateError` и возвращается без broadcast (другая сторона уже получила DM/чат-карточку через шедулер). Это намеренно — Telegram гарантирует at-least-once для callback-ов, но мы не хотим дубль-DM.
+- **DM-broadcast**: `_broadcast_attack_prompt` / `_broadcast_result` оборачивают каждый `bot.send_message` в `try/except` с warning-логом — один заблокировавший бота игрок не должен ронять рассылку всем остальным. Это симметрично логике `_broadcast_attack_prompt` в `bot/handlers/duel.py` (1×1 PvP).
+- **Локали в DM**: каждый DM рендерится в персональной локали игрока через `IPlayerLocaleResolver.resolve_for_tg_id(...)` — игроки разных кланов могут видеть текст в разных языках. Чат-карточка `result_chat` идёт в `fallback_locale` (локаль инициатора атаки) — у группового чата нет «персональной» локали, и в массовом бою на 2-х сторонах нет одной общей.
+- **Не имплементируется**: ручная отмена `/clan_cancel_attack` (нужен только админу — это `CancelMassDuel` с `reason="admin_cancel"`, отдельная задача за рамками 2.2.F). AFK-таймер 2.2.F часть 1 уже сам зовёт `ForceResolveMassDuel` через шедулер — если игрок не успел нажать кнопки в `move_timer_seconds`, бой резолвится по случайным выборам.
+- **`MassDuelPresenter`** уже был полностью реализован предыдущим агентом (PR #65 / часть 1) — не трогал. Локали `pvp-mass-*` (32 ключа в `locales/{ru,en}.ftl`) тоже уже были — handler только зовёт презентер по нужным ключам.
+
+---
+
 ## 2026-05-06 — Спринт 2.2.E: application-слой массового PvP (5 use-case-ов + DI + 35 unit-тестов)
 
 **Автор:** Devin (по запросу intensive192)

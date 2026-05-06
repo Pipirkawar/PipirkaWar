@@ -31,6 +31,7 @@ from pipirik_wars.application.pvp.apply_outcome import apply_duel_outcome
 from pipirik_wars.application.pvp.cancel_duel import CancelDuel, DuelCancelled
 from pipirik_wars.application.pvp.cancel_mass_duel import CancelMassDuel, MassDuelCancelled
 from pipirik_wars.application.pvp.challenge_duel import ChallengeDuel, DuelChallenged
+from pipirik_wars.application.pvp.clan_history_query import IClanMassDuelHistoryQuery
 from pipirik_wars.application.pvp.enqueue_global_duel import (
     EnqueueGlobalDuel,
     GlobalDuelEnqueued,
@@ -50,6 +51,7 @@ from pipirik_wars.application.pvp.force_resolve_mass_duel import (
     ForceResolveMassDuel,
     MassDuelForceResolved,
 )
+from pipirik_wars.application.pvp.get_clan_attack_history import GetClanAttackHistory
 from pipirik_wars.application.pvp.log_templates import IDuelLogTemplateProvider
 from pipirik_wars.application.pvp.match_from_lobby import (
     DuelMatched,
@@ -83,7 +85,9 @@ __all__ = [
     "EscalateChatToGlobal",
     "ExpireLobbyEntry",
     "ForceResolveMassDuel",
+    "GetClanAttackHistory",
     "GlobalDuelEnqueued",
+    "IClanMassDuelHistoryQuery",
     "IDuelLogTemplateProvider",
     "InvalidLobbyEnqueueError",
     "LobbyEntryExpirationSkipped",
