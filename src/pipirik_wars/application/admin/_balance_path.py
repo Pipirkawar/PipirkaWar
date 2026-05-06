@@ -36,17 +36,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-
-class BalanceKeyError(KeyError):
-    """Dotted-path в `BalanceConfig` не разрешается."""
-
-    __slots__ = ("key", "reason", "segment")
-
-    def __init__(self, *, key: str, segment: str, reason: str) -> None:
-        super().__init__(f"balance key {key!r} invalid at segment {segment!r}: {reason}")
-        self.key = key
-        self.segment = segment
-        self.reason = reason
+from pipirik_wars.domain.balance.errors import BalanceKeyError
 
 
 def _navigate_node(root: BaseModel, key: str) -> Any:
