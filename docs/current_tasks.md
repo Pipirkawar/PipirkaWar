@@ -46,7 +46,7 @@
 | **Активный PR / шаг** | **2.5-A**: каркас (admin_audit_log + AdminGuard + TOTP-FSM) |
 | **Активная feature-ветка** | `devin/1778087829-sprint-2-5-a-admin-foundation` (от `e3a7818`) |
 | **Базовая ветка** | `main` |
-| **Последний коммит на ветке** | (пока равен `e3a7818` из main — ветка только создана) |
+| **Последний коммит на ветке** | `2af84c0` `chore(docs): sync current_tasks.md под Спринт 2.5-A` |
 | **PR (если открыт)** | ещё не открыт; будет открыт как 2.5-A после закрытия всех шагов ниже |
 | **CI статус** | зелёный (последний прогон в PR #78: 2829 passed / 1 skipped, coverage 96.11%) |
 | **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задачи 2.5.1–2.5.10 |
@@ -62,7 +62,7 @@
 **PR 2.5-A — каркас расширенного админ-интерфейса:**
 
 - [x] sync `current_tasks.md` под 2.5.
-- [ ] **2.5-A.1** — таблица `admin_audit_log` (миграция `0016_admin_audit_log` + ORM `AdminAuditLogRow` + `IAdminAuditLogger` + Sql/Fake + integration-тесты).
+- [x] **2.5-A.1** — таблица `admin_audit_log` (миграция `0016_admin_audit_log` + ORM `AdminAuditLogORM` + домен-порт `IAdminAuditLogger` + `AdminAuditEntry` + `AdminAuditAction` + `AdminAuditSource` + `SqlAlchemyAdminAuditLogger` + `FakeAdminAuditLogger` + 6 integration-тестов + 4 unit-теста + расширение `test_migrations`).
 - [ ] **2.5-A.2** — aiogram-middleware `AdminGuard` (проверяет `tg_id` в `admins`, кладёт `Admin` + `AdminRole` в context, тихо игнорирует чужих; регистрируется на все `/admin_*` в следующих PR-ах).
 - [ ] **2.5-A.3** — FSM `TOTPConfirm` + use-cases `RequestAdminConfirm`/`VerifyAdminConfirm` + локали `admin-confirm-*` RU+EN + unit-тесты.
 - [ ] **Перед PR:** прогон `make ci` зелёный, lint/typecheck/import-linter ✅.

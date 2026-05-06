@@ -1,8 +1,15 @@
 """Реализации сервисных портов поверх SQLAlchemy."""
 
+from pipirik_wars.infrastructure.db.services.admin_audit import (
+    SqlAlchemyAdminAuditLogger,
+)
 from pipirik_wars.infrastructure.db.services.audit import SqlAlchemyAuditLogger
 from pipirik_wars.infrastructure.db.services.idempotency import (
     SqlAlchemyIdempotencyService,
 )
 
-__all__ = ["SqlAlchemyAuditLogger", "SqlAlchemyIdempotencyService"]
+__all__ = [
+    "SqlAlchemyAdminAuditLogger",
+    "SqlAlchemyAuditLogger",
+    "SqlAlchemyIdempotencyService",
+]

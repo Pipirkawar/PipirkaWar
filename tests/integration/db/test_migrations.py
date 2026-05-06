@@ -64,6 +64,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0013_daily_active" in revisions
         assert "0014_audit_source_daily_head" in revisions
         assert "0015_referrals" in revisions
+        assert "0016_admin_audit_log" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -156,6 +157,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0014 is not None
         assert rev_0014.down_revision == "0013_daily_active"
 
+    def test_0016_descends_from_0015(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0016 = script.get_revision("0016_admin_audit_log")
+        assert rev_0016 is not None
+        assert rev_0016.down_revision == "0015_referrals"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -175,6 +183,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260506_0013_daily_active.py",
             "20260506_0014_audit_source_daily_head.py",
             "20260506_0015_referrals.py",
+            "20260507_0016_admin_audit_log.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -227,6 +236,7 @@ class TestAlembicMigrationsApplyCleanly:
             "daily_heads",
             "daily_active",
             "referrals",
+            "admin_audit_log",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 

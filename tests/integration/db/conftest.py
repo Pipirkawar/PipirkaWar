@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import (
 from pipirik_wars.infrastructure.db.base import Base
 from pipirik_wars.infrastructure.db.models import (  # noqa: F401  (регистрация моделей)
     ActivityLockORM,
+    AdminAuditLogORM,
     AdminORM,
     AuditLogORM,
     ClanMemberORM,
