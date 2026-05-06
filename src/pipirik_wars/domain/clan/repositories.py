@@ -49,6 +49,24 @@ class IClanRepository(abc.ABC):
           count=0 не интересен ГДД §6 — топ показывает «живые» кланы).
         """
 
+    @abc.abstractmethod
+    async def list_active(self) -> Sequence[Clan]:
+        """Список всех `ClanStatus.ACTIVE`-кланов (Спринт 2.3.F.2).
+
+        Используется cron-шедулером «Главы клана дня» при старте бота
+        и при ежесуточном перепланировании: для каждого активного клана
+        регистрируется отдельная APScheduler-задача со случайным
+        offset-ом 0..24h от 00:00 МСК. Frozen-кланы пропускаются — они
+        и так получили бы no-op в `RunDailyHeadCron`, лучше не плодить
+        мёртвые job-ы.
+
+        Контракт реализаций:
+        - возвращает все клиенты `ClanStatus.ACTIVE`;
+        - порядок стабильный — `clan_id ASC` (для детерминизма
+          per-clan offset-а в логах / тестах);
+        - frozen-кланы исключаются (см. выше).
+        """
+
 
 class IClanMembershipRepository(abc.ABC):
     """Доступ к таблице `clan_members`. Внутри активного UoW."""

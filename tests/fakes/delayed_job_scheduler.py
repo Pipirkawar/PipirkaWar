@@ -41,6 +41,14 @@ class ScheduledMassDuelAfkJob:
     run_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class ScheduledDailyHeadCronJob:
+    """Запись «что и на когда» для cron-а «Главы клана дня» (Спринт 2.3.F.2)."""
+
+    clan_id: int
+    run_at: datetime
+
+
 @dataclass
 class FakeDelayedJobScheduler(IDelayedJobScheduler):
     """Фиксирует все вызовы `schedule_*` / `cancel_*`."""
@@ -60,6 +68,9 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
     # 2.2.F: per-duel_id AFK-таймер масс-боя (один на бой, без раундов).
     scheduled_mass_duel_afk: dict[int, ScheduledMassDuelAfkJob] = field(default_factory=dict)
     cancelled_mass_duel_afk: list[int] = field(default_factory=list)
+    # 2.3.F.2: per-clan_id cron «Главы клана дня».
+    scheduled_daily_head_cron: dict[int, ScheduledDailyHeadCronJob] = field(default_factory=dict)
+    cancelled_daily_head_cron: list[int] = field(default_factory=list)
 
     async def schedule_finish_forest_run(
         self,
@@ -137,3 +148,18 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
     ) -> None:
         self.cancelled_mass_duel_afk.append(duel_id)
         self.scheduled_mass_duel_afk.pop(duel_id, None)
+
+    async def schedule_daily_head_cron(
+        self,
+        *,
+        clan_id: int,
+        run_at: datetime,
+    ) -> None:
+        self.scheduled_daily_head_cron[clan_id] = ScheduledDailyHeadCronJob(
+            clan_id=clan_id,
+            run_at=run_at,
+        )
+
+    async def cancel_daily_head_cron(self, *, clan_id: int) -> None:
+        self.cancelled_daily_head_cron.append(clan_id)
+        self.scheduled_daily_head_cron.pop(clan_id, None)

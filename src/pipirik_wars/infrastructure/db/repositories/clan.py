@@ -145,6 +145,18 @@ class SqlAlchemyClanRepository(IClanRepository):
             for row in result.all()
         )
 
+    async def list_active(self) -> Sequence[Clan]:
+        # Список ACTIVE-кланов для cron-шедулера «Главы клана дня»
+        # (Спринт 2.3.F.2). Стабильный порядок `clans.id ASC` — нужен
+        # детерминизм per-clan offset-а в логах / тестах.
+        stmt = (
+            select(ClanORM)
+            .where(ClanORM.status == ClanStatus.ACTIVE.value)
+            .order_by(ClanORM.id.asc())
+        )
+        result = await self._uow.session.execute(stmt)
+        return tuple(_row_to_clan(row) for row in result.scalars().all())
+
 
 class SqlAlchemyClanMembershipRepository(IClanMembershipRepository):
     """`UNIQUE(player_id)` гарантирует «один игрок = один клан».

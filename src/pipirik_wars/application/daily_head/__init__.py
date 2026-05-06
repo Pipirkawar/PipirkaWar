@@ -27,6 +27,10 @@ from pipirik_wars.application.daily_head.quote_templates import (
 from pipirik_wars.application.daily_head.record_activity import RecordPlayerActivity
 from pipirik_wars.application.daily_head.request import RequestDailyHead
 from pipirik_wars.application.daily_head.run_cron import RunDailyHeadCron
+from pipirik_wars.application.daily_head.schedule_cron_jobs import (
+    ScheduleDailyHeadCronJobs,
+    ScheduleDailyHeadCronJobsResult,
+)
 
 __all__ = [
     "DailyHeadResolved",
@@ -34,4 +38,6 @@ __all__ = [
     "RecordPlayerActivity",
     "RequestDailyHead",
     "RunDailyHeadCron",
+    "ScheduleDailyHeadCronJobs",
+    "ScheduleDailyHeadCronJobsResult",
 ]

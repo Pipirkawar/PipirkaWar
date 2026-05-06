@@ -27,6 +27,10 @@ from unittest.mock import MagicMock
 import pytest
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from pipirik_wars.application.daily_head import (
+    RunDailyHeadCron,
+    ScheduleDailyHeadCronJobs,
+)
 from pipirik_wars.application.dto.inputs import FinishForestRunInput
 from pipirik_wars.application.forest import (
     FinishForestRun,
@@ -559,3 +563,203 @@ class TestMassDuelAfkCallback:
         )
         await adapter._run_mass_duel_afk_job(duel_id=42)
         assert logger.exception.called
+
+
+@dataclass
+class _FakeDailyHeadCronUseCase:
+    """Stub `RunDailyHeadCron`-use-case-а для тестов callback-а 2.3.F.2."""
+
+    calls: list[int] = field(default_factory=list)
+    raise_exc: BaseException | None = None
+
+    async def execute(self, input_dto):  # type: ignore[no-untyped-def]
+        self.calls.append(input_dto.clan_id)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+
+
+class TestDailyHeadCronSchedule:
+    """2.3.F.2: schedule/cancel `daily_head_cron:{clan_id}`-job."""
+
+    @pytest.mark.asyncio
+    async def test_schedule_uses_per_clan_id(self) -> None:
+        adapter = _build_adapter(fake=_FakeFinishUseCase())
+        adapter.start()
+        try:
+            await adapter.schedule_daily_head_cron(
+                clan_id=42,
+                run_at=_NOW + timedelta(days=365),
+            )
+            jobs = adapter._scheduler.get_jobs()
+            assert len(jobs) == 1
+            assert jobs[0].id == "daily_head_cron:42"
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_schedule_replace_existing(self) -> None:
+        adapter = _build_adapter(fake=_FakeFinishUseCase())
+        adapter.start()
+        try:
+            first_at = _NOW + timedelta(days=365)
+            second_at = _NOW + timedelta(days=400)
+            await adapter.schedule_daily_head_cron(clan_id=42, run_at=first_at)
+            await adapter.schedule_daily_head_cron(clan_id=42, run_at=second_at)
+            jobs = adapter._scheduler.get_jobs()
+            assert len(jobs) == 1
+            assert jobs[0].next_run_time == second_at
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_cancel_removes_only_target(self) -> None:
+        adapter = _build_adapter(fake=_FakeFinishUseCase())
+        adapter.start()
+        try:
+            await adapter.schedule_daily_head_cron(clan_id=42, run_at=_NOW + timedelta(days=365))
+            await adapter.schedule_daily_head_cron(clan_id=43, run_at=_NOW + timedelta(days=365))
+            await adapter.cancel_daily_head_cron(clan_id=42)
+            ids = sorted(j.id for j in adapter._scheduler.get_jobs())
+            assert ids == ["daily_head_cron:43"]
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_cancel_missing_is_noop(self) -> None:
+        adapter = _build_adapter(fake=_FakeFinishUseCase())
+        adapter.start()
+        try:
+            await adapter.cancel_daily_head_cron(clan_id=999)
+        finally:
+            adapter.shutdown(wait=False)
+
+
+class TestDailyHeadCronCallback:
+    """`_run_daily_head_cron_job` callback (2.3.F.2)."""
+
+    @pytest.mark.asyncio
+    async def test_callback_invokes_use_case(self) -> None:
+        fake = _FakeDailyHeadCronUseCase()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            daily_head_cron_factory=lambda: cast(RunDailyHeadCron, fake),
+        )
+        await adapter._run_daily_head_cron_job(clan_id=42)
+        assert fake.calls == [42]
+
+    @pytest.mark.asyncio
+    async def test_callback_logs_when_factory_missing(self) -> None:
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            logger=logger,
+        )
+        await adapter._run_daily_head_cron_job(clan_id=42)
+        assert logger.warning.called
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_unexpected_error(self) -> None:
+        fake = _FakeDailyHeadCronUseCase(raise_exc=RuntimeError("kaboom"))
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            daily_head_cron_factory=lambda: cast(RunDailyHeadCron, fake),
+            logger=logger,
+        )
+        await adapter._run_daily_head_cron_job(clan_id=42)
+        assert logger.exception.called
+
+
+@dataclass
+class _FakeScheduleDailyHeadCronJobs:
+    """Stub `ScheduleDailyHeadCronJobs`-use-case-а для тестов 2.3.F.2 reschedule."""
+
+    calls: int = 0
+    raise_exc: BaseException | None = None
+
+    async def execute(self):  # type: ignore[no-untyped-def]
+        self.calls += 1
+        if self.raise_exc is not None:
+            raise self.raise_exc
+
+
+class TestDailyHeadRescheduleCron:
+    """`schedule_daily_head_reschedule_cron` + `_run_daily_head_reschedule_job`
+    (2.3.F.2). Это ежедневный cron `00:01 МСК`, который зовёт
+    `ScheduleDailyHeadCronJobs.execute()` для перепланирования
+    per-clan job-ов на новые сутки.
+    """
+
+    @pytest.mark.asyncio
+    async def test_callback_invokes_use_case(self) -> None:
+        fake = _FakeScheduleDailyHeadCronJobs()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            daily_reschedule_factory=lambda: cast(ScheduleDailyHeadCronJobs, fake),
+        )
+        await adapter._run_daily_head_reschedule_job()
+        assert fake.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_unexpected_error(self) -> None:
+        fake = _FakeScheduleDailyHeadCronJobs(raise_exc=RuntimeError("kaboom"))
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            daily_reschedule_factory=lambda: cast(ScheduleDailyHeadCronJobs, fake),
+            logger=logger,
+        )
+        await adapter._run_daily_head_reschedule_job()
+        assert logger.exception.called
+
+    @pytest.mark.asyncio
+    async def test_callback_no_factory_no_op(self) -> None:
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+        )
+        # Не должно бросить
+        await adapter._run_daily_head_reschedule_job()
+
+    @pytest.mark.asyncio
+    async def test_register_cron_uses_msk_timezone_and_replace_existing(self) -> None:
+        fake = _FakeScheduleDailyHeadCronJobs()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            daily_reschedule_factory=lambda: cast(ScheduleDailyHeadCronJobs, fake),
+        )
+        adapter.start()
+        try:
+            # Идемпотентно: два вызова — один job в job-store
+            adapter.schedule_daily_head_reschedule_cron()
+            adapter.schedule_daily_head_reschedule_cron()
+            jobs = [
+                j for j in adapter._scheduler.get_jobs() if j.id == "daily_head_reschedule_cron"
+            ]
+            assert len(jobs) == 1
+            # Триггер — CronTrigger с минутой 1 / часом 0 в Europe/Moscow.
+            trigger = jobs[0].trigger
+            assert hasattr(trigger, "fields")
+            field_map = {f.name: str(f) for f in trigger.fields}
+            assert field_map["minute"] == "1"
+            assert field_map["hour"] == "0"
+            assert "Moscow" in str(trigger.timezone)
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_register_cron_no_factory_logs_warning(self) -> None:
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            logger=logger,
+        )
+        adapter.schedule_daily_head_reschedule_cron()
+        assert logger.warning.called
