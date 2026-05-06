@@ -11,5 +11,11 @@
 """
 
 from pipirik_wars.bot.notifications.forest import TelegramForestFinishNotifier
+from pipirik_wars.bot.notifications.weekly_referral_summary import (
+    TelegramWeeklyClanReferralSummaryNotifier,
+)
 
-__all__ = ["TelegramForestFinishNotifier"]
+__all__ = [
+    "TelegramForestFinishNotifier",
+    "TelegramWeeklyClanReferralSummaryNotifier",
+]

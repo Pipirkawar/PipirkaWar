@@ -510,3 +510,14 @@ referral-share-forest = 🌲 PIPIRIK WARS — Forest Run!
     📏 New length: { NUMBER($length_cm, useGrouping: 0) } cm
 
     🎮 Play too → { $deeplink }
+
+
+## Weekly clan referral summary (Sprint 2.4.E, GDD §13.3)
+# Card is posted to the clan chat on Sunday 18:00 UTC by cron.
+# Parameters: $clan_title.
+weekly-referral-summary-title = 📊 WEEKLY REPORT — Clan "{ $clan_title }"
+# Parameters: $total — total number of new clan referrals in the past week.
+weekly-referral-summary-total = 👥 New referrals this week: { NUMBER($total, useGrouping: 0) }
+# Parameters: $rank (1..3), $referrer_display_name, $count.
+weekly-referral-summary-line = 🏆 { NUMBER($rank, useGrouping: 0) }. { $referrer_display_name } — brought { NUMBER($count, useGrouping: 0) }
+weekly-referral-summary-footer = Invite your friends — everyone grows together!

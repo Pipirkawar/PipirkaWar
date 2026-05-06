@@ -512,3 +512,14 @@ referral-share-forest = 🌲 ПИПИРИК ВАРС — Поход в лес!
     📏 Новая длина: { NUMBER($length_cm, useGrouping: 0) } см
 
     🎮 Играй тоже → { $deeplink }
+
+
+## Еженедельная сводка рефералов клана (Спринт 2.4.E, ГДД §13.3)
+# Карточка отправляется ботом в чат клана воскресными вечером (cron 18:00 UTC).
+# Параметры заголовка: $clan_title.
+weekly-referral-summary-title = 📊 ИТОГИ НЕДЕЛИ — Клан "{ $clan_title }"
+# Параметры: $total — суммарное число новых рефералов клана за неделю.
+weekly-referral-summary-total = 👥 Новых рефералов за неделю: { NUMBER($total, useGrouping: 0) }
+# Параметры: $rank (1..3), $referrer_display_name, $count.
+weekly-referral-summary-line = 🏆 { NUMBER($rank, useGrouping: 0) }. { $referrer_display_name } — пригласил { NUMBER($count, useGrouping: 0) }
+weekly-referral-summary-footer = Зови друзей — все растут вместе!
