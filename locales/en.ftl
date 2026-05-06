@@ -539,3 +539,70 @@ admin-confirm-token-not-found = ⚠️Token not found. It may have already been 
 admin-confirm-token-expired = ⏰Time to enter the code has run out. Repeat the command.
 admin-confirm-code-invalid = ❌Invalid code. For safety the token has been burned — repeat the command from scratch.
 admin-confirm-admin-mismatch = 🚫This token belongs to another admin. Each confirmation is bound to its initiator.
+
+
+## Admin — support commands (Sprint 2.5-B, GDD §18.6.5)
+# Used by `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban` and the
+# shared `/confirm` handler.
+
+# /find_player <text>
+admin-find-player-usage = ⚠️ Usage: <code>/find_player &lt;tg_id | @username | substring&gt;</code>. The query is required.
+admin-find-player-not-authorized = ❌ Only active admins may search for players.
+admin-find-player-empty = 🔍 No players found for query <code>{ $query }</code>.
+admin-find-player-header = 🔍 Found { $count } player(s) for query <code>{ $query }</code>.
+# Single row. Parameters: $tg_id, $username (or "—"), $name (or "—"),
+#  $title (or "—"), $length_cm, $thickness_level, $status.
+admin-find-player-row = • <code>{ $tg_id }</code> · @{ $username } · «{ $name }» · { $title } · L{ $length_cm }/T{ $thickness_level } · { $status }
+
+# /player <tg_id>
+admin-player-usage = ⚠️ Usage: <code>/player &lt;tg_id&gt;</code>. The argument is required.
+admin-player-not-authorized = ❌ Only active admins may view player cards.
+admin-player-bad-id = ⚠️ <code>{ $value }</code> is not a valid tg_id (integer). Try again.
+admin-player-not-found = 🔍 No player with tg_id <code>{ $tg_id }</code>.
+admin-player-card-summary = • <code>{ $tg_id }</code> · @{ $username } · «{ $name }» · { $title } · L{ $length_cm }/T{ $thickness_level } · { $status }
+admin-player-card-clan = 🏰 Clan: <code>{ $title }</code> ({ $clan_status }) · role { $role } · since { $joined_at }
+admin-player-card-no-clan = 🏰 Clan: —
+admin-player-card-forest-active = 🌲 Active forest run #{ $run_id }: from { $started_at } to { $ends_at }.
+admin-player-card-no-forest = 🌲 No active forest run.
+admin-player-card-anticheat = 🛡️ Anti-cheat ban until: { $until }.
+admin-player-card-no-anticheat = 🛡️ Anti-cheat ban: not active.
+
+# /freeze
+admin-freeze-usage = ⚠️ Usage: <code>/freeze &lt;tg_id&gt; [reason]</code>.
+admin-freeze-not-authorized = ❌ Only active admins may freeze players.
+admin-freeze-bad-id = ⚠️ <code>{ $value }</code> is not a valid tg_id (integer).
+admin-freeze-not-found = 🔍 No player with tg_id <code>{ $tg_id }</code>.
+admin-freeze-already = ❄️ Player <code>{ $tg_id }</code> is already frozen.
+admin-freeze-ok = 🥶 Player <code>{ $tg_id }</code> has been frozen.{ $reason_suffix }
+admin-freeze-reason-suffix = Reason: { $reason }.
+
+# /unfreeze
+admin-unfreeze-usage = ⚠️ Usage: <code>/unfreeze &lt;tg_id&gt; [reason]</code>.
+admin-unfreeze-not-authorized = ❌ Only active admins may unfreeze players.
+admin-unfreeze-bad-id = ⚠️ <code>{ $value }</code> is not a valid tg_id (integer).
+admin-unfreeze-not-found = 🔍 No player with tg_id <code>{ $tg_id }</code>.
+admin-unfreeze-already = ▶️ Player <code>{ $tg_id }</code> is already active.
+admin-unfreeze-ok = ☀️ Player <code>{ $tg_id }</code> has been unfrozen.{ $reason_suffix }
+admin-unfreeze-reason-suffix = Reason: { $reason }.
+
+# /ban — necessitates TOTP (B.4)
+admin-ban-usage = ⚠️ Usage: <code>/ban &lt;tg_id&gt; &lt;reason&gt;</code>. Reason is required.
+admin-ban-not-authorized = ❌ Only active admins may ban players.
+admin-ban-totp-not-configured = ❌ Your TOTP is not configured. `/ban` is unavailable.
+admin-ban-bad-id = ⚠️ <code>{ $value }</code> is not a valid tg_id (integer).
+admin-ban-no-reason = ⚠️ Reason is required. Usage: <code>/ban &lt;tg_id&gt; &lt;reason&gt;</code>.
+admin-ban-not-found = 🔍 No player with tg_id <code>{ $tg_id }</code>.
+admin-ban-already = 🛑 Player <code>{ $tg_id }</code> is already banned.
+admin-ban-confirm-issued = 🛡️ Confirm this operation. Send: <code>/confirm { $token } &lt;6-digit code&gt;</code>. Token TTL: { $ttl_seconds } sec.
+
+# /confirm (B.5)
+admin-confirm-usage = ⚠️ Usage: <code>/confirm &lt;token&gt; &lt;6-digit code&gt;</code>.
+admin-confirm-not-authorized = ❌ Only active admins may confirm operations.
+admin-confirm-totp-not-configured = ❌ Your TOTP is not configured. Confirmation impossible.
+admin-confirm-token-not-found = ❌ Token <code>{ $token }</code> is already used or does not exist.
+admin-confirm-token-expired = ⌛ Token expired. Rerun the command.
+admin-confirm-admin-mismatch = ❌ This token belongs to another admin.
+admin-confirm-code-invalid = ❌ Invalid 6-digit code.
+admin-confirm-success-ban = ✅ Player <code>{ $tg_id }</code> has been banned.
+admin-confirm-success-ban-already = 🛑 Player <code>{ $tg_id }</code> was already banned.
+admin-confirm-unknown-command-kind = ⚠️ Unknown command kind <code>{ $command_kind }</code> — please update the bot.

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 
 from pipirik_wars.domain.player import (
@@ -23,6 +23,19 @@ from pipirik_wars.infrastructure.db.models import UserORM
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from pipirik_wars.infrastructure.db.utils import ensure_utc
 from pipirik_wars.shared.errors import IntegrityError as DomainIntegrityError
+
+
+def _looks_like_int(value: str) -> bool:
+    """`True`, если `value` целиком — целое число (с опциональным `-`)."""
+    if not value:
+        return False
+    body = value[1:] if value[0] in "+-" else value
+    return body.isdigit()
+
+
+def _escape_like(value: str) -> str:
+    """Экранирование `%` / `_` / `\\` для безопасного `ILIKE`-поиска (escape='\\')."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _row_to_entity(row: UserORM) -> Player:
@@ -114,6 +127,48 @@ class SqlAlchemyPlayerRepository(IPlayerRepository):
         # `created_at` намеренно не трогаем — он immutable после INSERT.
         await self._uow.session.flush()
         return _row_to_entity(row)
+
+    async def find_by_query(self, *, query: str, limit: int) -> Sequence[Player]:
+        if limit <= 0:
+            raise ValueError(f"limit must be positive, got {limit}")
+        normalized = query.strip()
+        if not normalized:
+            return ()
+
+        # 1) Целое число — точный поиск по tg_id (BIGINT, UNIQUE).
+        if _looks_like_int(normalized):
+            tg_id = int(normalized)
+            result = await self._uow.session.execute(
+                select(UserORM).where(UserORM.tg_id == tg_id),
+            )
+            row = result.scalar_one_or_none()
+            return (_row_to_entity(row),) if row is not None else ()
+
+        # 2) `@username` — точный по `users.username` (без `@`).
+        if normalized.startswith("@") and len(normalized) > 1:
+            username_value = normalized[1:]
+            result = await self._uow.session.execute(
+                select(UserORM).where(UserORM.username == username_value),
+            )
+            row = result.scalar_one_or_none()
+            return (_row_to_entity(row),) if row is not None else ()
+
+        # 3) Свободный текст → ILIKE %query% по `username` и `name`.
+        # `escape='\\'` защищает от пользовательских `%` / `_` в подстроке.
+        like_pattern = f"%{_escape_like(normalized)}%"
+        stmt = (
+            select(UserORM)
+            .where(
+                or_(
+                    UserORM.username.ilike(like_pattern, escape="\\"),
+                    UserORM.name.ilike(like_pattern, escape="\\"),
+                ),
+            )
+            .order_by(UserORM.id.asc())
+            .limit(limit)
+        )
+        result = await self._uow.session.execute(stmt)
+        return tuple(_row_to_entity(row) for row in result.scalars().all())
 
     async def list_top_by_length(self, *, limit: int) -> Sequence[Player]:
         if limit <= 0:

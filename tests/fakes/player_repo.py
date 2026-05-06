@@ -58,9 +58,50 @@ class FakePlayerRepository(IPlayerRepository):
                 return player
         raise IntegrityError(f"Player id={player.id} does not exist")
 
+    async def find_by_query(self, *, query: str, limit: int) -> Sequence[Player]:
+        if limit <= 0:
+            raise ValueError(f"limit must be positive, got {limit}")
+        normalized = query.strip()
+        if not normalized:
+            return ()
+
+        # 1) Целое число → точный tg_id.
+        if _looks_like_int(normalized):
+            tg_id = int(normalized)
+            for p in self.rows:
+                if p.tg_id == tg_id:
+                    return (p,)
+            return ()
+
+        # 2) `@username` → точный username.
+        if normalized.startswith("@") and len(normalized) > 1:
+            username_value = normalized[1:]
+            for p in self.rows:
+                if p.username is not None and p.username.value == username_value:
+                    return (p,)
+            return ()
+
+        # 3) ILIKE по username/name. Имитация PG ILIKE — case-insensitive.
+        needle = normalized.casefold()
+        matches: list[Player] = []
+        for p in self.rows:
+            username = p.username.value.casefold() if p.username is not None else ""
+            name = p.name.value.casefold() if p.name is not None else ""
+            if needle in username or needle in name:
+                matches.append(p)
+        matches.sort(key=lambda p: p.id or 0)
+        return tuple(matches[:limit])
+
     async def list_top_by_length(self, *, limit: int) -> Sequence[Player]:
         active = [p for p in self.rows if p.status == PlayerStatus.ACTIVE]
         # Сортировка: сперва по убыванию длины, затем по возрастанию id
         # (стабильный тай-брейкер, как в SqlAlchemy-репо).
         active.sort(key=lambda p: (-p.length.cm, p.id or 0))
         return tuple(active[:limit])
+
+
+def _looks_like_int(value: str) -> bool:
+    if not value:
+        return False
+    body = value[1:] if value[0] in "+-" else value
+    return body.isdigit()

@@ -6,6 +6,7 @@
 рефакторинг интерфейсов.
 """
 
+from tests.fakes.admin_audit import FakeAdminAuditLogger
 from tests.fakes.admin_repo import FakeAdminRepository
 from tests.fakes.anticheat_admin_alerter import (
     AnticheatAdminAlertEvent,
@@ -53,12 +54,14 @@ from tests.fakes.referral import FakeReferralRepository
 from tests.fakes.signup_queue import FakeSignupQueueRepository
 from tests.fakes.top_clans import FakeClanTopQuery
 from tests.fakes.top_players import FakeTopPlayersQuery
+from tests.fakes.totp_verifier import FakeTotpVerifier
 from tests.fakes.uow import FakeUnitOfWork
 
 __all__ = [
     "AnticheatAdminAlertEvent",
     "DauAlertEvent",
     "FakeActivityLockRepository",
+    "FakeAdminAuditLogger",
     "FakeAdminRepository",
     "FakeAnticheatAdminAlerter",
     "FakeAnticheatRepository",
@@ -91,6 +94,7 @@ __all__ = [
     "FakeReferralRepository",
     "FakeSignupQueueRepository",
     "FakeTopPlayersQuery",
+    "FakeTotpVerifier",
     "FakeUnitOfWork",
     "ScheduledFinish",
     "ScheduledLobbyJob",

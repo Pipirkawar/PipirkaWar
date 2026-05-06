@@ -543,3 +543,72 @@ admin-confirm-token-not-found = ⚠️Токен не найден. Возмож
 admin-confirm-token-expired = ⏰Время на ввод кода истекло. Повтори команду.
 admin-confirm-code-invalid = ❌Неверный код. Из соображений безопасности токен сожжён — повтори команду заново.
 admin-confirm-admin-mismatch = 🚫Этот токен подтверждает не ты. Каждое подтверждение принадлежит конкретному админу.
+
+
+## Admin — команды поддержки (Спринт 2.5-B, ГДД §18.6.5)
+# Используются `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban` и общим
+# `/confirm`-handler-ом. Тексты намеренно компактные — админ-чаты обычно
+# заполнены одной командой за другой, длинные простыни шумят.
+
+# /find_player <text>
+admin-find-player-usage = ⚠️ Использование: <code>/find_player &lt;tg_id | @username | подстрока&gt;</code>. Запрос обязателен.
+admin-find-player-not-authorized = ❌ Только активные админы могут пользоваться поиском игроков.
+admin-find-player-empty = 🔍 По запросу <code>{ $query }</code> игроки не найдены.
+# Заголовок выдачи (count — сколько строк ниже).
+admin-find-player-header = 🔍 Найдено игроков: { $count } (по запросу <code>{ $query }</code>).
+# Одна строка списка. Параметры: $tg_id, $username (или "—"), $name (или "—"),
+#  $title (или "—"), $length_cm, $thickness_level, $status (текстовая метка).
+admin-find-player-row = • <code>{ $tg_id }</code> · @{ $username } · «{ $name }» · { $title } · L{ $length_cm }/T{ $thickness_level } · { $status }
+
+# /player <tg_id>
+admin-player-usage = ⚠️ Использование: <code>/player &lt;tg_id&gt;</code>. Параметр обязателен.
+admin-player-not-authorized = ❌ Только активные админы могут смотреть карточки игроков.
+admin-player-bad-id = ⚠️ <code>{ $value }</code> не похож на tg_id (целое число). Попробуй ещё раз.
+admin-player-not-found = 🔍 Игрок с tg_id <code>{ $tg_id }</code> не найден.
+admin-player-card-summary = • <code>{ $tg_id }</code> · @{ $username } · «{ $name }» · { $title } · L{ $length_cm }/T{ $thickness_level } · { $status }
+admin-player-card-clan = 🏰 Клан: <code>{ $title }</code> ({ $clan_status }) · роль { $role } · с { $joined_at }
+admin-player-card-no-clan = 🏰 Клан: —
+admin-player-card-forest-active = 🌲 Активный поход в лес #{ $run_id }: с { $started_at }, до { $ends_at }.
+admin-player-card-no-forest = 🌲 Активного похода нет.
+admin-player-card-anticheat = 🛡️ Anti-cheat-бан до: { $until }.
+admin-player-card-no-anticheat = 🛡️ Anti-cheat-бан: не активен.
+
+# /freeze
+admin-freeze-usage = ⚠️ Использование: <code>/freeze &lt;tg_id&gt; [причина]</code>.
+admin-freeze-not-authorized = ❌ Только активные админы могут замораживать игроков.
+admin-freeze-bad-id = ⚠️ <code>{ $value }</code> не похож на tg_id (целое число).
+admin-freeze-not-found = 🔍 Игрок с tg_id <code>{ $tg_id }</code> не найден.
+admin-freeze-already = ❄️ Игрок <code>{ $tg_id }</code> уже заморожен.
+admin-freeze-ok = 🥶 Игрок <code>{ $tg_id }</code> заморожен.{ $reason_suffix }
+admin-freeze-reason-suffix = Причина: { $reason }.
+
+# /unfreeze
+admin-unfreeze-usage = ⚠️ Использование: <code>/unfreeze &lt;tg_id&gt; [причина]</code>.
+admin-unfreeze-not-authorized = ❌ Только активные админы могут размораживать игроков.
+admin-unfreeze-bad-id = ⚠️ <code>{ $value }</code> не похож на tg_id (целое число).
+admin-unfreeze-not-found = 🔍 Игрок с tg_id <code>{ $tg_id }</code> не найден.
+admin-unfreeze-already = ▶️ Игрок <code>{ $tg_id }</code> и так активен.
+admin-unfreeze-ok = ☀️ Игрок <code>{ $tg_id }</code> разморожен.{ $reason_suffix }
+admin-unfreeze-reason-suffix = Причина: { $reason }.
+
+# /ban — necessitates TOTP (B.4)
+admin-ban-usage = ⚠️ Использование: <code>/ban &lt;tg_id&gt; &lt;причина&gt;</code>. Причина обязательна.
+admin-ban-not-authorized = ❌ Только активные админы могут банить игроков.
+admin-ban-totp-not-configured = ❌ У тебя не настроен TOTP. Команда `/ban` без него недоступна.
+admin-ban-bad-id = ⚠️ <code>{ $value }</code> не похож на tg_id (целое число).
+admin-ban-no-reason = ⚠️ Причина обязательна. Использование: <code>/ban &lt;tg_id&gt; &lt;причина&gt;</code>.
+admin-ban-not-found = 🔍 Игрок с tg_id <code>{ $tg_id }</code> не найден.
+admin-ban-already = 🛑 Игрок <code>{ $tg_id }</code> уже забанен.
+admin-ban-confirm-issued = 🛡️ Подтверди операцию. Отправь: <code>/confirm { $token } &lt;6-значный код&gt;</code>. Токен живёт { $ttl_seconds } секунд.
+
+# /confirm (B.5)
+admin-confirm-usage = ⚠️ Использование: <code>/confirm &lt;token&gt; &lt;6-значный код&gt;</code>.
+admin-confirm-not-authorized = ❌ Только активные админы могут подтверждать операции.
+admin-confirm-totp-not-configured = ❌ У тебя не настроен TOTP. Подтверждение невозможно.
+admin-confirm-token-not-found = ❌ Токен <code>{ $token }</code> уже использован или не существует.
+admin-confirm-token-expired = ⌛ Токен истёк. Заведи команду заново.
+admin-confirm-admin-mismatch = ❌ Этот токен принадлежит другому админу.
+admin-confirm-code-invalid = ❌ Неверный 6-значный код.
+admin-confirm-success-ban = ✅ Игрок <code>{ $tg_id }</code> забанен.
+admin-confirm-success-ban-already = 🛑 Игрок <code>{ $tg_id }</code> уже был забанен.
+admin-confirm-unknown-command-kind = ⚠️ Неизвестный тип команды <code>{ $command_kind }</code> — обновите бота.

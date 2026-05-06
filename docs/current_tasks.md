@@ -17,7 +17,7 @@
 
 **На `main`:** последний смерженный спринт — **2.5-A** ([PR #79](https://github.com/Pipirkawar/PipirkaWar/pull/79), коммит `b358349`) «Каркас расширенного админ-интерфейса в боте» — `admin_audit_log` table + `AdminGuard` aiogram-middleware + TOTP-confirm scaffold (миграция `0017_admins_totp_secret`, доменные VO/порты, use-case-ы `RequestAdminConfirm`/`VerifyAdminConfirm`, in-memory store + `pyotp`-verifier, локали `admin-confirm-*`). Завершены Фазы 0, 1 (MVP), 1.6 (анти-чит) полностью; из Фазы 2 закрыты 2.1–2.4 целиком и **2.5-A** — каркас идущего сейчас спринта 2.5. Идёт **Спринт 2.5-B** (команды поддержки в боте: `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban`).
 
-**Активная feature-ветка:** _будет создана_ под 2.5-B (от свежего `b358349`).
+**Активная feature-ветка:** `devin/1778094141-sprint-2-5-b-support-commands` (от `a967197`).
 
 **Что уже есть в коде после 2.5-A:**
 - `domain/admin/{audit,confirm,entities,repositories}.py` + `domain/admin/ports/{admin_audit,admin_confirm}.py` — доменные VO `Admin` / `AdminAuditEntry` / `AdminConfirm{Request,Entry}` + ошибки + enum-ы + порты `IAdminAuditLogger` / `IAdminConfirmStore` / `ITotpVerifier`.
@@ -36,7 +36,7 @@
 - **2.5-C**: экономика — `/grant_length`, `/grant_thickness`, `/balance_get`, `/balance_set` + TOTP на все + идемпотентность.
 - **2.5-D** (финал): кланы (`/clan`, `/freeze_clan`, `/unfreeze_clan`, `/clan_daily_head_history`) + `/announce` + `/audit` + `/admin_setup_totp` + `docs/admin_runbook.md`.
 
-**`make ci` на main:** зелёный (последний прогон в PR #79: 2901 passed / 1 skipped, coverage 96.19%).
+**`make ci` на ветке 2.5-B:** зелёный — `lint` (ruff) ✅, `typecheck` (mypy --strict, 629 файлов, 0 issues) ✅, `imports` (import-linter, 3 контракта) ✅, `test` 2997 passed / 1 skipped, coverage 96.18%.
 
 **`AGENT_HANDOFF.md`:** нет.
 
@@ -48,11 +48,12 @@
 |---|---|
 | **Активный спринт** | `2.5 — Расширенный админ-интерфейс в боте` |
 | **Активный PR / шаг** | **2.5-B**: команды поддержки (`/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban`) |
-| **Активная feature-ветка** | _ещё не создана_ — будет ветвиться от свежего `main` (`b358349`) |
+| **Активная feature-ветка** | `devin/1778094141-sprint-2-5-b-support-commands` |
 | **Базовая ветка** | `main` |
-| **Последний коммит на main** | `b358349` (мерж PR #79 «Спринт 2.5-A: Каркас расширенного админ-интерфейса») |
+| **Последний коммит на main** | `a967197` (мерж PR #80 «Спринт 2.5-A postmerge docs sync») |
 | **PR (если открыт)** | _ещё не открыт_ |
-| **CI статус** | зелёный (последний прогон в PR #79: 2901 passed / 1 skipped, coverage 96.19%) |
+| **CI статус** | локально зелёный (`make ci` на `3c016b7`); ждём GitHub CI после открытия PR |
+| **Последний коммит на ветке** | `3c016b7` (Sprint 2.5-B.7: DI use-cases в `Container`) |
 | **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задачи 2.5.3 (find_player/player/freeze/unfreeze/ban), 2.5.5 (TOTP на /ban), 2.5.9 (use-case каркас) |
 | **Связанная спецификация в `game_design.md`** | §18.6 (основной канал администрирования — Telegram-бот) |
 | **`AGENT_HANDOFF.md` существует?** | нет |
@@ -65,15 +66,15 @@
 
 **PR 2.5-B — команды поддержки:**
 
-- [ ] **2.5-B.1 — `/find_player <text>`** — поиск игрока по `tg_username` (точно), `tg_id` (точно), `tg_full_name` (подстрока, ILIKE). Use-case `FindPlayers(query, limit) -> Sequence[PlayerSummary]`. Без TOTP. Запись `ADMIN_PLAYER_LOOKUP` в `admin_audit_log`. Локаль `admin-find-player-*` (RU+EN).
-- [ ] **2.5-B.2 — `/player <tg_id>`** — карточка игрока: длина, толщина, клан, бан-статус, лесные блок-таймеры, последние 5 PvP/PvE-боёв (использует существующие репо-методы). Use-case `GetPlayerCard(tg_id) -> PlayerCard`. Без TOTP. Запись `ADMIN_PLAYER_LOOKUP`.
-- [ ] **2.5-B.3 — `/freeze <tg_id> [reason]`** / **`/unfreeze <tg_id>`** — установка `is_frozen=True/False` через `IPlayerRepository`. Use-cases `FreezePlayer` / `UnfreezePlayer`. Без TOTP (обратимая операция). Запись `ADMIN_PLAYER_FROZEN` / `ADMIN_PLAYER_UNFROZEN` с `before/after`. Локали.
-- [ ] **2.5-B.4 — `/ban <tg_id> <reason>`** — необратимый бан через `IPlayerRepository.ban()`. Use-case `BanPlayer`. **TOTP-обязателен**: handler сначала зовёт `RequestAdminConfirm(command_kind="ban", target=...)`, отвечает «отправь /confirm <token> <code>»; на втором шаге `/confirm` зовёт `VerifyAdminConfirm`, и если ОК — `BanPlayer.execute()`. Запись `ADMIN_PLAYER_BANNED` (после успешного бана) и `ADMIN_BAN_BLOCKED` (если TOTP-подтверждение провалилось).
-- [ ] **2.5-B.5 — `/confirm <token> <code>`** — общий handler для подтверждения опасных команд (по умолчанию через `VerifyAdminConfirm`). Внутри FSM router-а или отдельным command-фильтром. Локаль `admin-confirm-success-{ban,…}` (расширяемый switch по `command_kind`).
-- [ ] **2.5-B.6 — Регистрация `/admin_*`-router-а** в `bot/main.py` с router-фильтром `is_admin` (читает `data["admin"]` от `AdminGuard`). Тихий игнор не-админов (filter возвращает `False`).
-- [ ] **2.5-B.7 — DI use-case-ов в `Container`** — `find_players`, `get_player_card`, `freeze_player`, `unfreeze_player`, `ban_player`, `request_admin_confirm`, `verify_admin_confirm` + `InMemoryAdminConfirmStore` (singleton), `PyOtpTotpVerifier`, `TokenFactory = secrets.token_urlsafe(16)`.
-- [ ] **2.5-B.8 — Тесты:** unit на каждый новый use-case (≥3 кейса: happy / not_found / уже-в-state); 2-3 integration-теста на `IPlayerRepository.ban` / `freeze` / `unfreeze` (если методов ещё нет — добавляем); 2 e2e-теста на TOTP-flow `/ban` (правильный код / неверный код).
-- [ ] **Перед PR:** прогон `make ci` зелёный, lint/typecheck/import-linter ✅.
+- [x] **2.5-B.1 — `/find_player <text>`** — поиск игрока по `tg_id` (точно), `@username` (точно), либо подстроке (ILIKE по `username`/`name`). Use-case `FindPlayers(query, limit) -> Sequence[PlayerSummary]`. Без TOTP. Запись `ADMIN_PLAYER_LOOKUP` в `admin_audit_log`. Локаль `admin-find-player-*` (RU+EN).
+- [x] **2.5-B.2 — `/player <tg_id>`** — карточка игрока: сводка (длина, толщина, статус, anticheat-soft-ban-таймер), клан + роль, активный forest-run. Use-case `GetPlayerCard(tg_id) -> PlayerCard`. Без TOTP. Запись `ADMIN_PLAYER_LOOKUP`. Локаль `admin-player-*` (RU+EN). Список последних 5 PvP/PvE-боёв вынесен в B-followup: ни `IDuelRepository`, ни `IMassDuelRepository`, ни `IForestRunRepository` не имеют метода «список последних N для игрока» — добавлять новые read-методы поверх существующих агрегатов в скоуп B.2 не входит, но это закроет full-feature-карточку.
+- [x] **2.5-B.3 — `/freeze <tg_id> [reason]`** / **`/unfreeze <tg_id>`** — установка `is_frozen=True/False` через `IPlayerRepository`. Use-cases `FreezePlayer` / `UnfreezePlayer`. Без TOTP (обратимая операция). Запись `ADMIN_PLAYER_FROZEN` / `ADMIN_PLAYER_UNFROZEN` с `before/after`. Идемпотентно: повторная заморозка/разморозка ничего не пишет в audit, возвращает `was_already_frozen=True` / `was_already_active=True`. Локали `admin-freeze-*` / `admin-unfreeze-*` (RU+EN).
+- [x] **2.5-B.4 — `/ban <tg_id> <reason>`** — необратимый бан. Добавлено: `PlayerStatus.BANNED`, `Player.ban(now)` (идемпотентно). Use-case `BanPlayer` (post-TOTP, с защитой-в-глубину `is_active` + reason-нон-empty). Handler `/ban` зовёт `RequestAdminConfirm(command_kind="ban", payload={target_tg_id, reason})`, отвечает токеном и инструкцией `/confirm <token> <code>`. Запись `ADMIN_PLAYER_BANNED` (на успешном бане). `ADMIN_BAN_BLOCKED` решено НЕ выписывать отдельно — `VerifyAdminConfirm` уже пишет `ADMIN_CONFIRM_FAILED` с привязкой `command_kind=ban`, дублирование не нужно (это можно поднять в /audit-фильтре). Локали `admin-ban-*` (RU+EN).
+- [x] **2.5-B.5 — `/confirm <token> <code>`** — общий handler для всех TOTP-команд. Зовёт `VerifyAdminConfirm`, диспатчит по `command_kind`: на MVP только `ban → BanPlayer.execute()`. На неизвестный `command_kind` или сломанный payload — `admin-confirm-unknown-command-kind`. Локали `admin-confirm-*` (RU+EN).
+- [x] **2.5-B.6 — Регистрация `admin_support_router`** через `dispatcher.include_router` в `bot/handlers/__init__.py`. Router-фильтр `IsAdminFilter` живёт прямо на самом router-е (`router.message.filter(IsAdminFilter())` + `.callback_query.filter(...)`), читает `data["admin"]` от `AdminGuard`. Не-админы тихо проходят мимо (filter возвращает `False`). Если `AdminGuard` не подключён — secure default = отказать. Файлы: `bot/filters/admin.py`, `bot/filters/__init__.py`, `bot/handlers/admin_support.py` (фильтр на router-е), `bot/handlers/__init__.py` (include_router). 4 unit-теста на фильтр.
+- [x] **2.5-B.7 — DI use-case-ов в `Container`** — `find_players`, `get_player_card`, `freeze_player`, `unfreeze_player`, `ban_player`, `request_admin_confirm`, `verify_admin_confirm` + `SqlAlchemyAdminAuditLogger` (write-side `admin_audit_log`), `InMemoryAdminConfirmStore` (singleton, переживать рестарт смысла нет — 60-секундные токены), `PyOtpTotpVerifier`, `TokenFactory = _default_admin_token_factory` (`secrets.token_urlsafe(16)`). Все 7 use-case-ов прокинуты в `dispatcher` workflow-data. Тесты: 2 новых assert-ов в `test_composition_root.py` (`TestContainer.test_container_holds_admin_support_use_cases` + расширения в `TestBuildContainer.test_build_container_returns_real_adapters` и `TestBuildDispatcher.test_build_dispatcher_assembles_full_stack`).
+- [x] **2.5-B.8 — Тесты:** покрытие добавлено вместе с каждым шагом B.1–B.7. Unit-тесты на все use-case-ы — `tests/unit/application/admin/test_find_players.py` (9), `test_get_player_card.py` (7), `test_freeze_unfreeze.py` (8), `test_ban_player.py` (7). Integration на `IPlayerRepository`: `find_by_query_*` (7 кейсов: exact tg_id / @username / substring case-insensitive / empty / LIKE-escape / включая frozen / limit / non-positive limit reject), `freeze_unfreeze_round_trip`, `save_persists_mutations` (покрывает `Player.ban` через `save`), а также существовавшие `anticheat_ban_*`. E2E на TOTP-flow `/ban`+`/confirm` — `tests/unit/bot/handlers/test_admin_support.py` (44 кейса, в т.ч. happy / token expired / token not found / admin mismatch / code invalid / TOTP not configured / unknown command_kind / payload typo / target disappeared / already banned).
+- [x] **Перед PR:** локальный `make ci` зелёный — lint ✅, mypy --strict ✅, import-linter ✅, pytest 2997/1 skipped, coverage 96.18%.
 - [ ] **Перед мерджем:** sync `current_tasks.md` под 2.5-C; запись в `history.md`.
 
 ---

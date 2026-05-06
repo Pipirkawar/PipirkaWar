@@ -14,6 +14,15 @@ import pytest
 from aiogram import Dispatcher
 from pydantic import SecretStr
 
+from pipirik_wars.application.admin import (
+    BanPlayer,
+    FindPlayers,
+    FreezePlayer,
+    GetPlayerCard,
+    RequestAdminConfirm,
+    UnfreezePlayer,
+    VerifyAdminConfirm,
+)
 from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.clan import (
@@ -73,7 +82,7 @@ from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.application.top import GetTopClans, GetTopPlayers
 from pipirik_wars.bot.main import Container, build_container, build_dispatcher
-from pipirik_wars.domain.admin import IAdminRepository
+from pipirik_wars.domain.admin import IAdminConfirmStore, IAdminRepository, ITotpVerifier
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.daily_head import DailyHeadService
 from pipirik_wars.domain.forest import IForestRunRepository
@@ -82,6 +91,10 @@ from pipirik_wars.domain.pvp import IDuelRepository, IMassDuelRepository
 from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
+from pipirik_wars.infrastructure.admin import (
+    InMemoryAdminConfirmStore,
+    PyOtpTotpVerifier,
+)
 from pipirik_wars.infrastructure.anticheat import StructlogAnticheatAdminAlerter
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock import RealClock
@@ -105,6 +118,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemySignupQueueRepository,
 )
 from pipirik_wars.infrastructure.db.services import (
+    SqlAlchemyAdminAuditLogger,
     SqlAlchemyAuditLogger,
     SqlAlchemyIdempotencyService,
 )
@@ -124,6 +138,7 @@ from pipirik_wars.infrastructure.settings import (
 )
 from tests.fakes import (
     FakeActivityLockRepository,
+    FakeAdminAuditLogger,
     FakeAdminRepository,
     FakeAnticheatAdminAlerter,
     FakeAnticheatRepository,
@@ -154,6 +169,7 @@ from tests.fakes import (
     FakeReferralRepository,
     FakeSignupQueueRepository,
     FakeTopPlayersQuery,
+    FakeTotpVerifier,
     FakeUnitOfWork,
 )
 from tests.unit.domain.balance.factories import build_valid_balance
@@ -425,6 +441,63 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         scheduler=delayed_jobs,
         clock=clock,
     )
+    admin_audit = FakeAdminAuditLogger()
+    admin_confirm_store: IAdminConfirmStore = InMemoryAdminConfirmStore()
+    totp_verifier: ITotpVerifier = FakeTotpVerifier()
+    find_players_uc = FindPlayers(
+        uow=uow,
+        admins=admins,
+        players=players,
+        audit=admin_audit,
+        clock=clock,
+    )
+    get_player_card_uc = GetPlayerCard(
+        uow=uow,
+        admins=admins,
+        players=players,
+        clans=clans,
+        clan_members=members,
+        forest_runs=forest_runs,
+        audit=admin_audit,
+        clock=clock,
+    )
+    freeze_player_uc = FreezePlayer(
+        uow=uow,
+        admins=admins,
+        players=players,
+        audit=admin_audit,
+        clock=clock,
+    )
+    unfreeze_player_uc = UnfreezePlayer(
+        uow=uow,
+        admins=admins,
+        players=players,
+        audit=admin_audit,
+        clock=clock,
+    )
+    ban_player_uc = BanPlayer(
+        uow=uow,
+        admins=admins,
+        players=players,
+        audit=admin_audit,
+        clock=clock,
+    )
+    request_admin_confirm_uc = RequestAdminConfirm(
+        uow=uow,
+        admins=admins,
+        store=admin_confirm_store,
+        audit=admin_audit,
+        clock=clock,
+        token_factory=lambda: "test-token",
+    )
+    verify_admin_confirm_uc = VerifyAdminConfirm(
+        uow=uow,
+        admins=admins,
+        store=admin_confirm_store,
+        totp=totp_verifier,
+        audit=admin_audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -627,6 +700,16 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
             referrals=referrals,
             clock=clock,
         ),
+        admin_audit=admin_audit,
+        admin_confirm_store=admin_confirm_store,
+        totp_verifier=totp_verifier,
+        find_players=find_players_uc,
+        get_player_card=get_player_card_uc,
+        freeze_player=freeze_player_uc,
+        unfreeze_player=unfreeze_player_uc,
+        ban_player=ban_player_uc,
+        request_admin_confirm=request_admin_confirm_uc,
+        verify_admin_confirm=verify_admin_confirm_uc,
     )
 
 
@@ -719,6 +802,22 @@ class TestContainer:
         assert isinstance(c.grant_referral_thickness_milestone, GrantReferralThicknessMilestone)
         assert isinstance(c.run_weekly_clan_referral_summary, RunWeeklyClanReferralSummary)
 
+    def test_container_holds_admin_support_use_cases(self) -> None:
+        """Расширенный админ-интерфейс (Спринт 2.5-A.3 + 2.5-B)."""
+        c = _container_with_fakes()
+        # Инфраструктурные адаптеры.
+        assert isinstance(c.admin_audit, FakeAdminAuditLogger)
+        assert isinstance(c.admin_confirm_store, InMemoryAdminConfirmStore)
+        assert isinstance(c.totp_verifier, FakeTotpVerifier)
+        # Use-case-ы B.1-B.5.
+        assert isinstance(c.find_players, FindPlayers)
+        assert isinstance(c.get_player_card, GetPlayerCard)
+        assert isinstance(c.freeze_player, FreezePlayer)
+        assert isinstance(c.unfreeze_player, UnfreezePlayer)
+        assert isinstance(c.ban_player, BanPlayer)
+        assert isinstance(c.request_admin_confirm, RequestAdminConfirm)
+        assert isinstance(c.verify_admin_confirm, VerifyAdminConfirm)
+
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
         with pytest.raises((AttributeError, TypeError)):
@@ -797,6 +896,19 @@ class TestBuildContainer:
         # Anticheat add_length (Спринт 1.6.D).
         assert isinstance(c.anticheat_admin_alerter, StructlogAnticheatAdminAlerter)
         assert isinstance(c.add_length, AddLength)
+        # Расширенный админ-интерфейс (Спринт 2.5-A + 2.5-B): реальные
+        # адаптеры — `SqlAlchemyAdminAuditLogger`, in-memory store и
+        # `PyOtpTotpVerifier`.
+        assert isinstance(c.admin_audit, SqlAlchemyAdminAuditLogger)
+        assert isinstance(c.admin_confirm_store, InMemoryAdminConfirmStore)
+        assert isinstance(c.totp_verifier, PyOtpTotpVerifier)
+        assert isinstance(c.find_players, FindPlayers)
+        assert isinstance(c.get_player_card, GetPlayerCard)
+        assert isinstance(c.freeze_player, FreezePlayer)
+        assert isinstance(c.unfreeze_player, UnfreezePlayer)
+        assert isinstance(c.ban_player, BanPlayer)
+        assert isinstance(c.request_admin_confirm, RequestAdminConfirm)
+        assert isinstance(c.verify_admin_confirm, VerifyAdminConfirm)
 
 
 class TestBuildDispatcher:
@@ -858,3 +970,12 @@ class TestBuildDispatcher:
         # Sprint 2.3.C: Daily Head use-cases в workflow-data для handler-а 2.3.E.
         assert dp["request_daily_head"] is c.request_daily_head
         assert dp["run_daily_head_cron"] is c.run_daily_head_cron
+        # Sprint 2.5-B: admin_support router + use-cases в workflow-data.
+        assert any(r.name == "admin_support" for r in dp.sub_routers)
+        assert dp["find_players"] is c.find_players
+        assert dp["get_player_card"] is c.get_player_card
+        assert dp["freeze_player"] is c.freeze_player
+        assert dp["unfreeze_player"] is c.unfreeze_player
+        assert dp["ban_player"] is c.ban_player
+        assert dp["request_admin_confirm"] is c.request_admin_confirm
+        assert dp["verify_admin_confirm"] is c.verify_admin_confirm

@@ -360,3 +360,115 @@ class TestSqlAlchemyPlayerRepository:
             reloaded = await repo.get_by_tg_id(42)
             assert reloaded is not None
             assert reloaded.anticheat_ban_until is None
+
+    # ── /find_player (Спринт 2.5-B.1) ──────────────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_find_by_query_exact_tg_id(self, uow: SqlAlchemyUnitOfWork) -> None:
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        async with uow:
+            await repo.add(_make_new(tg_id=100, username=Username(value="ivan")))
+            await repo.add(_make_new(tg_id=200, username=Username(value="petr")))
+
+        async with uow:
+            rows = await repo.find_by_query(query="100", limit=10)
+        assert [p.tg_id for p in rows] == [100]
+
+    @pytest.mark.asyncio
+    async def test_find_by_query_at_username_exact(self, uow: SqlAlchemyUnitOfWork) -> None:
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        async with uow:
+            await repo.add(_make_new(tg_id=100, username=Username(value="ivan")))
+            await repo.add(_make_new(tg_id=101, username=Username(value="ivanushka")))
+
+        async with uow:
+            rows = await repo.find_by_query(query="@ivan", limit=10)
+        # Точное совпадение: должны вернуть только "ivan", не "ivanushka".
+        assert [p.tg_id for p in rows] == [100]
+
+    @pytest.mark.asyncio
+    async def test_find_by_query_substring_username_and_name_case_insensitive(
+        self, uow: SqlAlchemyUnitOfWork
+    ) -> None:
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        later = NOW + timedelta(seconds=1)
+        async with uow:
+            p1 = await repo.add(_make_new(tg_id=100, username=Username(value="ivan42")))
+            p2 = await repo.add(_make_new(tg_id=101, username=Username(value="petrov")))
+            p3 = await repo.add(_make_new(tg_id=102, username=Username(value="anna")))
+            assert p1.id is not None and p2.id is not None and p3.id is not None
+            await repo.save(p2.with_name(PlayerName(value="Ivanushka"), now=later))
+            await repo.save(p3.with_name(PlayerName(value="Алёна"), now=later))
+
+        async with uow:
+            rows = await repo.find_by_query(query="IVAN", limit=10)
+        # Регистр не важен: совпадения по `username='ivan42'` и `name='Ivanushka'`.
+        # Сортировка `id ASC`.
+        assert [p.tg_id for p in rows] == [100, 101]
+
+    @pytest.mark.asyncio
+    async def test_find_by_query_empty_returns_empty(self, uow: SqlAlchemyUnitOfWork) -> None:
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        async with uow:
+            await repo.add(_make_new(tg_id=100, username=Username(value="ivan")))
+
+        async with uow:
+            rows = await repo.find_by_query(query="   ", limit=10)
+        assert rows == ()
+
+    @pytest.mark.asyncio
+    async def test_find_by_query_substring_escapes_like_wildcards(
+        self, uow: SqlAlchemyUnitOfWork
+    ) -> None:
+        """Пользовательские `%` / `_` не должны превращаться в `LIKE`-метасимволы."""
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        later = NOW + timedelta(seconds=1)
+        async with uow:
+            p1 = await repo.add(_make_new(tg_id=100, username=Username(value="ivan_42")))
+            p2 = await repo.add(_make_new(tg_id=101, username=Username(value="ivanovich")))
+            assert p1.id is not None and p2.id is not None
+            # имя нам не нужно — проверяем по username.
+            _ = later
+
+        async with uow:
+            # `_` — это LIKE-метасимвол «один любой символ»; без эскейпа он бы
+            # совпал с `ivanovich`. С эскейпом — только с `ivan_42`.
+            rows = await repo.find_by_query(query="ivan_", limit=10)
+        assert [p.tg_id for p in rows] == [100]
+
+    @pytest.mark.asyncio
+    async def test_find_by_query_includes_frozen_players(self, uow: SqlAlchemyUnitOfWork) -> None:
+        """Замороженных тоже находим — админ должен мочь их размораживать."""
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        later = NOW + timedelta(seconds=1)
+        async with uow:
+            p = await repo.add(_make_new(tg_id=100, username=Username(value="frozen_ivan")))
+            await repo.save(p.freeze(now=later))
+
+        async with uow:
+            rows = await repo.find_by_query(query="frozen", limit=10)
+        assert [p.tg_id for p in rows] == [100]
+        assert rows[0].status is PlayerStatus.FROZEN
+
+    @pytest.mark.asyncio
+    async def test_find_by_query_respects_limit(self, uow: SqlAlchemyUnitOfWork) -> None:
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        async with uow:
+            for tg in range(100, 105):
+                await repo.add(_make_new(tg_id=tg, username=Username(value=f"ivan{tg}")))
+
+        async with uow:
+            rows = await repo.find_by_query(query="ivan", limit=2)
+        assert len(rows) == 2
+        assert [p.tg_id for p in rows] == [100, 101]
+
+    @pytest.mark.asyncio
+    async def test_find_by_query_rejects_non_positive_limit(
+        self, uow: SqlAlchemyUnitOfWork
+    ) -> None:
+        repo = SqlAlchemyPlayerRepository(uow=uow)
+        async with uow:
+            with pytest.raises(ValueError, match="positive"):
+                await repo.find_by_query(query="ivan", limit=0)
+            with pytest.raises(ValueError, match="positive"):
+                await repo.find_by_query(query="ivan", limit=-1)
