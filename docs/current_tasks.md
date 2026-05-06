@@ -63,7 +63,7 @@
 
 - [x] sync `current_tasks.md` под 2.5.
 - [x] **2.5-A.1** — таблица `admin_audit_log` (миграция `0016_admin_audit_log` + ORM `AdminAuditLogORM` + домен-порт `IAdminAuditLogger` + `AdminAuditEntry` + `AdminAuditAction` + `AdminAuditSource` + `SqlAlchemyAdminAuditLogger` + `FakeAdminAuditLogger` + 6 integration-тестов + 4 unit-теста + расширение `test_migrations`).
-- [ ] **2.5-A.2** — aiogram-middleware `AdminGuard` (проверяет `tg_id` в `admins`, кладёт `Admin` + `AdminRole` в context, тихо игнорирует чужих; регистрируется на все `/admin_*` в следующих PR-ах).
+- [x] **2.5-A.2** — aiogram-middleware `AdminGuard` (читает `tg_identity`, делает `IAdminRepository.get_by_tg_id`, кладёт `data["admin"] = Admin | None`; деактивированные → `None`). Регистрируется в композиционном root, прибавляется ко всем 3 observer-ам после `AuthMiddleware`. 7 unit-тестов + апдейт композиционного теста.
 - [ ] **2.5-A.3** — FSM `TOTPConfirm` + use-cases `RequestAdminConfirm`/`VerifyAdminConfirm` + локали `admin-confirm-*` RU+EN + unit-тесты.
 - [ ] **Перед PR:** прогон `make ci` зелёный, lint/typecheck/import-linter ✅.
 - [ ] **Перед мерджем:** sync `current_tasks.md` под 2.5-B; запись в `history.md`.
