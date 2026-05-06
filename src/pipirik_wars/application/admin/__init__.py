@@ -38,6 +38,12 @@ from pipirik_wars.application.admin.get_player_card import (
     GetPlayerCardOutput,
     PlayerCard,
 )
+from pipirik_wars.application.admin.grant_length import (
+    GrantLength,
+    GrantLengthBlockedError,
+    GrantLengthInput,
+    GrantLengthOutput,
+)
 from pipirik_wars.application.admin.request_confirm import (
     RequestAdminConfirm,
     RequestAdminConfirmInput,
@@ -71,6 +77,10 @@ __all__ = [
     "GetPlayerCard",
     "GetPlayerCardInput",
     "GetPlayerCardOutput",
+    "GrantLength",
+    "GrantLengthBlockedError",
+    "GrantLengthInput",
+    "GrantLengthOutput",
     "PlayerCard",
     "PlayerSummary",
     "RequestAdminConfirm",
