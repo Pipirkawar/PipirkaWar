@@ -583,3 +583,14 @@ class GrantReferralThicknessMilestoneInput(_StrictBase):
         ge=1,
         description="Новый уровень толщины (после успешного апгрейда)",
     )
+
+
+class RunWeeklyClanReferralSummaryInput(_StrictBase):
+    """Cron-триггер еженедельной сводки рефералов клана (Спринт 2.4.E, ГДД §13.3).
+
+    APScheduler в воскресенье 18:00 UTC зовёт use-case на каждый
+    `clan_id`. Use-case идемпотентен в смысле «нет побочных эффектов
+    в БД»: только читает агрегаты и шлёт сообщение через notifier.
+    """
+
+    clan_id: int = Field(gt=0, description="Внутренний clans.id")
