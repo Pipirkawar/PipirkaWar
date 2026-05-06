@@ -31,10 +31,16 @@ PvP массовый клан×клан (Спринт 2.2.D):
 - `PvpMassDuelORM` — таблица `pvp_mass_duels`.
 - `PvpMassDuelChoiceORM` — таблица `pvp_mass_duel_choices`.
 - `PvpMassDuelDamageEntryORM` — таблица `pvp_mass_duel_damage_entries`.
+
+Глава клана дня (Спринт 2.3.B):
+- `DailyHeadAssignmentORM` — таблица `daily_heads`.
+- `DailyActiveORM` — таблица `daily_active`.
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
 from pipirik_wars.infrastructure.db.models.clan import ClanMemberORM, ClanORM
+from pipirik_wars.infrastructure.db.models.daily_active import DailyActiveORM
+from pipirik_wars.infrastructure.db.models.daily_head import DailyHeadAssignmentORM
 from pipirik_wars.infrastructure.db.models.forest import ForestRunORM
 from pipirik_wars.infrastructure.db.models.oracle import OracleInvocationORM
 from pipirik_wars.infrastructure.db.models.player import UserORM
@@ -59,6 +65,8 @@ __all__ = [
     "AuditLogORM",
     "ClanMemberORM",
     "ClanORM",
+    "DailyActiveORM",
+    "DailyHeadAssignmentORM",
     "ForestRunORM",
     "IdempotencyKeyORM",
     "OracleInvocationORM",
