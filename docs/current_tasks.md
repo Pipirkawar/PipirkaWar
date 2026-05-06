@@ -15,26 +15,30 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный спринт — **2.4** (PR #78, коммит `e3a7818`) «Реферальная система и шеринг» (закрыты A→F: домен + persistence + use-cases + интеграция в `/start`/`/upgrade` + кнопка шеринга + weekly cron + rate-limit антифрод). Завершены Фазы 0, 1 (MVP), 1.6 (анти-чит) полностью; из Фазы 2 закрыты 2.1 (PvP 1×1), 2.2 (масс-PvP), 2.3 (Глава клана дня), 2.4 (реферальная система). Идёт **Спринт 2.5 — Расширенный админ-интерфейс в боте**.
+**На `main`:** последний смерженный спринт — **2.5-A** ([PR #79](https://github.com/Pipirkawar/PipirkaWar/pull/79), коммит `b358349`) «Каркас расширенного админ-интерфейса в боте» — `admin_audit_log` table + `AdminGuard` aiogram-middleware + TOTP-confirm scaffold (миграция `0017_admins_totp_secret`, доменные VO/порты, use-case-ы `RequestAdminConfirm`/`VerifyAdminConfirm`, in-memory store + `pyotp`-verifier, локали `admin-confirm-*`). Завершены Фазы 0, 1 (MVP), 1.6 (анти-чит) полностью; из Фазы 2 закрыты 2.1–2.4 целиком и **2.5-A** — каркас идущего сейчас спринта 2.5. Идёт **Спринт 2.5-B** (команды поддержки в боте: `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban`).
 
-**Активная feature-ветка:** `devin/1778087829-sprint-2-5-a-admin-foundation` (первый из четырёх PR-ов спринта 2.5). Бралась свежий `main` на момент создания.
+**Активная feature-ветка:** _будет создана_ под 2.5-B (от свежего `b358349`).
 
-**Что уже есть в коде (из Спринтов 1.1.E + 1.2.B + 1.6):**
-- `domain/admin/{entities,repositories}.py` — `Admin` VO + `AdminRole` enum (`super_admin`/`economist`/`support`/`read_only`) + `IAdminRepository`.
-- `infrastructure/db/{models,repositories}/admin.py` + Fake в `tests/fakes/admin_repo.py`. Таблица `admins` в миграции `0001_initial_security_schema`.
+**Что уже есть в коде после 2.5-A:**
+- `domain/admin/{audit,confirm,entities,repositories}.py` + `domain/admin/ports/{admin_audit,admin_confirm}.py` — доменные VO `Admin` / `AdminAuditEntry` / `AdminConfirm{Request,Entry}` + ошибки + enum-ы + порты `IAdminAuditLogger` / `IAdminConfirmStore` / `ITotpVerifier`.
+- `application/admin/{request_confirm,verify_confirm}.py` — use-case-ы TOTP-confirm. Каркас под use-case-ы команд поддержки/экономики (2.5-B/C) идёт рядом, в этом же пакете.
 - `application/bootstrap/admin.py` — `BootstrapSuperAdmin` (читает `BOOTSTRAP_ADMIN_IDS`).
-- `bot/handlers/admin.py` — рабочие `/balance_reload`, `/admin_stats`, `/set_max_dau`, `/anticheat_unban` (авторизация на уровне use-case-а).
+- `infrastructure/db/{models,repositories}/{admin,admin_audit}.py` + Sql/Fake реализации портов; миграции `0016_admin_audit_log`, `0017_admins_totp_secret`.
+- `infrastructure/admin/{in_memory_confirm_store,pyotp_totp_verifier}.py` — реализации портов TOTP-confirm.
+- `bot/middlewares/admin_guard.py` + DI в `bot/main.py` — `data["admin"]` доступен handler-ам.
+- `bot/handlers/admin.py` — рабочие `/balance_reload`, `/admin_stats`, `/set_max_dau`, `/anticheat_unban` (старые, с авторизацией на уровне use-case-а; в 2.5-D будут перенесены под `AdminGuard` + RBAC).
+- `locales/{ru,en}.ftl` — `admin-confirm-*` ключи.
 - Пустые пакеты `src/pipirik_wars/admin/{api,auth,rbac,web}/` — зарезервированы под веб-админку в Спринте 4.5.
 
-**Скоуп Спринта 2.5 (разбивается на 4 PR-а):**
-- **2.5-A** (текущая ветка): каркас — `admin_audit_log` table, `AdminGuard` aiogram-middleware, FSM `TOTPConfirm` + use-cases `RequestAdminConfirm`/`VerifyAdminConfirm`, локали. Без полезных команд.
-- **2.5-B** (следующий PR): команды поддержки — `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban` (TOTP только на `/ban`).
+**Скоуп Спринта 2.5 (4 PR-а):**
+- ~~**2.5-A**~~ ✅ закрыт PR #79 (`b358349`) — каркас `admin_audit_log` + `AdminGuard` + TOTP-confirm.
+- **2.5-B** (текущий PR): команды поддержки — `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban` (TOTP только на `/ban`).
 - **2.5-C**: экономика — `/grant_length`, `/grant_thickness`, `/balance_get`, `/balance_set` + TOTP на все + идемпотентность.
-- **2.5-D** (финал): кланы + `/announce` + `/audit` + `docs/admin_runbook.md`.
+- **2.5-D** (финал): кланы (`/clan`, `/freeze_clan`, `/unfreeze_clan`, `/clan_daily_head_history`) + `/announce` + `/audit` + `/admin_setup_totp` + `docs/admin_runbook.md`.
 
-**`make ci` на main:** зелёный (последний прогон в PR #78: 2829 passed / 1 skipped, coverage 96.11%).
+**`make ci` на main:** зелёный (последний прогон в PR #79: 2901 passed / 1 skipped, coverage 96.19%).
 
-**`AGENT_HANDOFF.md`:** нет (удалён в `2c4b588`).
+**`AGENT_HANDOFF.md`:** нет.
 
 ---
 
@@ -43,13 +47,13 @@
 | Поле | Значение |
 |---|---|
 | **Активный спринт** | `2.5 — Расширенный админ-интерфейс в боте` |
-| **Активный PR / шаг** | **2.5-A**: каркас (admin_audit_log + AdminGuard + TOTP-FSM) |
-| **Активная feature-ветка** | `devin/1778087829-sprint-2-5-a-admin-foundation` (от `e3a7818`) |
+| **Активный PR / шаг** | **2.5-B**: команды поддержки (`/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban`) |
+| **Активная feature-ветка** | _ещё не создана_ — будет ветвиться от свежего `main` (`b358349`) |
 | **Базовая ветка** | `main` |
-| **Последний коммит на ветке** | `43186c3` `feat(bot): AdminGuard outer-middleware (Спринт 2.5-A.2)` |
-| **PR (если открыт)** | ещё не открыт; откроется после закрытия 2.5-A.3 |
-| **CI статус** | зелёный (локальный прогон после 2.5-A.3: 2901 passed / 1 skipped, coverage 96.19%) |
-| **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задачи 2.5.1–2.5.10 |
+| **Последний коммит на main** | `b358349` (мерж PR #79 «Спринт 2.5-A: Каркас расширенного админ-интерфейса») |
+| **PR (если открыт)** | _ещё не открыт_ |
+| **CI статус** | зелёный (последний прогон в PR #79: 2901 passed / 1 skipped, coverage 96.19%) |
+| **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задачи 2.5.3 (find_player/player/freeze/unfreeze/ban), 2.5.5 (TOTP на /ban), 2.5.9 (use-case каркас) |
 | **Связанная спецификация в `game_design.md`** | §18.6 (основной канал администрирования — Telegram-бот) |
 | **`AGENT_HANDOFF.md` существует?** | нет |
 
@@ -59,14 +63,18 @@
 
 > Отмечай `[x]` по мере выполнения. **Перед каждым `git commit`** обнови этот чек-лист (даже если шаг ещё не закрыт — отметь, что начат). Это safety-net на случай, если агент прервётся в середине работы.
 
-**PR 2.5-A — каркас расширенного админ-интерфейса:**
+**PR 2.5-B — команды поддержки:**
 
-- [x] sync `current_tasks.md` под 2.5.
-- [x] **2.5-A.1** — таблица `admin_audit_log` (миграция `0016_admin_audit_log` + ORM `AdminAuditLogORM` + домен-порт `IAdminAuditLogger` + `AdminAuditEntry` + `AdminAuditAction` + `AdminAuditSource` + `SqlAlchemyAdminAuditLogger` + `FakeAdminAuditLogger` + 6 integration-тестов + 4 unit-теста + расширение `test_migrations`).
-- [x] **2.5-A.2** — aiogram-middleware `AdminGuard` (читает `tg_identity`, делает `IAdminRepository.get_by_tg_id`, кладёт `data["admin"] = Admin | None`; деактивированные → `None`). Регистрируется в композиционном root, прибавляется ко всем 3 observer-ам после `AuthMiddleware`. 7 unit-тестов + апдейт композиционного теста.
-- [x] **2.5-A.3** — TOTP-подтверждение опасных команд: миграция `0017_admins_totp_secret` (новая колонка `admins.totp_secret`), `Admin.totp_secret`, доменные VO `AdminConfirmRequest`/`AdminConfirmEntry` + ошибки `Confirm{TokenNotFound,TokenExpired,CodeInvalid,AdminMismatch}Error` + `TotpNotConfiguredError`, доменные порты `IAdminConfirmStore` / `ITotpVerifier`, `application/admin/{request_confirm,verify_confirm}.py` use-cases (запись `ADMIN_CONFIRM_REQUESTED` / `ADMIN_CONFIRM_VERIFIED` / `ADMIN_CONFIRM_FAILED` в `admin_audit_log`, токен — однократный «pop»), инфраструктура `infrastructure/admin/{in_memory_confirm_store,pyotp_totp_verifier}.py`, локали `admin-confirm-*` в RU+EN, 35 новых unit-тестов (5 на VO/ошибки + 11 на use-case-ах + 15 на store/verifier + 1 на миграцию + 3 на repo). DI в композиционный root **не делаем** — handler-ы `/ban` / `/grant_*` появятся только в 2.5-B/C, тогда же подключим в `Container`.
-- [x] **Перед PR:** прогон `make ci` зелёный, lint/typecheck/import-linter ✅ (2901 passed / 1 skipped, coverage 96.19%).
-- [ ] **Перед мерджем:** sync `current_tasks.md` под 2.5-B; запись в `history.md`.
+- [ ] **2.5-B.1 — `/find_player <text>`** — поиск игрока по `tg_username` (точно), `tg_id` (точно), `tg_full_name` (подстрока, ILIKE). Use-case `FindPlayers(query, limit) -> Sequence[PlayerSummary]`. Без TOTP. Запись `ADMIN_PLAYER_LOOKUP` в `admin_audit_log`. Локаль `admin-find-player-*` (RU+EN).
+- [ ] **2.5-B.2 — `/player <tg_id>`** — карточка игрока: длина, толщина, клан, бан-статус, лесные блок-таймеры, последние 5 PvP/PvE-боёв (использует существующие репо-методы). Use-case `GetPlayerCard(tg_id) -> PlayerCard`. Без TOTP. Запись `ADMIN_PLAYER_LOOKUP`.
+- [ ] **2.5-B.3 — `/freeze <tg_id> [reason]`** / **`/unfreeze <tg_id>`** — установка `is_frozen=True/False` через `IPlayerRepository`. Use-cases `FreezePlayer` / `UnfreezePlayer`. Без TOTP (обратимая операция). Запись `ADMIN_PLAYER_FROZEN` / `ADMIN_PLAYER_UNFROZEN` с `before/after`. Локали.
+- [ ] **2.5-B.4 — `/ban <tg_id> <reason>`** — необратимый бан через `IPlayerRepository.ban()`. Use-case `BanPlayer`. **TOTP-обязателен**: handler сначала зовёт `RequestAdminConfirm(command_kind="ban", target=...)`, отвечает «отправь /confirm <token> <code>»; на втором шаге `/confirm` зовёт `VerifyAdminConfirm`, и если ОК — `BanPlayer.execute()`. Запись `ADMIN_PLAYER_BANNED` (после успешного бана) и `ADMIN_BAN_BLOCKED` (если TOTP-подтверждение провалилось).
+- [ ] **2.5-B.5 — `/confirm <token> <code>`** — общий handler для подтверждения опасных команд (по умолчанию через `VerifyAdminConfirm`). Внутри FSM router-а или отдельным command-фильтром. Локаль `admin-confirm-success-{ban,…}` (расширяемый switch по `command_kind`).
+- [ ] **2.5-B.6 — Регистрация `/admin_*`-router-а** в `bot/main.py` с router-фильтром `is_admin` (читает `data["admin"]` от `AdminGuard`). Тихий игнор не-админов (filter возвращает `False`).
+- [ ] **2.5-B.7 — DI use-case-ов в `Container`** — `find_players`, `get_player_card`, `freeze_player`, `unfreeze_player`, `ban_player`, `request_admin_confirm`, `verify_admin_confirm` + `InMemoryAdminConfirmStore` (singleton), `PyOtpTotpVerifier`, `TokenFactory = secrets.token_urlsafe(16)`.
+- [ ] **2.5-B.8 — Тесты:** unit на каждый новый use-case (≥3 кейса: happy / not_found / уже-в-state); 2-3 integration-теста на `IPlayerRepository.ban` / `freeze` / `unfreeze` (если методов ещё нет — добавляем); 2 e2e-теста на TOTP-flow `/ban` (правильный код / неверный код).
+- [ ] **Перед PR:** прогон `make ci` зелёный, lint/typecheck/import-linter ✅.
+- [ ] **Перед мерджем:** sync `current_tasks.md` под 2.5-C; запись в `history.md`.
 
 ---
 
@@ -74,17 +82,18 @@
 
 > Сюда пиши **дельту** к плану: что именно меняешь, какие use-cases / порты / handler-ы / тесты затронуты. Не дублируй ТЗ из `development_plan.md` — пиши только то, что важно для **текущего PR**.
 
-**Текущая дельта (PR 2.5-A будет про):**
-- **2.5-A.1 — аудит админ-мутаций.** Новая таблица `admin_audit_log` (отдельная от общего `audit_log`, чтобы /audit по админам был быстрым). Поля по ГДД §18.6: `admin_id, action, target_kind, target_id, before_jsonb, after_jsonb, reason, source ('bot'|'web'), idempotency_key, tg_chat_id, ip, occurred_at`.
-- **2.5-A.2 — AdminGuard middleware.** aiogram outer-middleware: из `event.from_user.id` ищет `Admin` в репо, если нет / `is_active=False` — выход без передачи update-а в router (тихий игнор); иначе кладёт `data['admin']` и передаёт дальше. Регистрируется на admin-router в `bot/main.py`.
-- **2.5-A.3 — TOTP-confirm FSM.** Use-cases `RequestAdminConfirm(admin_id, command_kind, target, payload_jsonb) -> str (token)` и `VerifyAdminConfirm(admin_id, token, code) -> ConfirmResult`. FSM в памяти бота (`InMemoryAdminConfirmStore`, TTL 60c). Верификация TOTP-кода через `admins.totp_secret` (`pyotp`). Аудит неверных кодов.
-- Затронутые слои: `domain/admin/{entities,errors,ports/admin_audit.py,ports/admin_confirm.py}`, `application/admin/{request_confirm,verify_confirm}.py`, `bot/middlewares/admin_guard.py`, `infrastructure/db/{models,repositories}/admin_audit.py`, `infrastructure/db/migrations/versions/20260507_0016_admin_audit_log.py`, `infrastructure/admin/in_memory_confirm_store.py`, `infrastructure/admin/pyotp_totp_verifier.py`, `bot/main.py` (DI), `locales/{ru,en}/admin.ftl`.
+**Текущая дельта (PR 2.5-B будет про):**
+- Команды поддержки **без выдачи длины/толщины/банвейв-операций над балансом** (это всё в 2.5-C). Только заморозка / разморозка / бан / lookup.
+- Новый router `admin_support_router` подцепляется к dispatcher в `bot/main.py` поверх существующего `AdminGuard` (тот уже регистрируется в композиционном root после мерджа 2.5-A).
+- Новые методы `IPlayerRepository`: `find_by_query(query, limit)`, `get_card(tg_id)`, `freeze(tg_id, *, reason)`, `unfreeze(tg_id)`, `ban(tg_id, *, reason)`. Реализуем в `SqlAlchemyPlayerRepository` + `FakePlayerRepository`.
+- Новые `AdminAuditAction` константы: `ADMIN_PLAYER_LOOKUP`, `ADMIN_PLAYER_FROZEN`, `ADMIN_PLAYER_UNFROZEN`, `ADMIN_PLAYER_BANNED`, `ADMIN_BAN_BLOCKED` (последний — когда TOTP-подтверждение провалилось до выполнения мутации).
+- Затронутые слои: `domain/admin/ports/admin_audit.py` (расширяем enum), `domain/player/{entities,ports/player_repository.py}` (методы поиска/freeze/ban), `application/admin/*.py` (новые use-case-ы), `infrastructure/db/repositories/player.py` (Sql-impl), `tests/fakes/player_repo.py` (Fake-impl), `bot/handlers/admin_support.py` (новый файл) + регистрация router-а в `bot/main.py`, `locales/{ru,en}.ftl`.
 
 ---
 
 ## 🛑 Известные блокеры / открытые вопросы PR-а
 
-- _нет / список_
+- _нет_
 
 ---
 
@@ -107,7 +116,8 @@
 
 | Спринт | Содержимое (укрупнённо) |
 |---|---|
-| **2.5** Расширенный админ-интерфейс в боте | `application/admin/*` use-cases, RBAC через `admins`, TOTP-подтверждение опасных команд, `/clan_*`, `/balance_*`, `/audit`, `admin_audit_log` |
+| **2.5-C** Админ-интерфейс — экономика | `/grant_length`, `/grant_thickness`, `/balance_get`, `/balance_set` + TOTP на все + idempotency_key из `(admin_id, command, target, minute)` |
+| **2.5-D** Админ-интерфейс — финал | `/clan`, `/freeze_clan`, `/unfreeze_clan`, `/clan_daily_head_history`, `/announce`, `/audit`, `/admin_setup_totp`, `docs/admin_runbook.md` |
 | **3.1** Горы и данжон | Новые PvE-локации с риском потери длины, drop тиров |
 | **3.2** Караваны (полная механика) | Создание (с уровня 7) + нападение (с уровня 5), лобби 20 мин, 4 роли (лидер / эскорт / защитник / рейдер), боевая механика |
 | **3.3** Рейд-боссы | Призыв (с уровня X), управление боссом, лобби, фазы, награды |
