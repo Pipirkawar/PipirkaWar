@@ -33,6 +33,7 @@ import logging
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
+from aiogram.types import InlineKeyboardMarkup
 
 from pipirik_wars.application.forest import (
     ForestRunFinished,
@@ -46,6 +47,7 @@ from pipirik_wars.application.i18n import (
     Locale,
 )
 from pipirik_wars.bot.presenters.forest import ForestPresenter
+from pipirik_wars.bot.presenters.referral_share import ReferralSharePresenter
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.forest import (
     ForestLogNoTemplatesError,
@@ -75,6 +77,7 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
         "_players",
         "_presenter",
         "_random",
+        "_share_presenter",
         "_uow",
     )
 
@@ -97,6 +100,7 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
         self._balance = balance
         self._uow = uow
         self._presenter = ForestPresenter(bundle=bundle)
+        self._share_presenter = ReferralSharePresenter(bundle=bundle)
         self._log_templates = log_templates
         self._random = random
         self._locale_resolver = locale_resolver
@@ -128,7 +132,7 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
             locale=locale,
             flavor_template=flavor_template,
         )
-        keyboard = self._presenter.finish_keyboard(result, locale=locale)
+        keyboard = self._compose_finish_keyboard(result=result, locale=locale)
 
         try:
             await self._bot.send_message(
@@ -148,6 +152,27 @@ class TelegramForestFinishNotifier(IForestFinishNotifier):
                 "forest_notifier: unexpected delivery error",
                 extra={"run_id": result.run.id, "tg_id": player_after.tg_id},
             )
+
+    def _compose_finish_keyboard(
+        self,
+        *,
+        result: ForestRunFinished,
+        locale: Locale,
+    ) -> InlineKeyboardMarkup | None:
+        """Клавиатура = дроп-кнопки (`finish_keyboard`) + ряд «Поделиться».
+
+        Спринт 2.4.D-b: под каждым результатом похода добавляем
+        свой share-row (ГДД §13.2). Если `run.id` почему-то нет
+        — отдаём базовую клавиатуру без share (defensive).
+        """
+        base = self._presenter.finish_keyboard(result, locale=locale)
+        run_id = result.run.id
+        if run_id is None:
+            return base
+        share_row = [self._share_presenter.share_button_forest(run_id=run_id, locale=locale)]
+        if base is None:
+            return InlineKeyboardMarkup(inline_keyboard=[share_row])
+        return InlineKeyboardMarkup(inline_keyboard=[*base.inline_keyboard, share_row])
 
     def _compute_display_name(self, *, length_cm: int) -> DisplayName:
         """Достать `DisplayName` из текущего `IBalanceConfig.get()`.

@@ -15,6 +15,7 @@ from pipirik_wars.domain.shared.ports.audit import (
 from pipirik_wars.domain.shared.ports.clock import IClock
 from pipirik_wars.domain.shared.ports.idempotency import IIdempotencyKey
 from pipirik_wars.domain.shared.ports.random import IRandom
+from pipirik_wars.domain.shared.ports.rate_limiter import IRateLimiter
 from pipirik_wars.domain.shared.ports.scheduler import IDelayedJobScheduler
 from pipirik_wars.domain.shared.ports.uow import IUnitOfWork
 
@@ -27,5 +28,6 @@ __all__ = [
     "IDelayedJobScheduler",
     "IIdempotencyKey",
     "IRandom",
+    "IRateLimiter",
     "IUnitOfWork",
 ]

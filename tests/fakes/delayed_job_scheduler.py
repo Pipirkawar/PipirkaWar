@@ -71,6 +71,8 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
     # 2.3.F.2: per-clan_id cron «Главы клана дня».
     scheduled_daily_head_cron: dict[int, ScheduledDailyHeadCronJob] = field(default_factory=dict)
     cancelled_daily_head_cron: list[int] = field(default_factory=list)
+    # 2.4.E: глобальный cron weekly-сводки рефералов клана (один на бота).
+    scheduled_weekly_clan_referral_summary_cron: bool = False
 
     async def schedule_finish_forest_run(
         self,
@@ -163,3 +165,6 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
     async def cancel_daily_head_cron(self, *, clan_id: int) -> None:
         self.cancelled_daily_head_cron.append(clan_id)
         self.scheduled_daily_head_cron.pop(clan_id, None)
+
+    async def schedule_weekly_clan_referral_summary_cron(self) -> None:
+        self.scheduled_weekly_clan_referral_summary_cron = True

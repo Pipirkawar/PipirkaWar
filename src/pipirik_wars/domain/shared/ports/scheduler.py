@@ -209,3 +209,20 @@ class IDelayedJobScheduler(abc.ABC):
         главу дня — ГДД §6.1.8) и из самого callback-а после успешного
         выполнения, чтобы не мешать перепланированию следующего дня.
         """
+
+    # ── Спринт 2.4.E: еженедельная сводка рефералов клана ──
+
+    @abc.abstractmethod
+    async def schedule_weekly_clan_referral_summary_cron(self) -> None:
+        """Запланировать глобальный cron «еженедельная сводка рефералов клана».
+
+        В отличие от per-clan-`schedule_daily_head_cron(...)`, это один
+        APScheduler-job-cron — `CronTrigger(day_of_week='sun', hour=18,
+        minute=0, timezone='UTC')`. Внутри callback-а реализация
+        итерирует `IClanRepository.list_active()` и зовёт
+        `RunWeeklyClanReferralSummary` на каждый клан.
+
+        Идемпотентно: повторный вызов перезаписывает job (нужно для
+        старта бота — мы каждый раз перевешиваем cron заново, чтобы
+        не плодить дубликаты).
+        """

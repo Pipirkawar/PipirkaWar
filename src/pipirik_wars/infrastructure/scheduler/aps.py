@@ -35,6 +35,7 @@ from pipirik_wars.application.dto.inputs import (
     ForceResolveMassDuelInput,
     ResolveAfkRoundInput,
     RunDailyHeadCronInput,
+    RunWeeklyClanReferralSummaryInput,
 )
 from pipirik_wars.application.forest import (
     FinishForestRun,
@@ -47,6 +48,11 @@ from pipirik_wars.application.pvp import (
     ForceResolveMassDuel,
     ResolveAfkRound,
 )
+from pipirik_wars.application.referral import (
+    IWeeklyClanReferralSummaryNotifier,
+    RunWeeklyClanReferralSummary,
+)
+from pipirik_wars.domain.clan import IClanRepository
 from pipirik_wars.domain.forest import ForestRunNotFoundError
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
@@ -58,6 +64,12 @@ _ROUND_AFK_JOB_PREFIX: Final[str] = "pvp_round_afk:"
 _MASS_DUEL_AFK_JOB_PREFIX: Final[str] = "pvp_mass_duel_afk:"
 _DAILY_HEAD_CRON_PREFIX: Final[str] = "daily_head_cron:"
 _DAILY_HEAD_RESCHEDULE_JOB_ID: Final[str] = "daily_head_reschedule_cron"
+_WEEKLY_REFERRAL_SUMMARY_JOB_ID: Final[str] = "weekly_clan_referral_summary_cron"
+#: Расписание weekly-сводки рефералов клана: вс. 18:00 UTC (ГДД §13.3).
+_WEEKLY_REFERRAL_SUMMARY_DAY_OF_WEEK: Final[str] = "sun"
+_WEEKLY_REFERRAL_SUMMARY_HOUR: Final[int] = 18
+_WEEKLY_REFERRAL_SUMMARY_MINUTE: Final[int] = 0
+_WEEKLY_REFERRAL_SUMMARY_TIMEZONE: Final[str] = "UTC"
 
 
 def _job_id(run_id: int) -> str:
@@ -129,6 +141,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
 
     __slots__ = (
         "_afk_resolution_factory",
+        "_clans",
         "_daily_head_cron_factory",
         "_daily_reschedule_factory",
         "_escalate_factory",
@@ -138,6 +151,8 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         "_mass_duel_afk_factory",
         "_notifier",
         "_scheduler",
+        "_weekly_referral_summary_factory",
+        "_weekly_referral_summary_notifier",
     )
 
     def __init__(
@@ -152,6 +167,9 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         mass_duel_afk_factory: Callable[[], ForceResolveMassDuel] | None = None,
         daily_head_cron_factory: Callable[[], RunDailyHeadCron] | None = None,
         daily_reschedule_factory: (Callable[[], ScheduleDailyHeadCronJobs] | None) = None,
+        weekly_referral_summary_factory: (Callable[[], RunWeeklyClanReferralSummary] | None) = None,
+        weekly_referral_summary_notifier: (IWeeklyClanReferralSummaryNotifier | None) = None,
+        clans: IClanRepository | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._scheduler = scheduler
@@ -163,6 +181,9 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._mass_duel_afk_factory = mass_duel_afk_factory
         self._daily_head_cron_factory = daily_head_cron_factory
         self._daily_reschedule_factory = daily_reschedule_factory
+        self._weekly_referral_summary_factory = weekly_referral_summary_factory
+        self._weekly_referral_summary_notifier = weekly_referral_summary_notifier
+        self._clans = clans
         self._logger = logger or logging.getLogger(__name__)
 
     async def schedule_finish_forest_run(
@@ -308,6 +329,27 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
             self._scheduler.remove_job(_daily_head_cron_job_id(clan_id))
         except Exception:
             return
+
+    async def schedule_weekly_clan_referral_summary_cron(self) -> None:
+        """Зарегистрировать глобальный cron weekly-сводки рефералов (Спринт 2.4.E).
+
+        Вс. 18:00 UTC. Идемпотентен (`replace_existing=True`).
+        При отсутствии `weekly_referral_summary_factory` или
+        `clans` в конструкторе журнал логируется и каллбэк тихо
+        выходит (для recovery / тестов).
+        """
+        self._scheduler.add_job(
+            self._run_weekly_clan_referral_summary_cron_job,
+            trigger=CronTrigger(
+                day_of_week=_WEEKLY_REFERRAL_SUMMARY_DAY_OF_WEEK,
+                hour=_WEEKLY_REFERRAL_SUMMARY_HOUR,
+                minute=_WEEKLY_REFERRAL_SUMMARY_MINUTE,
+                timezone=_WEEKLY_REFERRAL_SUMMARY_TIMEZONE,
+            ),
+            id=_WEEKLY_REFERRAL_SUMMARY_JOB_ID,
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
 
     def start(self) -> None:
         """Запустить APScheduler. Вызывается из `run()` после `build_container`."""
@@ -530,6 +572,69 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
                 extra={"clan_id": clan_id, "error": type(exc).__name__},
             )
             return
+
+    async def _run_weekly_clan_referral_summary_cron_job(self) -> None:
+        """Callback глобального cron-а weekly-сводки рефералов клана (Спринт 2.4.E).
+
+        Срабатывает в воскресенье 18:00 UTC. Алгоритм:
+
+        1. Если фабрика, репо кланов или нотификатор не подвязаны —
+           лог + skip (для recovery / тестов APScheduler-а самого по себе).
+        2. Получает список ACTIVE-кланов через `IClanRepository.list_active()`.
+        3. По каждому клану зовёт `RunWeeklyClanReferralSummary(clan_id=...)`
+           — отдельный use-case-инстанс на клан, чтобы UoW открывался /
+           закрывался изолированно (если один клан упал, остальные
+           обработаются).
+        4. Если use-case вернул ненулевой `WeeklyClanReferralSummary` —
+           зовёт `notifier.notify(summary)` после транзакции (нотификатор
+           сам поглощает свои ошибки доставки).
+
+        Все исключения use-case-а / нотификатора логируются и
+        проглатываются. APScheduler не должен пометить cron как failed
+        и снять его — карточка должна снова отстреляться через неделю.
+        """
+        if (
+            self._weekly_referral_summary_factory is None
+            or self._weekly_referral_summary_notifier is None
+            or self._clans is None
+        ):
+            self._logger.warning(
+                "weekly_clan_referral_summary_cron: dependencies not wired",
+            )
+            return
+        try:
+            clans = await self._clans.list_active()
+        except Exception as exc:
+            self._logger.exception(
+                "weekly_clan_referral_summary_cron: list_active failed",
+                extra={"error": type(exc).__name__},
+            )
+            return
+        for clan in clans:
+            if clan.id is None:
+                # Clan-snapshot из репо обязан иметь id; defensive skip.
+                continue
+            try:
+                use_case = self._weekly_referral_summary_factory()
+                summary = await use_case.execute(
+                    RunWeeklyClanReferralSummaryInput(clan_id=clan.id),
+                )
+            except Exception as exc:
+                self._logger.exception(
+                    "weekly_clan_referral_summary_cron: use-case failed",
+                    extra={"clan_id": clan.id, "error": type(exc).__name__},
+                )
+                continue
+            if summary is None:
+                continue
+            try:
+                await self._weekly_referral_summary_notifier.notify(summary)
+            except Exception as exc:
+                # Нотификатор обязан сам поглощать TelegramAPIError; защищаемся.
+                self._logger.exception(
+                    "weekly_clan_referral_summary_cron: notifier failed",
+                    extra={"clan_id": clan.id, "error": type(exc).__name__},
+                )
 
 
 __all__ = ["APSchedulerDelayedJobScheduler"]

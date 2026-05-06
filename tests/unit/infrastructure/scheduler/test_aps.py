@@ -38,6 +38,11 @@ from pipirik_wars.application.forest import (
     IForestFinishNotifier,
 )
 from pipirik_wars.application.pvp import ForceResolveMassDuel, ResolveAfkRound
+from pipirik_wars.application.referral import (
+    IWeeklyClanReferralSummaryNotifier,
+    RunWeeklyClanReferralSummary,
+)
+from pipirik_wars.domain.clan import IClanRepository
 from pipirik_wars.domain.forest import (
     ForestRun,
     ForestRunNotFoundError,
@@ -763,3 +768,193 @@ class TestDailyHeadRescheduleCron:
         )
         adapter.schedule_daily_head_reschedule_cron()
         assert logger.warning.called
+
+
+# ── 2.4.E: weekly clan referral summary cron ──
+
+
+@dataclass
+class _FakeWeeklyClanReferralSummaryUseCase:
+    """Stub `RunWeeklyClanReferralSummary`-use-case-а для тестов callback-а 2.4.E."""
+
+    calls: list[int] = field(default_factory=list)
+    raise_exc: BaseException | None = None
+    return_summary_for: set[int] = field(default_factory=set)
+
+    async def execute(self, input_dto):  # type: ignore[no-untyped-def]
+        self.calls.append(input_dto.clan_id)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+        if input_dto.clan_id not in self.return_summary_for:
+            return None
+        # Возвращаем минимально-валидный объект — типизация только в callback-е.
+        return _StubSummary(clan_id=input_dto.clan_id)
+
+
+@dataclass
+class _StubSummary:
+    """Маркер, чтобы callback дёрнул notifier (тип не важен — мы его cast-нём)."""
+
+    clan_id: int
+
+
+@dataclass
+class _FakeWeeklySummaryNotifier:
+    """Stub `IWeeklyClanReferralSummaryNotifier` для тестов callback-а."""
+
+    notified_clan_ids: list[int] = field(default_factory=list)
+    raise_exc: BaseException | None = None
+
+    async def notify(self, summary) -> None:  # type: ignore[no-untyped-def]
+        self.notified_clan_ids.append(summary.clan_id)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+
+
+@dataclass
+class _FakeClanRepository:
+    """Минимальный stub `IClanRepository` — нам нужен только `list_active`."""
+
+    rows: list[object] = field(default_factory=list)
+    raise_exc: BaseException | None = None
+
+    async def list_active(self):  # type: ignore[no-untyped-def]
+        if self.raise_exc is not None:
+            raise self.raise_exc
+        return tuple(self.rows)
+
+
+def _stub_clan(clan_id: int):  # type: ignore[no-untyped-def]
+    """Лёгкий stub Clan со свойством `id` (нужно только это для callback-а)."""
+
+    class _C:
+        id = clan_id
+
+    return _C()
+
+
+class TestWeeklyClanReferralSummaryCron:
+    """`schedule_weekly_clan_referral_summary_cron` + `_run_..._cron_job` (2.4.E)."""
+
+    @pytest.mark.asyncio
+    async def test_schedule_registers_one_cron_with_correct_trigger(self) -> None:
+        fake_uc = _FakeWeeklyClanReferralSummaryUseCase()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            weekly_referral_summary_factory=lambda: cast(RunWeeklyClanReferralSummary, fake_uc),
+            weekly_referral_summary_notifier=cast(
+                IWeeklyClanReferralSummaryNotifier, _FakeWeeklySummaryNotifier()
+            ),
+            clans=cast(IClanRepository, _FakeClanRepository()),
+        )
+        adapter.start()
+        try:
+            await adapter.schedule_weekly_clan_referral_summary_cron()
+            await adapter.schedule_weekly_clan_referral_summary_cron()  # idempotent
+            jobs = [
+                j
+                for j in adapter._scheduler.get_jobs()
+                if j.id == "weekly_clan_referral_summary_cron"
+            ]
+            assert len(jobs) == 1
+            trigger = jobs[0].trigger
+            field_map = {f.name: str(f) for f in trigger.fields}
+            assert field_map["day_of_week"] == "sun"
+            assert field_map["hour"] == "18"
+            assert field_map["minute"] == "0"
+            assert "UTC" in str(trigger.timezone)
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_callback_iterates_all_active_clans(self) -> None:
+        fake_uc = _FakeWeeklyClanReferralSummaryUseCase(return_summary_for={1, 3})
+        notifier = _FakeWeeklySummaryNotifier()
+        clans_repo = _FakeClanRepository(
+            rows=[_stub_clan(1), _stub_clan(2), _stub_clan(3)],
+        )
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            weekly_referral_summary_factory=lambda: cast(RunWeeklyClanReferralSummary, fake_uc),
+            weekly_referral_summary_notifier=cast(IWeeklyClanReferralSummaryNotifier, notifier),
+            clans=cast(IClanRepository, clans_repo),
+        )
+        await adapter._run_weekly_clan_referral_summary_cron_job()
+        # Use-case вызвался для всех 3-х кланов.
+        assert fake_uc.calls == [1, 2, 3]
+        # Notifier — только для тех, кто вернул summary (1, 3).
+        assert notifier.notified_clan_ids == [1, 3]
+
+    @pytest.mark.asyncio
+    async def test_callback_logs_when_dependencies_missing(self) -> None:
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            logger=logger,
+        )
+        await adapter._run_weekly_clan_referral_summary_cron_job()
+        assert logger.warning.called
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_use_case_error_and_continues(self) -> None:
+        # Use-case упадёт на каждом клане, но callback не должен проваливаться.
+        fake_uc = _FakeWeeklyClanReferralSummaryUseCase(raise_exc=RuntimeError("kaboom"))
+        notifier = _FakeWeeklySummaryNotifier()
+        clans_repo = _FakeClanRepository(rows=[_stub_clan(1), _stub_clan(2)])
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            weekly_referral_summary_factory=lambda: cast(RunWeeklyClanReferralSummary, fake_uc),
+            weekly_referral_summary_notifier=cast(IWeeklyClanReferralSummaryNotifier, notifier),
+            clans=cast(IClanRepository, clans_repo),
+            logger=logger,
+        )
+        await adapter._run_weekly_clan_referral_summary_cron_job()
+        # Use-case прошёлся по обоим, не упал;
+        assert fake_uc.calls == [1, 2]
+        # Notifier ни разу не звался (use-case кидал).
+        assert notifier.notified_clan_ids == []
+        # Логировали ошибку как минимум 2 раза.
+        assert logger.exception.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_list_active_error(self) -> None:
+        fake_uc = _FakeWeeklyClanReferralSummaryUseCase()
+        clans_repo = _FakeClanRepository(raise_exc=RuntimeError("db down"))
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            weekly_referral_summary_factory=lambda: cast(RunWeeklyClanReferralSummary, fake_uc),
+            weekly_referral_summary_notifier=cast(
+                IWeeklyClanReferralSummaryNotifier, _FakeWeeklySummaryNotifier()
+            ),
+            clans=cast(IClanRepository, clans_repo),
+            logger=logger,
+        )
+        await adapter._run_weekly_clan_referral_summary_cron_job()
+        # Не было ни одного use-case-вызова.
+        assert fake_uc.calls == []
+        assert logger.exception.called
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_notifier_error(self) -> None:
+        fake_uc = _FakeWeeklyClanReferralSummaryUseCase(return_summary_for={1})
+        notifier = _FakeWeeklySummaryNotifier(raise_exc=RuntimeError("send fail"))
+        clans_repo = _FakeClanRepository(rows=[_stub_clan(1)])
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            weekly_referral_summary_factory=lambda: cast(RunWeeklyClanReferralSummary, fake_uc),
+            weekly_referral_summary_notifier=cast(IWeeklyClanReferralSummaryNotifier, notifier),
+            clans=cast(IClanRepository, clans_repo),
+            logger=logger,
+        )
+        await adapter._run_weekly_clan_referral_summary_cron_job()
+        assert notifier.notified_clan_ids == [1]
+        assert logger.exception.called

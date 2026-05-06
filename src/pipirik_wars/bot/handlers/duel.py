@@ -70,6 +70,7 @@ from pipirik_wars.application.pvp import (
 from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters import (
     DuelPresenter,
+    ReferralSharePresenter,
     parse_accept_callback_data,
     parse_attack_callback_data,
     parse_block_callback_data,
@@ -644,11 +645,12 @@ async def handle_pvp_block(  # noqa: PLR0911 — каждая ветка = от�
             random=pvp_random,
         )
         # Финал боя: отправляем result-DM обоим игрокам и публичную
-        # карточку с кнопкой «Поделиться» (Спринт 2.1.H).
+        # карточку с кнопкой «Поделиться» (Спринт 2.1.H → 2.4.D-b: реферальный share).
         await _broadcast_result(
             bot=bot,
             players=players,
             presenter=presenter,
+            bundle=bundle,
             duel=duel,
             locale_resolver=player_locale_resolver,
             fallback_locale=effective_locale,
@@ -901,6 +903,7 @@ async def _broadcast_result(
     bot: Bot,
     players: IPlayerRepository,
     presenter: DuelPresenter,
+    bundle: IMessageBundle,
     duel: Duel,
     locale_resolver: IPlayerLocaleResolver,
     fallback_locale: Locale,
@@ -960,11 +963,12 @@ async def _broadcast_result(
             p2_name=p2_name,
             locale=player_locale,
         )
+        share_presenter = ReferralSharePresenter(bundle=bundle)
         try:
             await bot.send_message(
                 chat_id=player.tg_id,
                 text=card_text,
-                reply_markup=presenter.share_keyboard(
+                reply_markup=share_presenter.share_keyboard_duel(
                     duel_id=duel_id,
                     locale=player_locale,
                 ),

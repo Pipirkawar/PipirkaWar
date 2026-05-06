@@ -31,6 +31,14 @@ start-queued = 🍆 The servers are full — we've put you in the queue.
     Your position: #{ $position }.
     As soon as a slot opens up, we'll register you and send a notification.
 
+# Referral arrival (Sprint 2.4.D, GDD §13.1).
+# Parameters:
+# - `$bonus_cm` — how many cm the newcomer got on top of the starting
+#   length (`balance.referral.on_signup.newbie_bonus_cm`, default 5).
+start-registered-with-referral = 🍆 Done! You are registered in Pipirik Wars.
+
+    Starting length is 2 cm + <b>{ $bonus_cm } cm bonus for arriving via a referral link</b>. Thickness is level 1. Your name and title will appear later — on your first forest run.
+
 ## /profile (Sprint 1.1.E → 1.5.C)
 
 profile-group = 🍆 The /profile command works only in the bot's DM. Open a private chat and try again.
@@ -474,3 +482,42 @@ clan-head-success = 👑 <b>Clan head of the day</b> — { $head_display_name }!
 clan-head-already-assigned = 👑 The clan head for today is already assigned — { $head_display_name } (+{ NUMBER($bonus_cm, useGrouping: 0) } cm).
 
   💬 <i>{ $quote_text }</i>
+
+## Referral-share button (Sprint 2.4.D-b, GDD §13.2)
+# Button label under duel / forest results — shares result with referral link.
+referral-share-button = 🔗 Share
+
+# Text posted to chat when user clicks "Share" after a duel (victory).
+# Parameters: $winner, $loser, $delta_cm, $winner_length_cm, $deeplink.
+referral-share-duel-victory = ⚔️ PIPIRIK WARS — Battle Result!
+    { $winner } 🏆 won!
+    Stole { NUMBER($delta_cm, useGrouping: 0) } cm from { $loser }!
+    📏 New length: { NUMBER($winner_length_cm, useGrouping: 0) } cm
+
+    🎮 Play too → { $deeplink }
+
+# Text for a draw.
+# Parameters: $p1, $p2, $deeplink.
+referral-share-duel-draw = ⚔️ PIPIRIK WARS — Battle Result!
+    Draw: { $p1 } and { $p2 } parted on equal terms.
+
+    🎮 Play too → { $deeplink }
+
+# Text posted to chat when user clicks "Share" after a forest run.
+# Parameters: $player, $delta_cm, $length_cm, $deeplink.
+referral-share-forest = 🌲 PIPIRIK WARS — Forest Run!
+    { $player } returned from the forest with { NUMBER($delta_cm, useGrouping: 0) } cm!
+    📏 New length: { NUMBER($length_cm, useGrouping: 0) } cm
+
+    🎮 Play too → { $deeplink }
+
+
+## Weekly clan referral summary (Sprint 2.4.E, GDD §13.3)
+# Card is posted to the clan chat on Sunday 18:00 UTC by cron.
+# Parameters: $clan_title.
+weekly-referral-summary-title = 📊 WEEKLY REPORT — Clan "{ $clan_title }"
+# Parameters: $total — total number of new clan referrals in the past week.
+weekly-referral-summary-total = 👥 New referrals this week: { NUMBER($total, useGrouping: 0) }
+# Parameters: $rank (1..3), $referrer_display_name, $count.
+weekly-referral-summary-line = 🏆 { NUMBER($rank, useGrouping: 0) }. { $referrer_display_name } — brought { NUMBER($count, useGrouping: 0) }
+weekly-referral-summary-footer = Invite your friends — everyone grows together!

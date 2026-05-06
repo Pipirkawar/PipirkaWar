@@ -90,6 +90,13 @@ from pipirik_wars.application.pvp import (
     SubmitMassMove,
     SubmitMove,
 )
+from pipirik_wars.application.referral import (
+    GrantReferralSignupBonus,
+    GrantReferralThicknessMilestone,
+    IWeeklyClanReferralSummaryNotifier,
+    RegisterReferral,
+    RunWeeklyClanReferralSummary,
+)
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.application.top import (
@@ -100,7 +107,10 @@ from pipirik_wars.application.top import (
 )
 from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import register_middlewares
-from pipirik_wars.bot.notifications import TelegramForestFinishNotifier
+from pipirik_wars.bot.notifications import (
+    TelegramForestFinishNotifier,
+    TelegramWeeklyClanReferralSummaryNotifier,
+)
 from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.anticheat import IAnticheatAdminAlerter, IAnticheatRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
@@ -117,6 +127,7 @@ from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.progression import ILengthGranter
 from pipirik_wars.domain.pvp import IDuelRepository, IMassDuelRepository
 from pipirik_wars.domain.pvp.lobby import IGlobalLobbyRepository
+from pipirik_wars.domain.referral import IReferralRepository
 from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import (
     IAuditLogger,
@@ -152,6 +163,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyMassDuelRepository,
     SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPlayerRepository,
+    SqlAlchemyReferralRepository,
     SqlAlchemySignupQueueRepository,
 )
 from pipirik_wars.infrastructure.db.services import (
@@ -218,6 +230,7 @@ class Container:
     duels: IDuelRepository
     mass_duels: IMassDuelRepository
     global_lobby: IGlobalLobbyRepository
+    referrals: IReferralRepository
     anticheat: IAnticheatRepository
     anticheat_admin_alerter: IAnticheatAdminAlerter
 
@@ -298,6 +311,12 @@ class Container:
     clan_quote_provider: IClanQuoteTemplateProvider
     schedule_daily_head_cron_jobs: ScheduleDailyHeadCronJobs
 
+    # Реферальная система (Спринт 2.4.D + 2.4.E)
+    register_referral: RegisterReferral
+    grant_referral_signup_bonus: GrantReferralSignupBonus
+    grant_referral_thickness_milestone: GrantReferralThicknessMilestone
+    run_weekly_clan_referral_summary: RunWeeklyClanReferralSummary
+
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
     settings: Settings | None = None,
@@ -338,6 +357,13 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         refill_per_second=settings.bot.default_throttle_per_second,
         clock=clock,
     )
+    # Отдельный rate-limiter под антифрод реферальной системы (Спринт 2.4.F).
+    # Bucket: capacity=N, refill = N / 3600 в секунду (т.е. ≈ N новых в час).
+    referral_rate_limiter = InMemoryTokenBucketRateLimiter(
+        capacity=settings.bot.referral_rate_limit_capacity,
+        refill_per_second=(settings.bot.referral_rate_limit_refill_per_hour / 3600.0),
+        clock=clock,
+    )
     players = SqlAlchemyPlayerRepository(uow=uow)
     clans = SqlAlchemyClanRepository(uow=uow)
     clan_members = SqlAlchemyClanMembershipRepository(uow=uow)
@@ -349,6 +375,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     duels = SqlAlchemyDuelRepository(uow=uow)
     mass_duels = SqlAlchemyMassDuelRepository(uow=uow)
     global_lobby = SqlAlchemyGlobalLobbyRepository(uow=uow)
+    referrals = SqlAlchemyReferralRepository(uow=uow)
     anticheat = SqlAlchemyAnticheatRepository(uow=uow)
     anticheat_admin_alerter = StructlogAnticheatAdminAlerter()
     oracle_templates = JsonOracleTemplateProvider(
@@ -486,6 +513,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clock=clock,
     )
     forest_notifier: IForestFinishNotifier | None = None
+    weekly_referral_summary_notifier: IWeeklyClanReferralSummaryNotifier | None = None
     if bot is not None:
         forest_notifier = TelegramForestFinishNotifier(
             bot=bot,
@@ -496,6 +524,11 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
             log_templates=forest_log_templates,
             random=RealRandom(),
             locale_resolver=player_locale_resolver,
+        )
+        weekly_referral_summary_notifier = TelegramWeeklyClanReferralSummaryNotifier(
+            bot=bot,
+            bundle=bundle,
+            balance=balance,
         )
     # Late-bound фабрики для PvP-lobby job-ов: scheduler нужен раньше,
     # чем `escalate_chat_to_global` / `expire_lobby_entry`, поэтому передаём
@@ -511,6 +544,9 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         mass_duel_afk_factory=lambda: force_resolve_mass_duel,
         daily_head_cron_factory=lambda: run_daily_head_cron,
         daily_reschedule_factory=lambda: schedule_daily_head_cron_jobs,
+        weekly_referral_summary_factory=lambda: run_weekly_clan_referral_summary,
+        weekly_referral_summary_notifier=weekly_referral_summary_notifier,
+        clans=clans,
     )
     start_forest_run = StartForestRun(
         uow=uow,
@@ -758,6 +794,36 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         scheduler=delayed_jobs,
         clock=clock,
     )
+    register_referral = RegisterReferral(
+        uow=uow,
+        players=players,
+        referrals=referrals,
+        clock=clock,
+        rate_limiter=referral_rate_limiter,
+        audit=audit,
+    )
+    grant_referral_signup_bonus = GrantReferralSignupBonus(
+        uow=uow,
+        players=players,
+        referrals=referrals,
+        length_granter=add_length,
+        balance=balance,
+        clock=clock,
+    )
+    grant_referral_thickness_milestone = GrantReferralThicknessMilestone(
+        uow=uow,
+        players=players,
+        referrals=referrals,
+        length_granter=add_length,
+        balance=balance,
+    )
+    run_weekly_clan_referral_summary = RunWeeklyClanReferralSummary(
+        uow=uow,
+        clans=clans,
+        players=players,
+        referrals=referrals,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -779,6 +845,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         duels=duels,
         mass_duels=mass_duels,
         global_lobby=global_lobby,
+        referrals=referrals,
         anticheat=anticheat,
         anticheat_admin_alerter=anticheat_admin_alerter,
         oracle_templates=oracle_templates,
@@ -836,10 +903,14 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         record_player_activity=record_player_activity,
         clan_quote_provider=clan_quote_provider,
         schedule_daily_head_cron_jobs=schedule_daily_head_cron_jobs,
+        register_referral=register_referral,
+        grant_referral_signup_bonus=grant_referral_signup_bonus,
+        grant_referral_thickness_milestone=grant_referral_thickness_milestone,
+        run_weekly_clan_referral_summary=run_weekly_clan_referral_summary,
     )
 
 
-def build_dispatcher(container: Container) -> Dispatcher:
+def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — composition root, плоский DI-список оправдан
     """Собрать aiogram `Dispatcher` со стеком middleware-ов и роутерами.
 
     Use-case-ы регистрируются в `dispatcher` workflow-data — aiogram
@@ -894,6 +965,9 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["duel_log_templates"] = container.duel_log_templates
     dispatcher["pvp_random"] = container.random
     dispatcher["duels"] = container.duels
+    # Share-кнопка под результатом /forest (Спринт 2.4.D-b) — handler
+    # подгружает `ForestRun` по `run_id` из callback_data `ref-share:forest:{id}`.
+    dispatcher["forest_runs"] = container.forest_runs
     # Mass-PvP клан×клан (Спринт 2.2.F) — use-cases + clans для handler-ов.
     dispatcher["start_mass_duel"] = container.start_mass_duel
     dispatcher["submit_mass_move"] = container.submit_mass_move
@@ -908,6 +982,11 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["run_daily_head_cron"] = container.run_daily_head_cron
     dispatcher["record_player_activity"] = container.record_player_activity
     dispatcher["clan_quote_provider"] = container.clan_quote_provider
+    # Реферальная система (Спринт 2.4.D) — use-cases для /start ref_<id>
+    # и /upgrade_thickness handler-ов.
+    dispatcher["register_referral"] = container.register_referral
+    dispatcher["grant_referral_signup_bonus"] = container.grant_referral_signup_bonus
+    dispatcher["grant_referral_thickness_milestone"] = container.grant_referral_thickness_milestone
     return dispatcher
 
 
@@ -955,6 +1034,9 @@ async def run(
         # который сам перепланирует на новые сутки (Спринт 2.3.F.2).
         await container.schedule_daily_head_cron_jobs.execute()
         scheduler.schedule_daily_head_reschedule_cron()
+        # Глобальный weekly cron «итоги недели по рефералам клана»
+        # (вс. 18:00 UTC, Спринт 2.4.E).
+        await scheduler.schedule_weekly_clan_referral_summary_cron()
     try:
         await dispatcher.start_polling(
             bot,

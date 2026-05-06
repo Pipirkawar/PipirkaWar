@@ -241,7 +241,7 @@ async def test_skips_when_was_already_finished() -> None:
 
 
 @pytest.mark.asyncio
-async def test_sends_message_with_text_and_no_keyboard_for_no_drop_ru() -> None:
+async def test_sends_message_with_share_button_for_no_drop_ru() -> None:
     bot = _FakeBot()
     notifier = _make_notifier(
         bot=bot,
@@ -254,7 +254,13 @@ async def test_sends_message_with_text_and_no_keyboard_for_no_drop_ru() -> None:
     assert call.chat_id == 1001
     assert "вернулся из леса" in call.text
     assert "+5 см" in call.text
-    assert call.reply_markup is None
+    # NoDrop: только share-row (Спринт 2.4.D-b).
+    assert call.reply_markup is not None
+    assert len(call.reply_markup.inline_keyboard) == 1
+    share_row = call.reply_markup.inline_keyboard[0]
+    assert len(share_row) == 1
+    assert share_row[0].callback_data is not None
+    assert share_row[0].callback_data.startswith("ref-share:forest:")
 
 
 @pytest.mark.asyncio

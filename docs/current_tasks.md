@@ -15,17 +15,21 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный спринт — **2.3.F.2** (PR #74) «Per-clan APScheduler-cron Главы клана дня». Завершены Фазы 0, 1 (MVP), 1.6 (анти-чит) полностью; из Фазы 2 закрыты 2.1 (PvP 1×1), 2.2 (масс-PvP + клановые механики), 2.3 (Глава клана дня). Идёт **Спринт 2.4 — Реферальная система и шеринг**.
+**На `main`:** последний смерженный спринт — **2.3.F.2** (PR #74) «Per-clan APScheduler-cron Главы клана дня»; затем серия docs-PR-ов #75/#76/#77 (реструктуризация документации + протокол передачи работы между агентами + расширения и дефолты ГДД). Завершены Фазы 0, 1 (MVP), 1.6 (анти-чит) полностью; из Фазы 2 закрыты 2.1 (PvP 1×1), 2.2 (масс-PvP + клановые механики), 2.3 (Глава клана дня). Идёт **Спринт 2.4 — Реферальная система и шеринг**.
 
-**Активная feature-ветка:** `devin/1778068742-sprint-2-4-a-referral-domain` (имя ветки от первого шага, на ней уже три коммита):
-- ✅ `0cbe1e3` Спринт 2.4.A (шаг 1/4): доменный слой реферальной системы (`Referral` VO + `IReferralRepository` + 5 ошибок + 25 тестов)
-- ✅ `56c7ce4` Спринт 2.4.B (шаг 2/4): persistence (миграция 0015 + ORM + Sql/Fake repo + 6 integration-тестов)
-- ✅ `5414693` Спринт 2.4.C (шаг 3/4): application use-cases (`RegisterReferral` + `GrantReferralSignupBonus` + `GrantReferralThicknessMilestone` + 24 unit-теста)
-- ⏳ **Шаг 4/4 не начат:** bot-слой и шеринг — handler `/start ref_<id>` (только в ЛС, парсинг `start=ref_<id>`, валидация antifraud), интеграция с `RegisterPlayer` (вызов `RegisterReferral` + `GrantReferralSignupBonus`), интеграция с `UpgradeThickness` (вызов `GrantReferralThicknessMilestone` на milestone 3 и 5), кнопка «Поделиться» под результатом боя/похода/каравана/рейда (presenter), еженедельный шеринг-cron (вс. 18:00 UTC), локали `referral-*` в RU+EN.
+**Активная feature-ветка:** `devin/1778068742-sprint-2-4-a-referral-domain` (имя ветки от первого шага). В неё уже влит `origin/main` (merge-commit `f6a245e`, без конфликтов). Состояние шагов:
+- ✅ `0cbe1e3` Спринт 2.4.A: доменный слой реферальной системы (`Referral` VO + `IReferralRepository` + 5 ошибок + 25 тестов).
+- ✅ `56c7ce4` Спринт 2.4.B: persistence (миграция 0015 + ORM + Sql/Fake repo + 6 integration-тестов).
+- ✅ `5414693` Спринт 2.4.C: application use-cases (`RegisterReferral` + `GrantReferralSignupBonus` + `GrantReferralThicknessMilestone` + 24 unit-теста).
+- ✅ `2865452` Спринт 2.4.C (фикс): убран `unused-ignore` в `test_entities.py`.
+- ✅ `9580210` Спринт **2.4.D-a**: интеграция реферальных use-cases в `/start` и `/upgrade` — payload `start=ref_<id>` (только в ЛС, антифрод по типу чата + self-referral + кривой формат), `RegisterPlayer` → `RegisterReferral` + `GrantReferralSignupBonus`, `UpgradeThickness` → `GrantReferralThicknessMilestone`, локали `start-registered-with-referral` RU+EN.
+- ✅ `5197ced` + `82109a4` Спринт **2.4.D-b**: кнопка «Поделиться» под результатом `/duel` и `/forest` (presenter `ReferralSharePresenter` + handler `referral_share.py` с callback_data `ref-share:{kind}:{entity_id}` + локали `referral-share-*` RU+EN, ГДД §13.2) + 26 тестов presenter + 14 тестов handler + fix forest-notifier-теста.
+- ✅ `5e97ba4` + `877510b` + `36f4694` + `be5c756` Спринт **2.4.E**: еженедельный per-clan referral-summary-cron (вс. 18:00 UTC). E.1 — `IReferralRepository.weekly_summary_by_clan` + Sql + Fake + integration-тесты. E.2 — use-case `RunWeeklyClanReferralSummary` + DTO + unit-тесты. E.3 — `WeeklyClanReferralSummaryPresenter` + `TelegramWeeklyClanReferralSummaryNotifier` + локали RU+EN + тесты. E.4 — `IDelayedJobScheduler.schedule_weekly_clan_referral_summary_cron` + APScheduler `CronTrigger(day_of_week='sun', hour=18)` + DI + composition-root тест.
+- ✅ `fa9b08b` Спринт **2.4.F**: rate-limit-антифрод per-`referrer_tg_id` (token-bucket, дефолт 10/h, настраивается в `BotSettings`) — перенос `IRateLimiter` в `domain/shared/ports/`, интеграция в `RegisterReferral`, audit-actions `REFERRAL_REGISTERED` + `REFERRAL_RATE_LIMITED` (раздельный UoW для фиксации попытки без создания реферала), `ReferralRateLimitedError` + handler swallow-it. Задача 2.4.4 закрыта «частично» — IP/устройство в aiogram недоступны.
 
-**Открытого PR на 2.4 нет.** Ветка в зелёном состоянии (CI проходил на момент шага 3/4 — проверь сам).
+**Спринт 2.4 полностью закрыт в этой сессии.** PR будет открыт после этого коммита. CI: 2829 passed / 1 skipped, coverage 96.11%.
 
-**`AGENT_HANDOFF.md` на feature-ветке:** отсутствует. Предыдущий агент завершил без safety-net-а — это «артефакт», на который пользователь жаловался. Следующему агенту нужно: проверить состояние ветки самому (см. `CONTRIBUTING.md` → «Протокол передачи работы между агентами»), при необходимости создать `AGENT_HANDOFF.md` для будущих смен агентов, заполнить секцию «Текущая позиция» ниже своим состоянием.
+**`AGENT_HANDOFF.md` на feature-ветке:** будет удалён отдельным коммитом перед открытием PR.
 
 ---
 
@@ -33,16 +37,16 @@
 
 | Поле | Значение |
 |---|---|
-| **Активный спринт** | _обнови при старте спринта_ — например, `2.4 — Реферальная система и шеринг` |
-| **Активный PR / шаг** | _обнови при каждом шаге_ — например, `2.4.D — bot-handler `/start ref_<id>` + кнопка «Поделиться»` (шаг 4/4) |
-| **Активная feature-ветка** | _обнови при старте_ — например, `devin/<unix_ts>-sprint-2-4-d-referral-bot` |
-| **Базовая ветка** | `main` (или предыдущая feature-ветка, если PR-цепочка) |
-| **Последний коммит на ветке** | _обнови перед каждым `git push`_ — `<short-sha> <subject>` |
-| **PR (если открыт)** | _ссылка_ |
-| **CI статус** | _зелёный / красный / не открыт / в работе_ |
-| **Связанная задача в `development_plan.md`** | например, §6 / Спринт 2.4 / задачи 2.4.5 + 2.4.6 |
-| **Связанная спецификация в `game_design.md`** | например, §13.1 (реферальная схема), §13.2 (шеринг) |
-| **`AGENT_HANDOFF.md` существует?** | да / нет (если да — в нём свежая выжимка, если нет — этот файл единственный источник правды) |
+| **Активный спринт** | `2.4 — Реферальная система и шеринг` (закрыт) |
+| **Активный PR / шаг** | финал: удалить HANDOFF, перенести в history.md, открыть PR |
+| **Активная feature-ветка** | `devin/1778068742-sprint-2-4-a-referral-domain` |
+| **Базовая ветка** | `main` |
+| **Последний коммит на ветке** | `fa9b08b` `feat(referral): rate-limit antifraud per-referrer + audit-log + ReferralRateLimitedError [Спринт 2.4.F]` |
+| **PR (если открыт)** | будет открыт после удаления HANDOFF + записи в history.md |
+| **CI статус** | зелёный (`make ci` после 2.4.F: 2829 passed / 1 skipped, coverage 96.11%, lint/typecheck/import-linter ✅) |
+| **Связанная задача в `development_plan.md`** | §6 / Спринт 2.4 / задачи 2.4.4 (антифрод), 2.4.6 (weekly cron) |
+| **Связанная спецификация в `game_design.md`** | §13.1 (реферальная схема), §13.3 (еженедельные итоги) |
+| **`AGENT_HANDOFF.md` существует?** | да (будет удалён перед открытием PR) |
 
 ---
 
@@ -50,12 +54,18 @@
 
 > Отмечай `[x]` по мере выполнения. **Перед каждым `git commit`** обнови этот чек-лист (даже если шаг ещё не закрыт — отметь, что начат). Это safety-net на случай, если агент прервётся в середине работы.
 
-- [ ] _шаг 1 — короткое описание_
-- [ ] _шаг 2_
-- [ ] _шаг 3_
-- [ ] **Перед PR:** обнови «Связанные документы» (если меняешь публичные API или поведение, упомянутое в `game_design.md` / `development_plan.md`).
-- [ ] **Перед PR:** прогон локального CI — `make ci` зелёный.
-- [ ] **Перед мерджем:** перенеси запись о завершённом спринте в `history.md` (свежие — сверху, формат — см. шапку `history.md`); удали этот чек-лист и пересоздай под следующий PR.
+- [x] **2.4.D-b** (`5197ced` + `82109a4`): кнопка «Поделиться» в результате `/duel` и `/forest`.
+- [x] **2.4.E**: weekly per-clan referral summary cron.
+    - [x] E.1 (`5e97ba4`): `IReferralRepository.weekly_summary_by_clan` + `WeeklyClanReferralEntry` + Sql + Fake + integration-тесты.
+    - [x] E.2 (`877510b`): use-case `RunWeeklyClanReferralSummary` + DTO + notifier-порт + unit-тесты.
+    - [x] E.3 (`36f4694`): `WeeklyClanReferralSummaryPresenter` + `TelegramWeeklyClanReferralSummaryNotifier` + локали RU+EN + тесты presenter / notifier.
+    - [x] E.4 (`be5c756`): `IDelayedJobScheduler.schedule_weekly_clan_referral_summary_cron` + APScheduler `CronTrigger(day_of_week='sun', hour=18)` + DI в `bot/main.py` + bootstrap-call + composition-root тест.
+- [x] **2.4.F** (`fa9b08b`): rate-limit-антифрод на `RegisterReferral`.
+    - [x] F.1: `IRateLimiter` перенесён в `domain/shared/ports/`, audit-actions `REFERRAL_REGISTERED` + `REFERRAL_RATE_LIMITED`, параметры `BotSettings.referral_rate_limit_capacity` (дефолт 10) и `referral_rate_limit_refill_per_hour` (дефолт 10/h).
+    - [x] F.2: переиспользован существующий `InMemoryTokenBucketRateLimiter` (отдельная инстанция для реферального bucket-а), `RegisterReferral` бросает `ReferralRateLimitedError`, хэндлер `/start` swallow-ит.
+    - [x] F.3: запись попыток в `audit_log` (отдельный UoW) + unit-тесты (happy / rate-limited / self-referral short-circuits / audit recorded). Задача 2.4.4 закрыта «частично» — IP/device в aiogram недоступны.
+- [x] **Перед PR:** прогон `make ci` зелёный (2829 passed, coverage 96.11%).
+- [ ] **Перед мерджем:** перенести запись в `history.md`; удалить `AGENT_HANDOFF.md`; пересоздать этот чек-лист под следующий спринт.
 
 ---
 
@@ -63,7 +73,10 @@
 
 > Сюда пиши **дельту** к плану: что именно меняешь, какие use-cases / порты / handler-ы / тесты затронуты. Не дублируй ТЗ из `development_plan.md` — пиши только то, что важно для **текущего PR**.
 
-_(агенту-исполнителю: замени этот placeholder на 3-7 строк описания твоего PR-а)_
+**Текущая дельта (PR будет про):**
+- **2.4.E** — Еженедельный per-clan referral-summary-cron (вс. 18:00 UTC). Узкая реферальная версия weekly-card: «Новых бойцов за неделю + топ-3 приглашателей». Полная клановая weekly-карточка из ГДД §13.3 (PvP / караваны / рейды) — будущий спринт, потому что агрегатов по этим фичам в репозиториях ещё нет.
+- **2.4.F** — Rate-limit-антифрод per-`referrer_tg_id` (≤ N новых рефералов в час) + audit-лог попыток. IP/device в aiogram недоступны — закрываю 2.4.4 как «частично» с пометкой в ГДД.
+- Затронутые слои: `domain/referral/{entities,repositories,errors}.py`, `application/referral/run_weekly_clan_summary.py`, `bot/notifications/referral.py`, `bot/presenters/referral.py` (расширение), `infrastructure/db/repositories/referral.py` (новый метод), `infrastructure/scheduler/aps.py` (новый cron + callback), `infrastructure/anticheat/in_memory_referral_rate_limiter.py` (или `infrastructure/rate_limit/`), `bot/main.py` (DI), `locales/{ru,en}.ftl`.
 
 ---
 

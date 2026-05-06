@@ -1,4 +1,4 @@
-"""Handler команды `/upgrade` (Спринт 1.4.A → 1.5.D, ГДД §3.2).
+"""Handler команды `/upgrade` (Спринт 1.4.A → 1.5.D → 2.4.D, ГДД §3.2 + §13.1).
 
 `/upgrade` (1.4.2) в ЛС:
 
@@ -24,6 +24,15 @@
 В группе/супергруппе — инструкция «открой ЛС» (как у `/forest` и
 `/profile`). 1.5.D убрал hardcoded `REPLY_*_RU`-константы и
 `RENDER_UPGRADE_*`-строки: теперь всё идёт через `IMessageBundle`.
+
+Реферальный milestone (Спринт 2.4.D, ГДД §13.1):
+- После успешного `UpgradeThickness.execute(...)` handler зовёт
+  `GrantReferralThicknessMilestone` для нового уровня толщины. Если
+  у апгрейднувшегося нет реферальной записи — use-case вернёт
+  `ReferralMilestoneNotApplicable` (no-op). Если milestone уже был
+  выдан — бросит `MilestoneAlreadyGrantedError` (handler swallow-ит
+  с логированием). Бонус рефереру (+10 на толщине 3, +30 на 5)
+  выдаётся атомарно через `ILengthGranter`.
 """
 
 from __future__ import annotations
@@ -35,10 +44,14 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 
-from pipirik_wars.application.dto.inputs import UpgradeThicknessInput
+from pipirik_wars.application.dto.inputs import (
+    GrantReferralThicknessMilestoneInput,
+    UpgradeThicknessInput,
+)
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.application.player import GetProfile
 from pipirik_wars.application.progression import UpgradeThickness
+from pipirik_wars.application.referral import GrantReferralThicknessMilestone
 from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters import (
     UpgradePresenter,
@@ -52,6 +65,7 @@ from pipirik_wars.domain.progression import (
     InsufficientLengthError,
     cost_for_upgrade,
 )
+from pipirik_wars.domain.referral import MilestoneAlreadyGrantedError
 from pipirik_wars.shared.errors import ConcurrencyError
 
 router = Router(name="upgrade")
@@ -127,6 +141,7 @@ async def handle_upgrade_callback(  # noqa: PLR0911 — каждая ветка 
     callback: CallbackQuery,
     tg_identity: TgIdentity | None,
     upgrade_thickness: UpgradeThickness,
+    grant_referral_thickness_milestone: GrantReferralThicknessMilestone,
     bundle: IMessageBundle,
     locale: Locale | None = None,
 ) -> None:
@@ -219,6 +234,30 @@ async def handle_upgrade_callback(  # noqa: PLR0911 — каждая ветка 
             ),
         )
         return
+
+    # Реферальный milestone (Спринт 2.4.D): если апгрейднувшийся игрок
+    # был приглашён по рефке — начислить milestone-бонус рефереру за
+    # достижение толщины 3 / 5. Use-case сам проверяет: реферальная
+    # запись существует, milestone не выдавался ранее, балансовая
+    # точка совпадает с новым уровнем. Любые «no-op-кейсы» (рефки нет,
+    # milestone уже выдан) тихо проглатываются — апгрейд для самого
+    # игрока всё равно состоялся, и поломать UX дополнительной ошибкой
+    # нельзя.
+    try:
+        await grant_referral_thickness_milestone.execute(
+            GrantReferralThicknessMilestoneInput(
+                referred_tg_id=tg_identity.tg_user_id,
+                new_thickness_level=result.new_thickness,
+            )
+        )
+    except MilestoneAlreadyGrantedError:
+        # Re-delivery callback-а или повторный апгрейд после понижения.
+        # Бизнес-инвариант: один milestone выдаётся ровно один раз.
+        _LOGGER.info(
+            "Referral milestone already granted: tg_id=%s, thickness=%s",
+            tg_identity.tg_user_id,
+            result.new_thickness,
+        )
 
     await callback.answer(
         presenter.toast_upgraded(locale=effective_locale),

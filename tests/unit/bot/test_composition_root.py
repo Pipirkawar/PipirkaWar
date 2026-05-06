@@ -63,6 +63,12 @@ from pipirik_wars.application.pvp import (
     SubmitMassMove,
     SubmitMove,
 )
+from pipirik_wars.application.referral import (
+    GrantReferralSignupBonus,
+    GrantReferralThicknessMilestone,
+    RegisterReferral,
+    RunWeeklyClanReferralSummary,
+)
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.application.top import GetTopClans, GetTopPlayers
@@ -145,6 +151,7 @@ from tests.fakes import (
     FakePlayerLocaleResolver,
     FakePlayerRepository,
     FakeRandom,
+    FakeReferralRepository,
     FakeSignupQueueRepository,
     FakeTopPlayersQuery,
     FakeUnitOfWork,
@@ -180,6 +187,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
     duels: IDuelRepository = FakeDuelRepository()
     mass_duels: IMassDuelRepository = FakeMassDuelRepository()
     global_lobby = FakeGlobalLobbyRepository()
+    referrals = FakeReferralRepository()
     balance = FakeBalanceConfig(build_valid_balance())
     dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=200)
@@ -437,6 +445,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         duels=duels,
         mass_duels=mass_duels,
         global_lobby=global_lobby,
+        referrals=referrals,
         delayed_jobs=delayed_jobs,
         register_player=RegisterPlayer(
             uow=uow,
@@ -588,6 +597,36 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         run_daily_head_cron=run_daily_head_cron,
         record_player_activity=record_player_activity,
         schedule_daily_head_cron_jobs=schedule_daily_head_cron_jobs,
+        register_referral=RegisterReferral(
+            uow=uow,
+            players=players,
+            referrals=referrals,
+            clock=clock,
+            rate_limiter=_fake_limiter(),
+            audit=audit,
+        ),
+        grant_referral_signup_bonus=GrantReferralSignupBonus(
+            uow=uow,
+            players=players,
+            referrals=referrals,
+            length_granter=add_length,
+            balance=balance,
+            clock=clock,
+        ),
+        grant_referral_thickness_milestone=GrantReferralThicknessMilestone(
+            uow=uow,
+            players=players,
+            referrals=referrals,
+            length_granter=add_length,
+            balance=balance,
+        ),
+        run_weekly_clan_referral_summary=RunWeeklyClanReferralSummary(
+            uow=uow,
+            clans=clans,
+            players=players,
+            referrals=referrals,
+            clock=clock,
+        ),
     )
 
 
@@ -671,6 +710,14 @@ class TestContainer:
         assert isinstance(c.daily_head_service, DailyHeadService)
         assert isinstance(c.request_daily_head, RequestDailyHead)
         assert isinstance(c.run_daily_head_cron, RunDailyHeadCron)
+
+    def test_container_holds_referral_use_cases(self) -> None:
+        """Реферальная система (Спринт 2.4.D + 2.4.E)."""
+        c = _container_with_fakes()
+        assert isinstance(c.register_referral, RegisterReferral)
+        assert isinstance(c.grant_referral_signup_bonus, GrantReferralSignupBonus)
+        assert isinstance(c.grant_referral_thickness_milestone, GrantReferralThicknessMilestone)
+        assert isinstance(c.run_weekly_clan_referral_summary, RunWeeklyClanReferralSummary)
 
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()

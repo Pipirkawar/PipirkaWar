@@ -21,6 +21,10 @@ from pipirik_wars.application.progression import (
     ThicknessUpgraded,
     UpgradeThickness,
 )
+from pipirik_wars.application.referral import (
+    GrantReferralThicknessMilestone,
+    ReferralMilestoneNotApplicable,
+)
 from pipirik_wars.bot.handlers.upgrade import (
     handle_upgrade,
     handle_upgrade_callback,
@@ -312,6 +316,21 @@ def _stub_upgrade(
     return use_case
 
 
+def _stub_milestone(
+    *,
+    error: BaseException | None = None,
+) -> MagicMock:
+    """Stub `GrantReferralThicknessMilestone`. По умолчанию возвращает
+    `ReferralMilestoneNotApplicable` — дефолтный no-op-кейс для тестов
+    upgrade-handler-а, которые не проверяют реферальную ветку."""
+    use_case = MagicMock(spec=GrantReferralThicknessMilestone)
+    if error is not None:
+        use_case.execute = AsyncMock(side_effect=error)
+    else:
+        use_case.execute = AsyncMock(return_value=ReferralMilestoneNotApplicable())
+    return use_case
+
+
 @pytest.mark.asyncio
 class TestHandleUpgradeCallback:
     async def test_confirm_calls_use_case_and_replaces_text(self) -> None:
@@ -322,6 +341,7 @@ class TestHandleUpgradeCallback:
             cb,
             _identity("private"),
             cast(UpgradeThickness, upgrade),
+            cast(GrantReferralThicknessMilestone, _stub_milestone()),
             _bundle(),
             Locale("ru"),
         )
@@ -346,6 +366,7 @@ class TestHandleUpgradeCallback:
             cb,
             _identity("private"),
             cast(UpgradeThickness, upgrade),
+            cast(GrantReferralThicknessMilestone, _stub_milestone()),
             _bundle(),
             Locale("ru"),
         )
@@ -363,6 +384,7 @@ class TestHandleUpgradeCallback:
             cb,
             _identity("private"),
             cast(UpgradeThickness, upgrade),
+            cast(GrantReferralThicknessMilestone, _stub_milestone()),
             _bundle(),
             Locale("ru"),
         )
@@ -379,6 +401,7 @@ class TestHandleUpgradeCallback:
             cb,
             _identity("private"),
             cast(UpgradeThickness, upgrade),
+            cast(GrantReferralThicknessMilestone, _stub_milestone()),
             _bundle(),
             Locale("ru"),
         )
@@ -403,6 +426,7 @@ class TestHandleUpgradeCallback:
             cb,
             _identity("private"),
             cast(UpgradeThickness, upgrade),
+            cast(GrantReferralThicknessMilestone, _stub_milestone()),
             _bundle(),
             Locale("ru"),
         )
@@ -426,6 +450,7 @@ class TestHandleUpgradeCallback:
             cb,
             _identity("private"),
             cast(UpgradeThickness, upgrade),
+            cast(GrantReferralThicknessMilestone, _stub_milestone()),
             _bundle(),
             Locale("ru"),
         )
@@ -442,6 +467,7 @@ class TestHandleUpgradeCallback:
             cb,
             None,
             cast(UpgradeThickness, upgrade),
+            cast(GrantReferralThicknessMilestone, _stub_milestone()),
             _bundle(),
             Locale("ru"),
         )
@@ -457,6 +483,7 @@ class TestHandleUpgradeCallback:
             cb,
             _identity("private"),
             cast(UpgradeThickness, upgrade),
+            cast(GrantReferralThicknessMilestone, _stub_milestone()),
             _bundle(),
             Locale("ru"),
         )
@@ -472,6 +499,7 @@ class TestHandleUpgradeCallback:
             cb,
             _identity("private"),
             cast(UpgradeThickness, upgrade),
+            cast(GrantReferralThicknessMilestone, _stub_milestone()),
             _bundle(),
             Locale("en"),
         )
@@ -487,6 +515,7 @@ class TestHandleUpgradeCallback:
             cb,
             _identity("private"),
             cast(UpgradeThickness, upgrade),
+            cast(GrantReferralThicknessMilestone, _stub_milestone()),
             _bundle(),
             None,
         )
@@ -508,6 +537,7 @@ class TestUpgradeCallbackHelperEncoding:
             cb,
             _identity("private"),
             cast(UpgradeThickness, upgrade),
+            cast(GrantReferralThicknessMilestone, _stub_milestone()),
             _bundle(),
             Locale("ru"),
         )
