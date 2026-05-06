@@ -35,6 +35,7 @@ from pipirik_wars.application.admin import (
 )
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
+from pipirik_wars.bot.filters import IsAdminFilter
 from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters.admin_support import (
     BanPlayerPresenter,
@@ -54,6 +55,13 @@ from pipirik_wars.domain.admin import (
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 
 router = Router(name="admin_support")
+# Тихий игнор не-админских апдейтов на уровне router-а (ГДД §18.6.4):
+# фильтр применяется ко всем observer-ам `Router`-а — message + callback.
+# `data["admin"]` кладётся `AdminGuard`-middleware-ом (Спринт 2.5-A.2);
+# если этот middleware не подключён в dispatcher-е, фильтр считает
+# актора не-админом и пропускает апдейт мимо router-а.
+router.message.filter(IsAdminFilter())
+router.callback_query.filter(IsAdminFilter())
 
 REPLY_NON_PRIVATE_RU = "🍆 Админ-команды доступны только в ЛС бота."
 

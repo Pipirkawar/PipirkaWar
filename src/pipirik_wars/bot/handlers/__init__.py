@@ -15,6 +15,7 @@ InvokeOracle) и `top` (Спринт 1.4.C: /top → GetTopPlayers с TTL-кэш
 from aiogram import Dispatcher
 
 from pipirik_wars.bot.handlers.admin import router as admin_router
+from pipirik_wars.bot.handlers.admin_support import router as admin_support_router
 from pipirik_wars.bot.handlers.clan_head import router as clan_head_router
 from pipirik_wars.bot.handlers.clan_history import router as clan_history_router
 from pipirik_wars.bot.handlers.clantop import router as clantop_router
@@ -47,6 +48,11 @@ def register_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(clan_head_router)
     dispatcher.include_router(clan_history_router)
     dispatcher.include_router(admin_router)
+    # Спринт 2.5-B.6: extended-support router (`/find_player`, `/player`,
+    # `/freeze`, `/unfreeze`, `/ban`, `/confirm`). Фильтр `is_admin` живёт
+    # на самом router-е (см. `admin_support.router.message.filter(...)`),
+    # поэтому здесь — обычный `include_router`.
+    dispatcher.include_router(admin_support_router)
     dispatcher.include_router(registration_router)
 
 
