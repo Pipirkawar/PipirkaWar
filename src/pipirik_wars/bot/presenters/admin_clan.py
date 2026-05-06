@@ -12,6 +12,7 @@ from typing import Final
 from pipirik_wars.application.admin import (
     ClanCard,
     ClanMemberCardInfo,
+    DailyHeadHistoryEntry,
 )
 from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
 from pipirik_wars.domain.clan import ClanMemberRole, ClanStatus
@@ -260,8 +261,108 @@ class UnfreezeClanAdminPresenter:
         )
 
 
+# ── /clan_daily_head_history ─────────────────────────────────────────────────
+
+_KEY_DH_USAGE: Final[MessageKey] = MessageKey("admin-clan-daily-head-history-usage")
+_KEY_DH_NOT_AUTHORIZED: Final[MessageKey] = MessageKey(
+    "admin-clan-daily-head-history-not-authorized",
+)
+_KEY_DH_BAD_ID: Final[MessageKey] = MessageKey("admin-clan-daily-head-history-bad-id")
+_KEY_DH_BAD_LIMIT: Final[MessageKey] = MessageKey(
+    "admin-clan-daily-head-history-bad-limit",
+)
+_KEY_DH_NOT_FOUND: Final[MessageKey] = MessageKey(
+    "admin-clan-daily-head-history-not-found",
+)
+_KEY_DH_EMPTY: Final[MessageKey] = MessageKey("admin-clan-daily-head-history-empty")
+_KEY_DH_HEADER: Final[MessageKey] = MessageKey("admin-clan-daily-head-history-header")
+_KEY_DH_ROW: Final[MessageKey] = MessageKey("admin-clan-daily-head-history-row")
+_KEY_DH_ROW_ORPHAN: Final[MessageKey] = MessageKey(
+    "admin-clan-daily-head-history-row-orphan",
+)
+
+
+class GetClanDailyHeadHistoryPresenter:
+    """Локализованные ответы `/clan_daily_head_history`."""
+
+    __slots__ = ("_bundle",)
+
+    def __init__(self, *, bundle: IMessageBundle) -> None:
+        self._bundle = bundle
+
+    def usage(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_DH_USAGE, locale=locale)
+
+    def not_authorized(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_DH_NOT_AUTHORIZED, locale=locale)
+
+    def bad_id(self, *, locale: Locale, value: str) -> str:
+        return self._bundle.format(_KEY_DH_BAD_ID, locale=locale, value=value)
+
+    def bad_limit(self, *, locale: Locale, value: str) -> str:
+        return self._bundle.format(_KEY_DH_BAD_LIMIT, locale=locale, value=value)
+
+    def not_found(self, *, locale: Locale, query: int) -> str:
+        return self._bundle.format(
+            _KEY_DH_NOT_FOUND,
+            locale=locale,
+            query=str(query),
+        )
+
+    def render(
+        self,
+        *,
+        locale: Locale,
+        clan_id: int,
+        clan_title: str,
+        entries: tuple[DailyHeadHistoryEntry, ...],
+    ) -> str:
+        if not entries:
+            return self._bundle.format(
+                _KEY_DH_EMPTY,
+                locale=locale,
+                clan_id=str(clan_id),
+                title=clan_title,
+            )
+        lines: list[str] = [
+            self._bundle.format(
+                _KEY_DH_HEADER,
+                locale=locale,
+                clan_id=str(clan_id),
+                title=clan_title,
+                count=str(len(entries)),
+            ),
+        ]
+        for entry in entries:
+            if entry.player is None:
+                lines.append(
+                    self._bundle.format(
+                        _KEY_DH_ROW_ORPHAN,
+                        locale=locale,
+                        moscow_date=str(entry.moscow_date),
+                        bonus=str(entry.bonus_cm),
+                        source=entry.source.value,
+                    ),
+                )
+                continue
+            lines.append(
+                self._bundle.format(
+                    _KEY_DH_ROW,
+                    locale=locale,
+                    moscow_date=str(entry.moscow_date),
+                    bonus=str(entry.bonus_cm),
+                    source=entry.source.value,
+                    tg_id=str(entry.player.tg_id),
+                    username=entry.player.username or "—",
+                    name=entry.player.name or "—",
+                ),
+            )
+        return "\n".join(lines)
+
+
 __all__ = [
     "FreezeClanAdminPresenter",
     "GetClanCardPresenter",
+    "GetClanDailyHeadHistoryPresenter",
     "UnfreezeClanAdminPresenter",
 ]

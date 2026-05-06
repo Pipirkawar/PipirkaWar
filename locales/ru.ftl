@@ -732,3 +732,17 @@ admin-unfreeze-clan-bad-id = ⚠ <code>{ $value }</code> не похож на id
 admin-unfreeze-clan-not-found = 🔍Клан с id/chat_id <code>{ $query }</code> не найден.
 admin-unfreeze-clan-already = ℹ Клан #{ $clan_id } уже активен.
 admin-unfreeze-clan-ok = 🔥 Клан #{ $clan_id } разморожен.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Спринт 2.5-D.3 — `/clan_daily_head_history` (read-only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+admin-clan-daily-head-history-usage = ⚠ Использование: <code>/clan_daily_head_history &lt;id|chat_id&gt; [N=10]</code>.
+admin-clan-daily-head-history-not-authorized = ❌Только активные админы могут смотреть историю «Главы клана дня».
+admin-clan-daily-head-history-bad-id = ⚠ <code>{ $value }</code> не похож на id клана (целое число).
+admin-clan-daily-head-history-bad-limit = ⚠ <code>{ $value }</code> не похож на лимит (целое число 1..50).
+admin-clan-daily-head-history-not-found = 🔍Клан с id/chat_id <code>{ $query }</code> не найден.
+admin-clan-daily-head-history-empty = 👑 Клан #{ $clan_id } «{ $title }»: история «Главы дня» пуста.
+admin-clan-daily-head-history-header = 👑 Клан #{ $clan_id } «{ $title }», последние { $count } назначений «Главы дня»:
+admin-clan-daily-head-history-row = • <b>{ $moscow_date }</b> — { $tg_id } (@{ $username }, { $name }) +{ $bonus } см ({ $source })
+admin-clan-daily-head-history-row-orphan = • <b>{ $moscow_date }</b> — игрок удалён +{ $bonus } см ({ $source })

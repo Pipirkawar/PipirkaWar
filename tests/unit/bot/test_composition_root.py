@@ -23,6 +23,7 @@ from pipirik_wars.application.admin import (
     GetAdminAuditTrail,
     GetBalanceValue,
     GetClanCard,
+    GetClanDailyHeadHistory,
     GetPlayerCard,
     GrantLength,
     GrantThickness,
@@ -576,6 +577,15 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         audit=admin_audit,
         clock=clock,
     )
+    get_clan_daily_head_history_uc = GetClanDailyHeadHistory(
+        uow=uow,
+        admins=admins,
+        clans=clans,
+        players=players,
+        daily_heads=daily_heads,
+        audit=admin_audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -797,6 +807,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         get_clan_card=get_clan_card_uc,
         freeze_clan_admin=freeze_clan_admin_uc,
         unfreeze_clan_admin=unfreeze_clan_admin_uc,
+        get_clan_daily_head_history=get_clan_daily_head_history_uc,
     )
 
 

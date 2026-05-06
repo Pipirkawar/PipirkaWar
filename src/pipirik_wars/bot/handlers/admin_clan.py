@@ -23,6 +23,8 @@ from pipirik_wars.application.admin import (
     FreezeClanAdminInput,
     GetClanCard,
     GetClanCardInput,
+    GetClanDailyHeadHistory,
+    GetClanDailyHeadHistoryInput,
     UnfreezeClanAdmin,
     UnfreezeClanAdminInput,
 )
@@ -33,6 +35,7 @@ from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters.admin_clan import (
     FreezeClanAdminPresenter,
     GetClanCardPresenter,
+    GetClanDailyHeadHistoryPresenter,
     UnfreezeClanAdminPresenter,
 )
 
@@ -221,9 +224,82 @@ async def handle_unfreeze_clan(
     )
 
 
+@router.message(Command("clan_daily_head_history"))
+async def handle_clan_daily_head_history(
+    message: Message,
+    command: CommandObject,
+    tg_identity: TgIdentity | None,
+    get_clan_daily_head_history: GetClanDailyHeadHistory,
+    bundle: IMessageBundle,
+    locale: Locale | None = None,
+) -> None:
+    """`/clan_daily_head_history <id|chat_id> [N=10]` — read-only история
+    «Главы клана дня» (Спринт 2.5-D.3).
+
+    Без TOTP. Audit: `ADMIN_CLAN_LOOKUP` (read-side lookup клана).
+    """
+    presenter = GetClanDailyHeadHistoryPresenter(bundle=bundle)
+    effective_locale = locale or DEFAULT_LOCALE
+
+    chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
+    if chat_kind != "private" or tg_identity is None:
+        await message.answer(REPLY_NON_PRIVATE_RU)
+        return
+
+    raw = (command.args or "").strip()
+    if not raw:
+        await message.answer(presenter.usage(locale=effective_locale))
+        return
+
+    parts = raw.split(maxsplit=1)
+    try:
+        query = int(parts[0])
+    except ValueError:
+        await message.answer(presenter.bad_id(locale=effective_locale, value=parts[0]))
+        return
+
+    limit = 10
+    if len(parts) == 2 and parts[1].strip():
+        try:
+            limit = int(parts[1].strip())
+        except ValueError:
+            await message.answer(
+                presenter.bad_limit(locale=effective_locale, value=parts[1].strip()),
+            )
+            return
+
+    try:
+        result = await get_clan_daily_head_history.execute(
+            GetClanDailyHeadHistoryInput(
+                actor_tg_id=tg_identity.tg_user_id,
+                query=query,
+                limit=limit,
+                tg_chat_id=tg_identity.chat_id,
+            ),
+        )
+    except AuthorizationError:
+        await message.answer(presenter.not_authorized(locale=effective_locale))
+        return
+
+    if result.clan_id is None:
+        await message.answer(presenter.not_found(locale=effective_locale, query=query))
+        return
+
+    assert result.clan_title is not None
+    await message.answer(
+        presenter.render(
+            locale=effective_locale,
+            clan_id=result.clan_id,
+            clan_title=result.clan_title,
+            entries=result.entries,
+        ),
+    )
+
+
 __all__ = [
     "REPLY_NON_PRIVATE_RU",
     "handle_clan",
+    "handle_clan_daily_head_history",
     "handle_freeze_clan",
     "handle_unfreeze_clan",
     "router",

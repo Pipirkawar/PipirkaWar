@@ -55,6 +55,12 @@ from pipirik_wars.application.admin.get_clan_card import (
     GetClanCardInput,
     GetClanCardOutput,
 )
+from pipirik_wars.application.admin.get_clan_daily_head_history import (
+    DailyHeadHistoryEntry,
+    GetClanDailyHeadHistory,
+    GetClanDailyHeadHistoryInput,
+    GetClanDailyHeadHistoryOutput,
+)
 from pipirik_wars.application.admin.get_player_card import (
     ClanCardInfo,
     ForestCardInfo,
@@ -116,6 +122,7 @@ __all__ = [
     "ClanCard",
     "ClanCardInfo",
     "ClanMemberCardInfo",
+    "DailyHeadHistoryEntry",
     "FindPlayers",
     "FindPlayersInput",
     "FindPlayersOutput",
@@ -135,6 +142,9 @@ __all__ = [
     "GetClanCard",
     "GetClanCardInput",
     "GetClanCardOutput",
+    "GetClanDailyHeadHistory",
+    "GetClanDailyHeadHistoryInput",
+    "GetClanDailyHeadHistoryOutput",
     "GetPlayerCard",
     "GetPlayerCardInput",
     "GetPlayerCardOutput",

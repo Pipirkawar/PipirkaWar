@@ -726,3 +726,17 @@ admin-unfreeze-clan-bad-id = ⚠ <code>{ $value }</code> is not a clan id (integ
 admin-unfreeze-clan-not-found = 🔍Clan with id/chat_id <code>{ $query }</code> not found.
 admin-unfreeze-clan-already = ℹ Clan #{ $clan_id } is already active.
 admin-unfreeze-clan-ok = 🔥 Clan #{ $clan_id } unfrozen.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 2.5-D.3 — `/clan_daily_head_history` (read-only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+admin-clan-daily-head-history-usage = ⚠ Usage: <code>/clan_daily_head_history &lt;id|chat_id&gt; [N=10]</code>.
+admin-clan-daily-head-history-not-authorized = ❌Only active admins can see daily-head history.
+admin-clan-daily-head-history-bad-id = ⚠ <code>{ $value }</code> is not a clan id (integer).
+admin-clan-daily-head-history-bad-limit = ⚠ <code>{ $value }</code> is not a limit (integer 1..50).
+admin-clan-daily-head-history-not-found = 🔍Clan with id/chat_id <code>{ $query }</code> not found.
+admin-clan-daily-head-history-empty = 👑 Clan #{ $clan_id } "{ $title }": daily-head history is empty.
+admin-clan-daily-head-history-header = 👑 Clan #{ $clan_id } "{ $title }", last { $count } daily-head assignments:
+admin-clan-daily-head-history-row = • <b>{ $moscow_date }</b> — { $tg_id } (@{ $username }, { $name }) +{ $bonus } cm ({ $source })
+admin-clan-daily-head-history-row-orphan = • <b>{ $moscow_date }</b> — player deleted +{ $bonus } cm ({ $source })
