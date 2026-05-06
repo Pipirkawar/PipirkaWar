@@ -28,9 +28,14 @@ from pipirik_wars.domain.daily_head.entities import (
     DailyHeadSource,
 )
 from pipirik_wars.domain.daily_head.errors import (
+    ClanQuoteCatalogEmptyError,
     DailyHeadAlreadyAssignedError,
     DailyHeadError,
     DailyHeadInsufficientActivityError,
+)
+from pipirik_wars.domain.daily_head.quote import (
+    ALLOWED_QUOTE_TAGS,
+    ClanQuoteTemplate,
 )
 from pipirik_wars.domain.daily_head.repositories import (
     IDailyActivityRepository,
@@ -39,6 +44,9 @@ from pipirik_wars.domain.daily_head.repositories import (
 from pipirik_wars.domain.daily_head.services import DailyHeadService
 
 __all__ = [
+    "ALLOWED_QUOTE_TAGS",
+    "ClanQuoteCatalogEmptyError",
+    "ClanQuoteTemplate",
     "DailyHeadAlreadyAssignedError",
     "DailyHeadAssignment",
     "DailyHeadError",

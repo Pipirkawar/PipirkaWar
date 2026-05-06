@@ -21,11 +21,15 @@ Race-handling (`DailyHeadAlreadyAssignedError` от `heads.add(...)`)
 from __future__ import annotations
 
 from pipirik_wars.application.daily_head.dto import DailyHeadResolved
+from pipirik_wars.application.daily_head.quote_templates import (
+    IClanQuoteTemplateProvider,
+)
 from pipirik_wars.application.daily_head.request import RequestDailyHead
 from pipirik_wars.application.daily_head.run_cron import RunDailyHeadCron
 
 __all__ = [
     "DailyHeadResolved",
+    "IClanQuoteTemplateProvider",
     "RequestDailyHead",
     "RunDailyHeadCron",
 ]
