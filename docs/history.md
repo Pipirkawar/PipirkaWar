@@ -23,6 +23,34 @@
 
 ---
 
+## 2026-05-06 — Спринт 2.2.G: журнал клановых атак (`/clan_history` + read-side SQL-проекция + 88 тестов)
+
+**Автор:** Devin (по запросу urbanviola)
+**Тип:** feature
+**Связано:** `current_tasks.md` Спринт 2.2.G, ПД 2.2.5 (`development_plan.md` §6), ГДД §7.2 (журнал клановых боёв в карточке клана).
+
+Что сделано:
+- **Domain VO `ClanMassDuelHistoryEntry`** (`src/pipirik_wars/domain/pvp/clan_history.py`) + enum `ClanMassDuelOutcomeForUs` (`VICTORY`/`DEFEAT`/`DRAW`/`CANCELLED`) с `outcome_from_winner(winner, our_side)` и full-`__post_init__`-валидацией: zero-sum дельт (`our_delta_cm + opponent_delta_cm == 0`), state↔outcome agreement (`CANCELLED` обоюдно), VICTORY ⇒ dealt > received, DEFEAT ⇒ dealt < received, DRAW ⇒ dealt == received, `completed_at` присутствует только для не-CANCELLED.
+- **Application-порт `IClanMassDuelHistoryQuery.get_recent(*, clan_id, limit)`** + read-only use-case `GetClanAttackHistory(query, default_limit=10)` — тонкая обёртка с валидацией входов (`clan_id > 0`, `limit > 0`), по аналогии с `GetTopClans`/`GetTopPlayers` (Спринт 2.2.A / 1.4.C).
+- **Infrastructure read-side `SqlAlchemyClanMassDuelHistoryQuery`**: один SQL-запрос по `pvp_mass_duels` с CASE-выражением для `opponent_id` (если `clan1_id == clan_id` ⇒ `clan2_id`, иначе `clan1_id`) + 2 коррелированных subquery к `pvp_mass_duel_choices` (counts on each side) + JOIN к `clans` для `opponent_title`; фильтр `state IN ('completed', 'cancelled')` (`IN_PROGRESS`-бои не показываются), сортировка `created_at DESC, id DESC`; денормализация в VO с маппингом `clan1`/`clan2` → `our`/`opponent` сторон.
+- **Bot-слой**: `ClanHistoryPresenter` через `IMessageBundle` (ключи `clan-history-{header,empty,needs-group-chat,not-registered,entry-{victory,defeat,draw,cancelled}}` RU+EN) с `dd.mm HH:MM`-форматом времени (берёт `completed_at` для COMPLETED, `created_at` для CANCELLED); handler `/clan_history` (group-only, ищет клан по `tg_identity.chat_id`, в ЛС → `needs-group-chat`, в чате без клана → `not-registered`).
+- **DI-провязка**: новый router `clan_history_router` в `register_routers`; `clan_mass_duel_history_query` + `get_clan_attack_history` в `Container` / `build_dispatcher`; `dispatcher["get_clan_attack_history"]` в `bot/main.py`.
+- **Локали**: 8 ключей `clan-history-*` × 2 локали = 16 строк (`locales/{ru,en}.ftl`).
+- **Тесты**: +88 (33 VO `tests/unit/domain/pvp/test_clan_history_entry.py` + 12 use-case `tests/unit/application/pvp/test_get_clan_attack_history.py` + 16 integration SQL `tests/integration/db/pvp/test_clan_mass_duel_history_query.py` + 18 presenter `tests/unit/bot/presenters/test_clan_history.py` + 9 handler `tests/unit/bot/handlers/test_clan_history.py`) + `FakeClanMassDuelHistoryQuery` (`tests/fakes/clan_history.py`).
+
+Результат / артефакты:
+- `make ci` зелёный (2431 passed, 1 skipped, coverage 95.84%).
+- ПР: см. PR-ссылку в session.
+
+Заметки / решения:
+- **Read-side, не доменный репо.** `IClanMassDuelHistoryQuery` живёт в `application/pvp/`, реализация в `infrastructure/db/repositories/`, но это не доменный `IMassDuelRepository` (он про write-side / load-by-id). VO `ClanMassDuelHistoryEntry` — это перспектива конкретного клана, а не агрегат. По CQRS-стилю — read-projection.
+- **Денормализация в SQL.** `opponent_clan_title` приходит из `clans.title` JOIN-ом (а не лайв-резолв на app-слое), `our/opponent_participants_count` — из коррелированных subquery к `pvp_mass_duel_choices` (на момент запроса = размер ростера, замороженный при `StartMassDuel`). Это даёт O(1) запрос на показ всего журнала клана, против O(N) live-резолва.
+- **`IN_PROGRESS`-фильтр в SQL.** Историю показываем только по завершённым/отменённым боям — текущий идущий бой клан видит через `started_card`, а не через `/clan_history`. Это устраняет «мерцание» (бой в журнале до его финала).
+- **`completed_at` для CANCELLED = NULL.** В миграции 0011 (Спринт 2.2.D) `completed_at` обнуляется при `CANCELLED`-state-е (CHECK-инварианте). Презентер берёт `created_at` для CANCELLED-боёв — единственное доступное поле.
+- **Сортировка `created_at DESC, id DESC`.** Тай-брейкер `id DESC` обязателен — `created_at` приходит из app-слоя (`IClock`) и в тестах часто совпадает у соседних боёв.
+
+---
+
 ## 2026-05-06 — Спринт 2.2.F часть 2: bot-слой массового PvP (`/clan_attack` handler + callback-ы + 27 unit-тестов)
 
 **Автор:** Devin (по запросу urbanviola)

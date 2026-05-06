@@ -14,6 +14,7 @@ from tests.fakes.anticheat_admin_alerter import (
 from tests.fakes.anticheat_repo import FakeAnticheatRepository
 from tests.fakes.audit import FakeAuditLogger
 from tests.fakes.balance import FakeBalanceConfig
+from tests.fakes.clan_history import FakeClanMassDuelHistoryQuery
 from tests.fakes.clan_repo import FakeClanMembershipRepository, FakeClanRepository
 from tests.fakes.clock import FakeClock
 from tests.fakes.dau import (
@@ -57,6 +58,7 @@ __all__ = [
     "FakeAnticheatRepository",
     "FakeAuditLogger",
     "FakeBalanceConfig",
+    "FakeClanMassDuelHistoryQuery",
     "FakeClanMembershipRepository",
     "FakeClanRepository",
     "FakeClanTopQuery",

@@ -49,6 +49,7 @@ from pipirik_wars.application.pvp import (
     EscalateChatToGlobal,
     ExpireLobbyEntry,
     ForceResolveMassDuel,
+    GetClanAttackHistory,
     MatchFromLobby,
     ResolveAfkRound,
     ResolveMassDuel,
@@ -113,6 +114,7 @@ from tests.fakes import (
     FakeAnticheatRepository,
     FakeAuditLogger,
     FakeBalanceConfig,
+    FakeClanMassDuelHistoryQuery,
     FakeClanMembershipRepository,
     FakeClanRepository,
     FakeClanTopQuery,
@@ -200,6 +202,7 @@ def _container_with_fakes() -> Container:
     duel_log_templates = FakeDuelLogTemplateProvider()
     top_players_query = FakeTopPlayersQuery()
     top_clans_query = FakeClanTopQuery()
+    clan_mass_duel_history_query = FakeClanMassDuelHistoryQuery()
     bundle: IMessageBundle = FakeMessageBundle()
     add_length = AddLength(
         uow=uow,
@@ -489,8 +492,10 @@ def _container_with_fakes() -> Container:
         ),
         top_players_query=top_players_query,
         top_clans_query=top_clans_query,
+        clan_mass_duel_history_query=clan_mass_duel_history_query,
         get_top_players=GetTopPlayers(query=top_players_query),
         get_top_clans=GetTopClans(query=top_clans_query),
+        get_clan_attack_history=GetClanAttackHistory(query=clan_mass_duel_history_query),
         bundle=bundle,
         player_locale_resolver=FakePlayerLocaleResolver(),
         set_player_locale=SetPlayerLocale(
