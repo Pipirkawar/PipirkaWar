@@ -23,6 +23,56 @@
 
 ---
 
+## 2026-05-06 — Спринт 2.3.C: application use-cases «Главы клана дня» (`RequestDailyHead` + `RunDailyHeadCron`, 18 unit-тестов, миграция 0014 audit-source)
+
+**Автор:** Devin (агент urbanviola, recovery-агент завершил DI-провязку + docs)
+**Тип:** feature
+**Связано:** ПД §5 / Спринт 2.3.3, ГДД §6.1; ветка `devin/1778058870-sprint-2-3-c-daily-head-usecases` (PR следует)
+
+Что сделано:
+- Реализованы application use-cases «Главы клана дня» поверх доменного `DailyHeadService` (2.3.A) и репозиториев 2.3.B. Сценарий гибридного триггера (ГДД §6.1, Q4 v9) теперь полностью на месте на application-уровне.
+- **`RequestDailyHead(uow, clans, players, heads, daily_head_service, length_granter, audit, clock)`** — button-trigger (`/clan_head` или inline-кнопка из клан-чата). Резолвит клан по `chat_id` (бросает `NoClanRegisteredError` при отсутствии); валидирует `ClanStatus.ACTIVE` (бросает `ClanFrozenError`); вызывает общий хелпер.
+- **`RunDailyHeadCron(uow, clans, players, heads, daily_head_service, length_granter, audit, clock)`** — cron-trigger (под APScheduler 2.3.F, по `random_offset(0..24h)`-час с 00:00 МСК). Принимает `clan_id` напрямую (резолвит клан через `clans.get_by_id`); если клан удалён или FROZEN — возвращает `None` (no-op без ошибки, чтобы шедулер не падал на устаревшей записи); иначе вызывает общий хелпер.
+- **Общий хелпер `_resolve_or_create_assignment(...)`** в `application/daily_head/_common.py` — внутри активного UoW:
+  1. `service.assign_or_get(...)` — preflight + выбор кандидата. Если уже назначен (`assignment.id is not None`) — читает игрока и возвращает `DailyHeadResolved(was_new=False)`.
+  2. `heads.add(assignment)` — INSERT новой записи. На race (UNIQUE-violation) — `DailyHeadAlreadyAssignedError` ловится → `heads.get_by_clan_and_date(...)` возвращает запись победителя → `was_new=False` (длина уже начислена выигравшей транзакцией, повторно не делаем).
+  3. На happy-path: `length_granter.grant(player_id, delta_cm=saved.bonus_cm, source=AuditSource.DAILY_HEAD, idempotency_key=f"add_length:daily_head:{clan_id}:{moscow_date.isoformat()}")` — anti-cheat clamp + audit `LENGTH_GRANT` внутри `grant()`. Idempotency-key стабилен по `(clan_id, moscow_date)` — при ретрае в тех же сутках LENGTH_GRANT-дубликат не возникнет.
+  4. Отдельный `AuditEntry(action=AuditAction.DAILY_HEAD_ASSIGN, target_kind="clan", target_id=str(clan_id), after={player_id, moscow_date, source, bonus_cm}, idempotency_key=f"daily_head_assign:{clan_id}:{moscow_date.isoformat()}")` — для аналитики (отдельно от LENGTH_GRANT, чтобы видеть кто стал главой и от какого триггера).
+  5. Re-fetch игрока с применённой прибавкой → `DailyHeadResolved(assignment=saved, player=saved_player, was_new=True)`.
+- **Новый `AuditSource.DAILY_HEAD = "daily_head"`** в `domain/security/entities.py` (для anti-cheat) + в `domain/shared/ports/audit.py` (для audit-логгера) + добавлен в `anticheat.organic_sources` (premium-bonus считается organic для anti-cheat clamp; otherwise чёрный ящик 20-см clamp обрезал бы законную прибавку 1–20 см).
+- **Alembic-миграция `0014_audit_source_daily_head`** — drop+recreate CHECK-whitelist `source` колонки `audit_log` (PostgreSQL не поддерживает `ALTER TABLE ... ADD VALUE` для CHECK constraint, только для ENUM-типов, поэтому drop+recreate). Migration test обновлён.
+- **DI-провязка в `bot/main.py::build_container`** (Спринт 2.3.C, шаг #5):
+  - `daily_heads = SqlAlchemyDailyHeadRepository(uow=uow)`,
+  - `daily_activity = SqlAlchemyDailyActivityRepository(uow=uow, clock=clock)`,
+  - `daily_head_service = DailyHeadService(balance, clock, random=RealRandom(), heads, activity)`,
+  - `request_daily_head = RequestDailyHead(...)`, `run_daily_head_cron = RunDailyHeadCron(...)`,
+  - 5 новых полей в `Container` (`daily_heads`, `daily_activity`, `daily_head_service`, `request_daily_head`, `run_daily_head_cron`).
+- **Wiring в `build_dispatcher`**: `dispatcher["request_daily_head"]` + `dispatcher["run_daily_head_cron"]` для handler-а 2.3.E (cron use-case также доступен в dispatcher для admin-команд / диагностики; основной runner — APScheduler 2.3.F).
+- **+18 unit-тестов** (`tests/unit/application/daily_head/`):
+  - `test_request_daily_head.py` — **11 тестов**: success new (idempotency-key + LENGTH_GRANT + DAILY_HEAD_ASSIGN audit), success idempotent (was_new=False, нет дополнительных side-effects), no-clan, frozen-clan, insufficient-active-members, race UNIQUE→re-fetch, FakeRandom детерминирует выбор кандидата, FakeClock контролирует `moscow_date`.
+  - `test_run_daily_head_cron.py` — **7 тестов**: success new (без actor_tg_id), success idempotent (DAU не меняется), unknown clan_id → None, FROZEN clan → None (no-op), insufficient-active-members → пропускает domain-error через UoW (`DailyHeadInsufficientActivityError` всё-таки бросается, чтобы шедулер видел метрику), race-handling identical to button-trigger.
+  - `tests/unit/bot/test_composition_root.py` обновлён (5 fakes + RequestDailyHead/RunDailyHeadCron в `_container_with_fakes()` + assertion `test_container_holds_daily_head_use_cases` + assertions в `test_build_container_returns_real_adapters` + dispatcher-assertions для `request_daily_head` / `run_daily_head_cron`).
+
+Результат / артефакты:
+- `src/pipirik_wars/application/daily_head/{__init__,dto,inputs,request,run_cron,_common}.py` — 6 новых модулей.
+- `src/pipirik_wars/bot/main.py` — DI-провязка (`Container` + `build_container` + `build_dispatcher`).
+- `alembic/versions/0014_audit_source_daily_head.py` — миграция CHECK-whitelist.
+- `tests/unit/application/daily_head/{test_request_daily_head,test_run_daily_head_cron}.py` — 18 unit-тестов.
+- `tests/unit/bot/test_composition_root.py` — обновления fakes + assertions.
+- `docs/current_tasks.md` — `2.3.B` → ✅ смержено (PR #69), `2.3.C` → 🔄 в работе (PR будет создан этим коммитом).
+
+Заметки / решения:
+- **Frozen-кланы и cron-trigger**: cron возвращает `None` (no-op без ошибки), button-trigger бросает `ClanFrozenError`. Это намеренная асимметрия — APScheduler поднимает дико много задач (один per-clan per-day), и если один клан стал FROZEN, шедулер не должен падать или ретраить; UI же должен сказать пользователю явно.
+- **`DailyHeadInsufficientActivityError`**: пробрасывается наружу как button-trigger ошибка (UI покажет «недостаточно активных»), и **тоже пробрасывается** из cron-use-case-а (наружу) — так шедулер 2.3.F получит метрику, что для конкретного клана сегодня не получилось назначить, и сможет залогировать это (опционально retry next day). Альтернатива — поглощать в cron — отвергнута, потому что тихий no-op скрывает проблему «клан перестал быть активен» от админа.
+- **`AuditSource.DAILY_HEAD` в `organic_sources`**: премия 1–20 см от главы клана дня — это «органический» bonus для anti-cheat, поэтому клампинг не должен срезать его на 20-см floor. Альтернатива — отдельный enum / флаг — отвергнута, organic_sources уже решает эту задачу для других премий (forest, oracle).
+- **Idempotency-keys**: использованы стабильные `add_length:daily_head:<clan_id>:<moscow_date>` для LENGTH_GRANT и `daily_head_assign:<clan_id>:<moscow_date>` для DAILY_HEAD_ASSIGN. На race (button+cron одновременно) выигравшая транзакция сделает обе записи; проигравшая ловит UNIQUE-violation, делает re-fetch, возвращает `was_new=False` без дополнительных side-effects (length / audit не дублируются).
+- **DI-инстансы `RealRandom` для `DailyHeadService`**: создаём отдельный `RealRandom()` (не reuse из `container.random`) — это `IRandom` для domain-сервиса, в production-е mass-PvP / oracle / forest используют свой `container.random` (тоже `RealRandom`); прямой share не нужен, RNG-состояние независимо. Альтернатива через DI-singleton отвергнута — преждевременная оптимизация.
+- **`DailyHeadResolved.player`**: re-fetch после `length_granter.grant(...)` обязателен, потому что `add_length` модифицирует `Player`-aggregate, а у нас в use-case-е свежий объект игрока нужен для UI. Без re-fetch презентер 2.3.E увидел бы старую длину.
+
+---
+
+---
+
 ## 2026-05-06 — Спринт 2.3.B: persistence-слой «Главы клана дня» (миграции 0012/0013 + ORM + 2 репо + 19 integration-тестов)
 
 **Автор:** Devin (агент urbanviola)

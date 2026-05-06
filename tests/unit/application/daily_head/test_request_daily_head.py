@@ -317,7 +317,7 @@ class TestRequestDailyHeadRace:
         `DailyHeadAlreadyAssignedError` от `heads.add(...)` и возвращает
         запись победителя.
         """
-        use_case, _, _, heads, audit, _, clock = _build()
+        use_case, _, players, heads, audit, _, clock = _build()
 
         # Эмулируем гонку: monkey-patch `heads.add` так, чтобы
         # перед фактическим INSERT-ом мы уже знали о записи победителя
@@ -342,7 +342,6 @@ class TestRequestDailyHeadRace:
 
         heads.add = racing_add  # type: ignore[method-assign]
         # Победитель — игрок 999, нужно его подсунуть в players-репо.
-        players = use_case._players  # type: ignore[attr-defined]
         players.rows.append(_make_player(player_id=999, tg_id=2999, length_cm=30))
 
         result = await use_case.execute(

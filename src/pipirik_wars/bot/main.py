@@ -42,6 +42,10 @@ from pipirik_wars.application.clan import (
     MigrateClanChatId,
     RegisterClan,
 )
+from pipirik_wars.application.daily_head import (
+    RequestDailyHead,
+    RunDailyHeadCron,
+)
 from pipirik_wars.application.dau import (
     CheckDauThreshold,
     GetDauStats,
@@ -98,6 +102,11 @@ from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.anticheat import IAnticheatAdminAlerter, IAnticheatRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
+from pipirik_wars.domain.daily_head import (
+    DailyHeadService,
+    IDailyActivityRepository,
+    IDailyHeadRepository,
+)
 from pipirik_wars.domain.dau import IDauCounter, IDauLimit, IDauThresholdAlerter
 from pipirik_wars.domain.forest import IForestRunRepository
 from pipirik_wars.domain.oracle import IOracleHistoryRepository
@@ -132,6 +141,8 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyClanMassDuelHistoryQuery,
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
+    SqlAlchemyDailyActivityRepository,
+    SqlAlchemyDailyHeadRepository,
     SqlAlchemyDuelRepository,
     SqlAlchemyForestRunRepository,
     SqlAlchemyGlobalLobbyRepository,
@@ -272,6 +283,13 @@ class Container:
     resolve_mass_duel: ResolveMassDuel
     force_resolve_mass_duel: ForceResolveMassDuel
     cancel_mass_duel: CancelMassDuel
+
+    # Daily Head «Глава клана дня» (Спринт 2.3)
+    daily_heads: IDailyHeadRepository
+    daily_activity: IDailyActivityRepository
+    daily_head_service: DailyHeadService
+    request_daily_head: RequestDailyHead
+    run_daily_head_cron: RunDailyHeadCron
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -678,6 +696,44 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clock=clock,
         scheduler=delayed_jobs,
     )
+    # Daily Head «Глава клана дня» (Спринт 2.3.C). Доменный сервис
+    # `DailyHeadService` чистый — фактические side-effects (запись в
+    # `daily_heads`, +len через `add_length`, audit `DAILY_HEAD_ASSIGN`)
+    # выполняют use-case-ы.
+    daily_heads = SqlAlchemyDailyHeadRepository(uow=uow)
+    daily_activity = SqlAlchemyDailyActivityRepository(uow=uow, clock=clock)
+    # `DailyHeadService` принимает `BalanceConfig`-снапшот (а не loader-port),
+    # потому что доменный сервис должен быть чистым — `IBalanceConfig` живёт в
+    # domain.balance.ports, но снимок берём один раз на старте процесса.
+    # Hot-reload `daily_head`-секции потребует перезапуска бота — это
+    # сознательный trade-off (раздел 2.3 редко крутится).
+    daily_head_service = DailyHeadService(
+        balance=balance.get(),
+        clock=clock,
+        random=RealRandom(),
+        heads=daily_heads,
+        activity=daily_activity,
+    )
+    request_daily_head = RequestDailyHead(
+        uow=uow,
+        clans=clans,
+        players=players,
+        heads=daily_heads,
+        daily_head_service=daily_head_service,
+        length_granter=add_length,
+        audit=audit,
+        clock=clock,
+    )
+    run_daily_head_cron = RunDailyHeadCron(
+        uow=uow,
+        clans=clans,
+        players=players,
+        heads=daily_heads,
+        daily_head_service=daily_head_service,
+        length_granter=add_length,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -748,6 +804,11 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         resolve_mass_duel=resolve_mass_duel,
         force_resolve_mass_duel=force_resolve_mass_duel,
         cancel_mass_duel=cancel_mass_duel,
+        daily_heads=daily_heads,
+        daily_activity=daily_activity,
+        daily_head_service=daily_head_service,
+        request_daily_head=request_daily_head,
+        run_daily_head_cron=run_daily_head_cron,
     )
 
 
@@ -812,6 +873,11 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["clans"] = container.clans
     # Журнал клановых атак (Спринт 2.2.G) — read-side use-case для handler-а.
     dispatcher["get_clan_attack_history"] = container.get_clan_attack_history
+    # Daily Head (Спринт 2.3.C) — button-trigger use-case для handler-а 2.3.E.
+    # `run_daily_head_cron` пробрасывается в шедулер (2.3.F), но также
+    # доступен в dispatcher для админ-команд / диагностики.
+    dispatcher["request_daily_head"] = container.request_daily_head
+    dispatcher["run_daily_head_cron"] = container.run_daily_head_cron
     return dispatcher
 
 

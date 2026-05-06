@@ -22,6 +22,10 @@ from pipirik_wars.application.clan import (
     MigrateClanChatId,
     RegisterClan,
 )
+from pipirik_wars.application.daily_head import (
+    RequestDailyHead,
+    RunDailyHeadCron,
+)
 from pipirik_wars.application.dau import (
     CheckDauThreshold,
     GetDauStats,
@@ -63,6 +67,7 @@ from pipirik_wars.application.top import GetTopClans, GetTopPlayers
 from pipirik_wars.bot.main import Container, build_container, build_dispatcher
 from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
+from pipirik_wars.domain.daily_head import DailyHeadService
 from pipirik_wars.domain.forest import IForestRunRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.pvp import IDuelRepository, IMassDuelRepository
@@ -82,6 +87,8 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyAdminRepository,
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
+    SqlAlchemyDailyActivityRepository,
+    SqlAlchemyDailyHeadRepository,
     SqlAlchemyDuelRepository,
     SqlAlchemyForestRunRepository,
     SqlAlchemyGlobalLobbyRepository,
@@ -119,6 +126,8 @@ from tests.fakes import (
     FakeClanRepository,
     FakeClanTopQuery,
     FakeClock,
+    FakeDailyActivityRepository,
+    FakeDailyHeadRepository,
     FakeDauThresholdAlerter,
     FakeDelayedJobScheduler,
     FakeDuelLogTemplateProvider,
@@ -153,7 +162,7 @@ def _fake_limiter() -> IRateLimiter:
     return cast(IRateLimiter, MagicMock(spec=IRateLimiter))
 
 
-def _container_with_fakes() -> Container:
+def _container_with_fakes() -> Container:  # noqa: PLR0915
     """Полный фейковый Container для unit-тестов composition-root-а."""
     uow = FakeUnitOfWork()
     audit = FakeAuditLogger()
@@ -363,6 +372,35 @@ def _container_with_fakes() -> Container:
         clock=clock,
         scheduler=delayed_jobs,
     )
+    daily_heads = FakeDailyHeadRepository()
+    daily_activity = FakeDailyActivityRepository()
+    daily_head_service = DailyHeadService(
+        balance=balance.get(),
+        clock=clock,
+        random=rng,
+        heads=daily_heads,
+        activity=daily_activity,
+    )
+    request_daily_head = RequestDailyHead(
+        uow=uow,
+        clans=clans,
+        players=players,
+        heads=daily_heads,
+        daily_head_service=daily_head_service,
+        length_granter=add_length,
+        audit=audit,
+        clock=clock,
+    )
+    run_daily_head_cron = RunDailyHeadCron(
+        uow=uow,
+        clans=clans,
+        players=players,
+        heads=daily_heads,
+        daily_head_service=daily_head_service,
+        length_granter=add_length,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -526,6 +564,11 @@ def _container_with_fakes() -> Container:
         resolve_mass_duel=resolve_mass_duel,
         force_resolve_mass_duel=force_resolve_mass_duel,
         cancel_mass_duel=cancel_mass_duel,
+        daily_heads=daily_heads,
+        daily_activity=daily_activity,
+        daily_head_service=daily_head_service,
+        request_daily_head=request_daily_head,
+        run_daily_head_cron=run_daily_head_cron,
     )
 
 
@@ -601,6 +644,15 @@ class TestContainer:
         assert isinstance(c.force_resolve_mass_duel, ForceResolveMassDuel)
         assert isinstance(c.cancel_mass_duel, CancelMassDuel)
 
+    def test_container_holds_daily_head_use_cases(self) -> None:
+        """Daily Head «Глава клана дня» (Спринт 2.3.C)."""
+        c = _container_with_fakes()
+        assert isinstance(c.daily_heads, FakeDailyHeadRepository)
+        assert isinstance(c.daily_activity, FakeDailyActivityRepository)
+        assert isinstance(c.daily_head_service, DailyHeadService)
+        assert isinstance(c.request_daily_head, RequestDailyHead)
+        assert isinstance(c.run_daily_head_cron, RunDailyHeadCron)
+
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
         with pytest.raises((AttributeError, TypeError)):
@@ -608,7 +660,7 @@ class TestContainer:
 
 
 class TestBuildContainer:
-    def test_build_container_returns_real_adapters(self) -> None:
+    def test_build_container_returns_real_adapters(self) -> None:  # noqa: PLR0915
         c = build_container(settings=_test_settings())
         assert isinstance(c.clock, RealClock)
         assert isinstance(c.random, RealRandom)
@@ -663,6 +715,12 @@ class TestBuildContainer:
         assert isinstance(c.resolve_mass_duel, ResolveMassDuel)
         assert isinstance(c.force_resolve_mass_duel, ForceResolveMassDuel)
         assert isinstance(c.cancel_mass_duel, CancelMassDuel)
+        # Daily Head «Глава клана дня» (Спринт 2.3.C): реальные репо + сервис + 2 use-cases.
+        assert isinstance(c.daily_heads, SqlAlchemyDailyHeadRepository)
+        assert isinstance(c.daily_activity, SqlAlchemyDailyActivityRepository)
+        assert isinstance(c.daily_head_service, DailyHeadService)
+        assert isinstance(c.request_daily_head, RequestDailyHead)
+        assert isinstance(c.run_daily_head_cron, RunDailyHeadCron)
         # Forest finish + scheduler (Спринт 1.3.C).
         assert isinstance(c.delayed_jobs, APSchedulerDelayedJobScheduler)
         assert isinstance(c.finish_forest_run, FinishForestRun)
@@ -727,3 +785,6 @@ class TestBuildDispatcher:
         # Sprint 2.1.F.2: PvP-lobby use-cases в workflow-data для handler-ов F.3.
         assert dp["enqueue_global_duel"] is c.enqueue_global_duel
         assert dp["match_from_lobby"] is c.match_from_lobby
+        # Sprint 2.3.C: Daily Head use-cases в workflow-data для handler-а 2.3.E.
+        assert dp["request_daily_head"] is c.request_daily_head
+        assert dp["run_daily_head_cron"] is c.run_daily_head_cron
