@@ -23,6 +23,59 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.2.D: persistence-слой массового PvP (`pvp_mass_duels` + ORM + репозиторий)
+
+**Автор:** Devin (по запросу shirline89)
+**Тип:** feature (alembic migration + ORM models + SQL-repository + integration tests)
+**Связано:** `current_tasks.md` Спринт 2.2.D, ПД 2.2.2 (persistence для клан→клан, `development_plan.md` §6), ГДД §7.2.
+
+После 2.2.C (доменный агрегат `MassDuel`) — следующий шаг: положить агрегат в БД, чтобы use-case-ы 2.2.E могли загружать/сохранять mass-duel-ы между HTTP-/Telegram-обновлениями. Persistence-слой проектируется по тому же шаблону, что и 1×1 `pvp_duels` + `pvp_duel_rounds` (2.1.C): root-row для root-агрегата + 1:N-таблицы для коллекций.
+
+Что сделано:
+
+- **Alembic-миграция `0011_pvp_mass_duels`** (`infrastructure/db/migrations/versions/20260505_0011_pvp_mass_duels.py`, ~270 строк):
+  - `pvp_mass_duels` (root): `id`, `clan{1,2}_id` (FK→clans CASCADE), `state`, `hit_pct`, `created_at` / `completed_at` / `cancelled_at`, `final_clan{1,2}_total_dealt` / `final_clan{1,2}_delta_cm` / `final_winner` (всё nullable; заполнено только при COMPLETED). 8 CHECK-инвариантов: state-валидация, hit_pct 0..100, no-self-team, winner ∈ {clan1,clan2,draw}, `state_invariants` (полная state×field-матрица для IN_PROGRESS / COMPLETED / CANCELLED), zero-sum дельт, total_dealt non-negative ×2. 3 индекса: `(clan1_id, state)`, `(clan2_id, state)`, `(state, created_at)`.
+  - `pvp_mass_duel_choices` (1:N от root, ростер + выборы): compound PK `(duel_id, player_id)`, `clan_side` (`clan1`/`clan2`), `initial_length_cm` (snapshot), `attack` / `block` / `submitted_at` (nullable до `submit_move`-а; pair-consistency CHECK). FK `duel_id`→`pvp_mass_duels` CASCADE, `player_id`→`users` CASCADE. 6 CHECK-ов + индекс `player_id`.
+  - `pvp_mass_duel_damage_entries` (1:N от root, COMPLETED-only): compound PK `(duel_id, entry_idx)` (0-based, порядок-сохраняющий), `attacker_id` / `defender_id` (FK→users CASCADE, no-self CHECK), `attacker_attack` / `defender_block`, `blocked` (BOOL), `damage_cm` (non-negative, `blocked⇒damage=0` CHECK). 6 CHECK-ов.
+
+- **ORM-модели** (`infrastructure/db/models/pvp.py`, +~200 строк): `PvpMassDuelORM` / `PvpMassDuelChoiceORM` / `PvpMassDuelDamageEntryORM` — зеркало миграции, full-`Mapped[]`-аннотации, `__table_args__` с теми же CHECK-/Index-определениями (для in-memory SQLite-тестов). Зарегистрированы в `infrastructure/db/models/__init__.py` и в `tests/integration/db/conftest.py`.
+
+- **Доменный порт `IMassDuelRepository`** (`domain/pvp/repositories.py`, +~70 строк): `add(duel) → duel` (флаш для PK + insert ростера + опц. damage_entries), `get_by_id(*, duel_id) → MassDuel | None`, `save(duel) → duel` (синхронизация root + выборов; дозапись только новых damage-entries — иммутабельность existing-row-ов).
+
+- **`SqlAlchemyMassDuelRepository`** (`infrastructure/db/repositories/pvp_mass_duel.py`, ~410 строк): полная реализация порта + helper-converter-ы `_choice_orm_to_value_object`, `_damage_entry_orm_to_value_object`, `_build_clan_side`, `_split_choice_rows_by_side`, `_row_to_mass_duel`, `_apply_root_fields`, `_damage_entry_to_orm`. Frozen-roster-инвариант: попытка `save()`-а с другим набором `clan{1,2}_member_ids` → `IntegrityError` (last-line-of-defense, домен сам не позволил бы). Все `SqlAlchemyIntegrityError`-ы конвертируются в доменный `IntegrityError`.
+
+- **`FakeMassDuelRepository`** (`tests/fakes/mass_duel_repo.py`, ~70 строк): in-memory list `MassDuel`-ов, serial id (`max(...) + 1`), frozen-roster-guard. Будет использоваться в unit-тестах use-case-ов 2.2.E.
+
+- **+13 integration-тестов** (`tests/integration/db/pvp/test_pvp_mass_duel_repository.py`, ~545 строк):
+  - `TestInProgressPersistence`: add → assigned id; get_by_id round-trip без submit-ов; missing → None.
+  - `TestSubmitMovePersistence`: save после `submit_move` (один игрок) сохраняет выбор; save после всех `submit_move`-ов оставляет state=IN_PROGRESS.
+  - `TestCompletedPersistence`: resolve → COMPLETED + damage-entries; повторный save идемпотентен (не дублирует damage-entries).
+  - `TestCancelledPersistence`: cancel → CANCELLED, без final-полей.
+  - `TestErrorCases`: add с pre-set id, save без id, save с unknown id, save с tampered ростером.
+  - `TestUnequalRosters`: 3v1-сценарий (параллельные кортежи восстанавливаются в правильном порядке после round-trip).
+
+- **Обновлён `tests/integration/db/test_migrations.py`**: добавлен ассерт `0011_pvp_mass_duels` в наборе ревизий + новый тест `test_0011_descends_from_0010` + расширен `test_versions_dir_lists_only_known_files` + `test_upgrade_head_creates_all_tables` (3 новые таблицы).
+
+- **`make ci` зелёный**: lint (ruff) + typecheck (mypy --strict, 477 файлов) + import-linter (3 contracts) + 2176 тестов passed (1 skipped). Coverage `pvp_mass_duel.py` — 94%, общий — 95.91%.
+
+Результат / артефакты:
+- Миграция: `src/pipirik_wars/infrastructure/db/migrations/versions/20260505_0011_pvp_mass_duels.py`.
+- ORM: `src/pipirik_wars/infrastructure/db/models/pvp.py` (+ `__init__.py`).
+- Domain port: `src/pipirik_wars/domain/pvp/repositories.py` (+ `__init__.py`).
+- Repo: `src/pipirik_wars/infrastructure/db/repositories/pvp_mass_duel.py` (+ `__init__.py`).
+- Fake: `tests/fakes/mass_duel_repo.py`.
+- Тесты: `tests/integration/db/pvp/test_pvp_mass_duel_repository.py`, `tests/integration/db/test_migrations.py`, `tests/integration/db/conftest.py`.
+
+Заметки / решения:
+- **Почему 3 таблицы, а не одна с JSON-blob-ом?** Симметрично 1×1-pvp_duels (root + rounds): root-row хранит state-машину + snapshot-ы + финальный outcome; 1:N choices хранит ростер + выборы (один row на участника, indexed по `player_id` для быстрых query-ев); 1:N damage_entries хранит immutable-лог ударов (только COMPLETED, через `entry_idx` для детерминированного восстановления tuple-порядка). Никаких JSON-blob-ов — все CHECK-инварианты проверяются БД, не приложением.
+- **Frozen-roster-инвариант** проверяется и доменом (`MassDuel`-mutator-ы не меняют ростер), и репозиторием (`save()` сравнивает существующий ростер с новым). Это last-line-of-defense — если кто-то в обход домена соберёт `replace(duel, clan1_member_ids=...)`, репо это поймает.
+- **Damage-entries иммутабельны** после resolve. `save()` дописывает только row-ы, которых ещё нет (по `entry_idx`); существующие не апдейтит. Это даёт идемпотентность повторных save-ов и защищает от случайных тампер-row-ов.
+- **DI-провязка отложена до 2.2.E**: на этом спринте нет use-case-ов, потребляющих `IMassDuelRepository`, так что `bot/main.py` пока не трогаем (мёртвая привязка только засорит DI-граф).
+
+Следующий шаг — Спринт 2.2.E: use-case-ы (`StartMassDuel` / `SubmitMassMove` / `ResolveMassDuel` / `ForceResolveMassDuel`) + bot-handlers + локали + AFK-таймер + DI-провязка `mass_duels = SqlAlchemyMassDuelRepository(uow=uow)` в `build_dispatcher`.
+
+---
+
 ## 2026-05-05 — Спринт 2.2.C: доменный агрегат `MassDuel` (lifecycle state machine)
 
 **Автор:** Devin (по запросу shirline89)

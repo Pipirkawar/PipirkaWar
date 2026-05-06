@@ -26,6 +26,11 @@ PvP 1×1 (Спринт 2.1.C):
 
 PvP global lobby (Спринт 2.1.F):
 - `PvpGlobalLobbyORM` — таблица `pvp_global_lobby` (FIFO-очередь pending-вызовов GLOBAL_ONLY).
+
+PvP массовый клан×клан (Спринт 2.2.D):
+- `PvpMassDuelORM` — таблица `pvp_mass_duels`.
+- `PvpMassDuelChoiceORM` — таблица `pvp_mass_duel_choices`.
+- `PvpMassDuelDamageEntryORM` — таблица `pvp_mass_duel_damage_entries`.
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
@@ -37,6 +42,9 @@ from pipirik_wars.infrastructure.db.models.pvp import (
     PvpDuelORM,
     PvpDuelRoundORM,
     PvpGlobalLobbyORM,
+    PvpMassDuelChoiceORM,
+    PvpMassDuelDamageEntryORM,
+    PvpMassDuelORM,
 )
 from pipirik_wars.infrastructure.db.models.security import (
     ActivityLockORM,
@@ -57,6 +65,9 @@ __all__ = [
     "PvpDuelORM",
     "PvpDuelRoundORM",
     "PvpGlobalLobbyORM",
+    "PvpMassDuelChoiceORM",
+    "PvpMassDuelDamageEntryORM",
+    "PvpMassDuelORM",
     "SignupQueueORM",
     "UserORM",
 ]

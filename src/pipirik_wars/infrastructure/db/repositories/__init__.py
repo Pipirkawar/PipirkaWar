@@ -28,6 +28,9 @@ from pipirik_wars.infrastructure.db.repositories.player import (
 from pipirik_wars.infrastructure.db.repositories.pvp_duel import (
     SqlAlchemyDuelRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.pvp_mass_duel import (
+    SqlAlchemyMassDuelRepository,
+)
 from pipirik_wars.infrastructure.db.repositories.signup_queue import (
     SqlAlchemySignupQueueRepository,
 )
@@ -41,6 +44,7 @@ __all__ = [
     "SqlAlchemyDuelRepository",
     "SqlAlchemyForestRunRepository",
     "SqlAlchemyGlobalLobbyRepository",
+    "SqlAlchemyMassDuelRepository",
     "SqlAlchemyOracleHistoryRepository",
     "SqlAlchemyPlayerRepository",
     "SqlAlchemySignupQueueRepository",

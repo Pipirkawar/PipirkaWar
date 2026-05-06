@@ -84,7 +84,7 @@ from pipirik_wars.domain.pvp.mass_services import (
     resolve_mass_duel,
     resolve_mass_round,
 )
-from pipirik_wars.domain.pvp.repositories import IDuelRepository
+from pipirik_wars.domain.pvp.repositories import IDuelRepository, IMassDuelRepository
 from pipirik_wars.domain.pvp.services import (
     DEFAULT_DUEL_ROUNDS,
     resolve_duel,
@@ -103,6 +103,7 @@ __all__ = [
     "DuelWinner",
     "IDuelRepository",
     "IGlobalLobbyRepository",
+    "IMassDuelRepository",
     "InvalidDuelStateError",
     "InvalidLengthError",
     "InvalidMassDuelStateError",

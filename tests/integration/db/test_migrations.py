@@ -59,6 +59,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0008_audit_log_delta_cm" in revisions
         assert "0009_pvp_duels" in revisions
         assert "0010_pvp_global_lobby" in revisions
+        assert "0011_pvp_mass_duels" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -123,6 +124,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0010 is not None
         assert rev_0010.down_revision == "0009_pvp_duels"
 
+    def test_0011_descends_from_0010(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0011 = script.get_revision("0011_pvp_mass_duels")
+        assert rev_0011 is not None
+        assert rev_0011.down_revision == "0010_pvp_global_lobby"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -137,6 +145,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260505_0008_audit_log_delta_cm.py",
             "20260505_0009_pvp_duels.py",
             "20260505_0010_pvp_global_lobby.py",
+            "20260505_0011_pvp_mass_duels.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -183,6 +192,9 @@ class TestAlembicMigrationsApplyCleanly:
             "pvp_duels",
             "pvp_duel_rounds",
             "pvp_global_lobby",
+            "pvp_mass_duels",
+            "pvp_mass_duel_choices",
+            "pvp_mass_duel_damage_entries",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 

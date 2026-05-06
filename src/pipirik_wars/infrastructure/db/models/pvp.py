@@ -263,3 +263,230 @@ class PvpGlobalLobbyORM(Base):
     enqueued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (Index("ix_pvp_global_lobby_enqueued_at", "enqueued_at"),)
+
+
+class PvpMassDuelORM(Base):
+    """Таблица ``pvp_mass_duels`` — корневой row массового PvP-боя клан×клан
+    (Спринт 2.2.D).
+
+    Все state-related инварианты (IN_PROGRESS/COMPLETED/CANCELLED ↔
+    обязательность/null-абельность ``completed_at`` / ``cancelled_at`` /
+    финальных дельт и ``final_winner``) охраняются комплексным CHECK-ом
+    ``ck_pvp_mass_duels_state_invariants``. Zero-sum инвариант (Σ delta = 0)
+    охраняется отдельным CHECK-ом для дополнительной защиты от ручных
+    SQL-правок в обход доменного слоя.
+    """
+
+    __tablename__ = "pvp_mass_duels"
+
+    id: Mapped[int] = mapped_column(_AutoIncBigInt, primary_key=True, autoincrement=True)
+    clan1_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("clans.id", ondelete="CASCADE", name="fk_pvp_mass_duels_clan1_id_clans"),
+        nullable=False,
+    )
+    clan2_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("clans.id", ondelete="CASCADE", name="fk_pvp_mass_duels_clan2_id_clans"),
+        nullable=False,
+    )
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    hit_pct: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    final_clan1_total_dealt: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    final_clan2_total_dealt: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    final_clan1_delta_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    final_clan2_delta_cm: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    final_winner: Mapped[str | None] = mapped_column(String(8), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('in_progress', 'completed', 'cancelled')",
+            name="ck_pvp_mass_duels_state_valid",
+        ),
+        CheckConstraint(
+            "hit_pct BETWEEN 0 AND 100",
+            name="ck_pvp_mass_duels_hit_pct_range",
+        ),
+        CheckConstraint(
+            "clan1_id <> clan2_id",
+            name="ck_pvp_mass_duels_no_self_team",
+        ),
+        CheckConstraint(
+            "final_winner IS NULL OR final_winner IN ('clan1', 'clan2', 'draw')",
+            name="ck_pvp_mass_duels_final_winner_valid",
+        ),
+        CheckConstraint(
+            "(state = 'in_progress' AND completed_at IS NULL"
+            " AND cancelled_at IS NULL AND final_winner IS NULL"
+            " AND final_clan1_total_dealt IS NULL AND final_clan2_total_dealt IS NULL"
+            " AND final_clan1_delta_cm IS NULL AND final_clan2_delta_cm IS NULL)"
+            " OR (state = 'completed' AND completed_at IS NOT NULL"
+            " AND cancelled_at IS NULL AND final_winner IS NOT NULL"
+            " AND final_clan1_total_dealt IS NOT NULL"
+            " AND final_clan2_total_dealt IS NOT NULL"
+            " AND final_clan1_delta_cm IS NOT NULL"
+            " AND final_clan2_delta_cm IS NOT NULL)"
+            " OR (state = 'cancelled' AND cancelled_at IS NOT NULL"
+            " AND completed_at IS NULL AND final_winner IS NULL"
+            " AND final_clan1_total_dealt IS NULL AND final_clan2_total_dealt IS NULL"
+            " AND final_clan1_delta_cm IS NULL AND final_clan2_delta_cm IS NULL)",
+            name="ck_pvp_mass_duels_state_invariants",
+        ),
+        CheckConstraint(
+            "final_clan1_delta_cm IS NULL OR (final_clan1_delta_cm + final_clan2_delta_cm) = 0",
+            name="ck_pvp_mass_duels_zero_sum_delta",
+        ),
+        CheckConstraint(
+            "final_clan1_total_dealt IS NULL OR final_clan1_total_dealt >= 0",
+            name="ck_pvp_mass_duels_clan1_total_dealt_non_negative",
+        ),
+        CheckConstraint(
+            "final_clan2_total_dealt IS NULL OR final_clan2_total_dealt >= 0",
+            name="ck_pvp_mass_duels_clan2_total_dealt_non_negative",
+        ),
+        Index("ix_pvp_mass_duels_clan1_id_state", "clan1_id", "state"),
+        Index("ix_pvp_mass_duels_clan2_id_state", "clan2_id", "state"),
+        Index("ix_pvp_mass_duels_state_created_at", "state", "created_at"),
+    )
+
+
+class PvpMassDuelChoiceORM(Base):
+    """Таблица ``pvp_mass_duel_choices`` — ростер + выборы участников
+    массового боя (Спринт 2.2.D, 1:N от ``pvp_mass_duels``).
+
+    Один row на каждого игрока обеих сторон. Запись создаётся в
+    ``MassDuel.create_battle`` (через ``add(...)``-репозитория) с
+    заполненным ``initial_length_cm``; ``attack``/``block``/
+    ``submitted_at`` остаются NULL до ``submit_move(...)``.
+    """
+
+    __tablename__ = "pvp_mass_duel_choices"
+
+    duel_id: Mapped[int] = mapped_column(
+        _AutoIncBigInt,
+        ForeignKey(
+            "pvp_mass_duels.id",
+            ondelete="CASCADE",
+            name="fk_pvp_mass_duel_choices_duel_id_pvp_mass_duels",
+        ),
+        primary_key=True,
+    )
+    player_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+            name="fk_pvp_mass_duel_choices_player_id_users",
+        ),
+        primary_key=True,
+    )
+    clan_side: Mapped[str] = mapped_column(String(8), nullable=False)
+    initial_length_cm: Mapped[int] = mapped_column(Integer, nullable=False)
+    attack: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    block: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "clan_side IN ('clan1', 'clan2')",
+            name="ck_pvp_mass_duel_choices_clan_side_valid",
+        ),
+        CheckConstraint(
+            "initial_length_cm >= 0",
+            name="ck_pvp_mass_duel_choices_length_non_negative",
+        ),
+        CheckConstraint(
+            "attack IS NULL OR attack IN ('high', 'mid', 'low')",
+            name="ck_pvp_mass_duel_choices_attack_valid",
+        ),
+        CheckConstraint(
+            "block IS NULL OR block IN ('high', 'mid', 'low')",
+            name="ck_pvp_mass_duel_choices_block_valid",
+        ),
+        CheckConstraint(
+            "(attack IS NULL AND block IS NULL) OR (attack IS NOT NULL AND block IS NOT NULL)",
+            name="ck_pvp_mass_duel_choices_pair_consistent",
+        ),
+        CheckConstraint(
+            "(attack IS NULL AND submitted_at IS NULL)"
+            " OR (attack IS NOT NULL AND submitted_at IS NOT NULL)",
+            name="ck_pvp_mass_duel_choices_submitted_at_consistent",
+        ),
+        Index("ix_pvp_mass_duel_choices_player_id", "player_id"),
+    )
+
+
+class PvpMassDuelDamageEntryORM(Base):
+    """Таблица ``pvp_mass_duel_damage_entries`` — отрезолвенные удары
+    массового боя (Спринт 2.2.D, 1:N от ``pvp_mass_duels``, заполняется
+    только для COMPLETED-боёв).
+
+    Хранит 0-based ``entry_idx`` для сохранения порядка tuple-а
+    ``MassRoundOutcome.damage_entries``. Запись иммутабельна после
+    ``MassDuel.resolve(...)`` (как и сам outcome в домене).
+    """
+
+    __tablename__ = "pvp_mass_duel_damage_entries"
+
+    duel_id: Mapped[int] = mapped_column(
+        _AutoIncBigInt,
+        ForeignKey(
+            "pvp_mass_duels.id",
+            ondelete="CASCADE",
+            name="fk_pvp_mass_duel_damage_entries_duel_id_pvp_mass_duels",
+        ),
+        primary_key=True,
+    )
+    entry_idx: Mapped[int] = mapped_column(Integer, primary_key=True)
+    attacker_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+            name="fk_pvp_mass_duel_damage_entries_attacker_id_users",
+        ),
+        nullable=False,
+    )
+    defender_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+            name="fk_pvp_mass_duel_damage_entries_defender_id_users",
+        ),
+        nullable=False,
+    )
+    attacker_attack: Mapped[str] = mapped_column(String(8), nullable=False)
+    defender_block: Mapped[str] = mapped_column(String(8), nullable=False)
+    blocked: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    damage_cm: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "entry_idx >= 0",
+            name="ck_pvp_mass_duel_damage_entries_idx_non_negative",
+        ),
+        CheckConstraint(
+            "attacker_id <> defender_id",
+            name="ck_pvp_mass_duel_damage_entries_no_self",
+        ),
+        CheckConstraint(
+            "attacker_attack IN ('high', 'mid', 'low')",
+            name="ck_pvp_mass_duel_damage_entries_attack_valid",
+        ),
+        CheckConstraint(
+            "defender_block IN ('high', 'mid', 'low')",
+            name="ck_pvp_mass_duel_damage_entries_block_valid",
+        ),
+        CheckConstraint(
+            "damage_cm >= 0",
+            name="ck_pvp_mass_duel_damage_entries_damage_non_negative",
+        ),
+        CheckConstraint(
+            "(blocked = 0 OR damage_cm = 0)",
+            name="ck_pvp_mass_duel_damage_entries_damage_zero_when_blocked",
+        ),
+    )
