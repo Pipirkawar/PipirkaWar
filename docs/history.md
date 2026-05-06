@@ -23,6 +23,54 @@
 
 ---
 
+## 2026-05-06 — Спринт 2.4: реферальная система и шеринг (полное закрытие — A→F)
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 2.4 ([`current_tasks.md`](current_tasks.md), ПД §6 / задачи 2.4.1–2.4.6), ГДД §13.1 (реферальная схема), §13.2 (кнопка «Поделиться»), §13.3 (еженедельные итоги)
+
+Что сделано:
+- **2.4.A — Доменный слой реферальной системы** (`0cbe1e3`). Value-object `Referral(id, referrer_id, referred_id, signup_granted_at, last_milestone_thickness, created_at)`, port `IReferralRepository` (методы `get_by_referred_id`, `add`, `update`, `mark_signup_granted`, `bump_milestone`, `count_by_referrer_in_window`), 5 ошибок (`ReferralError` — базовая; `SelfReferralError`, `ReferrerNotRegisteredError`, `ReferralRaceError`, `SignupBonusAlreadyGrantedError`), 25 unit-тестов.
+- **2.4.B — Persistence-слой** (`56c7ce4`). Миграция `0015_create_referrals_table` (UNIQUE по `referred_id` — один новичок → один реферер, никаких смен), `ReferralRow` ORM, `SqlAlchemyReferralRepository` + `FakeReferralRepository`, +6 integration-тестов на UNIQUE-violation и race-условие.
+- **2.4.C — Application use-cases** (`5414693`). `RegisterReferral` (создаёт `Referral` с `signup_granted_at=None`), `GrantReferralSignupBonus` (выдаёт `signup_bonus_cm` рефереру, идемпотентно через `mark_signup_granted`), `GrantReferralThicknessMilestone` (на каждый milestone тиражности новичка выдаёт рефереру `milestone_bonus_cm` + `bump_milestone`), +24 unit-теста.
+- **2.4.D-a — Интеграция в `/start` и `/upgrade`** (`9580210`). Парсинг payload `start=ref_<id>` (только в ЛС, проверка типа чата + self-referral + кривой формат), `RegisterPlayer` зовёт `RegisterReferral` + `GrantReferralSignupBonus` после успешной регистрации, `UpgradeThickness` зовёт `GrantReferralThicknessMilestone` после апгрейда, локали `start-registered-with-referral` RU+EN.
+- **2.4.D-b — Кнопка «Поделиться» под результатом боя/леса** (`5197ced` + `82109a4`). `ReferralSharePresenter` (генерирует deep-link `t.me/{bot}?start=ref_<player_id>`), handler `referral_share.py` с callback_data `ref-share:{kind}:{entity_id}` (kind ∈ `duel`/`forest`), локали `referral-share-*` RU+EN, кнопка добавлена в presenter-ы `/duel` и `/forest`. ГДД §13.2.
+- **2.4.E — Еженедельный per-clan referral-summary cron, вс. 18:00 UTC** (`5e97ba4` + `877510b` + `36f4694` + `be5c756`).
+  - **E.1** — Доменный port `IReferralRepository.weekly_summary_by_clan(*, clan_id, since, until) -> Sequence[WeeklyClanReferralEntry]` + Sql-impl + Fake + integration-тесты на агрегацию по `referrer_id` внутри клана.
+  - **E.2** — Use-case `RunWeeklyClanReferralSummary` + DTO + notifier-port `IWeeklyClanReferralSummaryNotifier` + unit-тесты (frozen-clan / нет рефералов / happy-path / top-3 truncation).
+  - **E.3** — `WeeklyClanReferralSummaryPresenter` (рендер «новых бойцов за неделю + топ-3 приглашателей» через `IMessageBundle`), `TelegramWeeklyClanReferralSummaryNotifier`, локали `weekly-referral-summary-*` RU+EN, тесты presenter / notifier.
+  - **E.4** — Доменный port `IDelayedJobScheduler.schedule_weekly_clan_referral_summary_cron()` + `APSchedulerDelayedJobScheduler` impl (`CronTrigger(day_of_week='sun', hour=18, minute=0, timezone='UTC')`), DI в `bot/main.py` (`Container` + late-bound фабрика), bootstrap-call после `scheduler.start()`, composition-root тест. Узкая реферальная weekly-card (а не полная клановая из ГДД §13.3) — потому что агрегатов по PvP/караванам/рейдам в репозиториях ещё нет.
+- **2.4.F — Rate-limit-антифрод per-`referrer_tg_id` + audit-log** (`fa9b08b`).
+  - `IRateLimiter` перенесён из `infrastructure/rate_limit/` в `domain/shared/ports/rate_limiter.py` (требование import-linter contract — application не может зависеть от infrastructure).
+  - Новые audit-actions `REFERRAL_REGISTERED` и `REFERRAL_RATE_LIMITED` в `AuditAction`.
+  - `RegisterReferral` теперь принимает `rate_limiter: IRateLimiter` и `audit: IAuditLogger`. Перед открытием UoW проверяет `rate_limiter.try_acquire(key=f"referral:{referrer_tg_id}")`. Если `False` — записывает `REFERRAL_RATE_LIMITED` audit-entry в отдельной UoW (чтобы фиксация попытки не зависела от транзакции создания реферала) и бросает новую `ReferralRateLimitedError`. На happy-path после `referrals.add(...)` пишет `REFERRAL_REGISTERED` audit (`actor_id=referrer.id`, `target_kind="referral"`, `target_id=str(referral.id)`, `after={referrer_id, referred_id}`).
+  - `BotSettings.referral_rate_limit_capacity` (дефолт 10) + `referral_rate_limit_refill_per_hour` (дефолт 10/h) — настраиваемые через env-vars.
+  - Bot composition-root заводит **отдельную** инстанцию `InMemoryTokenBucketRateLimiter` для реферального bucket-а (refill = N/3600 сек), чтобы не пересекаться с глобальным throttle-rate-limiter-ом aiogram-update-ов.
+  - `/start`-handler swallow-ит `ReferralRateLimitedError` в no-op (новичок не должен видеть «реферер исчерпал лимит» — это ломает скан-стратегию атакующего; use-case уже записал audit).
+  - +5 unit-тестов на rate-limit (happy-path acquired / rate-limited raises + audit / self-referral short-circuits before limit / happy-path records REFERRAL_REGISTERED audit).
+  - **Задача 2.4.4 «Anti-fraud: minimum protection» закрыта частично** — IP/устройство в aiogram недоступны, реализован только token-bucket per-`referrer_tg_id`. Полноценный антифрод (IP-history, fingerprinting) — будущий спринт после интеграции с web-админкой (§4.5).
+- **CI после полного спринта**: 2829 passed / 1 skipped, coverage 96.11%, lint/typecheck/import-linter ✅.
+
+Результат / артефакты:
+- `src/pipirik_wars/domain/referral/` — доменный слой (entity, port, errors, scheduling-helpers).
+- `src/pipirik_wars/domain/shared/ports/rate_limiter.py` — port вынесен из infrastructure для соблюдения layered contract.
+- `src/pipirik_wars/application/referral/{register,grant_signup_bonus,grant_thickness_milestone,run_weekly_clan_summary,weekly_summary_dto,weekly_summary_notifier}.py` — application use-cases.
+- `src/pipirik_wars/infrastructure/db/repositories/referral.py` + миграция `0015_*.py` — persistence.
+- `src/pipirik_wars/infrastructure/scheduler/aps.py` — `schedule_weekly_clan_referral_summary_cron` + callback.
+- `src/pipirik_wars/bot/handlers/{start.py,referral_share.py}` — payload + кнопка «Поделиться».
+- `src/pipirik_wars/bot/presenters/{weekly_referral_summary.py,referral_share.py}` + `bot/notifications/weekly_referral_summary.py` — UI-слой.
+- `src/pipirik_wars/locales/{ru,en}/referral.ftl` — локали.
+- `tests/{unit,integration}/...` — ~80 новых тестов суммарно по всему спринту.
+
+Заметки / решения:
+- **Перенос `IRateLimiter` в domain** был вынужденной правкой при F-шаге: до 2.4.F port жил в `infrastructure/rate_limit/token_bucket.py`, потому что использовался только bot-middleware-ом и не нужен был application-слою. С появлением антифрода в `RegisterReferral` import-linter contract «application не зависит от infrastructure» сработал жёстко — port пришлось поднять в `domain/shared/ports/rate_limiter.py`. Реализация осталась в infrastructure.
+- **Раздельный UoW для `REFERRAL_RATE_LIMITED` audit** — чтобы попытка фиксировалась даже если последующая логика не выполняется (нет создания реферала). Если бы audit писался в той же UoW, что и rejected-add, при exception-е audit бы откатился вместе с транзакцией.
+- **Тихий no-op в handler-е при `ReferralRateLimitedError`** — намеренно: feedback «реферер исчерпал лимит» сломал бы скан-стратегию атакующего (он бы понял, какие tg_id уже исчерпали bucket, и оптимизировал атаку). Audit фиксирует попытку, но новичок видит обычный `/start`-flow без реферала.
+- **Узкая реферальная weekly-card вместо полной клановой** в 2.4.E — компромисс, потому что в ГДД §13.3 weekly-card должна также включать PvP-стату клана, караваны, рейды, но соответствующих репозиторных агрегатов ещё нет. Решено: сейчас закрываем именно реферальную часть (это в скоупе спринта 2.4); расширение до полной клановой weekly-card — в спринтах 3.x после реализации караванов и рейдов.
+- **Token-bucket-параметры** (capacity=10, refill=10/час) выбраны как «реалистичный пригласил-друзей-за-вечер без блока, но достаточно жёстко чтобы скан-атака 1000 фейк-tg выявилась за час». Если в production эти цифры окажутся неподходящими — `BotSettings`-fields позволяют менять без code-deploy через env-vars.
+
+---
+
 ## 2026-05-06 — Спринт 2.3.F.2: per-clan APScheduler-cron «Главы клана дня» (deterministic offset + bootstrap + midnight reschedule)
 
 **Автор:** Devin (агент)

@@ -24,11 +24,12 @@
 - ✅ `2865452` Спринт 2.4.C (фикс): убран `unused-ignore` в `test_entities.py`.
 - ✅ `9580210` Спринт **2.4.D-a**: интеграция реферальных use-cases в `/start` и `/upgrade` — payload `start=ref_<id>` (только в ЛС, антифрод по типу чата + self-referral + кривой формат), `RegisterPlayer` → `RegisterReferral` + `GrantReferralSignupBonus`, `UpgradeThickness` → `GrantReferralThicknessMilestone`, локали `start-registered-with-referral` RU+EN.
 - ✅ `5197ced` + `82109a4` Спринт **2.4.D-b**: кнопка «Поделиться» под результатом `/duel` и `/forest` (presenter `ReferralSharePresenter` + handler `referral_share.py` с callback_data `ref-share:{kind}:{entity_id}` + локали `referral-share-*` RU+EN, ГДД §13.2) + 26 тестов presenter + 14 тестов handler + fix forest-notifier-теста.
-- ⏳ **Остаётся (текущая сессия):** **2.4.E** — еженедельный per-clan cron (вс. 18:00 UTC) с реферальной weekly-card (новых бойцов + топ-3 приглашателей за неделю); **2.4.F** — rate-limit-антифрод per-`referrer_tg_id` на `RegisterReferral` + audit-лог попыток (задача 2.4.4 — закрывается «частично», IP/устройство в aiogram недоступны).
+- ✅ `5e97ba4` + `877510b` + `36f4694` + `be5c756` Спринт **2.4.E**: еженедельный per-clan referral-summary-cron (вс. 18:00 UTC). E.1 — `IReferralRepository.weekly_summary_by_clan` + Sql + Fake + integration-тесты. E.2 — use-case `RunWeeklyClanReferralSummary` + DTO + unit-тесты. E.3 — `WeeklyClanReferralSummaryPresenter` + `TelegramWeeklyClanReferralSummaryNotifier` + локали RU+EN + тесты. E.4 — `IDelayedJobScheduler.schedule_weekly_clan_referral_summary_cron` + APScheduler `CronTrigger(day_of_week='sun', hour=18)` + DI + composition-root тест.
+- ✅ `fa9b08b` Спринт **2.4.F**: rate-limit-антифрод per-`referrer_tg_id` (token-bucket, дефолт 10/h, настраивается в `BotSettings`) — перенос `IRateLimiter` в `domain/shared/ports/`, интеграция в `RegisterReferral`, audit-actions `REFERRAL_REGISTERED` + `REFERRAL_RATE_LIMITED` (раздельный UoW для фиксации попытки без создания реферала), `ReferralRateLimitedError` + handler swallow-it. Задача 2.4.4 закрыта «частично» — IP/устройство в aiogram недоступны.
 
-**Открытого PR на 2.4 нет.** PR будет открыт после закрытия 2.4.E и 2.4.F и зелёного `make ci`.
+**Спринт 2.4 полностью закрыт в этой сессии.** PR будет открыт после этого коммита. CI: 2829 passed / 1 skipped, coverage 96.11%.
 
-**`AGENT_HANDOFF.md` на feature-ветке:** есть (актуализирован под текущую сессию — safety-net). Удаляется отдельным коммитом перед открытием PR.
+**`AGENT_HANDOFF.md` на feature-ветке:** будет удалён отдельным коммитом перед открытием PR.
 
 ---
 
@@ -36,16 +37,16 @@
 
 | Поле | Значение |
 |---|---|
-| **Активный спринт** | `2.4 — Реферальная система и шеринг` |
-| **Активный PR / шаг** | `2.4.E → 2.4.F` (полное закрытие спринта 2.4) |
-| **Активная feature-ветка** | `devin/1778068742-sprint-2-4-a-referral-domain` (продолжаем существующую ветку, `origin/main` уже влит) |
+| **Активный спринт** | `2.4 — Реферальная система и шеринг` (закрыт) |
+| **Активный PR / шаг** | финал: удалить HANDOFF, перенести в history.md, открыть PR |
+| **Активная feature-ветка** | `devin/1778068742-sprint-2-4-a-referral-domain` |
 | **Базовая ветка** | `main` |
-| **Последний коммит на ветке** | `82109a4` `test(referral): unit-тесты ReferralSharePresenter + handler + fix forest notifier test` |
-| **PR (если открыт)** | ещё не открыт; будет один PR на закрытие 2.4 (E + F) |
-| **CI статус** | зелёный (`make ci` на момент приёмки этой сессии — lint/typecheck/import-linter ✅; pytest 2781 passed / 1 skipped, coverage 96.10%) |
+| **Последний коммит на ветке** | `fa9b08b` `feat(referral): rate-limit antifraud per-referrer + audit-log + ReferralRateLimitedError [Спринт 2.4.F]` |
+| **PR (если открыт)** | будет открыт после удаления HANDOFF + записи в history.md |
+| **CI статус** | зелёный (`make ci` после 2.4.F: 2829 passed / 1 skipped, coverage 96.11%, lint/typecheck/import-linter ✅) |
 | **Связанная задача в `development_plan.md`** | §6 / Спринт 2.4 / задачи 2.4.4 (антифрод), 2.4.6 (weekly cron) |
 | **Связанная спецификация в `game_design.md`** | §13.1 (реферальная схема), §13.3 (еженедельные итоги) |
-| **`AGENT_HANDOFF.md` существует?** | да (см. `/AGENT_HANDOFF.md` в корне) |
+| **`AGENT_HANDOFF.md` существует?** | да (будет удалён перед открытием PR) |
 
 ---
 
@@ -53,19 +54,18 @@
 
 > Отмечай `[x]` по мере выполнения. **Перед каждым `git commit`** обнови этот чек-лист (даже если шаг ещё не закрыт — отметь, что начат). Это safety-net на случай, если агент прервётся в середине работы.
 
-- [x] **2.4.D-b** (закрыто коммитами `5197ced` + `82109a4`): кнопка «Поделиться» в результате `/duel` и `/forest` — `ReferralSharePresenter` + handler `referral_share.py` (callback_data `ref-share:{kind}:{entity_id}`) + локали `referral-share-*` RU+EN + 26 тестов presenter + 14 тестов handler. ГДД §13.2.
-- [ ] **2.4.E**: weekly per-clan referral summary cron.
-    - [ ] E.1: `IReferralRepository.weekly_summary_by_clan(*, clan_id, since, until) -> Sequence[WeeklyClanReferralEntry]` (домен) + Sql + Fake + integration-тесты.
-    - [ ] E.2: use-case `RunWeeklyClanReferralSummary` + DTO + unit-тесты (frozen-clan / нет рефералов / happy-path / top-3 truncation).
-    - [ ] E.3: presenter `WeeklyClanReferralSummaryPresenter` + Telegram-notifier `TelegramWeeklyClanReferralSummaryNotifier` + локали `weekly-referral-summary-*` (RU+EN) + тесты presenter / notifier.
-    - [ ] E.4: `IDelayedJobScheduler.schedule_weekly_clan_referral_summary_cron()` + APScheduler `CronTrigger(day_of_week='sun', hour=18, timezone='UTC')` + DI в `bot/main.py` + bootstrap-call + composition-root тест.
-- [ ] **2.4.F**: rate-limit-антифрод на `RegisterReferral`.
-    - [ ] F.1: `IReferralRateLimiter` (домен) + балансовый параметр `referral.antifraud.max_per_referrer_per_hour` (дефолт 10) + audit-action `ANTICHEAT_REFERRAL_RATE_LIMITED`.
-    - [ ] F.2: in-memory реализация (`InMemoryReferralRateLimiter`) + Fake + использование в `RegisterReferral` (новая ветка `ReferralRateLimited`-result, handler swallow-ит).
-    - [ ] F.3: запись попыток в `audit_log` + unit/integration-тесты + пометка в ГДД §13.1 о принятых ограничениях антифрода.
-- [ ] **Перед PR:** обнови «Связанные документы» в `game_design.md` / `development_plan.md`, если расширил поведение.
-- [ ] **Перед PR:** прогон локального CI — `make ci` зелёный.
-- [ ] **Перед мерджем:** перенеси запись о завершённом спринте в `history.md` (свежие — сверху); удали `AGENT_HANDOFF.md` отдельным коммитом; пересоздай этот чек-лист под следующий спринт.
+- [x] **2.4.D-b** (`5197ced` + `82109a4`): кнопка «Поделиться» в результате `/duel` и `/forest`.
+- [x] **2.4.E**: weekly per-clan referral summary cron.
+    - [x] E.1 (`5e97ba4`): `IReferralRepository.weekly_summary_by_clan` + `WeeklyClanReferralEntry` + Sql + Fake + integration-тесты.
+    - [x] E.2 (`877510b`): use-case `RunWeeklyClanReferralSummary` + DTO + notifier-порт + unit-тесты.
+    - [x] E.3 (`36f4694`): `WeeklyClanReferralSummaryPresenter` + `TelegramWeeklyClanReferralSummaryNotifier` + локали RU+EN + тесты presenter / notifier.
+    - [x] E.4 (`be5c756`): `IDelayedJobScheduler.schedule_weekly_clan_referral_summary_cron` + APScheduler `CronTrigger(day_of_week='sun', hour=18)` + DI в `bot/main.py` + bootstrap-call + composition-root тест.
+- [x] **2.4.F** (`fa9b08b`): rate-limit-антифрод на `RegisterReferral`.
+    - [x] F.1: `IRateLimiter` перенесён в `domain/shared/ports/`, audit-actions `REFERRAL_REGISTERED` + `REFERRAL_RATE_LIMITED`, параметры `BotSettings.referral_rate_limit_capacity` (дефолт 10) и `referral_rate_limit_refill_per_hour` (дефолт 10/h).
+    - [x] F.2: переиспользован существующий `InMemoryTokenBucketRateLimiter` (отдельная инстанция для реферального bucket-а), `RegisterReferral` бросает `ReferralRateLimitedError`, хэндлер `/start` swallow-ит.
+    - [x] F.3: запись попыток в `audit_log` (отдельный UoW) + unit-тесты (happy / rate-limited / self-referral short-circuits / audit recorded). Задача 2.4.4 закрыта «частично» — IP/device в aiogram недоступны.
+- [x] **Перед PR:** прогон `make ci` зелёный (2829 passed, coverage 96.11%).
+- [ ] **Перед мерджем:** перенести запись в `history.md`; удалить `AGENT_HANDOFF.md`; пересоздать этот чек-лист под следующий спринт.
 
 ---
 
