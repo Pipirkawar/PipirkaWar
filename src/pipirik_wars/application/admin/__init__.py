@@ -44,6 +44,13 @@ from pipirik_wars.application.admin.grant_length import (
     GrantLengthInput,
     GrantLengthOutput,
 )
+from pipirik_wars.application.admin.grant_thickness import (
+    GrantThickness,
+    GrantThicknessBlockedError,
+    GrantThicknessInput,
+    GrantThicknessOutput,
+    ThicknessLevelInvalidError,
+)
 from pipirik_wars.application.admin.request_confirm import (
     RequestAdminConfirm,
     RequestAdminConfirmInput,
@@ -81,11 +88,16 @@ __all__ = [
     "GrantLengthBlockedError",
     "GrantLengthInput",
     "GrantLengthOutput",
+    "GrantThickness",
+    "GrantThicknessBlockedError",
+    "GrantThicknessInput",
+    "GrantThicknessOutput",
     "PlayerCard",
     "PlayerSummary",
     "RequestAdminConfirm",
     "RequestAdminConfirmInput",
     "RequestAdminConfirmOutput",
+    "ThicknessLevelInvalidError",
     "TokenFactory",
     "UnfreezePlayer",
     "UnfreezePlayerInput",
