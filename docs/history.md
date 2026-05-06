@@ -23,6 +23,38 @@
 
 ---
 
+## 2026-05-07 — Спринт 2.5-B: команды поддержки в боте (`/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban` + TOTP, `/confirm`)
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 2.5 (`current_tasks.md`), ПД §5 / задачи 2.5.3 (find_player/player/freeze/unfreeze/ban), 2.5.5 (TOTP на /ban), 2.5.9 (use-case-каркас); ГДД §18.6 (основной канал администрирования — Telegram-бот), [PR #81](https://github.com/Pipirkawar/PipirkaWar/pull/81) (мерж — `3653e40`)
+
+Что сделано:
+- **2.5-B.1 — `/find_player <text>`** (`ac48f19`). Use-case `FindPlayers(query, limit) -> Sequence[PlayerSummary]`: поиск по `tg_id` (точно), `@username` (точно), либо case-insensitive `ILIKE`-подстроке (`username`/`name`) с экранированием LIKE-wildcards (`%`/`_`). Без TOTP. Аудит: `ADMIN_PLAYER_LOOKUP`. Расширены `IPlayerRepository.find_by_query` (Sql + Fake), локали `admin-find-player-*` (RU + EN). Unit + integration на repo + handler.
+- **2.5-B.2 — `/player <tg_id>`** (`a909304`). Use-case `GetPlayerCard(tg_id) -> PlayerCard`: длина, толщина, статус, anticheat-soft-ban-таймер, клан + роль, активный forest-run. Без TOTP. Аудит: `ADMIN_PLAYER_LOOKUP`. Локали `admin-player-*`. Список последних 5 PvP/PvE-боёв вынесен в B-followup (`IDuelRepository`/`IMassDuelRepository`/`IForestRunRepository` сейчас не имеют read-метода «последние N для игрока» — вынесли точечным PR).
+- **2.5-B.3 — `/freeze <tg_id> [reason]`** / **`/unfreeze <tg_id>`** (`7b81d52`). Use-cases `FreezePlayer` / `UnfreezePlayer` через `IPlayerRepository.freeze` / `unfreeze`. Без TOTP (обратимая операция). Идемпотентно: повторная заморозка/разморозка не пишет в audit и возвращает `was_already_frozen=True` / `was_already_active=True`. Аудит: `ADMIN_PLAYER_FROZEN` / `ADMIN_PLAYER_UNFROZEN` с `before/after`. Локали `admin-freeze-*` / `admin-unfreeze-*`.
+- **2.5-B.4 — `/ban <tg_id> <reason>`** + **2.5-B.5 — `/confirm <token> <code>`** (`47a8759`). Добавлены `PlayerStatus.BANNED` + доменный метод `Player.ban(now)` (идемпотентный). Use-case `BanPlayer` (post-TOTP, защита-в-глубину `is_active` + reason-non-empty). Handler `/ban` зовёт `RequestAdminConfirm(command_kind="ban", payload={target_tg_id, reason})`, отвечает токеном и инструкцией `/confirm <token> <code>`. Общий `/confirm`-dispatcher зовёт `VerifyAdminConfirm`, диспатчит по `command_kind` (на MVP только `ban → BanPlayer.execute()`); неизвестный `command_kind` или сломанный payload → `admin-confirm-unknown-command-kind`. Аудит: `ADMIN_PLAYER_BANNED` (на успехе); неудачные TOTP-попытки уже пишет `VerifyAdminConfirm` как `ADMIN_CONFIRM_FAILED` с привязкой `command_kind=ban` — `ADMIN_BAN_BLOCKED` отдельно не вводили. Локали `admin-ban-*` / `admin-confirm-*`.
+- **2.5-B.6 — Регистрация `admin_support_router`** (`d95a01f`). `dispatcher.include_router(admin_support_router)` в `bot/handlers/__init__.py` поверх `AdminGuard` из 2.5-A. Router-фильтр `IsAdminFilter` живёт прямо на самом router-е (`router.message.filter(IsAdminFilter())` + `.callback_query.filter(...)`), читает `data["admin"]` от `AdminGuard`. Не-админы тихо проходят мимо (filter возвращает `False`). Если `AdminGuard` не подключён — secure default = отказать. Файлы `bot/filters/admin.py`, `bot/filters/__init__.py`, `bot/handlers/admin_support.py`, `bot/handlers/__init__.py`. 4 unit-теста на фильтр.
+- **2.5-B.7 — DI use-case-ов в `Container`** (`3c016b7`). `find_players`, `get_player_card`, `freeze_player`, `unfreeze_player`, `ban_player`, `request_admin_confirm`, `verify_admin_confirm` + `SqlAlchemyAdminAuditLogger` (write-side `admin_audit_log`), `InMemoryAdminConfirmStore` (singleton, TTL 60 сек — переживать рестарт смысла нет), `PyOtpTotpVerifier`, `TokenFactory = _default_admin_token_factory` (`secrets.token_urlsafe(16)`). Все 7 use-case-ов прокинуты в `dispatcher` workflow-data. Расширения `test_composition_root` под полный стек.
+
+Результат / артефакты:
+- Domain: `domain/player/{entities,repositories}.py` (новые порты `find_by_query` / `freeze` / `unfreeze` / `Player.ban` / `PlayerStatus.BANNED`); `domain/admin/ports/admin_audit.py` (расширение enum `AdminAuditAction`).
+- Application: `application/admin/{find_players,get_player_card,freeze_player,unfreeze_player,ban_player}.py`.
+- Infrastructure: `infrastructure/db/repositories/player.py` (Sql-impl новых методов с экранированием LIKE-wildcards).
+- Bot: `bot/filters/admin.py` (`IsAdminFilter`), `bot/handlers/admin_support.py` (5 handler-ов + `/confirm` dispatcher), `bot/presenters/admin_support.py`, обновлён `bot/main.py` (DI use-case-ов в workflow-data).
+- Локали: новые ключи в `locales/{ru,en}.ftl` (`admin-find-player-*`, `admin-player-*`, `admin-freeze-*`, `admin-unfreeze-*`, `admin-ban-*`, расширены `admin-confirm-*`).
+- Тесты: `tests/unit/application/admin/test_{find_players,get_player_card,freeze_unfreeze,ban_player}.py`, `tests/unit/bot/handlers/test_admin_support.py` (e2e на TOTP-flow `/ban` → `/confirm`: happy / token expired / token not found / admin mismatch / code invalid / TOTP not configured / unknown command_kind / payload typo / target disappeared / already banned), `tests/unit/bot/filters/test_admin.py`, `tests/fakes/totp_verifier.py`, расширения `tests/integration/db/test_player_repository.py` (`find_by_query_*` × 7 + `freeze_unfreeze_round_trip`), расширения `tests/unit/bot/test_composition_root.py`.
+- CI на момент мерджа (PR #81): **2997 passed / 1 skipped, coverage 96.18%**, ruff / mypy --strict (629 файлов) / import-linter — 3 контракта kept.
+
+Заметки / решения:
+- **`PlayerStatus.BANNED`** добавлен как доменный enum-член. Проверка `Player.ban(now)` идемпотентна: повторный `ban` на уже забаненного игрока не меняет состояние и не пишет аудит. На уровне БД бан фиксируется через `save()` (статус-поле), отдельный `IPlayerRepository.ban`-метод не нужен — `save_persists_mutations` integration-тест уже покрывает запись.
+- **`ADMIN_BAN_BLOCKED`** не вводили: `VerifyAdminConfirm` уже пишет `ADMIN_CONFIRM_FAILED` с `command_kind=ban` в payload — фильтр в `/audit` (2.5-D) сможет вывести «попытки забанить, которые провалились на TOTP». Дублирование событий лишнее.
+- **`InMemoryAdminConfirmStore` остался singleton-ом без переноса в БД.** TTL — 60 секунд; пользы от выживания между рестартами нет, а с многоинстансным деплоем разберёмся в Фазе 4 (Webhook + Redis). Если деплой остаётся single-instance long-polling — проблема не возникает.
+- **`IsAdminFilter` на router-е, а не на handler-ах.** `admin_support_router.message.filter(IsAdminFilter())` + `.callback_query.filter(...)` — это идиома aiogram-3 для admin-namespace-а. Filter получает `Update` + `data` (через `event_data` keyword), читает `data["admin"]`, возвращает `False` если не админ. Тихий отказ — secure default; обычный игрок, набирая `/find_player`, не получает ответа. Если `AdminGuard` не подключён (например, на тестовом запуске без БД) — `data["admin"]` отсутствует, fail-closed.
+- **Список последних 5 PvP/PvE-боёв в `/player` отложен** (B-followup). Текущая карточка отвечает на 90% запросов поддержки (длина/толщина/клан/активный forest); добавление новых read-методов `IDuelRepository.list_recent_for_player(N)` / `IMassDuelRepository.list_recent_for_player(N)` / `IForestRunRepository.list_recent_for_player(N)` потребует Sql-индексов и пересмотра агрегатов — это отдельный рефактор, которому не место в B.
+
+---
+
 ## 2026-05-07 — Спринт 2.5-A: каркас расширенного админ-интерфейса (admin_audit_log + AdminGuard + TOTP-confirm)
 
 **Автор:** Devin (агент)
