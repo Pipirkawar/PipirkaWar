@@ -71,7 +71,13 @@ class FindPlayersOutput:
     results: Sequence[PlayerSummary]
 
 
-def _to_summary(player: Player) -> PlayerSummary:
+def player_to_summary(player: Player) -> PlayerSummary:
+    """Сжать `Player`-агрегат до сводки `PlayerSummary`.
+
+    Вынесено наружу одним именем — `GetPlayerCard` (B.2) использует
+    тот же контракт сводки, чтобы handler-ы `/find_player` и `/player`
+    рендерили одну и ту же шапку игрока.
+    """
     return PlayerSummary(
         tg_id=player.tg_id,
         username=player.username.value if player.username is not None else None,
@@ -150,7 +156,7 @@ class FindPlayers:
 
         return FindPlayersOutput(
             query=normalized_query,
-            results=tuple(_to_summary(row) for row in rows),
+            results=tuple(player_to_summary(row) for row in rows),
         )
 
 
@@ -160,4 +166,5 @@ __all__ = [
     "FindPlayersInput",
     "FindPlayersOutput",
     "PlayerSummary",
+    "player_to_summary",
 ]

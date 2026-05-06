@@ -559,3 +559,16 @@ admin-find-player-header = 🔍 Найдено игроков: { $count } (по 
 # Одна строка списка. Параметры: $tg_id, $username (или "—"), $name (или "—"),
 #  $title (или "—"), $length_cm, $thickness_level, $status (текстовая метка).
 admin-find-player-row = • <code>{ $tg_id }</code> · @{ $username } · «{ $name }» · { $title } · L{ $length_cm }/T{ $thickness_level } · { $status }
+
+# /player <tg_id>
+admin-player-usage = ⚠️ Использование: <code>/player &lt;tg_id&gt;</code>. Параметр обязателен.
+admin-player-not-authorized = ❌ Только активные админы могут смотреть карточки игроков.
+admin-player-bad-id = ⚠️ <code>{ $value }</code> не похож на tg_id (целое число). Попробуй ещё раз.
+admin-player-not-found = 🔍 Игрок с tg_id <code>{ $tg_id }</code> не найден.
+admin-player-card-summary = • <code>{ $tg_id }</code> · @{ $username } · «{ $name }» · { $title } · L{ $length_cm }/T{ $thickness_level } · { $status }
+admin-player-card-clan = 🏰 Клан: <code>{ $title }</code> ({ $clan_status }) · роль { $role } · с { $joined_at }
+admin-player-card-no-clan = 🏰 Клан: —
+admin-player-card-forest-active = 🌲 Активный поход в лес #{ $run_id }: с { $started_at }, до { $ends_at }.
+admin-player-card-no-forest = 🌲 Активного похода нет.
+admin-player-card-anticheat = 🛡️ Anti-cheat-бан до: { $until }.
+admin-player-card-no-anticheat = 🛡️ Anti-cheat-бан: не активен.

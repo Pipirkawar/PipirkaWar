@@ -553,3 +553,16 @@ admin-find-player-header = 🔍 Found { $count } player(s) for query <code>{ $qu
 # Single row. Parameters: $tg_id, $username (or "—"), $name (or "—"),
 #  $title (or "—"), $length_cm, $thickness_level, $status.
 admin-find-player-row = • <code>{ $tg_id }</code> · @{ $username } · «{ $name }» · { $title } · L{ $length_cm }/T{ $thickness_level } · { $status }
+
+# /player <tg_id>
+admin-player-usage = ⚠️ Usage: <code>/player &lt;tg_id&gt;</code>. The argument is required.
+admin-player-not-authorized = ❌ Only active admins may view player cards.
+admin-player-bad-id = ⚠️ <code>{ $value }</code> is not a valid tg_id (integer). Try again.
+admin-player-not-found = 🔍 No player with tg_id <code>{ $tg_id }</code>.
+admin-player-card-summary = • <code>{ $tg_id }</code> · @{ $username } · «{ $name }» · { $title } · L{ $length_cm }/T{ $thickness_level } · { $status }
+admin-player-card-clan = 🏰 Clan: <code>{ $title }</code> ({ $clan_status }) · role { $role } · since { $joined_at }
+admin-player-card-no-clan = 🏰 Clan: —
+admin-player-card-forest-active = 🌲 Active forest run #{ $run_id }: from { $started_at } to { $ends_at }.
+admin-player-card-no-forest = 🌲 No active forest run.
+admin-player-card-anticheat = 🛡️ Anti-cheat ban until: { $until }.
+admin-player-card-no-anticheat = 🛡️ Anti-cheat ban: not active.

@@ -20,11 +20,16 @@ from aiogram.types import Message
 from pipirik_wars.application.admin import (
     FindPlayers,
     FindPlayersInput,
+    GetPlayerCard,
+    GetPlayerCardInput,
 )
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.bot.middlewares import TgIdentity
-from pipirik_wars.bot.presenters.admin_support import FindPlayerPresenter
+from pipirik_wars.bot.presenters.admin_support import (
+    FindPlayerPresenter,
+    GetPlayerCardPresenter,
+)
 
 router = Router(name="admin_support")
 
@@ -81,4 +86,58 @@ async def handle_find_player(
             query=result.query,
             results=result.results,
         ),
+    )
+
+
+@router.message(Command("player"))
+async def handle_player(
+    message: Message,
+    command: CommandObject,
+    tg_identity: TgIdentity | None,
+    get_player_card: GetPlayerCard,
+    bundle: IMessageBundle,
+    locale: Locale | None = None,
+) -> None:
+    """`/player <tg_id>` — карточка игрока (Спринт 2.5-B.2).
+
+    Аргумент строго целое число. Локализованные ответы — `admin-player-*`.
+    """
+    presenter = GetPlayerCardPresenter(bundle=bundle)
+    effective_locale = locale or DEFAULT_LOCALE
+
+    chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
+    if chat_kind != "private" or tg_identity is None:
+        await message.answer(REPLY_NON_PRIVATE_RU)
+        return
+
+    raw = (command.args or "").strip()
+    if not raw:
+        await message.answer(presenter.usage(locale=effective_locale))
+        return
+    try:
+        target_tg_id = int(raw)
+    except ValueError:
+        await message.answer(presenter.bad_id(locale=effective_locale, value=raw))
+        return
+
+    try:
+        result = await get_player_card.execute(
+            GetPlayerCardInput(
+                actor_tg_id=tg_identity.tg_user_id,
+                target_tg_id=target_tg_id,
+                tg_chat_id=tg_identity.chat_id,
+            ),
+        )
+    except AuthorizationError:
+        await message.answer(presenter.not_authorized(locale=effective_locale))
+        return
+
+    if result.card is None:
+        await message.answer(
+            presenter.not_found(locale=effective_locale, tg_id=target_tg_id),
+        )
+        return
+
+    await message.answer(
+        presenter.render(locale=effective_locale, card=result.card),
     )
