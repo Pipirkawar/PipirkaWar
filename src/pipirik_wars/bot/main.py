@@ -474,6 +474,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         escalate_factory=lambda: escalate_chat_to_global,
         expire_factory=lambda: expire_lobby_entry,
         afk_resolution_factory=lambda: resolve_afk_round,
+        mass_duel_afk_factory=lambda: force_resolve_mass_duel,
     )
     start_forest_run = StartForestRun(
         uow=uow,
@@ -632,6 +633,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         balance=balance,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
     )
     submit_mass_move = SubmitMassMove(
         uow=uow,
@@ -648,6 +650,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         random=RealRandom(),
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
     )
     force_resolve_mass_duel = ForceResolveMassDuel(
         uow=uow,
@@ -658,6 +661,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         random=RealRandom(),
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
     )
     cancel_mass_duel = CancelMassDuel(
         uow=uow,
@@ -665,6 +669,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         locks=activity_lock_service,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
     )
     return Container(
         clock=clock,

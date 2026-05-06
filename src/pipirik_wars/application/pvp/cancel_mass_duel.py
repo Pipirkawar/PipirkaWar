@@ -35,6 +35,7 @@ from pipirik_wars.domain.shared.ports import (
     AuditEntry,
     IAuditLogger,
     IClock,
+    IDelayedJobScheduler,
     IUnitOfWork,
 )
 
@@ -55,6 +56,7 @@ class CancelMassDuel:
         "_clock",
         "_duels",
         "_locks",
+        "_scheduler",
         "_uow",
     )
 
@@ -66,12 +68,14 @@ class CancelMassDuel:
         locks: ActivityLockService,
         audit: IAuditLogger,
         clock: IClock,
+        scheduler: IDelayedJobScheduler | None = None,
     ) -> None:
         self._uow = uow
         self._duels = duels
         self._locks = locks
         self._audit = audit
         self._clock = clock
+        self._scheduler = scheduler
 
     async def execute(self, input_dto: CancelMassDuelInput) -> MassDuelCancelled:
         """Отменить бой. Бросает:
@@ -109,8 +113,13 @@ class CancelMassDuel:
                     occurred_at=now,
                 )
             )
+            saved_id = saved.id
 
-            return MassDuelCancelled(duel=saved, was_already_cancelled=False)
+        # AFK-таймер снимаем снаружи UoW (идемпотентная операция шедулера).
+        if self._scheduler is not None:
+            await self._scheduler.cancel_mass_duel_afk_resolution(duel_id=saved_id)
+
+        return MassDuelCancelled(duel=saved, was_already_cancelled=False)
 
 
 __all__ = [

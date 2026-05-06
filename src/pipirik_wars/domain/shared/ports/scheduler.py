@@ -30,6 +30,16 @@ global_lobby_ttl_minutes}`).
 Job-id-ы — per-(duel_id, round_num), потому что в активной дуэли
 ровно один pending раунд за раз, но cancel должен быть точечным
 (чтобы не задеть таймер следующего раунда, если он уже запланирован).
+
+Спринт 2.2.F: добавлен AFK-таймер массового PvP —
+`schedule_mass_duel_afk_resolution(*, duel_id, run_at)` ставит job,
+который через `pvp.mass_duel.move_timer_seconds` дёрнет
+`ForceResolveMassDuel(duel_id=...)` (если хотя бы один участник не
+отправил `SubmitMassMove`). В отличие от 1×1, масс-бой одно-тиковый —
+job всего один на бой, ключ — просто `duel_id`. Cancel вызывается из
+`ResolveMassDuel` (когда все успели сами), `CancelMassDuel`
+(административная отмена) и из самого `_run_mass_duel_afk_job` (best-
+effort cleanup).
 """
 
 from __future__ import annotations
@@ -132,4 +142,33 @@ class IDelayedJobScheduler(abc.ABC):
 
         Вызывается из `SubmitMove` / `CancelDuel` / `ResolveAfkRound`,
         когда раунд закрылся реальными ходами или дуэль отменена.
+        """
+
+    # ── Спринт 2.2.F: AFK-таймер массового PvP ──
+
+    @abc.abstractmethod
+    async def schedule_mass_duel_afk_resolution(
+        self,
+        *,
+        duel_id: int,
+        run_at: datetime,
+    ) -> None:
+        """Запланировать `ForceResolveMassDuel(duel_id=...)` на `run_at` (UTC).
+
+        Срабатывает через `pvp.mass_duel.move_timer_seconds` после
+        `StartMassDuel`. Идемпотентно по `duel_id`: повторный вызов
+        перезаписывает job (нужно для recovery-сценариев на старте бота).
+        """
+
+    @abc.abstractmethod
+    async def cancel_mass_duel_afk_resolution(
+        self,
+        *,
+        duel_id: int,
+    ) -> None:
+        """Снять AFK-таймер масс-боя (NO-OP, если job-а нет).
+
+        Вызывается из `ResolveMassDuel` (все участники успели сами),
+        `CancelMassDuel` (админ отменил), `ForceResolveMassDuel`
+        (best-effort cleanup на случай повторного срабатывания).
         """

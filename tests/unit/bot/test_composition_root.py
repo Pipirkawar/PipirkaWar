@@ -322,6 +322,7 @@ def _container_with_fakes() -> Container:
         balance=balance,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
     )
     submit_mass_move = SubmitMassMove(
         uow=uow,
@@ -338,6 +339,7 @@ def _container_with_fakes() -> Container:
         random=rng,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
     )
     force_resolve_mass_duel = ForceResolveMassDuel(
         uow=uow,
@@ -348,6 +350,7 @@ def _container_with_fakes() -> Container:
         random=rng,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
     )
     cancel_mass_duel = CancelMassDuel(
         uow=uow,
@@ -355,6 +358,7 @@ def _container_with_fakes() -> Container:
         locks=activity_lock_service,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
     )
     return Container(
         clock=clock,

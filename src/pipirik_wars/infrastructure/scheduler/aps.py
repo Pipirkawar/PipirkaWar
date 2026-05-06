@@ -27,6 +27,7 @@ from pipirik_wars.application.dto.inputs import (
     EscalateChatToGlobalInput,
     ExpireLobbyEntryInput,
     FinishForestRunInput,
+    ForceResolveMassDuelInput,
     ResolveAfkRoundInput,
 )
 from pipirik_wars.application.forest import (
@@ -37,6 +38,7 @@ from pipirik_wars.application.forest import (
 from pipirik_wars.application.pvp import (
     EscalateChatToGlobal,
     ExpireLobbyEntry,
+    ForceResolveMassDuel,
     ResolveAfkRound,
 )
 from pipirik_wars.domain.forest import ForestRunNotFoundError
@@ -47,6 +49,7 @@ _FINISH_JOB_PREFIX: Final[str] = "forest_run_finish:"
 _ESCALATE_JOB_PREFIX: Final[str] = "pvp_chat_to_global:"
 _EXPIRE_JOB_PREFIX: Final[str] = "pvp_global_lobby_expire:"
 _ROUND_AFK_JOB_PREFIX: Final[str] = "pvp_round_afk:"
+_MASS_DUEL_AFK_JOB_PREFIX: Final[str] = "pvp_mass_duel_afk:"
 
 
 def _job_id(run_id: int) -> str:
@@ -63,6 +66,10 @@ def _expire_job_id(duel_id: int) -> str:
 
 def _round_afk_job_id(duel_id: int, round_num: int) -> str:
     return f"{_ROUND_AFK_JOB_PREFIX}{duel_id}:{round_num}"
+
+
+def _mass_duel_afk_job_id(duel_id: int) -> str:
+    return f"{_MASS_DUEL_AFK_JOB_PREFIX}{duel_id}"
 
 
 class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
@@ -90,6 +97,13 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
     `ResolveAfkRound`-use-case-а; вызывается из job-callback-а
     `_run_round_afk_job` для добивания pending-раунда случайными
     выборами через `IRandom`. Если фабрика не подвязана — лог + skip.
+
+    `mass_duel_afk_factory` (Спринт 2.2.F, опциональна) — фабрика
+    `ForceResolveMassDuel`-use-case-а; вызывается из job-callback-а
+    `_run_mass_duel_afk_job` для добивания масс-боя случайными
+    выборами для AFK-участников. Use-case сам идемпотентен: если
+    бой уже завершён вручную — отрабатывает no-op-ветка с
+    `was_already_resolved=True`. Если фабрика не подвязана — лог + skip.
     """
 
     __slots__ = (
@@ -98,6 +112,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         "_expire_factory",
         "_finish_factory",
         "_logger",
+        "_mass_duel_afk_factory",
         "_notifier",
         "_scheduler",
     )
@@ -111,6 +126,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         escalate_factory: Callable[[], EscalateChatToGlobal] | None = None,
         expire_factory: Callable[[], ExpireLobbyEntry] | None = None,
         afk_resolution_factory: Callable[[], ResolveAfkRound] | None = None,
+        mass_duel_afk_factory: Callable[[], ForceResolveMassDuel] | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._scheduler = scheduler
@@ -119,6 +135,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._escalate_factory = escalate_factory
         self._expire_factory = expire_factory
         self._afk_resolution_factory = afk_resolution_factory
+        self._mass_duel_afk_factory = mass_duel_afk_factory
         self._logger = logger or logging.getLogger(__name__)
 
     async def schedule_finish_forest_run(
@@ -214,6 +231,32 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
     ) -> None:
         try:
             self._scheduler.remove_job(_round_afk_job_id(duel_id, round_num))
+        except Exception:
+            return
+
+    async def schedule_mass_duel_afk_resolution(
+        self,
+        *,
+        duel_id: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_mass_duel_afk_job,
+            trigger="date",
+            run_date=run_at,
+            args=(duel_id,),
+            id=_mass_duel_afk_job_id(duel_id),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_mass_duel_afk_resolution(
+        self,
+        *,
+        duel_id: int,
+    ) -> None:
+        try:
+            self._scheduler.remove_job(_mass_duel_afk_job_id(duel_id))
         except Exception:
             return
 
@@ -335,6 +378,32 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
                     "round_num": round_num,
                     "error": type(exc).__name__,
                 },
+            )
+            return
+
+    async def _run_mass_duel_afk_job(self, duel_id: int) -> None:
+        """Callback AFK-таймера масс-боя (Спринт 2.2.F).
+
+        Зовёт `ForceResolveMassDuel(duel_id=...)`. Если фабрика не
+        подвязана — лог + skip; любая другая ошибка логируется
+        (APScheduler иначе пометит job-у как failed).
+        Use-case сам идемпотентен: если бой уже завершён вручную
+        (`COMPLETED`) или отменён (`CANCELLED`) — отрабатывает
+        no-op-ветка с `was_already_resolved=True`.
+        """
+        if self._mass_duel_afk_factory is None:
+            self._logger.warning(
+                "pvp_mass_duel_afk: factory not wired",
+                extra={"duel_id": duel_id},
+            )
+            return
+        try:
+            use_case = self._mass_duel_afk_factory()
+            await use_case.execute(ForceResolveMassDuelInput(duel_id=duel_id))
+        except Exception as exc:
+            self._logger.exception(
+                "pvp_mass_duel_afk: unexpected error",
+                extra={"duel_id": duel_id, "error": type(exc).__name__},
             )
             return
 

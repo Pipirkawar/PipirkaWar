@@ -372,12 +372,20 @@ class PvpMassDuelConfig(_Frozen):
       клана-цели для запуска боя. По ГДД §7.2 — `1` (бой в принципе
       возможен и при 1 на 1, главное чтобы хотя бы один участник
       на каждой стороне). Параметризовано на случай балансировки.
+    * `move_timer_seconds` — общий AFK-таймер боя: время с момента
+      `StartMassDuel` до автоматического `ForceResolveMassDuel`
+      шедулером. В отличие от 1×1 PvP (per-round 30..60 сек), масс-бой
+      одно-тиковый — все участники должны успеть прислать `submit_move`
+      до этого дедлайна, иначе их выборы заполнятся случайно. Нижняя
+      граница 60 сек (минимум на UI), верхняя 600 сек (10 минут —
+      крайний разумный кейс для большой клановой битвы).
     """
 
     cooldown_hours: int = Field(ge=1, le=72)
     min_length_cm: int = Field(ge=0)
     min_thickness_level: int = Field(ge=1)
     min_clan_members: int = Field(ge=1, le=100)
+    move_timer_seconds: int = Field(ge=60, le=600)
 
 
 class PvpConfig(_Frozen):

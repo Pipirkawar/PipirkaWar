@@ -33,6 +33,14 @@ class ScheduledRoundAfkJob:
     run_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class ScheduledMassDuelAfkJob:
+    """Запись «что и на когда» для AFK-таймера масс-боя (Спринт 2.2.F)."""
+
+    duel_id: int
+    run_at: datetime
+
+
 @dataclass
 class FakeDelayedJobScheduler(IDelayedJobScheduler):
     """Фиксирует все вызовы `schedule_*` / `cancel_*`."""
@@ -49,6 +57,9 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
     # раунда: cancel предыдущего + schedule нового).
     scheduled_round_afk: dict[tuple[int, int], ScheduledRoundAfkJob] = field(default_factory=dict)
     cancelled_round_afk: list[tuple[int, int]] = field(default_factory=list)
+    # 2.2.F: per-duel_id AFK-таймер масс-боя (один на бой, без раундов).
+    scheduled_mass_duel_afk: dict[int, ScheduledMassDuelAfkJob] = field(default_factory=dict)
+    cancelled_mass_duel_afk: list[int] = field(default_factory=list)
 
     async def schedule_finish_forest_run(
         self,
@@ -107,3 +118,22 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
     ) -> None:
         self.cancelled_round_afk.append((duel_id, round_num))
         self.scheduled_round_afk.pop((duel_id, round_num), None)
+
+    async def schedule_mass_duel_afk_resolution(
+        self,
+        *,
+        duel_id: int,
+        run_at: datetime,
+    ) -> None:
+        self.scheduled_mass_duel_afk[duel_id] = ScheduledMassDuelAfkJob(
+            duel_id=duel_id,
+            run_at=run_at,
+        )
+
+    async def cancel_mass_duel_afk_resolution(
+        self,
+        *,
+        duel_id: int,
+    ) -> None:
+        self.cancelled_mass_duel_afk.append(duel_id)
+        self.scheduled_mass_duel_afk.pop(duel_id, None)
