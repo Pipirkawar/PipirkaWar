@@ -119,14 +119,14 @@ class TestReferralFrozen:
     def test_cannot_mutate_referrer_id(self) -> None:
         ref = Referral(id=None, referrer_id=1, referred_id=2, created_at=_NOW)
         with pytest.raises(FrozenInstanceError):
-            ref.referrer_id = 999  # type: ignore[misc]
+            ref.referrer_id = 999
 
     def test_cannot_mutate_signup_granted_at(self) -> None:
         ref = Referral(id=None, referrer_id=1, referred_id=2, created_at=_NOW)
         with pytest.raises(FrozenInstanceError):
-            ref.signup_granted_at = _NOW  # type: ignore[misc]
+            ref.signup_granted_at = _NOW
 
     def test_cannot_mutate_last_milestone_thickness(self) -> None:
         ref = Referral(id=None, referrer_id=1, referred_id=2, created_at=_NOW)
         with pytest.raises(FrozenInstanceError):
-            ref.last_milestone_thickness = 5  # type: ignore[misc]
+            ref.last_milestone_thickness = 5
