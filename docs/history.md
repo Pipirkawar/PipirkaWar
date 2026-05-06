@@ -23,6 +23,53 @@
 
 ---
 
+## 2026-05-06 — Спринт 2.3.B: persistence-слой «Главы клана дня» (миграции 0012/0013 + ORM + 2 репо + 19 integration-тестов)
+
+**Автор:** Devin (агент urbanviola)
+**Тип:** feature
+**Связано:** ПД §5 / Спринт 2.3.2, ГДД §6.1; ветка `devin/1778057764-sprint-2-3-b-daily-head-persistence` (PR следует)
+
+Что сделано:
+- Реализован persistence-слой «Главы клана дня» (фундамент 2.3.A смержен в PR #68). Все side-эффекты на месте; следующий шаг — use-cases (2.3.C) и UI (2.3.E).
+- **Alembic-миграция `0012_daily_heads`**: таблица `daily_heads` (`id BigSerial PK, clan_id BigInt FK clans CASCADE, player_id BigInt FK users CASCADE, moscow_date Date, source VarChar(8), bonus_cm Int, assigned_at DateTime(tz=True)`):
+  - **UNIQUE `(clan_id, moscow_date)`** — last-line-of-defense от race кнопка-vs-cron. Доменный `DailyHeadService.assign_or_get` сначала делает preflight-проверку, но при гонке двух конкурентных транзакций (button+cron одновременно) UNIQUE-индекс отбросит дубль `IntegrityError`-ом, а репозиторий конвертирует его в `DailyHeadAlreadyAssignedError`.
+  - CHECK-инварианты на уровне БД: `bonus_cm > 0` (премия положительная), `source IN ('button', 'cron')` (только два допустимых триггера).
+  - **Index `(clan_id, assigned_at DESC, id DESC)`** — для `list_recent_for_clan` (anti-repeat-фильтр в `DailyHeadService._filter_avoid_recent`); сортировка с tie-breaker по `id` обязательна — `assigned_at` приходит из `IClock` и часто совпадает у соседних записей в тестах.
+- **Alembic-миграция `0013_daily_active`**: таблица `daily_active` (`date Date NOT NULL, user_id BigInt NOT NULL FK users CASCADE, last_at DateTime(tz=True) NOT NULL`) с **PK `(date, user_id)`** (идемпотентный upsert на каждое сообщение) и **Index `(user_id, date DESC)`** (для запроса «активность одного игрока за последние N дней» без сканирования).
+- **ORM-модели** `DailyHeadAssignmentORM` + `DailyActiveORM` (зеркало миграций) в `infrastructure/db/models/`. Регистрация в `models/__init__.py` (re-export для `Base.metadata.create_all` в conftest).
+- **`SqlAlchemyDailyHeadRepository`** (3 метода `IDailyHeadRepository`):
+  - `get_by_clan_and_date(*, clan_id, moscow_date)` — SELECT через UNIQUE; `_row_to_entity` маппинг с `ensure_utc(...)` (SQLite возвращает naive-datetime даже из `DateTime(timezone=True)` колонки, Postgres — tz-aware).
+  - `add(assignment)` — INSERT с конвертацией `SqlAlchemyIntegrityError` → доменный `DailyHeadAlreadyAssignedError(clan_id, moscow_date)` для race-handling в use-case-е.
+  - `list_recent_for_clan(*, clan_id, limit)` — ORDER BY `assigned_at DESC, id DESC` LIMIT N; `limit <= 0` → пустой tuple (не упасть).
+- **`SqlAlchemyDailyActivityRepository.list_active_member_ids(*, clan_id, within_days)`** (`IDailyActivityRepository`):
+  - Один SQL JOIN `users × clan_members × clans × daily_active` + DISTINCT.
+  - Фильтры: `ClanStatus.ACTIVE` (frozen-клан вообще не получает триггер главы — ПД 2.3.8) + `PlayerStatus.ACTIVE` (FROZEN-игроки исключаются автоматически по контракту 2.3.A) + окно `[clock.moscow_date() - (within_days - 1) ... clock.moscow_date()]` включительно.
+  - **`IClock` инъектится в конструктор** — порт `IDailyActivityRepository` намеренно не принимает `as_of` параметром (см. контракт 2.3.A); реализация сама знает «сегодня по МСК». Альтернатива через `func.current_date()` была бы привязана к TZ-сессии БД (хрупко).
+  - Запись в `daily_active` будет делать middleware в Спринте 2.3.E (`bot/middlewares/daily_activity.py`); на момент 2.3.B репозиторий read-only, integration-тесты прямым `session.add(DailyActiveORM(...))` готовят данные.
+- **+19 integration-тестов** (`tests/integration/db/daily_head/`):
+  - `test_daily_head_repository.py` — **10 тестов**: пустая БД (`get → None`), add→get round-trip с `ensure_utc`, UNIQUE-violation на race (`add` вторым `player_id` → `DailyHeadAlreadyAssignedError`), два разных клана могут иметь главу в один день, один клан — разные дни — независимы, `list_recent_for_clan` пусто/limit/limit=0/order DESC с tie-breaker по id, фильтр по clan_id (другие кланы не попадают), иммутабельность входного VO (id остаётся None после add, возврат — новый VO с id).
+  - `test_daily_activity_repository.py` — **9 тестов** + `_FakeClock`: пустой клан, активный внутри окна, не активный за окном (10 дней назад при `within_days=7`), граница окна (TODAY-6 включается, TODAY-7 нет), FROZEN-игрок исключён даже при наличии активности, чужой клан исключён, член клана без активности исключён, дубликаты активности (3 разных дня одного игрока) → DISTINCT, `within_days < 1` → ValueError.
+- **`tests/integration/db/test_migrations.py`**: добавлены revisions `0012_daily_heads` + `0013_daily_active` в `test_expected_revisions_exist`, два descends-from-теста, новые имена файлов в `test_versions_dir_lists_only_known_files`, `EXPECTED_TABLES` пополнен `daily_heads` + `daily_active`.
+- **`tests/integration/db/conftest.py`**: импорт `DailyHeadAssignmentORM` + `DailyActiveORM` в общем блоке (нужно для `Base.metadata.create_all`).
+
+Результат / артефакты:
+- `src/pipirik_wars/infrastructure/db/migrations/versions/20260506_0012_daily_heads.py` (118 строк).
+- `src/pipirik_wars/infrastructure/db/migrations/versions/20260506_0013_daily_active.py` (76 строк).
+- `src/pipirik_wars/infrastructure/db/models/daily_head.py` + `daily_active.py` (зеркала миграций).
+- `src/pipirik_wars/infrastructure/db/repositories/daily_head.py` + `daily_activity.py`.
+- `tests/integration/db/daily_head/test_daily_head_repository.py` (10 тестов).
+- `tests/integration/db/daily_head/test_daily_activity_repository.py` (9 тестов).
+- Локальный smoke на изолированных тестах: `test_daily_head_repository.py` 10/10 passed, `test_daily_activity_repository.py` 9/9 passed, `test_migrations.py` 19/19 passed (revisions/descends/files/EXPECTED_TABLES).
+
+Заметки / решения:
+- Порт `IDailyActivityRepository` контракта 2.3.A фиксирован — не принимает `as_of` параметром. Реализация инъектит `IClock` в конструктор. Это отличается от паттерна use-case-ов (где clock передаётся снаружи), но для read-репозитория с временной семантикой это самый чистый способ — вызывающему коду (доменному сервису) не нужно знать о TZ-конверсиях, а репо не привязан к TZ-сессии БД.
+- Race-handling в `SqlAlchemyDailyHeadRepository.add(...)` поднимает доменный `DailyHeadAlreadyAssignedError`, а не `IntegrityError` — use-case 2.3.C это перехватит, сделает повторный `get_by_clan_and_date(...)` и вернёт запись от победителя (см. контракт 2.3.A `assign_or_get`).
+- `daily_active` middleware **не реализована** в 2.3.B — это для Спринта 2.3.E (когда подключаем bot-обработчики и middleware-цепочку). На 2.3.B integration-тесты пишут в `daily_active` напрямую через `session.add(DailyActiveORM(...))`, что моделирует поведение middleware.
+- `clan_members` в JOIN-е не отфильтровывается по `joined_at` — текущая семантика «состою в клане сейчас» = есть row в `clan_members`. Если в будущем добавится `clan_members.left_at`, фильтр расширится.
+- Все DateTime-колонки `(timezone=True)`, `ensure_utc(...)` применяется на чтении для совместимости с SQLite (production — Postgres + asyncpg, там tzinfo приходит сразу).
+
+---
+
 ## 2026-05-06 — Спринт 2.3.A: доменный слой «Главы клана дня» (47 тестов, фундамент гибридного триггера)
 
 **Автор:** Devin (агент урbanviola)
