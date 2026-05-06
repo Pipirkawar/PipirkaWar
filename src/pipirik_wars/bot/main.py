@@ -933,6 +933,9 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["duel_log_templates"] = container.duel_log_templates
     dispatcher["pvp_random"] = container.random
     dispatcher["duels"] = container.duels
+    # Share-кнопка под результатом /forest (Спринт 2.4.D-b) — handler
+    # подгружает `ForestRun` по `run_id` из callback_data `ref-share:forest:{id}`.
+    dispatcher["forest_runs"] = container.forest_runs
     # Mass-PvP клан×клан (Спринт 2.2.F) — use-cases + clans для handler-ов.
     dispatcher["start_mass_duel"] = container.start_mass_duel
     dispatcher["submit_mass_move"] = container.submit_mass_move
