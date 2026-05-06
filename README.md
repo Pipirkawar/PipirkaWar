@@ -2,18 +2,16 @@
 
 Telegram-бот PvP/PvE-игры с прокачкой «пипирика», походами, караванами, рейдами и кланами. Построен по принципам clean architecture / SOLID, security-first, локализован на **RU + EN** (Mozilla Fluent), полностью покрыт типами (`mypy --strict`) и тестами (≥ 80 %, фактически ~97 %).
 
-> **MVP-релиз** закрывает Спринт 1.5 (`docs/development_plan.md` §3). Definition of Done MVP — см. [`docs/dod_mvp.md`](docs/dod_mvp.md).
+> **MVP-релиз** закрывает Спринт 1.5 (`docs/development_plan.md` §4). Definition of Done MVP + операционное руководство по анти-читу — там же, как приложения к Спринтам 1.5 и 1.6.
 
 ## 📚 Документация
 
-- [`docs/pipirik_wars_plan.md`](docs/pipirik_wars_plan.md) — Игровой Дизайн-Документ (ГДД).
-- [`docs/development_plan.md`](docs/development_plan.md) — Подробный план разработки по фазам и спринтам.
-- [`docs/current_tasks.md`](docs/current_tasks.md) — Текущие задачи (актуальный спринт).
+- [`docs/game_design.md`](docs/game_design.md) — Игровой Дизайн-Документ (ГДД): все механики, формулы, баланс.
+- [`docs/development_plan.md`](docs/development_plan.md) — Подробный план разработки по фазам/спринтам + операционные приложения.
+- [`docs/current_tasks.md`](docs/current_tasks.md) — Текущий PR и статус (только активная работа).
 - [`docs/history.md`](docs/history.md) — Хронологический журнал выполненных работ.
-- [`docs/dod_mvp.md`](docs/dod_mvp.md) — Definition of Done для MVP-релиза.
-- [`docs/anticheat.md`](docs/anticheat.md) — анти-чит и хардкап (Спринт 1.6): архитектура, как добавить новый source, как вручную снять soft-ban.
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — правила разработки, чек-листы PR, security-чек-лист.
-- [`ops/runbooks/deploy_vps.md`](ops/runbooks/deploy_vps.md) — деплой на VPS 1 GB + Neon free.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — Правила разработки, чек-листы PR, security-чек-лист, **протокол передачи работы между агентами**.
+- [`ops/runbooks/deploy_vps.md`](ops/runbooks/deploy_vps.md) — Деплой на VPS 1 GB + Neon free.
 
 > ⚠ **Перед началом любой работы** — прочитать §0 ГДД («Политика разработки»: SOLID/ООП/безопасность). Эти требования обязательны.
 
@@ -161,7 +159,7 @@ bot/            ← тонкий aiogram-слой (handlers + presenters + middl
 - **CI gates**: `ruff`, `mypy --strict`, `import-linter`, `pytest`, `pip-audit` (отдельной job-ой). Все обязательны.
 - **Никаких прямых пушей в `main`** — только через PR с code review.
 
-Полный текст — в [`docs/pipirik_wars_plan.md`](docs/pipirik_wars_plan.md) §0 + [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Полный текст — в [`docs/game_design.md`](docs/game_design.md) §0 + [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## 🚢 Деплой на production
 

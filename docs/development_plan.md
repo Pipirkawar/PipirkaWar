@@ -1,6 +1,6 @@
 # 🍆 Пипирик Варс — Подробный план разработки
 
-> Документ описывает поэтапный план разработки Telegram-бота **Пипирик Варс** на основе ГДД v7 (`pipirik_wars_plan.md`). План разбит на фазы, спринты и конкретные задачи с критериями приёмки.
+> Документ описывает поэтапный план разработки Telegram-бота **Пипирик Варс** на основе ГДД v7 (`game_design.md`). План разбит на фазы, спринты и конкретные задачи с критериями приёмки.
 >
 > **Обязательно:** перед чтением этого плана прочитайте раздел §0 ГДД («Политика разработки»: SOLID/ООП/безопасность). Эти требования — приоритетны и применимы к каждой задаче ниже.
 
@@ -8,7 +8,7 @@
 
 ## 0. Политика проекта (краткая выдержка из ГДД §0)
 
-> Полный текст в `pipirik_wars_plan.md` §0. Здесь — рабочий чек-лист для каждого PR.
+> Полный текст в `game_design.md` §0. Здесь — рабочий чек-лист для каждого PR.
 
 ### 0.1 Архитектура (обязательная)
 
@@ -293,6 +293,58 @@ pipirik_wars/
 
 **Definition of Done MVP:** Игрок может зарегистрироваться, увидеть карточку, сходить в лес, получить шмот, прокачать толщину до 2, использовать предсказание, увидеть себя в топе. Работает RU + EN. Есть DAU Gate.
 
+#### 4.1.5+ Definition of Done — MVP (Спринт 1.5 завершён)
+
+> Финальный чек-лист закрытого альфа-теста. Каждая строка либо проверена кодом и тестами, либо требует ручной валидации после деплоя.
+
+**Архитектура и фундамент (Фаза 0)**
+
+- [x] **Clean architecture** (`domain` → `application` → `infrastructure` → `bot`) — контракт зашит в `import-linter` (3 контракта kept в CI).
+- [x] **`mypy --strict`** на всём `src/` — **0 issues**.
+- [x] **`ruff check`** + `ruff format` — без замечаний.
+- [x] **`pytest`** — coverage **≥ 80 %** (фактически ~97 %).
+- [x] **`pip-audit`** — без known CVE на dev-зависимостях.
+- [x] **Pre-commit hooks** — ruff, ruff-format, mypy, import-linter.
+- [x] **`IUnitOfWork`**, **`IIdempotencyService`**, **`IAuditLogger`**, **`IActivityLockService`** — все state-mutations через транзакции, idempotency-ключи на write-командах, audit-запись на каждом изменении, конкуренция по игроку защищена.
+- [x] **`ThrottleMiddleware`** + **`AuthContext`-middleware** — публичные команды rate-limit-нуты, admin-only handler-ы провалидированы централизованно.
+
+**Геймплей (MVP-фичи)**
+
+- [x] **Регистрация (Спринт 1.1)** — `/start` в группе регистрирует игрока и клан атомарно; `/start` в личке отказывает с подсказкой; миграция `chat_migrate_to`; bootstrap super-admin из `BOOTSTRAP_ADMIN_IDS`.
+- [x] **Прогрессия / DAU Gate (Спринт 1.2)** — стартовая длина 20 см (минимальная — те же 20); `signup_queue` (FIFO) при `current_dau >= MAX_DAU`; auto-promote при увеличении лимита или уходе игрока; алерт админу при 80 % MAX_DAU (idempotent по дате UTC).
+- [x] **Поход в лес (Спринт 1.3)** — `/forest` ролит outcome (branch + length_delta + drop) сразу на старте, hot-reload не ломает результат; cooldown 10–20 мин (`IRandom.randint`); двойной `/forest` → `AlreadyInForestError`; drop 0–1 предмет (probability + name vs equipment + rarity weights `70/25/5`); inline «Надеть/Выбросить»; audit `FOREST_RUN_*`.
+- [x] **Прокачка / предсказатель / топ (Спринт 1.4)** — `/upgrade` с защитой «не спустить ниже 20 см» (`InsufficientLengthError`); `/oracle` идемпотентен по `(player_id, date_msk)`; `/profile` (нік с титулом + длина + толщина + инвентарь + клан); `/top` (топ-10 по длине внутри клана).
+- [x] **Локализация и полировка (Спринт 1.5)** — Mozilla Fluent (`locales/{ru,en}.ftl`); числа через `NUMBER($x, useGrouping: 0)`; `use_isolating=False` (без bidi-isolation marks); `/lang ru|en`; `PlayerLocaleResolverDB` пробрасывается в фоновые jobs; ≥ 350 forest-логов и ≥ 200 oracle-предсказаний на локаль (с allowed-плейсхолдерами и integration-тест-валидацией); `/balance_reload` admin-only hot-reload.
+
+**DevOps и деплой (Спринт 1.5.H)**
+
+- [x] **`Dockerfile`** — multi-stage (builder venv + runtime slim), непривилегированный пользователь `pipirik:1000`, healthcheck.
+- [x] **`docker-compose.yml`** — 3 сервиса (postgres + migrations sidecar + bot); бот ждёт `migrations: service_completed_successfully`.
+- [x] **`.dockerignore`** — исключает `.git`, `.env`, `tests/`, `docs/`, кэши.
+- [x] **`README.md`** — полный setup/run-гайд (Docker и без), оценочное время поднятия для нового разработчика — < 5 мин.
+- [x] **`CONTRIBUTING.md`** — workflow PR, чек-листы SOLID/security, правила git, структура тестов.
+- [x] **`ops/runbooks/deploy_vps.md`** — пошаговая инструкция деплоя на VPS 1 GB + Neon free.
+- [ ] **24 часа стабильной работы** под закрытым тестом — проверяется руками после деплоя.
+
+**Acceptance: что делает игрок**
+
+Сценарий, который должен проходить полностью без падений:
+
+1. Игрок добавляется в клан-чат → бот видит `chat_member` update.
+2. Игрок пишет `/start` → бот регистрирует, выдаёт стартовую длину 20 см и толщину 1, пишет audit `PLAYER_REGISTERED`.
+3. Игрок пишет `/profile` → видит карточку.
+4. Игрок пишет `/forest` → бот отвечает «ты ушёл в лес» с рандомным flavour-сообщением. Cooldown 10–20 мин.
+5. Через cooldown — finished-сообщение: `+N см`, опциональный drop с inline-кнопками «Надеть/Выбросить».
+6. Игрок жмёт «Надеть» → инвентарь обновляется; при name-drop ник меняется на «{name} {nick}».
+7. Игрок пишет `/upgrade` → подтверждает → толщина 2.
+8. Игрок пишет `/oracle` → получает предсказание; повторный `/oracle` в тот же день — то же предсказание.
+9. Игрок пишет `/top` → видит топ-10 кланчата по длине.
+10. Игрок пишет `/lang en` → следующие сообщения от бота — на английском.
+
+Все шаги покрыты unit + integration-тестами.
+
+**Что НЕ входит в MVP** — анти-чит хардкап (Спринт 1.6, pre-Phase-2 gate); PvP 1×1 и масс-PvP, клановые механики, Глава клана дня, реферальная система — Фаза 2; полный админ-интерфейс — Спринт 2.5; горы, данжон, караваны, рейды — Фаза 3; монетизация (Stars / TON / USDT), Webhook вместо long-polling, Redis-кэш — Фаза 4.
+
 ### Спринт 1.6 — Анти-чит хардкап (Pre-Phase-2 gate)
 
 > **Зачем перед Фазой 2:** Фаза 2 вводит PvP и масс-PvP — новые источники прибавки/потери длины с высокой пропускной способностью. Без хардкапа в этих use-cases экспоит даст экспоненциальный рост. Анти-чит должен быть готов **до** PvP-механик. Полная спецификация — в ГДД §3.3.
@@ -308,9 +360,162 @@ pipirik_wars/
 | 1.6.7 | Bot-команда `/anticheat_unban <tg_id> <reason>` (только `super_admin`, обязательная причина) — снимает `anticheat_ban_until`, пишет `admin_audit_log` | Юнит-тесты на authz, на запись audit-а, на обнуление поля |
 | 1.6.8 | Локализация (`anticheat-soft-ban-active`, `anticheat-cap-clamped`, `anticheat-admin-alert`) в `locales/{ru,en}.ftl` | Через `IMessageBundle` (паттерн 1.5.B-F) |
 | 1.6.9 | Интеграционный нагрузочный тест: 100 параллельных лесов одного игрока → суточная сумма ≤ 3000, ни одна транзакция не «прорывает» лимит | `tests/integration/load/test_anticheat_concurrent.py` |
-| 1.6.10 | Документация: README + `docs/anticheat.md` (как добавить новый source, как вручную снять бан) | Готов для нового разработчика |
+| 1.6.10 | Документация: README + операционное руководство по анти-читу (как добавить новый source, как вручную снять бан) — приложение к этому спринту в `development_plan.md` (см. ниже §4.1.6+) | Готов для нового разработчика |
 
 **DoD спринта:** Все use-cases прибавки длины проходят через `progression.add_length`. Хардкап работает в clamp-режиме на штатном пути и в trip-wire-режиме при обходе. Soft-ban на 14 дней снимается автоматически и вручную. Алёрт админу идёт через `INotifier`. Race-test зелёный. Покрытие новых файлов ≥ 90 %.
+
+#### 4.1.6+ Анти-чит — операционное руководство (Спринт 1.6 завершён)
+
+> Игровая спецификация (что такое hardcap, лимиты, soft-ban) — в [`game_design.md` §3.3](game_design.md). Здесь — операционные процедуры для разработчика, который подключается к проекту и должен уметь: 1) понять, как устроены clamp + trip-wire; 2) добавить новый источник прибавки длины (`AuditSource`); 3) вручную снять soft-ban игроку.
+
+**Архитектурный обзор: единая точка прибавки длины — `progression.add_length`**
+
+Любая прибавка длины игроку проходит через `application/progression/add_length.py` (реализация порта `domain/progression/length_granter.py / ILengthGranter`). Прямые `player.with_length(...)` + `repo.save(player)` вне `AddLength` запрещены — `tests/unit/architecture/test_length_granter_only.py` сканит `src/` и заставляет CI падать на любой обход (architecture-guard 1.6.F).
+
+**Ambient-UoW.** Caller обязан открыть `async with uow:` сам, потом звать `await length_granter.grant(...)`. Без открытого `IUnitOfWork`-контекста — `RuntimeError`. Это нужно, чтобы вся прибавка (mutate + audit + trip-wire) и «бизнес-вставки» вызывающего use-case-а (`oracle_invocations.add(...)`, `forest_runs.save(...)`) были в одной транзакции.
+
+**Алгоритм `AddLength.grant(...)`** (внутри открытой транзакции):
+
+1. **Валидация входа** — `source = UNKNOWN` (backfill-маркер) → `LengthDeltaInvalidError`; `delta_cm = 0` → `LengthDeltaInvalidError`; `delta_cm < 0` для не-`admin_refund` → ошибка; `delta_cm > 0` для `admin_refund` → ошибка (refund — сторно, должно быть отрицательным).
+2. **Идемпотентность** — если `idempotency_key` передан и виден `IIdempotencyKey`, возвращается no-op (`applied_delta_cm=0`, `triggered_soft_ban=False`).
+3. **Загрузка игрока** — `players.get_by_id(...)` → `PlayerNotFoundError` если нет.
+4. **Soft-ban-гейт** — `player.is_anticheat_banned(now)` → `AnticheatSoftBanError`. Транзакция откатывается.
+5. **Clamp (только для organic)** — `daily = anticheat.sum_organic_in_window(since=now-24h, ...)`, `weekly = anticheat.sum_organic_in_window(since=now-7d, ...)`, `remaining = min(daily.remaining_cap_cm(daily_cap), weekly.remaining_cap_cm(weekly_cap))`, `applied = min(delta, remaining)`. Donate / `admin_refund` — passthrough.
+6. **Mutate** — `player.with_length(length + applied)` → `players.save(...)`.
+7. **Audit `LENGTH_GRANT`** — `AuditEntry(action=LENGTH_GRANT, source=source, delta_cm=applied, clamped_from=clamped_from, ...)`.
+8. **Idempotency-mark** — если `idempotency_key` есть.
+9. **Trip-wire** (только organic + `applied > 0`) — рекомпьют `daily_after` / `weekly_after` (включая только что записанный delta — `SqlAlchemyAuditLogger.flush()` делает это видимым в той же транзакции). Если `is_exceeded(cap)` → `player.with_anticheat_ban(until=now + soft_ban_duration_days)` + `players.save(...)` + audit `ANTICHEAT_DAILY_CAP_EXCEEDED` / `ANTICHEAT_WEEKLY_CAP_EXCEEDED` + alert админу через `IAnticheatAdminAlerter`.
+
+**Конфигурация** (`balance.yaml` секция `anticheat`):
+
+```yaml
+anticheat:
+  daily_cap_cm: 3000
+  weekly_cap_cm: 14000
+  soft_ban_duration_days: 14
+  organic_sources:
+    - forest
+    - oracle
+    - referral_signup
+    - raid_reward
+    - admin_grant
+  donate_sources:
+    - stars_payment
+    - ton_payment
+    - usdt_payment
+```
+
+Инварианты (`AnticheatConfig`-pydantic): `daily_cap_cm ≤ weekly_cap_cm`; `organic_sources ∩ donate_sources = ∅`; нет дублей; `unknown` запрещён в обоих; `admin_refund` запрещён в `organic_sources`. Hot-reload через `/balance_reload` (super_admin) — изменение `daily_cap_cm` без рестарта бота.
+
+**Rolling-окно vs календарный сброс.** `IAnticheatRepository.sum_organic_in_window(player_id, since, organic_sources)` — один `SELECT` по `audit_log` с фильтром `target_kind='player' AND target_id=:pid AND source IN (...) AND delta_cm > 0 AND occurred_at >= since`. Используется rolling-окно (`since = now - 24h` / `now - 7d`), а не календарный сброс в полночь. Это защищает от обхода через границу суток («2999 в 23:59 → 2999 в 00:01 = 6000 за 2 минуты»).
+
+**Trip-wire vs clamp.** *Clamp* — штатный путь: на каждом organic-grant-е читается `sum_organic_in_window`, дельта прижимается к `cap - already_consumed`. Игрок не замечает (получил «N см»). *Trip-wire* — «второй эшелон»: срабатывает, если в trip-wire-recompute суммарная organic-дельта **превысила** cap (например, на гонке нескольких параллельных grant-ов или при clamp-bug-е). Ставит soft-ban на 14 дней + audit `ANTICHEAT_*_CAP_EXCEEDED` + Telegram-alert админу.
+
+Под Postgres + REPEATABLE READ + `SELECT FOR UPDATE` на user-row clamp + trip-wire вместе гарантируют «суточная сумма ≤ 3000» — это и есть acceptance ПД 1.6.9. Под SQLite (test-only) clamp может проиграть гонку lost-update-у, но trip-wire всё равно ставит ban.
+
+##### Как добавить новый source (organic-источник прибавки длины)
+
+Допустим, добавляем `dungeon_reward` (organic-источник из новой активити «подземелье»).
+
+1. **Enum.** Добавь значение в `domain/shared/ports/audit.py / AuditSource`:
+   ```python
+   class AuditSource(StrEnum):
+       ...
+       DUNGEON_REWARD = "dungeon_reward"
+   ```
+
+2. **Миграция.** Расширь whitelist `audit_log.source` миграцией (см. `0007_anticheat_foundation` как образец). Создай `XXXX_extend_audit_source.py` с `op.execute("ALTER TABLE audit_log DROP CONSTRAINT audit_log_source_check")` + `CREATE CONSTRAINT ... CHECK (source IN (..., 'dungeon_reward'))`. Drift-тест в `tests/integration/db/test_migrations.py` сравнит enum vs whitelist миграции.
+
+3. **Конфиг.** Реши: organic или donate. Для organic — добавь в `balance.yaml` `anticheat.organic_sources`. Pydantic-инварианты не дадут продублировать или добавить в обе списка одновременно.
+
+4. **Use-case.** В новом use-case-е звани `length_granter.grant(...)`:
+   ```python
+   await self._length_granter.grant(
+       player_id=player.id,
+       delta_cm=reward_cm,
+       source=AuditSource.DUNGEON_REWARD,
+       reason=f"dungeon_run:{run_id}",
+       idempotency_key=f"dungeon_reward:{run_id}",
+   )
+   ```
+   Architecture-guard (1.6.F) **не разрешит** прямой `player.with_length(...)` + `repo.save(...)` в `src/` — CI упадёт на `tests/unit/architecture/test_length_granter_only.py`.
+
+5. **Тесты.** Юнит-тест на сам use-case (mocked `ILengthGranter`); параметризованный кейс в `tests/unit/application/progression/test_add_length.py` на новый source — clamp для organic или passthrough для donate.
+
+6. **Локализация.** Если нужны новые сообщения игроку, добавь ключи в `locales/{ru,en}.ftl` и используй через `IMessageBundle`-bundle (паттерн 1.5.B).
+
+##### Как вручную снять soft-ban
+
+**Через бот-команду (рекомендованный путь).** `/anticheat_unban <tg_id> <reason>` (Спринт 1.6.G). Только в ЛС, только активный `super_admin`.
+
+```
+/anticheat_unban 12345 false-positive: legitimate donate burst
+```
+
+Алгоритм `LiftAnticheatBan`:
+- Проверяет `Admin.can_lift_anticheat_ban()` (только super_admin) → `AuthorizationError` иначе.
+- Грузит игрока по `tg_id` → `PlayerNotFoundError` иначе.
+- Если бан уже не активен (None или истёк) — идемпотентный no-op без audit-записи.
+- Иначе: `player.with_anticheat_ban_lifted(now)` → `players.save(...)` → audit `ANTICHEAT_BAN_LIFTED` с `before/after.anticheat_ban_until`, `actor_id=admin.id`, `reason=<reason>`, `idempotency_key=anticheat_unban:<actor>:<target>:<ts>`.
+
+`reason` обязателен (требование game_design §18.6 — каждый admin-action оставляет след). Пустой reason → use-case бросит `ValueError`, handler отрисует `anticheat-unban-usage`.
+
+**Через прямой SQL (если бот лежит).**
+
+```sql
+-- 1. Снимаем поле.
+UPDATE users
+SET anticheat_ban_until = NULL,
+    updated_at          = NOW()
+WHERE tg_id = <target_tg_id>;
+
+-- 2. Записываем audit (НЕ ПРОПУСКАТЬ — game_design §18.6 требует, чтобы любое
+-- admin-действие оставляло audit-след).
+INSERT INTO audit_log (
+    occurred_at, action, actor_id, target_kind, target_id,
+    before, after, reason, source, idempotency_key
+)
+VALUES (
+    NOW(),
+    'ANTICHEAT_BAN_LIFTED',
+    <admin_id>,                                  -- из таблицы admins
+    'player',
+    (SELECT id::text FROM users WHERE tg_id = <target_tg_id>),
+    jsonb_build_object('anticheat_ban_until', '<old_iso_ts>'),
+    jsonb_build_object('anticheat_ban_until', NULL),
+    '<reason>',
+    'unknown',                                   -- backfill-маркер для ручного действия
+    'manual_unban:<target_tg_id>:' || EXTRACT(EPOCH FROM NOW())::bigint
+);
+```
+
+**Список забаненных и история trip-wire-событий** (для разбора):
+
+```sql
+-- Все активные soft-ban-ы:
+SELECT id, tg_id, username, length_cm, anticheat_ban_until
+FROM users
+WHERE anticheat_ban_until > NOW()
+ORDER BY anticheat_ban_until DESC;
+
+-- История anticheat-событий конкретного игрока:
+SELECT occurred_at, action, source, delta_cm, clamped_from, reason
+FROM audit_log
+WHERE target_kind = 'player'
+  AND target_id   = (SELECT id::text FROM users WHERE tg_id = <target_tg_id>)
+  AND action IN (
+      'ANTICHEAT_DAILY_CAP_EXCEEDED',
+      'ANTICHEAT_WEEKLY_CAP_EXCEEDED',
+      'ANTICHEAT_BAN_LIFTED'
+  )
+ORDER BY occurred_at DESC;
+```
+
+##### Известные ограничения / TODO
+
+- **Snapshot isolation в SQLite-тестах.** Под SQLite + aiosqlite параллельные `AddLength.grant(...)`-вызовы могут проиграть lost-update-гонку на `users.length_cm` (BEGIN DEFERRED + читают один snapshot). На проде (Postgres + REPEATABLE READ + `SELECT … FOR UPDATE` на `users`-row) это не проблема. Если переключаемся на Postgres-integration-тесты — `SELECT FOR UPDATE` на `players.get_by_id` нужно явно добавить в `SqlAlchemyPlayerRepository`.
+- **Authz transaction.** `SetMaxDau` и `ReloadBalance` (Спринт 1.5) делают `admins.get_by_tg_id(...)` ДО `async with self._uow:`. На проде это упадёт на `RuntimeError("UnitOfWork is not entered")` — `SqlAlchemyAdminRepository.get_by_tg_id` тянет `uow.session`. В `LiftAnticheatBan` (1.6.G) UoW открыт первой строкой; существующие use-cases оставлены как есть. Тикет-преемник: «починить admin authz-flow для SqlAlchemy-репозитория».
+- **`anticheat-admin-alert` локаль.** Зарезервирована, но пока не используется (`StructlogAnticheatAdminAlerter` не локализуется). Будет добавлена при появлении Telegram-канала админ-алёртов.
 
 ---
 
@@ -398,7 +603,9 @@ pipirik_wars/
 |---|---|---|
 | 3.1.1 | `/mountains` (lvl 3+, ≥ 20 см, 20–40 мин, ±длина, 0–1 предмет) | Е2Е сценарии на + и − исход |
 | 3.1.2 | `/dungeon` (lvl 6+, ≥ 20 см, 40–60 мин, ±длина, 0–3 предмета) | Дроп до 3 предметов; UI выбора «надеть/выбросить» по каждому |
-| 3.1.3 | Балансировка (`balance.yaml`: вероятности и величины) | Можно крутить ручки без релиза кода |
+| 3.1.3 | Дроп **скроллов заточки** в обоих локациях (см. ГДД §2.8): обычные скроллы — горы (очень-очень редко) + данжон (очень редко); blessed-скроллы — только данжон (очень-очень редко). | Юнит-тесты на доменный picker; integration: 1000 прогонов горы + 1000 данжон, частоты в ожидаемых границах |
+| 3.1.4 | Дроп **оружия** (`right_hand`, `left_hand`) в обоих локациях, см. ГДД §2.6 | Тот же drop-engine, что и для остального шмота; новые слоты появляются в выдаче «надеть/выбросить» |
+| 3.1.5 | Балансировка (`balance.yaml`: вероятности и величины) | Можно крутить ручки без релиза кода |
 
 ### Спринт 3.2 — Караваны (полная механика)
 
@@ -421,6 +628,37 @@ pipirik_wars/
 | 3.3.3 | Лобби 20 мин, пересылаемая кнопка | Минимум 1 рейдер |
 | 3.3.4 | Боевая механика: босс — 3 атаки, рейдер — 3 блока | Раунды 20 сек–1 мин |
 | 3.3.5 | Завершение: < 10 см у босса = победа рейдеров; иначе босс | Награды и % от системы — из `balance.yaml` |
+| 3.3.6 | Per-player ролл скроллов заточки на победу (см. ГДД §2.8.5): обычный скролл — малый шанс; blessed — очень малый. Идемпотентно по `(boss_fight_id, player_id, scroll_kind)`. | Юнит-тесты per-player ролла; integration: 100 рейдов × 5 игроков, частоты в границах |
+
+### Спринт 3.4 — Заточка предметов 🪛
+
+> Sink-механика для лишних СМ. Зависит от 3.1 (источники скроллов) и 3.3 (boss-drop). Реализуется отдельным спринтом, потому что затрагивает доменный слой инвентаря (новый агрегат `EnchantedItem`), бот-UI с warnings/confirmations, и audit-trail.
+
+| # | Задача | Критерий приёмки |
+|---|---|---|
+| 3.4.1 | Domain: расширение `Item`-агрегата полем `enchant_level: int` (0..30) + категории `weapon`/`armor`/`jewelry` для слотов (см. ГДД §2.6, §2.8.1). Доменный VO `Scroll(category, blessed: bool)`. Domain errors `WrongScrollCategory`, `MaxLevelReached`, `ItemDestroyed`. | Юнит-тесты на каждое правило; mypy --strict |
+| 3.4.2 | Persistence: миграция Alembic `add_enchant_level_to_items` + ORM-маппинг + `IItemRepository.update_enchant_level(...)`. | Integration-тесты: round-trip, default `enchant_level=0` для legacy-предметов |
+| 3.4.3 | Application: use-case `EnchantItem(*, player_id, item_id, scroll_id) -> EnchantOutcome`. Внутри: load + check category + roll исход через `IRandom` + audit `ITEM_ENCHANT_ATTEMPT` + idempotency-key. Отдельный use-case для blessed (или enum-флаг). | Юнит: всех 4 (regular) и 5 (blessed) исходов; idempotency повторного применения; категория-mismatch → `WrongScrollCategory` |
+| 3.4.4 | Доменный picker `pick_enchant_outcome(*, level, blessed, weights)` — чистая функция. | Юнит-тесты на: (a) safe-zone forced-success, (b) все 4/5 исходов в каждом тире, (c) `clamp(0, 30)` на нижней границе |
+| 3.4.5 | Балансовый конфиг: pydantic `EnchantmentConfig` с инвариантами (см. ГДД §2.8.6: сумма весов = 1.0; safe-zone-zero для drop/destroy; `blessed_outcomes_per_level["29"].success_2 == 0.0`, см. ГДД §2.8.4). Стартовые дефолты для всех уровней `0..29` уже зафиксированы в ГДД §2.8.6 — копируются в `balance.yaml` как есть. | Юнит-тесты на pydantic-валидаторы; интеграционный тест: дефолтный `balance.yaml` парсится без ошибок и сумма весов на каждом уровне = 1.0 ± ε |
+| 3.4.6 | Bot-handler `/enchant <item_id> <scroll_id>` или callback из карточки предмета. UX: предупреждение → подтверждение → ролл → результат с emoji-индикатором тира (см. ГДД §2.8.7). | Handler-тесты; визуальная проверка предупреждений в RU+EN |
+| 3.4.7 | Локализация ключей `enchant-*` (RU+EN): `enchant-warning-regular`, `enchant-warning-blessed`, `enchant-success`, `enchant-no-effect`, `enchant-drop`, `enchant-destroy`, `enchant-tier-{safe,easy,hard,very-hard,extreme,impossible}`, `enchant-wrong-category`. | Все ключи присутствуют в обоих файлах; e2e-snapshot |
+| 3.4.8 | Отображение `+N` рядом с именем предмета во всех местах: `/profile`, инвентарь, нотификации о дропе, audit-лог. | Снэпшот-тесты презентеров |
+| 3.4.9 | Trip-wire анти-чита: аномальные серии успехов на высоких тирах → admin alert (event `ENCHANT_ANOMALY` в `audit_log`). | Юнит-тест: 10 подряд успехов на тире `+18→+25` → alert |
+
+### Спринт 3.5 — Free-to-play рулетка (без крипто-лотов) 🎰
+
+> Минимальная версия рулетки — без крипто-приза. Запускается в Фазе 3, как только готовы скроллы (3.4) и шмот-эксклюзивы. Крипто-интеграция — в Фазе 4 / Спринт 4.1.
+
+| # | Задача | Критерий приёмки |
+|---|---|---|
+| 3.5.1 | Domain: порт `IRouletteEngine.spin(*, player, kind: RouletteKind) -> SpinResult`. Доменные исходы: `LengthGain`, `ItemDrop`, `ScrollDrop`, `BlessedScrollDrop`. (Крипто-исход добавится в 4.1.) | Юнит-тесты picker-а; mypy strict |
+| 3.5.2 | Application: use-case `SpinFreeRoulette(*, player_id) -> SpinResult`. Внутри: `progression.spend_length(player, 100, reason="roulette_spin")` → `engine.spin(...)` → применение исхода. Audit-trail. | Юнит-тесты + integration: спин с балансом 100 и 99 см |
+| 3.5.3 | Конфиг рулетки в `balance.yaml` (стартовые дефолты — в ГДД §12.4.2): `roulette.free.cost_cm`, `roulette.free.outcomes` (5 исходов: length / item / scroll_regular / scroll_blessed / crypto_lot), `roulette.free.length_buckets` (4 бакета СМ для скоса к малым). Доп. инвариант: при пустом крипто-пуле вес `crypto_lot` перетекает на `length`. | Pydantic-валидаторы; сумма весов = 1.0 на каждой группе; интеграционный тест 10000 спинов: `E[CM | spin]` ≈ 50 ± 5 см (sink работает) |
+| 3.5.4 | Эксклюзивный шмот `roulette_only: true` в каталоге предметов (минимум 5 предметов на каждую категорию слотов на старте). | Catalogue smoke-test: для каждого слота есть ≥ 1 roulette_only-предмет |
+| 3.5.5 | Bot-handler `/roulette_free` + кнопка из `/profile` + анимация-крутилка (3-5 промежуточных сообщений с задержкой) + финальная карточка результата. | Handler-тесты + manual smoke в RU+EN |
+| 3.5.6 | Локализация `roulette-free-*` (RU+EN). | Все ключи в обоих файлах |
+| 3.5.7 | Доступ — с уровня толщины 2 (см. ГДД §12.4.1). | Юнит-тест: lvl 1 → отказ с подсказкой |
 
 ---
 
@@ -430,14 +668,21 @@ pipirik_wars/
 
 | # | Задача | Критерий приёмки |
 |---|---|---|
-| 4.1.1 | Telegram Stars: рулетка за 1 ⭐ | Расчёт случайного выигрыша; чек-лог транзакций |
+| 4.1.1 | Telegram Stars: **платная рулетка** за 1 ⭐ (1 спин) и 9 ⭐ (10 спинов, 10-pack). См. ГДД §12.5; стартовые веса призов и бакеты СМ — §12.5.2. | Расчёт случайного выигрыша; чек-лог транзакций; 10-pack идёт одной транзакцией; integration 10000 спинов: `E[CM | spin]` ≈ 27 см (баланс смещён к не-CM призам и blessed-скроллам) |
 | 4.1.2 | TON Connect: фикс длина за TON | Sandbox + продакшн-сеть; webhook/poll платежей |
 | 4.1.3 | USDT (через TON-сеть/процессор) | Параметризованные суммы → длина |
 | 4.1.4 | Антифрод платежей, проверка двойных зачислений | Idempotency-key на платёж |
-| 4.1.5 | Переход на Redis (лобби, очереди, DAU, locks) | Нагрузочный тест 10× от MVP |
-| 4.1.6 | Перевод предсказаний/логов на ИИ (опционально) | Кэш на сгенерированных ответах |
-| 4.1.7 | Доп. языки: PT, ES, TR, ID, FA, UK | Файлы переводов, тест fallback |
-| 4.1.8 | Метрики и дашборд (Prometheus + Grafana) | Графики DAU/RPS/караваны/рейды |
+| 4.1.5 | **10 % от каждого донат-зачисления → крипто-призовой пул** (см. ГДД §12.6). `RecordDonation` use-case при подтверждении платежа делает второй проводкой `IncreasePrizePool(currency, amount=donation*0.10)`. Идемпотентно. | Юнит-тесты на all 3 валюты; integration: подтверждённый донат 100 ⭐ → пул вырос на 10 ⭐ |
+| 4.1.6 | **Призовой пул** — domain-агрегат `PrizePool(stars, ton_nano, usdt_decimal)`. Persistence + миграция. Audit-лог любого изменения. | Юнит-тесты на инкременты/декременты; round-trip persistence |
+| 4.1.7 | **Лот-генератор** (`PrizePoolService.regenerate_lots`, см. ГДД §12.6.3). Cron 1×/час + триггер после крупного донат-зачисления. Учёт комиссии: `IFeeEstimator` с P95 за 7 дней. Минимум лота = 1 USD-эквивалент + комиссия; максимум = 10 USD-эквивалент. | Юнит-тесты: пул 3 USDT → 3 лота × 1 USDT; пул 15 USDT → 1 лот × 10 USDT (5 USDT остаются); комиссия > buffer → лот возвращается |
+| 4.1.8 | **Крипто-приз** в результат-пуле платной + free-рулеток (см. ГДД §12.4.2, §12.5.2). Если активных лотов в данной валюте нет — слот криптоприза занимает СМ-приз. | Юнит-тесты picker-а: пул пуст → крипто-приз не появляется |
+| 4.1.9 | **Выплата выигрыша**: handler «Привязать кошелёк» + use-case `ClaimPrize(player, lot_id, recipient_address)` + транзакция через TON SDK. Жёсткая защита: `actual_fee > fee_buffer` → лот возвращается в пул, выплата откладывается. | Юнит-тесты на все ветки; integration в TON sandbox |
+| 4.1.10 | Админ-команды `/prize_pool`, `/refund_lot <lot_id>`, `/freeze_payouts` (super_admin + TOTP, см. ГДД §12.6.6) | RBAC-тесты; audit-записи `ADMIN_PRIZE_*` |
+| 4.1.11 | Лимиты выплат на игрока: `max 50 USDT-экв за 30 дней` (TODO(balance): финальное число). Сверх лимита — выплата ставится в очередь. | Юнит-тесты на rolling 30 day window |
+| 4.1.12 | Переход на Redis (лобби, очереди, DAU, locks) | Нагрузочный тест 10× от MVP |
+| 4.1.13 | Перевод предсказаний/логов на ИИ (опционально) | Кэш на сгенерированных ответах |
+| 4.1.14 | Доп. языки: PT, ES, TR, ID, FA, UK | Файлы переводов, тест fallback |
+| 4.1.15 | Метрики и дашборд (Prometheus + Grafana) | Графики DAU/RPS/караваны/рейды + крипто-пул per currency |
 
 ### Спринт 4.5 — Веб-админ-панель (опционально) 🌐
 
@@ -567,6 +812,14 @@ pipirik_wars/
 11. **Финальный триггер титула «Нежный»** — после v9 он стал TBD (открытый вопрос геймдизу).
 12. **Расширенная таблица титулов** — формулировки и условия остальных титулов (в v9 фиксирован только «Новичок»).
 13. **Канал-анонсы (Спринт 4.9)** — какой именно контент туда автопостится (итоги недели / лидерборды / релиз-ноты / всё)? Можно решить позже, ближе к Фазе 4.
+14. **Заточка — финальные `success_probability`** — стартовые дефолты для всех уровней `0..29` зафиксированы в ГДД §2.8.6 (полные таблицы regular/blessed). После альфа-теста подбираются по метрикам; настройка через `balance.yaml` без релиза кода.
+15. **Заточка — bad-luck protection** — нужна ли «гарантированный успех после N подряд провалов» в MVP механики или только в Фазе 4? (Сейчас не предусмотрена, см. ГДД §2.8.8.)
+16. **Эксклюзивный шмот рулетки** — сколько и каких именно `roulette_only` предметов готовить на старте (минимум 5 на категорию слотов в Спринте 3.5.4)? Финальный список — от геймдиза.
+17. **Лимит выплат по крипто-пулу** — `max 50 USDT-экв за 30 дней` (Спринт 4.1.11) — это разумный потолок? Нужно посмотреть на регуляторные ограничения и средний AOV.
+18. **`IFeeEstimator` стратегия** — P95 за 7 дней vs более агрессивный (P99 / max за 24 часа) — какой кончик оптимизировать: запас или эффективность пула? (Спринт 4.1.7.)
+19. **Bad-luck protection для крипто-приза** — после скольких сотен спинов без крипто-приза гарантировать выплату? (Сейчас не предусмотрено; решение по метрикам.)
+20. **Переход поля `equipment.kind` enum при добавлении `right_hand`/`left_hand`** — когда именно ввести миграцию: вместе со Спринтом 3.1 (тогда же дроп оружия) или раньше как «зарезервировать слоты»? Решается на старте Фазы 3.
+21. **Веса призов рулеток** — стартовые дефолты для free и paid зафиксированы в ГДД §12.4.2 / §12.5.2 (включая бакеты СМ). Подтвердить после альфа-теста: `E[CM | spin]` free ≈ 50 см (sink ~50/спин при цене 100), paid ≈ 27 см.
 
 ---
 
