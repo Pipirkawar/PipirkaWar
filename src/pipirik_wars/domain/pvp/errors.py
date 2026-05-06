@@ -287,3 +287,42 @@ class NoMissingMassMovesError(PvpError):
 
     def __init__(self) -> None:
         super().__init__("mass-duel has no missing moves to force-submit")
+
+
+class MassDuelNotFoundError(PvpError):
+    """`MassDuel` с указанным `id` не найден в БД (Спринт 2.2.E)."""
+
+    def __init__(self, *, duel_id: int) -> None:
+        super().__init__(f"mass-duel id={duel_id} not found")
+        self.duel_id = duel_id
+
+
+class MassDuelCooldownError(PvpError):
+    """Клан атакует чаще, чем `pvp.mass_duel.cooldown_hours` (ГДД §7.2 / 2.2.2).
+
+    Use-case `StartMassDuel` (Спринт 2.2.E) проверяет timestamp последнего
+    mass-duel-а каждой из двух сторон. Если у любого клана есть бой
+    моложе чем cooldown_hours назад — атака отклоняется.
+    """
+
+    def __init__(self, *, clan_id: int, cooldown_hours: int) -> None:
+        super().__init__(
+            f"clan id={clan_id} cannot start mass-duel: cooldown {cooldown_hours}h has not passed",
+        )
+        self.clan_id = clan_id
+        self.cooldown_hours = cooldown_hours
+
+
+class MassDuelNoParticipantsError(PvpError):
+    """У одной из сторон нет eligible-участников (Спринт 2.2.E).
+
+    После фильтрации по `length_cm`, `thickness_level`, `status` и
+    cross-clan-overlap у любой стороны может остаться 0 участников —
+    в этом случае массовый бой стартовать нельзя.
+    """
+
+    def __init__(self, *, clan_id: int) -> None:
+        super().__init__(
+            f"clan id={clan_id} has no eligible participants for mass-duel",
+        )
+        self.clan_id = clan_id

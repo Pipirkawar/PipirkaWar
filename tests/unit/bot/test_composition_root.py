@@ -43,12 +43,17 @@ from pipirik_wars.application.progression import AddLength, UpgradeThickness
 from pipirik_wars.application.pvp import (
     AcceptDuel,
     CancelDuel,
+    CancelMassDuel,
     ChallengeDuel,
     EnqueueGlobalDuel,
     EscalateChatToGlobal,
     ExpireLobbyEntry,
+    ForceResolveMassDuel,
     MatchFromLobby,
     ResolveAfkRound,
+    ResolveMassDuel,
+    StartMassDuel,
+    SubmitMassMove,
     SubmitMove,
 )
 from pipirik_wars.application.security import ActivityLockService
@@ -59,7 +64,7 @@ from pipirik_wars.domain.admin import IAdminRepository
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.forest import IForestRunRepository
 from pipirik_wars.domain.player import IPlayerRepository
-from pipirik_wars.domain.pvp import IDuelRepository
+from pipirik_wars.domain.pvp import IDuelRepository, IMassDuelRepository
 from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
@@ -79,6 +84,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyDuelRepository,
     SqlAlchemyForestRunRepository,
     SqlAlchemyGlobalLobbyRepository,
+    SqlAlchemyMassDuelRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemySignupQueueRepository,
 )
@@ -118,6 +124,7 @@ from tests.fakes import (
     FakeForestRunRepository,
     FakeGlobalLobbyRepository,
     FakeIdempotencyKey,
+    FakeMassDuelRepository,
     FakeMessageBundle,
     FakeOracleHistoryRepository,
     FakeOracleTemplateProvider,
@@ -157,6 +164,7 @@ def _container_with_fakes() -> Container:
     activity_locks: IActivityLockRepository = FakeActivityLockRepository()
     forest_runs: IForestRunRepository = FakeForestRunRepository()
     duels: IDuelRepository = FakeDuelRepository()
+    mass_duels: IMassDuelRepository = FakeMassDuelRepository()
     global_lobby = FakeGlobalLobbyRepository()
     balance = FakeBalanceConfig(build_valid_balance())
     dau_counter = InMemoryDauCounter(clock=clock)
@@ -304,6 +312,50 @@ def _container_with_fakes() -> Container:
         audit=audit,
         clock=clock,
     )
+    start_mass_duel = StartMassDuel(
+        uow=uow,
+        clans=clans,
+        clan_members=members,
+        players=players,
+        duels=mass_duels,
+        locks=activity_lock_service,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    submit_mass_move = SubmitMassMove(
+        uow=uow,
+        players=players,
+        duels=mass_duels,
+        clock=clock,
+    )
+    resolve_mass_duel = ResolveMassDuel(
+        uow=uow,
+        players=players,
+        duels=mass_duels,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        random=rng,
+        audit=audit,
+        clock=clock,
+    )
+    force_resolve_mass_duel = ForceResolveMassDuel(
+        uow=uow,
+        players=players,
+        duels=mass_duels,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        random=rng,
+        audit=audit,
+        clock=clock,
+    )
+    cancel_mass_duel = CancelMassDuel(
+        uow=uow,
+        duels=mass_duels,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -322,6 +374,7 @@ def _container_with_fakes() -> Container:
         activity_locks=activity_locks,
         forest_runs=forest_runs,
         duels=duels,
+        mass_duels=mass_duels,
         global_lobby=global_lobby,
         delayed_jobs=delayed_jobs,
         register_player=RegisterPlayer(
@@ -459,6 +512,11 @@ def _container_with_fakes() -> Container:
         match_from_lobby=match_from_lobby,
         escalate_chat_to_global=escalate_chat_to_global,
         expire_lobby_entry=expire_lobby_entry,
+        start_mass_duel=start_mass_duel,
+        submit_mass_move=submit_mass_move,
+        resolve_mass_duel=resolve_mass_duel,
+        force_resolve_mass_duel=force_resolve_mass_duel,
+        cancel_mass_duel=cancel_mass_duel,
     )
 
 
@@ -524,6 +582,16 @@ class TestContainer:
         assert isinstance(c.escalate_chat_to_global, EscalateChatToGlobal)
         assert isinstance(c.expire_lobby_entry, ExpireLobbyEntry)
 
+    def test_container_holds_mass_duel_use_cases(self) -> None:
+        """Mass-PvP клан×клан (Спринт 2.2.E)."""
+        c = _container_with_fakes()
+        assert isinstance(c.mass_duels, FakeMassDuelRepository)
+        assert isinstance(c.start_mass_duel, StartMassDuel)
+        assert isinstance(c.submit_mass_move, SubmitMassMove)
+        assert isinstance(c.resolve_mass_duel, ResolveMassDuel)
+        assert isinstance(c.force_resolve_mass_duel, ForceResolveMassDuel)
+        assert isinstance(c.cancel_mass_duel, CancelMassDuel)
+
     def test_container_is_frozen(self) -> None:
         c = _container_with_fakes()
         with pytest.raises((AttributeError, TypeError)):
@@ -579,6 +647,13 @@ class TestBuildContainer:
         assert isinstance(c.match_from_lobby, MatchFromLobby)
         assert isinstance(c.escalate_chat_to_global, EscalateChatToGlobal)
         assert isinstance(c.expire_lobby_entry, ExpireLobbyEntry)
+        # Mass-PvP клан×клан (Спринт 2.2.E): реальный mass-duel-репо + 5 use-cases.
+        assert isinstance(c.mass_duels, SqlAlchemyMassDuelRepository)
+        assert isinstance(c.start_mass_duel, StartMassDuel)
+        assert isinstance(c.submit_mass_move, SubmitMassMove)
+        assert isinstance(c.resolve_mass_duel, ResolveMassDuel)
+        assert isinstance(c.force_resolve_mass_duel, ForceResolveMassDuel)
+        assert isinstance(c.cancel_mass_duel, CancelMassDuel)
         # Forest finish + scheduler (Спринт 1.3.C).
         assert isinstance(c.delayed_jobs, APSchedulerDelayedJobScheduler)
         assert isinstance(c.finish_forest_run, FinishForestRun)

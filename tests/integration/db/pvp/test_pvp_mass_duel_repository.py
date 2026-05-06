@@ -527,3 +527,103 @@ class TestUnequalRosters:
         ):
             idx = c1_ids.index(member_id)
             assert length == [50, 70, 90][idx]
+
+
+class TestFindMostRecentForClan:
+    """Запрос `find_most_recent_for_clan(clan_id)` (Спринт 2.2.E, для cooldown-проверки)."""
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_clan_has_no_battles(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        clan1, _clan2, _, _ = await _seed_two_clans_with_members(uow, clan1_size=1, clan2_size=1)
+        assert clan1.id is not None
+        repo = SqlAlchemyMassDuelRepository(uow=uow)
+        async with uow:
+            result = await repo.find_most_recent_for_clan(clan_id=clan1.id)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_returns_battle_when_clan_is_attacker(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        clan1, clan2, clan1_players, clan2_players = await _seed_two_clans_with_members(
+            uow, clan1_size=1, clan2_size=1
+        )
+        assert clan1.id is not None and clan2.id is not None
+        assert clan1_players[0].id is not None and clan2_players[0].id is not None
+        repo = SqlAlchemyMassDuelRepository(uow=uow)
+        battle = _build_mass_duel(
+            clan1_id=clan1.id,
+            clan2_id=clan2.id,
+            clan1_lengths={clan1_players[0].id: 50},
+            clan2_lengths={clan2_players[0].id: 60},
+        )
+        async with uow:
+            stored = await repo.add(battle)
+        async with uow:
+            recent = await repo.find_most_recent_for_clan(clan_id=clan1.id)
+        assert recent is not None
+        assert recent.id == stored.id
+
+    @pytest.mark.asyncio
+    async def test_returns_battle_when_clan_is_defender(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        clan1, clan2, clan1_players, clan2_players = await _seed_two_clans_with_members(
+            uow, clan1_size=1, clan2_size=1
+        )
+        assert clan1.id is not None and clan2.id is not None
+        assert clan1_players[0].id is not None and clan2_players[0].id is not None
+        repo = SqlAlchemyMassDuelRepository(uow=uow)
+        battle = _build_mass_duel(
+            clan1_id=clan1.id,
+            clan2_id=clan2.id,
+            clan1_lengths={clan1_players[0].id: 50},
+            clan2_lengths={clan2_players[0].id: 60},
+        )
+        async with uow:
+            stored = await repo.add(battle)
+        async with uow:
+            recent = await repo.find_most_recent_for_clan(clan_id=clan2.id)
+        assert recent is not None
+        assert recent.id == stored.id
+
+    @pytest.mark.asyncio
+    async def test_returns_most_recent_among_multiple_battles(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        clan1, clan2, clan1_players, clan2_players = await _seed_two_clans_with_members(
+            uow, clan1_size=1, clan2_size=1
+        )
+        assert clan1.id is not None and clan2.id is not None
+        assert clan1_players[0].id is not None and clan2_players[0].id is not None
+        repo = SqlAlchemyMassDuelRepository(uow=uow)
+
+        early = MassDuel.create_battle(
+            clan1_id=clan1.id,
+            clan2_id=clan2.id,
+            clan1_lengths={clan1_players[0].id: 50},
+            clan2_lengths={clan2_players[0].id: 60},
+            hit_pct=10,
+            now=datetime(2026, 5, 5, 8, 0, tzinfo=UTC),
+        )
+        late = MassDuel.create_battle(
+            clan1_id=clan1.id,
+            clan2_id=clan2.id,
+            clan1_lengths={clan1_players[0].id: 50},
+            clan2_lengths={clan2_players[0].id: 60},
+            hit_pct=10,
+            now=datetime(2026, 5, 5, 12, 0, tzinfo=UTC),
+        )
+        async with uow:
+            await repo.add(early)
+            stored_late = await repo.add(late)
+        async with uow:
+            recent = await repo.find_most_recent_for_clan(clan_id=clan1.id)
+        assert recent is not None
+        assert recent.id == stored_late.id

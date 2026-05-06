@@ -67,13 +67,18 @@ from pipirik_wars.application.progression import AddLength, UpgradeThickness
 from pipirik_wars.application.pvp import (
     AcceptDuel,
     CancelDuel,
+    CancelMassDuel,
     ChallengeDuel,
     EnqueueGlobalDuel,
     EscalateChatToGlobal,
     ExpireLobbyEntry,
+    ForceResolveMassDuel,
     IDuelLogTemplateProvider,
     MatchFromLobby,
     ResolveAfkRound,
+    ResolveMassDuel,
+    StartMassDuel,
+    SubmitMassMove,
     SubmitMove,
 )
 from pipirik_wars.application.security import ActivityLockService
@@ -96,7 +101,7 @@ from pipirik_wars.domain.forest import IForestRunRepository
 from pipirik_wars.domain.oracle import IOracleHistoryRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.progression import ILengthGranter
-from pipirik_wars.domain.pvp import IDuelRepository
+from pipirik_wars.domain.pvp import IDuelRepository, IMassDuelRepository
 from pipirik_wars.domain.pvp.lobby import IGlobalLobbyRepository
 from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import (
@@ -127,6 +132,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyDuelRepository,
     SqlAlchemyForestRunRepository,
     SqlAlchemyGlobalLobbyRepository,
+    SqlAlchemyMassDuelRepository,
     SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemySignupQueueRepository,
@@ -192,6 +198,7 @@ class Container:
     forest_runs: IForestRunRepository
     oracle_history: IOracleHistoryRepository
     duels: IDuelRepository
+    mass_duels: IMassDuelRepository
     global_lobby: IGlobalLobbyRepository
     anticheat: IAnticheatRepository
     anticheat_admin_alerter: IAnticheatAdminAlerter
@@ -254,6 +261,13 @@ class Container:
     escalate_chat_to_global: EscalateChatToGlobal
     expire_lobby_entry: ExpireLobbyEntry
 
+    # Mass-PvP клан×клан (Спринт 2.2.E)
+    start_mass_duel: StartMassDuel
+    submit_mass_move: SubmitMassMove
+    resolve_mass_duel: ResolveMassDuel
+    force_resolve_mass_duel: ForceResolveMassDuel
+    cancel_mass_duel: CancelMassDuel
+
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
     settings: Settings | None = None,
@@ -303,6 +317,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     forest_runs = SqlAlchemyForestRunRepository(uow=uow, balance=balance)
     oracle_history = SqlAlchemyOracleHistoryRepository(uow=uow)
     duels = SqlAlchemyDuelRepository(uow=uow)
+    mass_duels = SqlAlchemyMassDuelRepository(uow=uow)
     global_lobby = SqlAlchemyGlobalLobbyRepository(uow=uow)
     anticheat = SqlAlchemyAnticheatRepository(uow=uow)
     anticheat_admin_alerter = StructlogAnticheatAdminAlerter()
@@ -607,6 +622,50 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=audit,
         clock=clock,
     )
+    start_mass_duel = StartMassDuel(
+        uow=uow,
+        clans=clans,
+        clan_members=clan_members,
+        players=players,
+        duels=mass_duels,
+        locks=activity_lock_service,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    submit_mass_move = SubmitMassMove(
+        uow=uow,
+        players=players,
+        duels=mass_duels,
+        clock=clock,
+    )
+    resolve_mass_duel = ResolveMassDuel(
+        uow=uow,
+        players=players,
+        duels=mass_duels,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        random=RealRandom(),
+        audit=audit,
+        clock=clock,
+    )
+    force_resolve_mass_duel = ForceResolveMassDuel(
+        uow=uow,
+        players=players,
+        duels=mass_duels,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        random=RealRandom(),
+        audit=audit,
+        clock=clock,
+    )
+    cancel_mass_duel = CancelMassDuel(
+        uow=uow,
+        duels=mass_duels,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -626,6 +685,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         forest_runs=forest_runs,
         oracle_history=oracle_history,
         duels=duels,
+        mass_duels=mass_duels,
         global_lobby=global_lobby,
         anticheat=anticheat,
         anticheat_admin_alerter=anticheat_admin_alerter,
@@ -669,6 +729,11 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         match_from_lobby=match_from_lobby,
         escalate_chat_to_global=escalate_chat_to_global,
         expire_lobby_entry=expire_lobby_entry,
+        start_mass_duel=start_mass_duel,
+        submit_mass_move=submit_mass_move,
+        resolve_mass_duel=resolve_mass_duel,
+        force_resolve_mass_duel=force_resolve_mass_duel,
+        cancel_mass_duel=cancel_mass_duel,
     )
 
 

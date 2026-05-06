@@ -23,6 +23,55 @@
 
 ---
 
+## 2026-05-06 — Спринт 2.2.E: application-слой массового PvP (5 use-case-ов + DI + 35 unit-тестов)
+
+**Автор:** Devin (по запросу intensive192)
+**Тип:** feature
+**Связано:** `current_tasks.md` Спринт 2.2.E, ПД 2.2.2 + 2.2.4 (`development_plan.md` §6), ГДД §7.2.
+
+### Что сделано
+
+- 5 use-case-ов в `src/pipirik_wars/application/pvp/`, поверх агрегата `MassDuel` (2.2.C) и репозитория `IMassDuelRepository` (2.2.D):
+    - **`StartMassDuel`** (`start_mass_duel.py`): резолвит оба клана по `chat_id` через `IClanRepository.get_by_chat_id`; падает с `IntegrityError` при отсутствии и с `ClanFrozenError` при `ClanStatus.FROZEN`; собирает eligible-ростер каждого клана через `IClanMembershipRepository.list_by_clan(clan_id)` + `IPlayerRepository.get_by_id(...)` с фильтрами `PlayerStatus.ACTIVE`, `length_cm ≥ pvp.mass_duel.min_length_cm`, `thickness.level ≥ min_thickness_level`; пустой ростер любой стороны → `MassDuelNoParticipantsError`; cooldown через `find_most_recent_for_clan(clan_id)` с порогом `pvp.mass_duel.cooldown_hours` для каждого из двух кланов → `MassDuelCooldownError`; снапшот `hit_pct` из баланса; `MassDuel.create_battle(...)` + `add()`; PvP-локи всех участников через `ActivityLockService.acquire(actor_kind="player", ...)` с TTL=30 мин; audit `PVP_MASS_DUEL_CREATED` (idempotency-key `pvp_mass_duel_created:{duel_id}`, `actor_id=initiator_tg_id`).
+    - **`SubmitMassMove`** (`submit_mass_move.py`): загружает `MassDuel` (нет — `MassDuelNotFoundError`); резолвит игрока по `tg_id` (нет — `PlayerNotFoundError`); валидирует `IN_PROGRESS` через `MassDuel.submit_move(...)` (доменные ошибки `InvalidMassDuelStateError`, `NotAMassDuelParticipantError`, `MassMoveAlreadySubmittedError` — пропускаются как есть); НЕ резолвит бой — резолв отдельной командой `ResolveMassDuel` или шедулером через `ForceResolveMassDuel`; возвращает флаг `is_ready_to_resolve` для удобства handler-а 2.2.F.
+    - **`ResolveMassDuel`** (`resolve_mass_duel.py`): финальный резолв когда все отправили: `MassDuel.resolve(random=..., now=...)` (`InvalidMassDuelStateError`/`MassDuelNotReadyError` пропускаются); `apply_mass_duel_outcome(...)` (`apply_mass_outcome.py` от 2.2.D-ветки) — атакующим прибавки через `ILengthGranter.grant(source=PVP_REWARD)` (cap-trip-wire), защитникам списания прямой `with_length` + audit `LENGTH_REVOKE`; `release_mass_duel_locks(saved, locks=...)`; audit `PVP_MASS_DUEL_COMPLETED` (idempotency-key `pvp_mass_duel_completed:{duel_id}`, `afk_fallback=False`).
+    - **`ForceResolveMassDuel`** (`force_resolve_mass_duel.py`): AFK-фоллбэк для шедулера 2.2.F; идемпотентный no-op (`was_already_resolved=True`) если бой уже не `IN_PROGRESS`; для каждого `pid in missing_player_ids` роллит `MassRoundChoice(player_id=pid, attack=random, block=random)` через `IRandom.choice(_POSITIONS)` (где `_POSITIONS = (HIGH, MID, LOW)`); если все уже отправили — пропускает шаг force-submit и сразу резолвит; `force_submit_missing(...)` → `resolve(...)` → `apply_mass_duel_outcome(...)` → `release_mass_duel_locks(...)` → audit `PVP_MASS_DUEL_COMPLETED` с `afk_fallback=True` и `reason="pvp_mass_duel_completed_afk"`.
+    - **`CancelMassDuel`** (`cancel_mass_duel.py`): административная отмена без раскатывания ±длин: идемпотентный no-op (`was_already_cancelled=True`) если уже `CANCELLED`; `MassDuel.cancel(now=...)` (из `COMPLETED` → `InvalidMassDuelStateError` пропускается); снимает PvP-локи всех участников; audit `PVP_MASS_DUEL_CANCELLED` (idempotency-key `pvp_mass_duel_cancelled:{duel_id}`, `before={"state": ...}`, `after={"state": "cancelled"}`).
+- Helper-функции `audit_mass_duel_completed(*, audit, duel, now, afk_fallback)` и `release_mass_duel_locks(duel, *, locks)` вынесены в `resolve_mass_duel.py` и переиспользуются в `force_resolve_mass_duel.py` (DRY: один формат audit-after, одна логика снятия локов).
+- Все 5 use-case-ов следуют единому паттерну: `__slots__` (alphabetical), keyword-only DI в `__init__`, `async with self._uow:` ambient-транзакция, `async def execute(input_dto: ...) -> ...Result`. Frozen `dataclass` для каждого Result-DTO с `__slots__`.
+- Все 5 use-case-ов экспортированы из `application/pvp/__init__.py`.
+- DI-провязка в `bot/main.py`:
+    - `Container` расширен 6 новыми полями: `mass_duels: IMassDuelRepository`, `start_mass_duel`, `submit_mass_move`, `resolve_mass_duel`, `force_resolve_mass_duel`, `cancel_mass_duel`.
+    - `build_container(...)` создаёт `SqlAlchemyMassDuelRepository(uow=uow)` и инстанцирует все 5 use-case-ов с уже существующими `add_length` (как `ILengthGranter`), `RealRandom()`, `activity_lock_service` и т.д.
+- Тесты:
+    - `tests/unit/application/pvp/test_start_mass_duel.py` — 11 тестов: 2v2 happy-path с проверкой ростера / hit_pct / локов / audit; 1×1 ростер; eligibility-фильтр (под-длина исключается, только под-длина → `MassDuelNoParticipantsError`); неизвестный/frozen-клан с двух сторон; cooldown (свежий бой блокирует, старый не блокирует); preexisting-lock одного из участников → `LockAlreadyHeldError`.
+    - `tests/unit/application/pvp/test_submit_mass_move.py` — 8 тестов: первый submit оставляет `IN_PROGRESS` и `is_ready_to_resolve=False`, последний submit возвращает `True`; `MassRoundChoice` персистится в правильную позицию; `MassDuelNotFoundError`, `PlayerNotFoundError`, `NotAMassDuelParticipantError`, `MassMoveAlreadySubmittedError`, `InvalidMassDuelStateError` (cancelled).
+    - `tests/unit/application/pvp/test_resolve_mass_duel.py` — 6 тестов: happy-path 2v2 с проверкой `COMPLETED` + сняты все локи + один `PVP_MASS_DUEL_COMPLETED` без `afk_fallback`; ±длины применяются (атакующие ≥ старт, защитники ≤ старт); `MassDuelNotFoundError`; `MassDuelNotReadyError` если не все отправили; повторный resolve и cancelled → `InvalidMassDuelStateError`.
+    - `tests/unit/application/pvp/test_force_resolve_mass_duel.py` — 6 тестов: 0/4 submitted → force; 2/4 submitted → force заполняет недостающих; 4/4 submitted → force работает без шага force_submit; идемпотентность повторного force-резолва (`was_already_resolved=True`, audit не дублируется); идемпотентность над уже cancelled-боем; `MassDuelNotFoundError`.
+    - `tests/unit/application/pvp/test_cancel_mass_duel.py` — 4 теста: happy-path (все локи сняты, audit с правильными `before`/`after`/`reason`); идемпотентность повторной отмены; `MassDuelNotFoundError`; cancel над `COMPLETED` → `InvalidMassDuelStateError`.
+    - Расширен `tests/unit/bot/test_composition_root.py` — `_container_with_fakes()` строит все 5 mass-duel use-case-ов; новый `test_container_holds_mass_duel_use_cases` проверяет `isinstance` всех 6 новых полей; `test_build_container_returns_real_adapters` проверяет `SqlAlchemyMassDuelRepository`.
+    - Helper-модуль `tests/unit/application/pvp/_mass_helpers.py` — `seed_clan(...)`, `seed_clan_member(...)`, `seed_eligible_clan_member(...)`.
+- `make ci` зелёный (lint + typecheck + imports + 2178 unit + integration тестов passed).
+
+### Артефакты
+
+- Новые файлы: `src/pipirik_wars/application/pvp/{start_mass_duel,submit_mass_move,resolve_mass_duel,force_resolve_mass_duel,cancel_mass_duel}.py`, `tests/unit/application/pvp/{test_start_mass_duel,test_submit_mass_move,test_resolve_mass_duel,test_force_resolve_mass_duel,test_cancel_mass_duel,_mass_helpers}.py`.
+- Изменённые файлы: `src/pipirik_wars/application/pvp/__init__.py` (экспорт 5 use-case-ов + 5 Result-DTO + 2 helper-функций), `src/pipirik_wars/bot/main.py` (Container + build_container + DI), `tests/fakes/__init__.py` (`FakeMassDuelRepository`), `tests/unit/bot/test_composition_root.py` (impl + assertions).
+
+### Заметки / решения
+
+- **Helper-функции вынесены в `resolve_mass_duel.py`, а не в отдельный `_mass_outcome_helpers.py`:** `audit_mass_duel_completed` и `release_mass_duel_locks` нужны только в `Resolve` и `ForceResolve`, и оба зависят от `MassDuel`-агрегата. Делать отдельный файл преждевременно — переедут когда понадобится третий вызов (например, при ручной admin-команде force-через-handler в 2.2.F).
+- **`is_ready_to_resolve` возвращается из `SubmitMassMove`, но use-case НЕ вызывает `ResolveMassDuel` сам:** по аналогии с 1×1 PvP, разделение submit и resolve упрощает рассуждение об idempotency, аудите и таймерах. Handler 2.2.F может проверить флаг и вызвать `ResolveMassDuel` синхронно — или дождаться шедулера.
+- **`ForceResolveMassDuel` — идемпотентный по дизайну:** шедулер APScheduler в реальной системе может срабатывать после того, как handler `SubmitMassMove` вызвал `ResolveMassDuel`. Возврат `was_already_resolved=True` без аудита в этом случае — единственно правильное поведение (мы не должны писать второй `PVP_MASS_DUEL_COMPLETED`).
+- **`CancelMassDuel` — НЕ применяет ±длины:** это административная отмена, не AFK-фоллбэк. Для AFK есть `ForceResolveMassDuel`, который раскатывает урон по случайным выборам (это «честный» резолв в смысле игровой логики). Cancel — для случаев, когда бой надо «забыть»: деградация ростера, abort через админ-команду.
+- **`StartMassDuel` использует `add_length` (`AddLength`-инстанс) НЕ в DI — `length_granter` нужен только в `Resolve` / `ForceResolve`:** в `Start` нет ни прибавок, ни списаний, поэтому DI-список короче. По линии 1×1 PvP `ChallengeDuel` тоже не получает `ILengthGranter`.
+
+### Следующий шаг
+
+Sprint 2.2.F: bot-handler-ы (`/clan_attack`, inline-кнопки атаки/блока, кнопка отмены), локали `locales/{ru,en}/pvp_mass.ftl`, presenter-ы (форматирование `MassDuelOutcome` + audit-сводка), APScheduler-wiring AFK-таймера через `IDelayedJobScheduler.schedule_mass_duel_afk_resolution(...)` → `ForceResolveMassDuel`, индикация cooldown в `/clantop` или отдельной команде.
+
+---
+
 ## 2026-05-05 — Спринт 2.2.D: persistence-слой массового PvP (`pvp_mass_duels` + ORM + репозиторий)
 
 **Автор:** Devin (по запросу shirline89)

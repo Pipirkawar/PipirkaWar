@@ -26,8 +26,10 @@ source=PVP_REWARD)` (anti-cheat-cap из 1.6); списание проиграв
 """
 
 from pipirik_wars.application.pvp.accept_duel import AcceptDuel, DuelAccepted
+from pipirik_wars.application.pvp.apply_mass_outcome import apply_mass_duel_outcome
 from pipirik_wars.application.pvp.apply_outcome import apply_duel_outcome
 from pipirik_wars.application.pvp.cancel_duel import CancelDuel, DuelCancelled
+from pipirik_wars.application.pvp.cancel_mass_duel import CancelMassDuel, MassDuelCancelled
 from pipirik_wars.application.pvp.challenge_duel import ChallengeDuel, DuelChallenged
 from pipirik_wars.application.pvp.enqueue_global_duel import (
     EnqueueGlobalDuel,
@@ -44,6 +46,10 @@ from pipirik_wars.application.pvp.expire_lobby_entry import (
     LobbyEntryExpirationSkipped,
     LobbyEntryExpired,
 )
+from pipirik_wars.application.pvp.force_resolve_mass_duel import (
+    ForceResolveMassDuel,
+    MassDuelForceResolved,
+)
 from pipirik_wars.application.pvp.log_templates import IDuelLogTemplateProvider
 from pipirik_wars.application.pvp.match_from_lobby import (
     DuelMatched,
@@ -55,12 +61,16 @@ from pipirik_wars.application.pvp.resolve_afk_round import (
     AfkRoundResolved,
     ResolveAfkRound,
 )
+from pipirik_wars.application.pvp.resolve_mass_duel import MassDuelResolved, ResolveMassDuel
+from pipirik_wars.application.pvp.start_mass_duel import MassDuelStarted, StartMassDuel
+from pipirik_wars.application.pvp.submit_mass_move import MassMoveSubmitted, SubmitMassMove
 from pipirik_wars.application.pvp.submit_move import MoveSubmitted, SubmitMove
 
 __all__ = [
     "AcceptDuel",
     "AfkRoundResolved",
     "CancelDuel",
+    "CancelMassDuel",
     "ChallengeDuel",
     "DuelAccepted",
     "DuelCancelled",
@@ -72,15 +82,25 @@ __all__ = [
     "EnqueueGlobalDuel",
     "EscalateChatToGlobal",
     "ExpireLobbyEntry",
+    "ForceResolveMassDuel",
     "GlobalDuelEnqueued",
     "IDuelLogTemplateProvider",
     "InvalidLobbyEnqueueError",
     "LobbyEntryExpirationSkipped",
     "LobbyEntryExpired",
     "LobbyEntryStale",
+    "MassDuelCancelled",
+    "MassDuelForceResolved",
+    "MassDuelResolved",
+    "MassDuelStarted",
+    "MassMoveSubmitted",
     "MatchFromLobby",
     "MoveSubmitted",
     "ResolveAfkRound",
+    "ResolveMassDuel",
+    "StartMassDuel",
+    "SubmitMassMove",
     "SubmitMove",
     "apply_duel_outcome",
+    "apply_mass_duel_outcome",
 ]
