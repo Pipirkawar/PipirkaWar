@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from pipirik_wars.domain.daily_head import (
+    ClanQuoteCatalogEmptyError,
     DailyHeadAlreadyAssignedError,
     DailyHeadError,
     DailyHeadInsufficientActivityError,
@@ -52,3 +53,18 @@ class TestDailyHeadAlreadyAssignedError:
         msg = str(err)
         assert "42" in msg
         assert "2026-05-06" in msg
+
+
+class TestClanQuoteCatalogEmptyError:
+    def test_inherits_from_daily_head_error(self) -> None:
+        err = ClanQuoteCatalogEmptyError(locale="ru")
+        assert isinstance(err, DailyHeadError)
+        assert isinstance(err, DomainError)
+
+    def test_payload_fields(self) -> None:
+        err = ClanQuoteCatalogEmptyError(locale="en")
+        assert err.locale == "en"
+
+    def test_message_contains_locale(self) -> None:
+        err = ClanQuoteCatalogEmptyError(locale="es")
+        assert "es" in str(err)

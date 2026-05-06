@@ -23,6 +23,49 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.3.D: каталог иронично-смешных цитат «Главы клана дня» (≥ 100 RU + ≥ 100 EN, JSON-загрузчик)
+
+**Автор:** Devin (агент sufficientdorette)
+**Тип:** feature
+**Связано:** PR #71 — Спринт 2.3.D ([`current_tasks.md` 2.3.D](current_tasks.md), ПД §5 / Спринт 2.3.4)
+
+Что сделано:
+- **Domain-VO** `ClanQuoteTemplate(id: str, text: str, tags: tuple[str, ...])` (`src/pipirik_wars/domain/daily_head/quote.py`) — иммутабельная (`frozen=True, slots=True`) запись каталога. Полная `__post_init__`-валидация: непустые trim-нутые `id`/`text`, `tags` ⊆ `ALLOWED_QUOTE_TAGS = {statham, vk_pablik, auf, meme, profanity}`, без дублей внутри `tags`, минимум 1 «стилистический» тег (`profanity` без стиля запрещён по ПД §5: «теги стиля заполнены»). Свойство `has_profanity` для будущей фильтрации (handler-уровень 2.3.E через `balance.daily_head.content_policy.mild_profanity`).
+- **Domain-ошибка** `ClanQuoteCatalogEmptyError(locale)` в `domain/daily_head/errors.py` — бросается infrastructure-адаптером при пустом каталоге (RU-каталог не существует или пуст; прод-инвариант — RU всегда есть ≥ 100 цитат).
+- **Application-порт** `IClanQuoteTemplateProvider.get_templates(*, locale: str)` (`src/pipirik_wars/application/daily_head/quote_templates.py`) — абстракция «откуда брать шаблоны». Реэкспортируется из `application.daily_head` для удобства handler-а 2.3.E.
+- **Infrastructure-адаптер** `JsonClanQuoteTemplateProvider` (`src/pipirik_wars/infrastructure/templates/clan_quotes.py`): lazy-кэширующий загрузчик per-локаль из `config/templates/clan_quotes_<locale>.json`; fallback на `"ru"` если запрошенной локали нет; конвертация `OSError` / `JSONDecodeError` / структурных нарушений в `ConfigError`; пустой каталог → `ClanQuoteCatalogEmptyError`. Парсинг каждой записи через `ClanQuoteTemplate(...)` — все доменные инварианты ловятся на этапе загрузки и превращаются в `ConfigError` с указанием `path` + `index` + reason. Кэш `dict[str, tuple[ClanQuoteTemplate, ...]]` хранит парсенный каталог per-локаль на время жизни процесса (hot-reload — задача отдельного спринта).
+- **Каталоги** `config/templates/clan_quotes_ru.json` (110 цитат) и `clan_quotes_en.json` (110 цитат) — стилистика «Стэтхем / паблики ВК / АУФ / общеинтернетный мем»; обращение к новому главе через плейсхолдер `{user}`; политика контента по ПД §5 (без политики, межнацоскорблений, насилия, рекламы, секса). Все 110 цитат каждого языка имеют ≥ 1 «стилистический» тег и `{user}`-плейсхолдер; уникальные стабильные id вида `clan_quote.<locale>.NNNN` (используются в audit_payload + аналитике).
+- **Tests:**
+  - `tests/unit/domain/daily_head/test_quote.py` — **13 unit-тестов** VO: минимальная валидная конструкция, frozen-immutability, multi-tag, `has_profanity` true/false, отказы по empty/whitespace `id`/`text`, empty `tags`, unknown tag, only-`profanity` без стиля, дубликаты в `tags`, `ALLOWED_QUOTE_TAGS` содержит все 5 тегов и является `frozenset`.
+  - `tests/unit/domain/daily_head/test_errors.py` — **3 unit-теста** `ClanQuoteCatalogEmptyError`: наследование, payload, текст ошибки.
+  - `tests/integration/templates/test_clan_quotes_loader.py` — **18 integration-тестов**: shipped-каталоги (`≥ 100`, уникальные id, рендер `{user}`, ≥ 1 стилистический тег, наличие `{user}`-плейсхолдера в каждой цитате, lazy-cache identity); error-кейсы (`fallback_to_ru` / `no_files` / `empty_file` / `duplicate_ids` / `invalid_json` / `root_not_object` / `templates_not_list` / `entry_not_object` / `id_missing` / `tags_missing` / `tags_not_list_of_strings` / `unknown_tag`); positive payload с `profanity`-цитатой.
+- **DI-провязка** `clan_quote_provider` в `Container` / `bot/main.py` пока **не сделана** — провайдер не имеет потребителя до handler-а 2.3.E. Когда handler `/clan_head` появится, провайдер будет инстанцирован в `build_container()` и проброшен в handler через `dispatcher["clan_quote_provider"]`.
+
+Результат / артефакты:
+- `src/pipirik_wars/domain/daily_head/quote.py` (новый, 96 строк).
+- `src/pipirik_wars/domain/daily_head/errors.py` — добавлен `ClanQuoteCatalogEmptyError`.
+- `src/pipirik_wars/domain/daily_head/__init__.py` — реэкспорт `ALLOWED_QUOTE_TAGS`, `ClanQuoteTemplate`, `ClanQuoteCatalogEmptyError`.
+- `src/pipirik_wars/application/daily_head/quote_templates.py` (новый, 36 строк).
+- `src/pipirik_wars/application/daily_head/__init__.py` — реэкспорт `IClanQuoteTemplateProvider`.
+- `src/pipirik_wars/infrastructure/templates/clan_quotes.py` (новый, 122 строки).
+- `src/pipirik_wars/infrastructure/templates/__init__.py` — реэкспорт `JsonClanQuoteTemplateProvider`.
+- `config/templates/clan_quotes_ru.json` (новый, 110 цитат).
+- `config/templates/clan_quotes_en.json` (новый, 110 цитат).
+- `tests/unit/domain/daily_head/test_quote.py` (новый, 13 тестов).
+- `tests/unit/domain/daily_head/test_errors.py` — добавлены 3 теста для `ClanQuoteCatalogEmptyError`.
+- `tests/integration/templates/test_clan_quotes_loader.py` (новый, 18 тестов).
+
+Заметки / решения:
+- **Tag-whitelist на уровне VO, а не loader-а.** Все 5 разрешённых тегов хранятся как `frozenset` в `domain/daily_head/quote.py` и проверяются в `__post_init__`. Loader (infrastructure) лишь конструирует VO — невалидные теги ловятся `ValueError` → `ConfigError`. Это значит, что в любых тестах / fixture-ах нельзя случайно создать «битый» каталог: домен сам себя защищает.
+- **Минимум 1 стилистический тег обязателен.** ПД §5 / 2.3.4 говорит: «теги стиля заполнены». Тег `profanity` — лишь модификатор; без стилевого тега цитата не классифицируется. Это даёт уверенность, что любая цитата может фильтроваться по стилю в будущем (например, «отключить АУФ»).
+- **Fallback на RU при отсутствии локали.** Та же стратегия, что в `JsonOracleTemplateProvider` (Спринт 1.4.B). Значит, в `dev`-окружении можно не иметь EN-каталога — handler автоматически возьмёт RU. В `prod` контракт обещает наличие обоих файлов.
+- **Hot-reload не делаем.** Каталог кэшируется per-локаль на время жизни процесса. Замена цитат → переcборка контейнера / restart бота. Это сознательный trade-off (раздел 2.3 редко крутится). Reload-стратегия может появиться позже через общий `IBalanceReloader`-паттерн (который уже есть для balance.yaml в 1.5.G backlog).
+- **Каталог отделён от handler-а / use-case-а.** В `dispatcher` пока ничего не пробрасывается — провайдер существует, но нет потребителя. Это даёт чистый, минимальный по диффу PR. Handler 2.3.E будет инстанцировать `JsonClanQuoteTemplateProvider(templates_dir=settings.templates_dir)` рядом с `JsonOracleTemplateProvider` в `build_container()`.
+- **Стилистика и политика контента.** Каталог сделан в духе «по понятиям / Стэтхем / АУФ / паблики ВК», но без реальных оскорблений и без тяжёлого мата. Из 110 цитат на язык ни одна не помечена тегом `profanity` (намеренно — не было желания добавлять мат в первую итерацию). Когда геймдиз / контент-команда захочет добавить «острые» цитаты с `profanity`-тегом, они будут добавлены отдельным PR-ом и автоматически фильтруемы через `balance.daily_head.content_policy.mild_profanity` в 2.3.E.
+- **`has_profanity` свойство без аргументов.** Быстрый способ узнать «можно ли показывать эту цитату при `mild_profanity=false`» прямо на VO. В 2.3.E фильтр будет: `[t for t in templates if balance.daily_head.content_policy.mild_profanity or not t.has_profanity]`.
+
+---
+
 ## 2026-05-06 — Спринт 2.3.C: application use-cases «Главы клана дня» (`RequestDailyHead` + `RunDailyHeadCron`, 18 unit-тестов, миграция 0014 audit-source)
 
 **Автор:** Devin (агент urbanviola, recovery-агент завершил DI-провязку + docs)

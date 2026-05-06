@@ -55,7 +55,27 @@ class DailyHeadAlreadyAssignedError(DailyHeadError):
         self.moscow_date = moscow_date
 
 
+class ClanQuoteCatalogEmptyError(DailyHeadError):
+    """Каталог цитат «Главы клана дня» пуст для запрошенной локали и fallback-локали (RU).
+
+    Бросается infrastructure-адаптером `JsonClanQuoteTemplateProvider`
+    (Спринт 2.3.D), когда ни в `clan_quotes_<locale>.json`, ни в
+    `clan_quotes_ru.json` нет шаблонов. Прод-инвариант: RU-каталог
+    должен быть всегда (≥ 100 цитат, ПД §5 / 2.3.4); ошибка означает
+    деплоймент-проблему.
+    """
+
+    __slots__ = ("locale",)
+
+    def __init__(self, *, locale: str) -> None:
+        super().__init__(
+            f"clan quotes catalog is empty for locale={locale!r} (and RU fallback also empty/missing)"
+        )
+        self.locale = locale
+
+
 __all__ = [
+    "ClanQuoteCatalogEmptyError",
     "DailyHeadAlreadyAssignedError",
     "DailyHeadError",
     "DailyHeadInsufficientActivityError",
