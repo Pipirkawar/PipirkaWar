@@ -1,6 +1,6 @@
 """Доменный слой реферальной системы (ГДД §13.1, Спринт 2.4.A)."""
 
-from pipirik_wars.domain.referral.entities import Referral
+from pipirik_wars.domain.referral.entities import Referral, WeeklyClanReferralEntry
 from pipirik_wars.domain.referral.errors import (
     MilestoneAlreadyGrantedError,
     ReferralAlreadyExistsError,
@@ -20,4 +20,5 @@ __all__ = [
     "ReferrerNotRegisteredError",
     "SelfReferralError",
     "SignupBonusAlreadyGrantedError",
+    "WeeklyClanReferralEntry",
 ]

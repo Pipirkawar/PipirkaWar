@@ -77,4 +77,38 @@ class Referral:
             )
 
 
-__all__ = ["Referral"]
+@dataclass(frozen=True, slots=True)
+class WeeklyClanReferralEntry:
+    """Один ряд недельной агрегации рефералов клана (Спринт 2.4.E).
+
+    Используется в `IReferralRepository.weekly_summary_by_clan(...)` —
+    группировка по `referrer_id` с подсчётом, сколько новых игроков
+    этот реферер привёл за окно `[since, until)` среди членов
+    конкретного клана.
+
+    Реферер обязан быть в клане (`clan_members.player_id`). Реферал
+    (новый игрок) не обязан вступать в клан — главное, чтобы реферер
+    был его членом. Это соответствует ГДД §13.1: «реферальный приз
+    идёт пригласившему», а еженедельная карточка показывает рост
+    клана через активность его участников.
+
+    Инварианты:
+    - `referrer_id > 0` (это `players.id`);
+    - `count > 0` (репозиторий не возвращает строки с нулём — отсутствие
+      = нет записи; таким образом отсутствие референции в выборке
+      означает «никого не пригласил за окно»).
+    """
+
+    referrer_id: int
+    count: int
+
+    def __post_init__(self) -> None:
+        if self.referrer_id <= 0:
+            raise ValueError(
+                f"WeeklyClanReferralEntry.referrer_id must be positive, got {self.referrer_id}"
+            )
+        if self.count <= 0:
+            raise ValueError(f"WeeklyClanReferralEntry.count must be positive, got {self.count}")
+
+
+__all__ = ["Referral", "WeeklyClanReferralEntry"]

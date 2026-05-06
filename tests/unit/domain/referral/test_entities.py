@@ -16,7 +16,11 @@ from datetime import UTC, datetime
 
 import pytest
 
-from pipirik_wars.domain.referral import Referral, SelfReferralError
+from pipirik_wars.domain.referral import (
+    Referral,
+    SelfReferralError,
+    WeeklyClanReferralEntry,
+)
 
 _NOW = datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC)
 
@@ -130,3 +134,27 @@ class TestReferralFrozen:
         ref = Referral(id=None, referrer_id=1, referred_id=2, created_at=_NOW)
         with pytest.raises(FrozenInstanceError):
             ref.last_milestone_thickness = 5
+
+
+class TestWeeklyClanReferralEntry:
+    """VO для строки агрегата `IReferralRepository.weekly_summary_by_clan` (Спринт 2.4.E)."""
+
+    def test_construction(self) -> None:
+        entry = WeeklyClanReferralEntry(referrer_id=42, count=3)
+        assert entry.referrer_id == 42
+        assert entry.count == 3
+
+    @pytest.mark.parametrize("bad_id", [0, -1, -100])
+    def test_referrer_id_must_be_positive(self, bad_id: int) -> None:
+        with pytest.raises(ValueError, match="referrer_id"):
+            WeeklyClanReferralEntry(referrer_id=bad_id, count=1)
+
+    @pytest.mark.parametrize("bad_count", [0, -1, -10])
+    def test_count_must_be_positive(self, bad_count: int) -> None:
+        with pytest.raises(ValueError, match="count"):
+            WeeklyClanReferralEntry(referrer_id=1, count=bad_count)
+
+    def test_frozen(self) -> None:
+        entry = WeeklyClanReferralEntry(referrer_id=1, count=1)
+        with pytest.raises(FrozenInstanceError):
+            entry.count = 999

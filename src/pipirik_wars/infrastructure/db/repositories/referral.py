@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError as SqlAlchemyIntegrityError
 
 from pipirik_wars.domain.referral import (
     IReferralRepository,
     Referral,
     ReferralAlreadyExistsError,
+    WeeklyClanReferralEntry,
 )
-from pipirik_wars.infrastructure.db.models import ReferralORM
+from pipirik_wars.infrastructure.db.models import ClanMemberORM, ReferralORM
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from pipirik_wars.infrastructure.db.utils import ensure_utc
 
@@ -115,3 +117,42 @@ class SqlAlchemyReferralRepository(IReferralRepository):
             row.last_milestone_thickness = thickness
             await self._uow.session.flush()
         return _row_to_entity(row)
+
+    async def weekly_summary_by_clan(
+        self,
+        *,
+        clan_id: int,
+        since: datetime,
+        until: datetime,
+    ) -> Sequence[WeeklyClanReferralEntry]:
+        # Спринт 2.4.E: новые рефералы клана за неделю — для weekly-карточки.
+        # INNER JOIN `clan_members на referrer_id` отсеивает referrer-ов вне
+        # клана сразу на уровне БД. WHERE по полузакрытому окну
+        # `created_at ∈ [since, until)`. GROUP BY `referrer_id` →
+        # `count(referrals.id)`. Сорт `count DESC, referrer_id ASC` —
+        # стабильный, нужен детерминизм для top-3 в карточке и тестах.
+        if since >= until:
+            raise ValueError(f"weekly_summary_by_clan: since ({since}) must be < until ({until})")
+        count_col = func.count(ReferralORM.id).label("ref_count")
+        stmt = (
+            select(ReferralORM.referrer_id, count_col)
+            .join(
+                ClanMemberORM,
+                ClanMemberORM.player_id == ReferralORM.referrer_id,
+            )
+            .where(
+                ClanMemberORM.clan_id == clan_id,
+                ReferralORM.created_at >= since,
+                ReferralORM.created_at < until,
+            )
+            .group_by(ReferralORM.referrer_id)
+            .order_by(count_col.desc(), ReferralORM.referrer_id.asc())
+        )
+        result = await self._uow.session.execute(stmt)
+        return tuple(
+            WeeklyClanReferralEntry(
+                referrer_id=int(row.referrer_id),
+                count=int(row.ref_count),
+            )
+            for row in result.all()
+        )

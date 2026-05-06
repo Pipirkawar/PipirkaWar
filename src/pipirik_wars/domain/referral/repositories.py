@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import abc
+from collections.abc import Sequence
 from datetime import datetime
 
-from pipirik_wars.domain.referral.entities import Referral
+from pipirik_wars.domain.referral.entities import Referral, WeeklyClanReferralEntry
 
 
 class IReferralRepository(abc.ABC):
@@ -64,6 +65,38 @@ class IReferralRepository(abc.ABC):
         запись. Use-case проверяет `last_milestone_thickness < thickness`
         перед вызовом — если уже >= — бросает
         `MilestoneAlreadyGrantedError`.
+        """
+
+    @abc.abstractmethod
+    async def weekly_summary_by_clan(
+        self,
+        *,
+        clan_id: int,
+        since: datetime,
+        until: datetime,
+    ) -> Sequence[WeeklyClanReferralEntry]:
+        """Сколько новых рефералов привёл каждый член клана за окно `[since, until)`.
+
+        Группировка `referrals.referrer_id` → `count(referrals.id)` среди
+        тех `referrer_id`, которые состоят в `clan_members(clan_id=:cid)`.
+        Реферал (приглашённый игрок) НЕ обязан быть в клане — еженедельная
+        карточка показывает рост клана через активность его участников
+        (ГДД §13.1: реферальный приз идёт пригласившему).
+
+        Окно полузакрытое: `created_at >= since AND created_at < until`.
+        Реализациям следует:
+
+        - возвращать только записи с `count > 0` (отсутствие реферера в
+          списке = «никого не пригласил за окно»);
+        - стабильный порядок: `count DESC, referrer_id ASC` — это то,
+          что увидит пользователь в финальной карточке (top-3); тестам
+          нужен детерминизм.
+
+        Use-case `RunWeeklyClanReferralSummary` (Спринт 2.4.E) дальше
+        резолвит `referrer_id` → `Player` и достаёт top-3 для текста
+        weekly-карточки (`weekly-referral-summary-*`).
+
+        :raises ValueError: если `since >= until` (защита от пустого / инверсного окна).
         """
 
 
