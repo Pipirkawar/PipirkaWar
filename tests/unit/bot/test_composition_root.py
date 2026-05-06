@@ -812,13 +812,14 @@ class TestBuildDispatcher:
         c = _container_with_fakes()
         dp = build_dispatcher(c)
         assert isinstance(dp, Dispatcher)
-        # `dp.callback_query` и `dp.my_chat_member` имеют 4 middleware-а:
-        # error / auth / locale / throttle.
+        # `dp.callback_query` и `dp.my_chat_member` имеют 5 middleware-ов:
+        # error / auth / admin_guard / locale / throttle (Спринт 2.5-A.2:
+        # AdminGuard прибавился между auth и locale).
         for observer in (dp.callback_query, dp.my_chat_member):
-            assert len(list(observer.middleware)) == 4
+            assert len(list(observer.middleware)) == 5
         # `dp.message` дополнительно содержит DailyActivityMiddleware
-        # (Спринт 2.3.F.1) — итого 5.
-        assert len(list(dp.message.middleware)) == 5
+        # (Спринт 2.3.F.1) — итого 6.
+        assert len(list(dp.message.middleware)) == 6
         # Минимум 4 router-а: `start`, `profile`, `admin`, `registration`.
         assert any(r.name == "start" for r in dp.sub_routers)
         assert any(r.name == "registration" for r in dp.sub_routers)

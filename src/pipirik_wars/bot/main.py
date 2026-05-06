@@ -106,7 +106,7 @@ from pipirik_wars.application.top import (
     ITopPlayersQuery,
 )
 from pipirik_wars.bot.handlers import register_routers
-from pipirik_wars.bot.middlewares import register_middlewares
+from pipirik_wars.bot.middlewares import AdminGuard, register_middlewares
 from pipirik_wars.bot.notifications import (
     TelegramForestFinishNotifier,
     TelegramWeeklyClanReferralSummaryNotifier,
@@ -917,11 +917,16 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     автоматически пробросит их в handler-ы по имени параметра.
     """
     dispatcher = Dispatcher()
+    # Спринт 2.5-A.2: AdminGuard кладёт `data["admin"] = Admin | None`
+    # для будущих admin-handler-ов (2.5-B/C/D). Сам по себе апдейт не
+    # отбрасывает — «тихий игнор чужих» делается на уровне router-а.
+    admin_guard = AdminGuard(uow=container.uow, admins=container.admins)
     register_middlewares(
         dispatcher,
         limiter=container.rate_limiter,
         record_player_activity=container.record_player_activity,
         player_locale_resolver=container.player_locale_resolver,
+        admin_guard=admin_guard,
     )
     register_routers(dispatcher)
     # Workflow-data DI: aiogram сам пробросит их в handler-ы по имени.

@@ -33,6 +33,7 @@ dependencies = [
   "structlog>=24.1,<26",
   "APScheduler>=3.10,<4",
   "fluent.runtime>=0.4,<1",      # i18n (Mozilla Fluent), Спринт 1.5.A
+  "pyotp>=2.9,<3",               # TOTP-подтверждение опасных admin-команд, Спринт 2.5-A.3
 ]
 
 [project.optional-dependencies]
@@ -132,6 +133,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["fluent.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pyotp", "pyotp.*"]
 ignore_missing_imports = true
 
 # -----------------------------------------------------------------------------

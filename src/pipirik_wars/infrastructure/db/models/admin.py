@@ -33,3 +33,6 @@ class AdminORM(Base):
         nullable=True,
     )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # TOTP-секрет в BASE32 (Спринт 2.5-A.3, ГДД §18.6). NULL — у админа
+    # ещё не настроено 2FA; опасные команды для него отказываются.
+    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)

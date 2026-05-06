@@ -39,6 +39,12 @@ class Admin:
     created_at: datetime
     created_by_admin_id: int | None = None
     note: str | None = field(default=None)
+    # TOTP-секрет в BASE32 (Спринт 2.5-A.3, ГДД §18.6). `None` — у
+    # админа ещё не настроено 2FA; опасные команды (`/ban`, `/grant_*`,
+    # `/balance_set`, `/announce`) для него отказываются с понятной
+    # ошибкой. Само значение в код-флоу никогда не покидает домен —
+    # `VerifyAdminConfirm` передаёт его в `ITotpVerifier` и не возвращает.
+    totp_secret: str | None = field(default=None)
 
     def can_write_balance(self) -> bool:
         """Может ли менять `balance.yaml` через админ-команды."""

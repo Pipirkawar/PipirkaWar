@@ -22,6 +22,7 @@ from aiogram import Dispatcher
 
 from pipirik_wars.application.daily_head import RecordPlayerActivity
 from pipirik_wars.application.i18n import IPlayerLocaleResolver, LocaleResolver
+from pipirik_wars.bot.middlewares.admin_guard import AdminGuard
 from pipirik_wars.bot.middlewares.auth import AuthMiddleware, TgIdentity
 from pipirik_wars.bot.middlewares.daily_activity import DailyActivityMiddleware
 from pipirik_wars.bot.middlewares.error_handler import ErrorHandlerMiddleware
@@ -37,6 +38,7 @@ def register_middlewares(
     record_player_activity: RecordPlayerActivity | None = None,
     locale_resolver: LocaleResolver | None = None,
     player_locale_resolver: IPlayerLocaleResolver | None = None,
+    admin_guard: AdminGuard | None = None,
 ) -> None:
     """Подключает middleware-стек ко всем нужным observer-ам.
 
@@ -53,6 +55,12 @@ def register_middlewares(
     и записывает активность в `daily_active` на каждое сообщение
     игрока в групповом чате. Опциональность нужна для unit-тестов
     composition-root и для запуска stand-alone сценариев.
+
+    `admin_guard` (Спринт 2.5-A.2) опциональный: если передан, на все
+    три observer-а вешается `AdminGuard` (после `AuthMiddleware`,
+    до `LocaleMiddleware`) — он кладёт `data["admin"] = Admin | None`
+    для последующих admin-handler-ов. Сам никого не отбрасывает —
+    «тихий игнор чужих» делается на уровне admin-router-ов в 2.5-B+.
     """
     error = ErrorHandlerMiddleware()
     auth = AuthMiddleware()
@@ -69,6 +77,8 @@ def register_middlewares(
     ):
         observer.middleware(error)
         observer.middleware(auth)
+        if admin_guard is not None:
+            observer.middleware(admin_guard)
         observer.middleware(locale)
         observer.middleware(throttle)
 
@@ -87,6 +97,7 @@ def register_middlewares(
 
 
 __all__ = [
+    "AdminGuard",
     "AuthMiddleware",
     "DailyActivityMiddleware",
     "ErrorHandlerMiddleware",

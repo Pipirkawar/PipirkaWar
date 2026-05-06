@@ -20,6 +20,7 @@ def _row_to_entity(row: AdminORM) -> Admin:
         created_at=row.created_at,
         created_by_admin_id=row.created_by_admin_id,
         note=row.note,
+        totp_secret=row.totp_secret,
     )
 
 

@@ -5,6 +5,7 @@
 - `AuditLogORM` — таблица `audit_log`.
 - `ActivityLockORM` — таблица `activity_locks`.
 - `AdminORM` — таблица `admins`.
+- `AdminAuditLogORM` — таблица `admin_audit_log` (Спринт 2.5-A.1).
 
 Игрок/клан (Спринт 1.1):
 - `UserORM` — таблица `users`.
@@ -41,6 +42,7 @@ PvP массовый клан×клан (Спринт 2.2.D):
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
+from pipirik_wars.infrastructure.db.models.admin_audit import AdminAuditLogORM
 from pipirik_wars.infrastructure.db.models.clan import ClanMemberORM, ClanORM
 from pipirik_wars.infrastructure.db.models.daily_active import DailyActiveORM
 from pipirik_wars.infrastructure.db.models.daily_head import DailyHeadAssignmentORM
@@ -65,6 +67,7 @@ from pipirik_wars.infrastructure.db.models.signup_queue import SignupQueueORM
 
 __all__ = [
     "ActivityLockORM",
+    "AdminAuditLogORM",
     "AdminORM",
     "AuditLogORM",
     "ClanMemberORM",
