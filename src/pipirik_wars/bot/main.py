@@ -357,6 +357,13 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         refill_per_second=settings.bot.default_throttle_per_second,
         clock=clock,
     )
+    # Отдельный rate-limiter под антифрод реферальной системы (Спринт 2.4.F).
+    # Bucket: capacity=N, refill = N / 3600 в секунду (т.е. ≈ N новых в час).
+    referral_rate_limiter = InMemoryTokenBucketRateLimiter(
+        capacity=settings.bot.referral_rate_limit_capacity,
+        refill_per_second=(settings.bot.referral_rate_limit_refill_per_hour / 3600.0),
+        clock=clock,
+    )
     players = SqlAlchemyPlayerRepository(uow=uow)
     clans = SqlAlchemyClanRepository(uow=uow)
     clan_members = SqlAlchemyClanMembershipRepository(uow=uow)
@@ -792,6 +799,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         players=players,
         referrals=referrals,
         clock=clock,
+        rate_limiter=referral_rate_limiter,
+        audit=audit,
     )
     grant_referral_signup_bonus = GrantReferralSignupBonus(
         uow=uow,

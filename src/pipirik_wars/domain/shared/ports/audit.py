@@ -68,6 +68,9 @@ class AuditAction(str, enum.Enum):
     PVP_MASS_DUEL_CREATED = "pvp_mass_duel_created"
     PVP_MASS_DUEL_COMPLETED = "pvp_mass_duel_completed"
     PVP_MASS_DUEL_CANCELLED = "pvp_mass_duel_cancelled"
+    # ── Спринт 2.4 (реферальная система, ГДД §13.1) ──
+    REFERRAL_REGISTERED = "referral_registered"
+    REFERRAL_RATE_LIMITED = "referral_rate_limited"
 
 
 class AuditSource(str, enum.Enum):

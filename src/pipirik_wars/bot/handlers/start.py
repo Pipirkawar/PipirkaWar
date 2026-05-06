@@ -72,6 +72,7 @@ from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters.start import StartPresenter
 from pipirik_wars.domain.player import PlayerAlreadyRegisteredError
 from pipirik_wars.domain.referral import (
+    ReferralRateLimitedError,
     ReferrerNotRegisteredError,
     SelfReferralError,
     SignupBonusAlreadyGrantedError,
@@ -232,6 +233,17 @@ async def _try_apply_referral(
         # пропускаем — пользователь даже не увидит, что рефка была.
         logger.info(
             "Referral skipped: referrer_tg_id=%s, referred_tg_id=%s",
+            referrer_tg_id,
+            referred_tg_id,
+        )
+        return 0
+    except ReferralRateLimitedError:
+        # Антифрод (Спринт 2.4.F): реферер исчерпал часовой лимит.
+        # Тихий no-op: новичок не должен видеть «ваш реферер исчерпал
+        # лимит» — это не его проблема, и отсутствие feedback-а ломает
+        # скан-стратегию атакующего. Use-case уже записал audit.
+        logger.info(
+            "Referral rate-limited: referrer_tg_id=%s, referred_tg_id=%s",
             referrer_tg_id,
             referred_tg_id,
         )

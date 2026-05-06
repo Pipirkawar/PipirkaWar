@@ -602,6 +602,8 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
             players=players,
             referrals=referrals,
             clock=clock,
+            rate_limiter=_fake_limiter(),
+            audit=audit,
         ),
         grant_referral_signup_bonus=GrantReferralSignupBonus(
             uow=uow,

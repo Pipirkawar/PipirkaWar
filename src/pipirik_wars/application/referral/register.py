@@ -14,15 +14,14 @@
 4. **Игрок уже был приглашён** (`UNIQUE` по `referred_id`) —
    `ReferralAlreadyExistsError`. Handler swallow-ит в no-op (re-delivery
    `/start` после повторного entry).
-5. **Happy-path**: создаётся `Referral`, audit-запись (опц., через action
-   `PLAYER_REGISTER`-style — но логика самого начисления длины —
-   в `GrantReferralSignupBonus`).
-
-Audit на этом шаге **не пишется** — собственно начисление длины
-произойдёт в `GrantReferralSignupBonus` через `ILengthGranter.grant`,
-который пишет audit `LENGTH_GRANT` с `source=REFERRAL_SIGNUP` автоматически.
-Само создание реферальной записи — внутрисистемный факт, аудитируется
-implicitly через `audit_log` начислений.
+5. **Реферер исчерпал лимит** (Спринт 2.4.F, антифрод) —
+   `ReferralRateLimitedError`. Handler тихо игнорирует (новичок не должен
+   видеть «лимит» — это не его проблема, и отсутствие feedback-а ломает
+   скан-стратегию). Audit пишется до raise (action=REFERRAL_RATE_LIMITED).
+6. **Happy-path**: создаётся `Referral` + audit-запись `REFERRAL_REGISTERED`
+   (Спринт 2.4.F). Само начисление длины — в `GrantReferralSignupBonus`
+   через `ILengthGranter.grant`, который пишет audit `LENGTH_GRANT` с
+   `source=REFERRAL_SIGNUP` автоматически.
 """
 
 from __future__ import annotations
@@ -36,10 +35,24 @@ from pipirik_wars.domain.referral import (
     IReferralRepository,
     Referral,
     ReferralAlreadyExistsError,
+    ReferralRateLimitedError,
     ReferrerNotRegisteredError,
     SelfReferralError,
 )
-from pipirik_wars.domain.shared.ports import IClock, IUnitOfWork
+from pipirik_wars.domain.shared.ports import IClock, IRateLimiter, IUnitOfWork
+from pipirik_wars.domain.shared.ports.audit import (
+    AuditAction,
+    AuditEntry,
+    IAuditLogger,
+)
+
+#: Префикс ключа для token-bucket-а реферального rate-limit-а (2.4.F).
+RATE_LIMIT_KEY_PREFIX: str = "referral:"
+
+
+def _rate_limit_key(referrer_tg_id: int) -> str:
+    """Канонический ключ token-bucket-а для одного реферера."""
+    return f"{RATE_LIMIT_KEY_PREFIX}{referrer_tg_id}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,8 +81,10 @@ class RegisterReferral:
     """Use-case создания реферальной связи (без начисления длины)."""
 
     __slots__ = (
+        "_audit",
         "_clock",
         "_players",
+        "_rate_limiter",
         "_referrals",
         "_uow",
     )
@@ -81,11 +96,15 @@ class RegisterReferral:
         players: IPlayerRepository,
         referrals: IReferralRepository,
         clock: IClock,
+        rate_limiter: IRateLimiter,
+        audit: IAuditLogger,
     ) -> None:
         self._uow = uow
         self._players = players
         self._referrals = referrals
         self._clock = clock
+        self._rate_limiter = rate_limiter
+        self._audit = audit
 
     async def execute(self, input_dto: RegisterReferralInput) -> RegisterReferralResult:
         """Создать реферальную связь, либо вернуть существующую.
@@ -93,6 +112,8 @@ class RegisterReferral:
         Бросает:
         - `SelfReferralError` — если pydantic-DTO как-то пропустил
           `referrer_tg_id == referred_tg_id` (defense-in-depth);
+        - `ReferralRateLimitedError` — реферер исчерпал часовой лимит
+          новых рефералов (Спринт 2.4.F, антифрод);
         - `ReferrerNotRegisteredError` — реферер не в `users`;
         - `PlayerNotFoundError` — новичок не в `users` (баг в caller-е);
         - **не** бросает `ReferralAlreadyExistsError` — конвертируется
@@ -100,6 +121,19 @@ class RegisterReferral:
         """
         if input_dto.referrer_tg_id == input_dto.referred_tg_id:
             raise SelfReferralError(player_id=input_dto.referrer_tg_id)
+
+        # Антифрод-защита: token-bucket по `referrer_tg_id` (Спринт 2.4.F).
+        # Token-bucket — sync (in-memory), проверяем до открытия UoW.
+        # Если реферер исчерпал лимит — пишем audit (в отдельной UoW-транзакции,
+        # чтобы попытка зафиксировалась в логе даже при racing-conditions),
+        # затем raise. Handler swallow-ит в no-op.
+        rate_key = _rate_limit_key(input_dto.referrer_tg_id)
+        if not self._rate_limiter.try_acquire(key=rate_key):
+            await self._record_rate_limit_audit(
+                referrer_tg_id=input_dto.referrer_tg_id,
+                referred_tg_id=input_dto.referred_tg_id,
+            )
+            raise ReferralRateLimitedError(referrer_tg_id=input_dto.referrer_tg_id)
 
         async with self._uow:
             referrer = await self._players.get_by_tg_id(tg_id=input_dto.referrer_tg_id)
@@ -133,10 +167,58 @@ class RegisterReferral:
                 race_winner = await self._referrals.get_by_referred_id(referred_id=referred.id)
                 assert race_winner is not None, "ReferralAlreadyExistsError implies row exists"
                 return ReferralAlreadyRegistered(referral=race_winner)
+
+            assert saved.id is not None, "Saved referral must have id"
+            await self._audit.record(
+                AuditEntry(
+                    action=AuditAction.REFERRAL_REGISTERED,
+                    actor_id=referrer.id,
+                    target_kind="referral",
+                    target_id=str(saved.id),
+                    before=None,
+                    after={
+                        "referrer_id": referrer.id,
+                        "referred_id": referred.id,
+                    },
+                    reason="referral_registered",
+                    idempotency_key=f"referral_registered:{saved.id}",
+                    occurred_at=now,
+                )
+            )
             return ReferralRegistered(referral=saved)
+
+    async def _record_rate_limit_audit(
+        self,
+        *,
+        referrer_tg_id: int,
+        referred_tg_id: int,
+    ) -> None:
+        """Записать audit-попытку обхода rate-limit-а (Спринт 2.4.F).
+
+        Открывает отдельную короткую UoW-транзакцию, чтобы попытка
+        зафиксировалась независимо от исхода `execute`. Если запись
+        не удалась (DB down) — пробрасываем ошибку, она должна быть
+        видна на CI/мониторинге.
+        """
+        now = self._clock.now()
+        async with self._uow:
+            await self._audit.record(
+                AuditEntry(
+                    action=AuditAction.REFERRAL_RATE_LIMITED,
+                    actor_id=referrer_tg_id,
+                    target_kind="referrer_tg_id",
+                    target_id=str(referrer_tg_id),
+                    before=None,
+                    after={"referred_tg_id": referred_tg_id},
+                    reason="referral_rate_limit_exceeded",
+                    idempotency_key=None,
+                    occurred_at=now,
+                )
+            )
 
 
 __all__ = [
+    "RATE_LIMIT_KEY_PREFIX",
     "ReferralAlreadyRegistered",
     "ReferralRegistered",
     "RegisterReferral",

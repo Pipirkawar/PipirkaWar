@@ -58,6 +58,26 @@ class BotSettings(BaseSettings):
     )
     default_throttle_per_second: float = Field(default=5.0, gt=0)
     default_throttle_capacity: int = Field(default=10, gt=0)
+    referral_rate_limit_capacity: int = Field(
+        default=10,
+        gt=0,
+        description=(
+            "Антифрод per-`referrer_tg_id` (Спринт 2.4.F): максимум новых "
+            "рефералов в burst-окне. Дефолт `10` — реалистичный «пригласил "
+            "друзей за вечер» без блока, но достаточный, чтобы скан-атака "
+            "1000 фейк-tg выявилась за час. Отдельный bucket от throttle-а."
+        ),
+    )
+    referral_rate_limit_refill_per_hour: float = Field(
+        default=10.0,
+        gt=0,
+        description=(
+            "Скорость долива bucket-а реферального антифрода (новых "
+            "рефералов / час). Дефолт `10/h` — лимит ~10 новых в час "
+            "после исчерпания burst-окна. ГДД §13.1 «защита от мульти-"
+            "аккаунтов»."
+        ),
+    )
     max_dau: int = Field(
         default=200,
         ge=1,

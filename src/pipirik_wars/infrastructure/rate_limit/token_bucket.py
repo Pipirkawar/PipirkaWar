@@ -2,18 +2,12 @@
 
 from __future__ import annotations
 
-import abc
 from dataclasses import dataclass
 
 from pipirik_wars.domain.shared.ports import IClock
+from pipirik_wars.domain.shared.ports.rate_limiter import IRateLimiter
 
-
-class IRateLimiter(abc.ABC):
-    """Порт rate-limiter-а. Чтобы переключаться между in-memory и Redis."""
-
-    @abc.abstractmethod
-    def try_acquire(self, *, key: str) -> bool:
-        """Попытаться «взять» токен. `True` — пропускаем; `False` — отказ."""
+__all__ = ["IRateLimiter", "InMemoryTokenBucketRateLimiter"]
 
 
 @dataclass(slots=True)

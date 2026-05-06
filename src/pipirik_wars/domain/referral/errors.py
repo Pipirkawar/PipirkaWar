@@ -77,10 +77,30 @@ class MilestoneAlreadyGrantedError(ReferralError):
         self.thickness = thickness
 
 
+class ReferralRateLimitedError(ReferralError):
+    """Реферер исчерпал часовой лимит новых рефералов (Спринт 2.4.F).
+
+    Бросается use-case-ом `RegisterReferral`, если token-bucket по
+    ключу `referral:{referrer_tg_id}` истощён. Антифрод-защита от
+    скан-атаки одним рефером (ГДД §13.1 «защита от мульти-аккаунтов»).
+    Handler `/start` swallow-ит её в no-op (новичок не должен видеть
+    «реферер исчерпал лимит» — это не его проблема, и отсутствие
+    feedback-а ломает скан-стратегию). До raise-а use-case пишет
+    audit-запись `REFERRAL_RATE_LIMITED` с `actor_id=referrer_tg_id`.
+    """
+
+    def __init__(self, *, referrer_tg_id: int) -> None:
+        super().__init__(
+            f"Referrer with tg_id={referrer_tg_id} exceeded hourly referral rate limit"
+        )
+        self.referrer_tg_id = referrer_tg_id
+
+
 __all__ = [
     "MilestoneAlreadyGrantedError",
     "ReferralAlreadyExistsError",
     "ReferralError",
+    "ReferralRateLimitedError",
     "ReferrerNotRegisteredError",
     "SelfReferralError",
     "SignupBonusAlreadyGrantedError",
