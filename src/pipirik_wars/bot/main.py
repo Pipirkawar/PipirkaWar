@@ -47,6 +47,7 @@ from pipirik_wars.application.daily_head import (
     RecordPlayerActivity,
     RequestDailyHead,
     RunDailyHeadCron,
+    ScheduleDailyHeadCronJobs,
 )
 from pipirik_wars.application.dau import (
     CheckDauThreshold,
@@ -295,6 +296,7 @@ class Container:
     run_daily_head_cron: RunDailyHeadCron
     record_player_activity: RecordPlayerActivity
     clan_quote_provider: IClanQuoteTemplateProvider
+    schedule_daily_head_cron_jobs: ScheduleDailyHeadCronJobs
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -507,6 +509,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         expire_factory=lambda: expire_lobby_entry,
         afk_resolution_factory=lambda: resolve_afk_round,
         mass_duel_afk_factory=lambda: force_resolve_mass_duel,
+        daily_head_cron_factory=lambda: run_daily_head_cron,
+        daily_reschedule_factory=lambda: schedule_daily_head_cron_jobs,
     )
     start_forest_run = StartForestRun(
         uow=uow,
@@ -748,6 +752,12 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         daily_activity=daily_activity,
         clock=clock,
     )
+    schedule_daily_head_cron_jobs = ScheduleDailyHeadCronJobs(
+        uow=uow,
+        clans=clans,
+        scheduler=delayed_jobs,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -825,6 +835,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         run_daily_head_cron=run_daily_head_cron,
         record_player_activity=record_player_activity,
         clan_quote_provider=clan_quote_provider,
+        schedule_daily_head_cron_jobs=schedule_daily_head_cron_jobs,
     )
 
 
@@ -938,6 +949,12 @@ async def run(
     scheduler = container.delayed_jobs
     if isinstance(scheduler, APSchedulerDelayedJobScheduler):
         scheduler.start()
+        # Bootstrap: пере-зарегистрировать сегодняшние per-clan
+        # daily-head-cron-job-ы (in-memory job-store APScheduler пуст
+        # при рестарте). Также включаем ежедневный cron 00:01 МСК,
+        # который сам перепланирует на новые сутки (Спринт 2.3.F.2).
+        await container.schedule_daily_head_cron_jobs.execute()
+        scheduler.schedule_daily_head_reschedule_cron()
     try:
         await dispatcher.start_polling(
             bot,

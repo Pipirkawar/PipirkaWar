@@ -22,8 +22,12 @@ from datetime import datetime
 from typing import Final
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
-from pipirik_wars.application.daily_head import RunDailyHeadCron
+from pipirik_wars.application.daily_head import (
+    RunDailyHeadCron,
+    ScheduleDailyHeadCronJobs,
+)
 from pipirik_wars.application.dto.inputs import (
     EscalateChatToGlobalInput,
     ExpireLobbyEntryInput,
@@ -53,6 +57,7 @@ _EXPIRE_JOB_PREFIX: Final[str] = "pvp_global_lobby_expire:"
 _ROUND_AFK_JOB_PREFIX: Final[str] = "pvp_round_afk:"
 _MASS_DUEL_AFK_JOB_PREFIX: Final[str] = "pvp_mass_duel_afk:"
 _DAILY_HEAD_CRON_PREFIX: Final[str] = "daily_head_cron:"
+_DAILY_HEAD_RESCHEDULE_JOB_ID: Final[str] = "daily_head_reschedule_cron"
 
 
 def _job_id(run_id: int) -> str:
@@ -125,6 +130,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
     __slots__ = (
         "_afk_resolution_factory",
         "_daily_head_cron_factory",
+        "_daily_reschedule_factory",
         "_escalate_factory",
         "_expire_factory",
         "_finish_factory",
@@ -145,6 +151,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         afk_resolution_factory: Callable[[], ResolveAfkRound] | None = None,
         mass_duel_afk_factory: Callable[[], ForceResolveMassDuel] | None = None,
         daily_head_cron_factory: Callable[[], RunDailyHeadCron] | None = None,
+        daily_reschedule_factory: (Callable[[], ScheduleDailyHeadCronJobs] | None) = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._scheduler = scheduler
@@ -155,6 +162,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._afk_resolution_factory = afk_resolution_factory
         self._mass_duel_afk_factory = mass_duel_afk_factory
         self._daily_head_cron_factory = daily_head_cron_factory
+        self._daily_reschedule_factory = daily_reschedule_factory
         self._logger = logger or logging.getLogger(__name__)
 
     async def schedule_finish_forest_run(
@@ -310,6 +318,52 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         """Остановить APScheduler. Вызывается из `run()` в `finally`-блоке."""
         if self._scheduler.running:
             self._scheduler.shutdown(wait=wait)
+
+    def schedule_daily_head_reschedule_cron(self) -> None:
+        """Зарегистрировать ежедневный cron `00:01 МСК` для перепланирования
+        per-clan daily-head-cron-job-ов на новые сутки (Спринт 2.3.F.2).
+
+        Зовётся из `run()` после `start()`. Идемпотентен (`replace_existing=True`).
+        Срабатывает в `00:01 Europe/Moscow` (минутный лаг от полуночи нужен,
+        чтобы `IClock.moscow_date()` гарантированно вернул новую дату).
+
+        Если фабрика `ScheduleDailyHeadCronJobs` не подвязана — пишем
+        warning и не регистрируем триггер (полезно в unit-тестах).
+        """
+        if self._daily_reschedule_factory is None:
+            self._logger.warning(
+                "daily_head_reschedule_cron: factory not wired",
+            )
+            return
+        self._scheduler.add_job(
+            self._run_daily_head_reschedule_job,
+            trigger=CronTrigger(
+                hour=0,
+                minute=1,
+                timezone="Europe/Moscow",
+            ),
+            id=_DAILY_HEAD_RESCHEDULE_JOB_ID,
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def _run_daily_head_reschedule_job(self) -> None:
+        """Callback ежедневного cron-а перепланирования per-clan daily-head-job-ов.
+
+        Зовёт `ScheduleDailyHeadCronJobs.execute()`. Все исключения логируются
+        и проглатываются — иначе APScheduler пометит cron как failed.
+        """
+        if self._daily_reschedule_factory is None:
+            return
+        try:
+            use_case = self._daily_reschedule_factory()
+            await use_case.execute()
+        except Exception as exc:
+            self._logger.exception(
+                "daily_head_reschedule_cron: unexpected error",
+                extra={"error": type(exc).__name__},
+            )
+            return
 
     async def _run_finish_job(self, run_id: int) -> None:
         """Callback, который APScheduler вызывает в `run_at`.

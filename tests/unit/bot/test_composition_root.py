@@ -26,6 +26,7 @@ from pipirik_wars.application.daily_head import (
     RecordPlayerActivity,
     RequestDailyHead,
     RunDailyHeadCron,
+    ScheduleDailyHeadCronJobs,
 )
 from pipirik_wars.application.dau import (
     CheckDauThreshold,
@@ -410,6 +411,12 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         daily_activity=daily_activity,
         clock=clock,
     )
+    schedule_daily_head_cron_jobs = ScheduleDailyHeadCronJobs(
+        uow=uow,
+        clans=clans,
+        scheduler=delayed_jobs,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -580,6 +587,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         request_daily_head=request_daily_head,
         run_daily_head_cron=run_daily_head_cron,
         record_player_activity=record_player_activity,
+        schedule_daily_head_cron_jobs=schedule_daily_head_cron_jobs,
     )
 
 
