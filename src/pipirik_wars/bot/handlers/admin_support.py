@@ -19,7 +19,6 @@ from aiogram.types import Message
 
 from pipirik_wars.application.admin import (
     BanPlayer,
-    BanPlayerInput,
     FindPlayers,
     FindPlayersInput,
     FreezePlayer,
@@ -35,12 +34,12 @@ from pipirik_wars.application.admin import (
     UnfreezePlayerInput,
     VerifyAdminConfirm,
     VerifyAdminConfirmInput,
-    VerifyAdminConfirmOutput,
 )
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.bot.filters import IsAdminFilter
 from pipirik_wars.bot.handlers.admin_economy import (
+    COMMAND_KIND_BAN,
     CONFIRM_DISPATCHERS,
     ConfirmDispatchDeps,
 )
@@ -305,10 +304,6 @@ async def handle_unfreeze(
 # ── /ban (B.4) — TOTP-двухфазный ────────────────────────────────────────────
 
 
-# Идентификатор команды в payload-е TOTP-store (используется обоими шагами).
-_COMMAND_KIND_BAN = "ban"
-
-
 @router.message(Command("ban"))
 async def handle_ban(
     message: Message,
@@ -348,7 +343,7 @@ async def handle_ban(
         result = await request_admin_confirm.execute(
             RequestAdminConfirmInput(
                 actor_tg_id=tg_identity.tg_user_id,
-                command_kind=_COMMAND_KIND_BAN,
+                command_kind=COMMAND_KIND_BAN,
                 target_kind="player",
                 target_id=str(target_tg_id),
                 payload={"target_tg_id": target_tg_id, "reason": reason},
@@ -374,61 +369,6 @@ async def handle_ban(
 # ── /confirm (B.5) — общий handler 2-й фазы ─────────────────────────────────
 
 
-async def _dispatch_ban(
-    result: VerifyAdminConfirmOutput,
-    message: Message,
-    identity: TgIdentity,
-    locale: Locale,
-    bundle: IMessageBundle,
-    *,
-    ban_player: BanPlayer,
-) -> None:
-    """Dispatch для `command_kind="ban"` — финализирует бан игрока."""
-    presenter = ConfirmPresenter(bundle=bundle)
-
-    target_tg_id_raw = result.payload.get("target_tg_id")
-    reason_raw = result.payload.get("reason")
-    if not isinstance(target_tg_id_raw, int) or not isinstance(reason_raw, str):
-        # payload-схема эволюционировала — fail-fast.
-        await message.answer(
-            presenter.unknown_command_kind(
-                locale=locale,
-                command_kind=result.command_kind,
-            ),
-        )
-        return
-
-    try:
-        ban_result = await ban_player.execute(
-            BanPlayerInput(
-                actor_tg_id=identity.tg_user_id,
-                target_tg_id=target_tg_id_raw,
-                reason=reason_raw,
-                tg_chat_id=identity.chat_id,
-            ),
-        )
-    except AuthorizationError:
-        await message.answer(presenter.not_authorized(locale=locale))
-        return
-    except PlayerNotFoundError:
-        await message.answer(
-            BanPlayerPresenter(bundle=bundle).not_found(
-                locale=locale,
-                tg_id=target_tg_id_raw,
-            ),
-        )
-        return
-
-    if ban_result.was_already_banned:
-        await message.answer(
-            presenter.success_ban_already(locale=locale, tg_id=target_tg_id_raw),
-        )
-        return
-    await message.answer(
-        presenter.success_ban(locale=locale, tg_id=target_tg_id_raw),
-    )
-
-
 @router.message(Command("confirm"))
 async def handle_confirm(  # noqa: PLR0911 — каждая ветка-возврат = отдельная UX-ошибка
     message: Message,
@@ -446,8 +386,7 @@ async def handle_confirm(  # noqa: PLR0911 — каждая ветка-возв�
     """`/confirm <token> <code>` — второй шаг для всех опасных admin-команд.
 
     Регистр-диспетчер: `command_kind` → `dispatch_*`-функция (см.
-    `bot/handlers/admin_economy.py::CONFIRM_DISPATCHERS`). `ban` —
-    легаси-ветка, исторически живёт прямо здесь.
+    `bot/handlers/admin_economy.py::CONFIRM_DISPATCHERS`).
     """
     presenter = ConfirmPresenter(bundle=bundle)
     effective_locale = locale or DEFAULT_LOCALE
@@ -497,24 +436,13 @@ async def handle_confirm(  # noqa: PLR0911 — каждая ветка-возв�
         await message.answer(presenter.code_invalid(locale=effective_locale))
         return
 
-    # Сначала легаси-`ban`, чтобы не ломать существующие тесты.
-    if result.command_kind == _COMMAND_KIND_BAN:
-        await _dispatch_ban(
-            result,
-            message,
-            tg_identity,
-            effective_locale,
-            bundle,
-            ban_player=ban_player,
-        )
-        return
-
     dispatcher = CONFIRM_DISPATCHERS.get(result.command_kind)
     if dispatcher is not None:
         deps = ConfirmDispatchDeps(
             grant_length=grant_length,
             grant_thickness=grant_thickness,
             set_balance_value=set_balance_value,
+            ban_player=ban_player,
             clock=clock,
         )
         await dispatcher(result, message, tg_identity, effective_locale, bundle, deps)
