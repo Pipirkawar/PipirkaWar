@@ -60,6 +60,7 @@ class FakeAdminRepository(IAdminRepository):
         role: AdminRole,
         is_active: bool = True,
         admin_id: int | None = None,
+        totp_secret: str | None = None,
     ) -> Admin:
         """Подложить админа без вызова бизнес-логики (для arrange-секции)."""
         new_id = admin_id or (max((a.id or 0 for a in self.rows), default=0) + 1)
@@ -71,6 +72,7 @@ class FakeAdminRepository(IAdminRepository):
             created_at=datetime.now(UTC),
             created_by_admin_id=None,
             note=None,
+            totp_secret=totp_secret,
         )
         self.rows.append(admin)
         return admin

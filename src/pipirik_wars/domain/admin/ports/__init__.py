@@ -11,7 +11,9 @@
 - источник ограничен whitelist-ом `bot` / `web` (без органических
   источников вроде `forest` / `oracle`).
 
-Доп. порты появятся в 2.5-A.3 (`IAdminConfirmStore` для FSM TOTP).
+`IAdminConfirmStore` + `ITotpVerifier` (Спринт 2.5-A.3) — однократный
+TTL-store ожидающих подтверждений + обёртка над `pyotp` для проверки
+6-значных кодов.
 """
 
 from pipirik_wars.domain.admin.ports.admin_audit import (
@@ -20,10 +22,16 @@ from pipirik_wars.domain.admin.ports.admin_audit import (
     AdminAuditSource,
     IAdminAuditLogger,
 )
+from pipirik_wars.domain.admin.ports.admin_confirm import (
+    IAdminConfirmStore,
+    ITotpVerifier,
+)
 
 __all__ = [
     "AdminAuditAction",
     "AdminAuditEntry",
     "AdminAuditSource",
     "IAdminAuditLogger",
+    "IAdminConfirmStore",
+    "ITotpVerifier",
 ]

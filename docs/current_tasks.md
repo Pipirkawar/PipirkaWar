@@ -46,9 +46,9 @@
 | **Активный PR / шаг** | **2.5-A**: каркас (admin_audit_log + AdminGuard + TOTP-FSM) |
 | **Активная feature-ветка** | `devin/1778087829-sprint-2-5-a-admin-foundation` (от `e3a7818`) |
 | **Базовая ветка** | `main` |
-| **Последний коммит на ветке** | `2af84c0` `chore(docs): sync current_tasks.md под Спринт 2.5-A` |
-| **PR (если открыт)** | ещё не открыт; будет открыт как 2.5-A после закрытия всех шагов ниже |
-| **CI статус** | зелёный (последний прогон в PR #78: 2829 passed / 1 skipped, coverage 96.11%) |
+| **Последний коммит на ветке** | `43186c3` `feat(bot): AdminGuard outer-middleware (Спринт 2.5-A.2)` |
+| **PR (если открыт)** | ещё не открыт; откроется после закрытия 2.5-A.3 |
+| **CI статус** | зелёный (локальный прогон после 2.5-A.3: 2901 passed / 1 skipped, coverage 96.19%) |
 | **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задачи 2.5.1–2.5.10 |
 | **Связанная спецификация в `game_design.md`** | §18.6 (основной канал администрирования — Telegram-бот) |
 | **`AGENT_HANDOFF.md` существует?** | нет |
@@ -64,8 +64,8 @@
 - [x] sync `current_tasks.md` под 2.5.
 - [x] **2.5-A.1** — таблица `admin_audit_log` (миграция `0016_admin_audit_log` + ORM `AdminAuditLogORM` + домен-порт `IAdminAuditLogger` + `AdminAuditEntry` + `AdminAuditAction` + `AdminAuditSource` + `SqlAlchemyAdminAuditLogger` + `FakeAdminAuditLogger` + 6 integration-тестов + 4 unit-теста + расширение `test_migrations`).
 - [x] **2.5-A.2** — aiogram-middleware `AdminGuard` (читает `tg_identity`, делает `IAdminRepository.get_by_tg_id`, кладёт `data["admin"] = Admin | None`; деактивированные → `None`). Регистрируется в композиционном root, прибавляется ко всем 3 observer-ам после `AuthMiddleware`. 7 unit-тестов + апдейт композиционного теста.
-- [ ] **2.5-A.3** — FSM `TOTPConfirm` + use-cases `RequestAdminConfirm`/`VerifyAdminConfirm` + локали `admin-confirm-*` RU+EN + unit-тесты.
-- [ ] **Перед PR:** прогон `make ci` зелёный, lint/typecheck/import-linter ✅.
+- [x] **2.5-A.3** — TOTP-подтверждение опасных команд: миграция `0017_admins_totp_secret` (новая колонка `admins.totp_secret`), `Admin.totp_secret`, доменные VO `AdminConfirmRequest`/`AdminConfirmEntry` + ошибки `Confirm{TokenNotFound,TokenExpired,CodeInvalid,AdminMismatch}Error` + `TotpNotConfiguredError`, доменные порты `IAdminConfirmStore` / `ITotpVerifier`, `application/admin/{request_confirm,verify_confirm}.py` use-cases (запись `ADMIN_CONFIRM_REQUESTED` / `ADMIN_CONFIRM_VERIFIED` / `ADMIN_CONFIRM_FAILED` в `admin_audit_log`, токен — однократный «pop»), инфраструктура `infrastructure/admin/{in_memory_confirm_store,pyotp_totp_verifier}.py`, локали `admin-confirm-*` в RU+EN, 35 новых unit-тестов (5 на VO/ошибки + 11 на use-case-ах + 15 на store/verifier + 1 на миграцию + 3 на repo). DI в композиционный root **не делаем** — handler-ы `/ban` / `/grant_*` появятся только в 2.5-B/C, тогда же подключим в `Container`.
+- [x] **Перед PR:** прогон `make ci` зелёный, lint/typecheck/import-linter ✅ (2901 passed / 1 skipped, coverage 96.19%).
 - [ ] **Перед мерджем:** sync `current_tasks.md` под 2.5-B; запись в `history.md`.
 
 ---
