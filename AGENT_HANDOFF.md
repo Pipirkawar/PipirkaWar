@@ -1,45 +1,51 @@
-# AGENT HANDOFF — Спринт 2.4 (закрытие шага 4/4 + добор 2.4.4 / 2.4.5 / 2.4.6)
+# AGENT HANDOFF — Спринт 2.4 (закрытие 2.4.E + 2.4.F)
 
 > Этот файл — временный safety-net на случай обрыва сессии. Удаляется отдельным коммитом перед открытием PR.
 
-## Что я сделал в этой сессии
+## Кратко
 
-- (сейчас) Влил `origin/main` в ветку (merge-коммит, файлы доки + `game_design.md` + `CONTRIBUTING.md` + `pyproject.toml` подтянуты; в исходниках конфликтов нет).
-- (сейчас) Обновил `docs/current_tasks.md` — «Снимок состояния», «Текущая позиция», «Чек-лист» под три оставшиеся шага.
+Спринт 2.4 (Реферальная система и шеринг) — в середине. **Шаги A/B/C/D-a/D-b закрыты**, остаются **2.4.E** (еженедельный per-clan referral summary cron) и **2.4.F** (rate-limit-антифрод на `RegisterReferral`), затем финальный PR.
 
-(Дальше — будет дополняться после каждого закрытого шага.)
+## Что уже сделано на ветке
 
-## На каком файле/задаче остановился
+- `0cbe1e3` 2.4.A (домен): `Referral` VO + `IReferralRepository` + 5 ошибок + 25 тестов.
+- `56c7ce4` 2.4.B (persistence): миграция 0015 + ORM + Sql/Fake repo + 6 integration-тестов.
+- `5414693` 2.4.C (use-cases): `RegisterReferral` + `GrantReferralSignupBonus` + `GrantReferralThicknessMilestone` + 24 unit-теста.
+- `2865452` 2.4.C (фикс): unused-ignore.
+- `9580210` 2.4.D-a (интеграция): payload `start=ref_<id>` в `/start`; `RegisterPlayer` → `RegisterReferral` + `GrantReferralSignupBonus`; `UpgradeThickness` → `GrantReferralThicknessMilestone`.
+- `5197ced` 2.4.D-b (share-кнопка): `ReferralSharePresenter` + handler `referral_share.py` (callback_data `ref-share:{kind}:{entity_id}`) + кнопки под `/duel` и `/forest` + локали `referral-share-*` (RU+EN), ГДД §13.2.
+- `82109a4` 2.4.D-b (тесты): 26 тестов presenter + 14 тестов handler + fix forest-notifier-теста.
 
-- На начале **2.4.D-b** — кнопка «Поделиться» в результатах `/duel` и `/forest`.
-- ТЗ:
-    - `docs/game_design.md` §13.1 (схема рефералки) и §13.2 (шаблоны share-сообщений).
-    - `docs/development_plan.md` §6 / Спринт 2.4 / задачи 2.4.5 (share-кнопка) + 2.4.6 (weekly cron) + 2.4.4 (антифрод).
-- Ориентир по реализации share-кнопки: уже есть рабочий шаблон в Спринте 2.1.H (PR #58) — `bot/handlers/duel.py::handle_share_pvp_result` + presenter `share_keyboard` для победной карточки 1×1. Я пойду тем же путём, но с реферальным deeplink-payload-ом.
+## План этой сессии
+
+1. **Синхрон доков**: в `current_tasks.md` 2.4.D-b в чек-листе стоит `[ ]`, хотя два коммита выше его закрыли. Синкаю и этот HANDOFF под себя — один коммит `chore`.
+2. **2.4.E** (жирный шаг): per-clan weekly cron (вс. 18:00 UTC) → бот постит в каждый активный клан карточку «Итоги недели — рефералы» (новых бойцов + топ-3 приглашателей). Ниже разбивка на 4 подшага.
+3. **2.4.F**: rate-limit `RegisterReferral` (≤ N новых в час от одного реферера) + audit-лог попыток. Если перебрал — `ReferralRateLimitedError` (handler swallow-ит в no-op + audit). IP/устройство в aiogram недоступны — закрою 2.4.4 как «частично» с пометкой в ГДД §13.1.
+4. **Финал**: `make ci`, удалить `AGENT_HANDOFF.md`, запись в `history.md` по всем шагам Спринта 2.4, открыть PR в `main`.
+
+## Разбивка 2.4.E на подшаги
+
+- **E.1 (порт и репо)**: добавить в `IReferralRepository` метод `weekly_summary_by_clan(*, clan_id, since, until) -> Sequence[WeeklyClanReferralEntry]`. `WeeklyClanReferralEntry` (в `domain/referral`) — `(referrer_id: int, count: int)`. SqlAlchemy-версия: `JOIN clan_members на referrer_id` → `WHERE clan_id = :cid AND created_at ∈ [since, until)` → `GROUP BY referrer_id ORDER BY count DESC, referrer_id`. Fake-версия — in-memory фильтр + groupby. Интеграционные тесты в `tests/integration/db/referral/`.
+- **E.2 (use-case)**: `application/referral/run_weekly_clan_summary.py` — `RunWeeklyClanReferralSummary` (uow, clans, players, referrals, clock, notifier-порт). Для одного `clan_id`: резолвить клан → если frozen или нет новых рефералов — no-op без поста. Иначе: посчитать итог (`weekly_summary_by_clan`), резолвить top-3 referrer-ов в `Player`, звать notifier. DTO: `WeeklyClanReferralSummary(clan, total, top: tuple[(player, count), …])`.
+- **E.3 (notifier + presenter + локали)**: порт `IWeeklyClanReferralSummaryNotifier` в `application/referral/`. Presenter `WeeklyClanReferralSummaryPresenter` в `bot/presenters/referral.py` (либо отдельный файл). Telegram-версия в `bot/notifications/referral.py` (по образцу `forest.py`). Локали: `weekly-referral-summary-{title, total, line, footer}` (RU+EN).
+- **E.4 (scheduler + DI)**: `IDelayedJobScheduler.schedule_weekly_clan_referral_summary_cron()` — регистрация APScheduler-cron `CronTrigger(day_of_week='sun', hour=18, minute=0, timezone='UTC')`, callback `_run_weekly_clan_referral_summary_cron_job` итерирует `clans.list_active()` и для каждого зовёт `RunWeeklyClanReferralSummary`. DI в `bot/main.py` + `bootstrap`.
+
+## Команды для следующего агента (если я уйду посреди)
+
+- Поднять окружение: `python3.12 -m venv .venv && source .venv/bin/activate && pip install -e '.[dev]'`.
+- Прогнать CI: `make ci`.
+- Реферальные тесты: `pytest tests/unit/domain/referral/ tests/unit/application/referral/ tests/integration/db/referral/ tests/unit/bot/handlers/test_referral_share.py tests/unit/bot/handlers/test_start.py tests/unit/bot/handlers/test_upgrade.py -q`.
+- Паттерн cron-интеграции — см. **Спринт 2.3.F.2** (PR #74): `application/daily_head/run_cron.py` + `schedule_cron_jobs.py` + `infrastructure/scheduler/aps.py::schedule_daily_head_reschedule_cron`.
 
 ## Состояние ветки
 
 - Ветка: `devin/1778068742-sprint-2-4-a-referral-domain`.
-- База: `main` (`6320c27` после PR #77).
-- Последний коммит на ветке (до мерджа main): `9580210` `Спринт 2.4.D-a (шаг 4/4): интеграция реферальных use-cases в /start и /upgrade`.
-- Перед стартом сессии — `git merge origin/main --no-edit` (без конфликтов; intersection файлов — пуста).
-- Незакоммиченные изменения: ДА — обновлённый `docs/current_tasks.md` + новый `AGENT_HANDOFF.md` (этот файл). Будут закоммичены первым коммитом сессии.
-- CI прогонялся? Да, после мерджа main — зелёный (lint / typecheck / import-linter ✅; pytest 2739 passed / 1 skipped, coverage 96.06%).
-
-## Команды для следующего агента
-
-- Поднять окружение: см. `README.md` «Локальная разработка». Минимально — `python3.12 -m venv .venv && source .venv/bin/activate && pip install -e '.[dev]'`.
-- Прогнать CI: `make ci`.
-- Запустить только реферальные тесты: `pytest tests/unit/domain/referral/ tests/unit/application/referral/ tests/integration/db/referral/ tests/unit/bot/handlers/test_start.py tests/unit/bot/handlers/test_upgrade.py -q`.
+- База: `main` (`6320c27` после PR #77; main в эту ветку уже влит merge-коммитом `f6a245e`).
+- Последний коммит: `82109a4 test(referral): unit-тесты ReferralSharePresenter + handler + fix forest notifier test`.
+- Незакоммиченных изменений на момент приёмки: нет. Свежие `current_tasks.md` + `AGENT_HANDOFF.md` (этот) — будут закоммичены первым коммитом сессии.
+- CI прогонялся? Да, на момент приёмки — зелёный (`pytest 2781 passed / 1 skipped`, coverage **96.10%**, lint/typecheck/import-linter ✅).
 
 ## Известные блокеры / открытые вопросы
 
-- **2.4.4 (антифрод по IP/устройству)** — Telegram-бот не имеет прямого доступа к IP клиента; webhook-IP — это IP Telegram-инфраструктуры, не пользователя. Реалистичная альтернатива — rate-limit per-`referrer_tg_id` (≤ N новых рефералов в час) + полный audit-лог попыток. Если этого недостаточно — задокументировать ограничение в `game_design.md` §13.1 и вынести в открытые вопросы геймдиза. Решение принимать в рамках 2.4.F.
-
-## План оставшихся шагов (этой сессии)
-
-1. **Шаг A (сейчас):** этот HANDOFF + актуализация `current_tasks.md` (один коммит `chore`).
-2. **Шаг B — 2.4.D-b:** локали `referral-share-*` (RU+EN) → `ReferralSharePresenter` (или метод существующего) + invariant `callback_data` `referral-share:{ctx}:{from_tg_id}` → handler-кнопка под результатом `/duel` (использовать тот же поток, что и существующая `pvp-share`-кнопка) и `/forest` (новый блок) + тесты презентера / handler-а / composition root.
-3. **Шаг C — 2.4.E (cron):** application-use-case `RunWeeklyClanReferralSummary` (подытоживает рефералов клана за неделю), новый порт-метод в `IReferralRepository` (`weekly_summary_by_clan`), bot-нотификатор `WeeklyClanReferralSummaryNotifier`, APScheduler-job `weekly_clan_referral_summary` (CronTrigger, вс. 18:00 UTC), DI в composition root, локали `weekly-referral-summary-*`, тесты.
-4. **Шаг D — 2.4.F (антифрод):** rate-limit на `RegisterReferral` (per-`referrer_tg_id`, токен-bucket в `IRateLimiter` или новый `IReferralRateLimiter`), audit-логирование в `ReferralAttemptedAudit`. Если IP/устройство недоступно — оставить в `game_design.md` пометку и закрыть 2.4.4 как «частично» (rate-limit поверх pair-uniqueness-constraint).
-5. **Шаг E — финал:** `make ci`, удалить `AGENT_HANDOFF.md`, добавить запись в `history.md`, открыть PR в `main`.
+- **2.4.4 (антифрод по IP/устройству)** — Telegram-бот не имеет прямого доступа к IP клиента. Реалистичная альтернатива — rate-limit per-`referrer_tg_id` (≤ N новых рефералов в час) + audit-лог попыток. Закрываю в рамках 2.4.F и документирую ограничение в ГДД.
+- **2.4.E и ГДД §13.3** — ГДД описывает широкую weekly-карточку (топ-3 бойцов по длине, PvP-боёв, караванов, рейдов). Агрегатов по PvP/караванам/рейдам в репозиториях ещё нет (караваны/рейды — Фаза 3). 2.4.E закрываю узкой реферальной версией (`weekly-referral-summary-*`); полная клановая weekly-карточка §13.3 — будущий спринт (помечу в `current_tasks.md`).
