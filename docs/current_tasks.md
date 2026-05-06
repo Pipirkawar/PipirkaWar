@@ -36,7 +36,7 @@
 - **2.5-C**: экономика — `/grant_length`, `/grant_thickness`, `/balance_get`, `/balance_set` + TOTP на все + идемпотентность.
 - **2.5-D** (финал): кланы (`/clan`, `/freeze_clan`, `/unfreeze_clan`, `/clan_daily_head_history`) + `/announce` + `/audit` + `/admin_setup_totp` + `docs/admin_runbook.md`.
 
-**`make ci` на main:** зелёный (последний прогон в PR #79: 2901 passed / 1 skipped, coverage 96.19%).
+**`make ci` на ветке 2.5-B:** зелёный — `lint` (ruff) ✅, `typecheck` (mypy --strict, 629 файлов, 0 issues) ✅, `imports` (import-linter, 3 контракта) ✅, `test` 2997 passed / 1 skipped, coverage 96.18%.
 
 **`AGENT_HANDOFF.md`:** нет.
 
@@ -52,7 +52,8 @@
 | **Базовая ветка** | `main` |
 | **Последний коммит на main** | `a967197` (мерж PR #80 «Спринт 2.5-A postmerge docs sync») |
 | **PR (если открыт)** | _ещё не открыт_ |
-| **CI статус** | _будет проверен после первого пуша_ |
+| **CI статус** | локально зелёный (`make ci` на `3c016b7`); ждём GitHub CI после открытия PR |
+| **Последний коммит на ветке** | `3c016b7` (Sprint 2.5-B.7: DI use-cases в `Container`) |
 | **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задачи 2.5.3 (find_player/player/freeze/unfreeze/ban), 2.5.5 (TOTP на /ban), 2.5.9 (use-case каркас) |
 | **Связанная спецификация в `game_design.md`** | §18.6 (основной канал администрирования — Telegram-бот) |
 | **`AGENT_HANDOFF.md` существует?** | нет |
@@ -72,8 +73,8 @@
 - [x] **2.5-B.5 — `/confirm <token> <code>`** — общий handler для всех TOTP-команд. Зовёт `VerifyAdminConfirm`, диспатчит по `command_kind`: на MVP только `ban → BanPlayer.execute()`. На неизвестный `command_kind` или сломанный payload — `admin-confirm-unknown-command-kind`. Локали `admin-confirm-*` (RU+EN).
 - [x] **2.5-B.6 — Регистрация `admin_support_router`** через `dispatcher.include_router` в `bot/handlers/__init__.py`. Router-фильтр `IsAdminFilter` живёт прямо на самом router-е (`router.message.filter(IsAdminFilter())` + `.callback_query.filter(...)`), читает `data["admin"]` от `AdminGuard`. Не-админы тихо проходят мимо (filter возвращает `False`). Если `AdminGuard` не подключён — secure default = отказать. Файлы: `bot/filters/admin.py`, `bot/filters/__init__.py`, `bot/handlers/admin_support.py` (фильтр на router-е), `bot/handlers/__init__.py` (include_router). 4 unit-теста на фильтр.
 - [x] **2.5-B.7 — DI use-case-ов в `Container`** — `find_players`, `get_player_card`, `freeze_player`, `unfreeze_player`, `ban_player`, `request_admin_confirm`, `verify_admin_confirm` + `SqlAlchemyAdminAuditLogger` (write-side `admin_audit_log`), `InMemoryAdminConfirmStore` (singleton, переживать рестарт смысла нет — 60-секундные токены), `PyOtpTotpVerifier`, `TokenFactory = _default_admin_token_factory` (`secrets.token_urlsafe(16)`). Все 7 use-case-ов прокинуты в `dispatcher` workflow-data. Тесты: 2 новых assert-ов в `test_composition_root.py` (`TestContainer.test_container_holds_admin_support_use_cases` + расширения в `TestBuildContainer.test_build_container_returns_real_adapters` и `TestBuildDispatcher.test_build_dispatcher_assembles_full_stack`).
-- [ ] **2.5-B.8 — Тесты:** unit на каждый новый use-case (≥3 кейса: happy / not_found / уже-в-state); 2-3 integration-теста на `IPlayerRepository.ban` / `freeze` / `unfreeze` (если методов ещё нет — добавляем); 2 e2e-теста на TOTP-flow `/ban` (правильный код / неверный код).
-- [ ] **Перед PR:** прогон `make ci` зелёный, lint/typecheck/import-linter ✅.
+- [x] **2.5-B.8 — Тесты:** покрытие добавлено вместе с каждым шагом B.1–B.7. Unit-тесты на все use-case-ы — `tests/unit/application/admin/test_find_players.py` (9), `test_get_player_card.py` (7), `test_freeze_unfreeze.py` (8), `test_ban_player.py` (7). Integration на `IPlayerRepository`: `find_by_query_*` (7 кейсов: exact tg_id / @username / substring case-insensitive / empty / LIKE-escape / включая frozen / limit / non-positive limit reject), `freeze_unfreeze_round_trip`, `save_persists_mutations` (покрывает `Player.ban` через `save`), а также существовавшие `anticheat_ban_*`. E2E на TOTP-flow `/ban`+`/confirm` — `tests/unit/bot/handlers/test_admin_support.py` (44 кейса, в т.ч. happy / token expired / token not found / admin mismatch / code invalid / TOTP not configured / unknown command_kind / payload typo / target disappeared / already banned).
+- [x] **Перед PR:** локальный `make ci` зелёный — lint ✅, mypy --strict ✅, import-linter ✅, pytest 2997/1 skipped, coverage 96.18%.
 - [ ] **Перед мерджем:** sync `current_tasks.md` под 2.5-C; запись в `history.md`.
 
 ---
