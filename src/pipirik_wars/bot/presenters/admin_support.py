@@ -200,7 +200,135 @@ class GetPlayerCardPresenter:
         return "\n".join(lines)
 
 
+# ── /freeze ──────────────────────────────────────────────────────────────────
+
+_KEY_FREEZE_USAGE: Final[MessageKey] = MessageKey("admin-freeze-usage")
+_KEY_FREEZE_NOT_AUTHORIZED: Final[MessageKey] = MessageKey("admin-freeze-not-authorized")
+_KEY_FREEZE_BAD_ID: Final[MessageKey] = MessageKey("admin-freeze-bad-id")
+_KEY_FREEZE_NOT_FOUND: Final[MessageKey] = MessageKey("admin-freeze-not-found")
+_KEY_FREEZE_ALREADY: Final[MessageKey] = MessageKey("admin-freeze-already")
+_KEY_FREEZE_OK: Final[MessageKey] = MessageKey("admin-freeze-ok")
+_KEY_FREEZE_REASON_SUFFIX: Final[MessageKey] = MessageKey("admin-freeze-reason-suffix")
+
+
+class FreezePlayerPresenter:
+    """Локализованные ответы `/freeze`."""
+
+    __slots__ = ("_bundle",)
+
+    def __init__(self, *, bundle: IMessageBundle) -> None:
+        self._bundle = bundle
+
+    def usage(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_FREEZE_USAGE, locale=locale)
+
+    def not_authorized(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_FREEZE_NOT_AUTHORIZED, locale=locale)
+
+    def bad_id(self, *, locale: Locale, value: str) -> str:
+        return self._bundle.format(_KEY_FREEZE_BAD_ID, locale=locale, value=value)
+
+    def not_found(self, *, locale: Locale, tg_id: int) -> str:
+        return self._bundle.format(
+            _KEY_FREEZE_NOT_FOUND,
+            locale=locale,
+            tg_id=str(tg_id),
+        )
+
+    def already(self, *, locale: Locale, tg_id: int) -> str:
+        return self._bundle.format(
+            _KEY_FREEZE_ALREADY,
+            locale=locale,
+            tg_id=str(tg_id),
+        )
+
+    def ok(self, *, locale: Locale, tg_id: int, reason: str | None) -> str:
+        suffix = (
+            " "
+            + self._bundle.format(
+                _KEY_FREEZE_REASON_SUFFIX,
+                locale=locale,
+                reason=reason,
+            )
+            if reason is not None and reason
+            else ""
+        )
+        return self._bundle.format(
+            _KEY_FREEZE_OK,
+            locale=locale,
+            tg_id=str(tg_id),
+            reason_suffix=suffix,
+        )
+
+
+# ── /unfreeze ────────────────────────────────────────────────────────────────
+
+_KEY_UNFREEZE_USAGE: Final[MessageKey] = MessageKey("admin-unfreeze-usage")
+_KEY_UNFREEZE_NOT_AUTHORIZED: Final[MessageKey] = MessageKey(
+    "admin-unfreeze-not-authorized",
+)
+_KEY_UNFREEZE_BAD_ID: Final[MessageKey] = MessageKey("admin-unfreeze-bad-id")
+_KEY_UNFREEZE_NOT_FOUND: Final[MessageKey] = MessageKey("admin-unfreeze-not-found")
+_KEY_UNFREEZE_ALREADY: Final[MessageKey] = MessageKey("admin-unfreeze-already")
+_KEY_UNFREEZE_OK: Final[MessageKey] = MessageKey("admin-unfreeze-ok")
+_KEY_UNFREEZE_REASON_SUFFIX: Final[MessageKey] = MessageKey(
+    "admin-unfreeze-reason-suffix",
+)
+
+
+class UnfreezePlayerPresenter:
+    """Локализованные ответы `/unfreeze`."""
+
+    __slots__ = ("_bundle",)
+
+    def __init__(self, *, bundle: IMessageBundle) -> None:
+        self._bundle = bundle
+
+    def usage(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_UNFREEZE_USAGE, locale=locale)
+
+    def not_authorized(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_UNFREEZE_NOT_AUTHORIZED, locale=locale)
+
+    def bad_id(self, *, locale: Locale, value: str) -> str:
+        return self._bundle.format(_KEY_UNFREEZE_BAD_ID, locale=locale, value=value)
+
+    def not_found(self, *, locale: Locale, tg_id: int) -> str:
+        return self._bundle.format(
+            _KEY_UNFREEZE_NOT_FOUND,
+            locale=locale,
+            tg_id=str(tg_id),
+        )
+
+    def already(self, *, locale: Locale, tg_id: int) -> str:
+        return self._bundle.format(
+            _KEY_UNFREEZE_ALREADY,
+            locale=locale,
+            tg_id=str(tg_id),
+        )
+
+    def ok(self, *, locale: Locale, tg_id: int, reason: str | None) -> str:
+        suffix = (
+            " "
+            + self._bundle.format(
+                _KEY_UNFREEZE_REASON_SUFFIX,
+                locale=locale,
+                reason=reason,
+            )
+            if reason is not None and reason
+            else ""
+        )
+        return self._bundle.format(
+            _KEY_UNFREEZE_OK,
+            locale=locale,
+            tg_id=str(tg_id),
+            reason_suffix=suffix,
+        )
+
+
 __all__ = [
     "FindPlayerPresenter",
+    "FreezePlayerPresenter",
     "GetPlayerCardPresenter",
+    "UnfreezePlayerPresenter",
 ]

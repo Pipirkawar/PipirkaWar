@@ -20,6 +20,11 @@ from pipirik_wars.application.admin.find_players import (
     PlayerSummary,
     player_to_summary,
 )
+from pipirik_wars.application.admin.freeze_player import (
+    FreezePlayer,
+    FreezePlayerInput,
+    FreezePlayerOutput,
+)
 from pipirik_wars.application.admin.get_player_card import (
     ClanCardInfo,
     ForestCardInfo,
@@ -34,6 +39,11 @@ from pipirik_wars.application.admin.request_confirm import (
     RequestAdminConfirmOutput,
     TokenFactory,
 )
+from pipirik_wars.application.admin.unfreeze_player import (
+    UnfreezePlayer,
+    UnfreezePlayerInput,
+    UnfreezePlayerOutput,
+)
 from pipirik_wars.application.admin.verify_confirm import (
     VerifyAdminConfirm,
     VerifyAdminConfirmInput,
@@ -47,6 +57,9 @@ __all__ = [
     "FindPlayersInput",
     "FindPlayersOutput",
     "ForestCardInfo",
+    "FreezePlayer",
+    "FreezePlayerInput",
+    "FreezePlayerOutput",
     "GetPlayerCard",
     "GetPlayerCardInput",
     "GetPlayerCardOutput",
@@ -56,6 +69,9 @@ __all__ = [
     "RequestAdminConfirmInput",
     "RequestAdminConfirmOutput",
     "TokenFactory",
+    "UnfreezePlayer",
+    "UnfreezePlayerInput",
+    "UnfreezePlayerOutput",
     "VerifyAdminConfirm",
     "VerifyAdminConfirmInput",
     "VerifyAdminConfirmOutput",

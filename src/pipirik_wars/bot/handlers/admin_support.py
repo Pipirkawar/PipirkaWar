@@ -20,16 +20,23 @@ from aiogram.types import Message
 from pipirik_wars.application.admin import (
     FindPlayers,
     FindPlayersInput,
+    FreezePlayer,
+    FreezePlayerInput,
     GetPlayerCard,
     GetPlayerCardInput,
+    UnfreezePlayer,
+    UnfreezePlayerInput,
 )
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters.admin_support import (
     FindPlayerPresenter,
+    FreezePlayerPresenter,
     GetPlayerCardPresenter,
+    UnfreezePlayerPresenter,
 )
+from pipirik_wars.domain.player.errors import PlayerNotFoundError
 
 router = Router(name="admin_support")
 
@@ -140,4 +147,124 @@ async def handle_player(
 
     await message.answer(
         presenter.render(locale=effective_locale, card=result.card),
+    )
+
+
+@router.message(Command("freeze"))
+async def handle_freeze(
+    message: Message,
+    command: CommandObject,
+    tg_identity: TgIdentity | None,
+    freeze_player: FreezePlayer,
+    bundle: IMessageBundle,
+    locale: Locale | None = None,
+) -> None:
+    """`/freeze <tg_id> [reason]` — обратимая заморозка (Спринт 2.5-B.3)."""
+    presenter = FreezePlayerPresenter(bundle=bundle)
+    effective_locale = locale or DEFAULT_LOCALE
+
+    chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
+    if chat_kind != "private" or tg_identity is None:
+        await message.answer(REPLY_NON_PRIVATE_RU)
+        return
+
+    raw = (command.args or "").strip()
+    if not raw:
+        await message.answer(presenter.usage(locale=effective_locale))
+        return
+
+    parts = raw.split(maxsplit=1)
+    try:
+        target_tg_id = int(parts[0])
+    except ValueError:
+        await message.answer(presenter.bad_id(locale=effective_locale, value=parts[0]))
+        return
+    reason = parts[1].strip() if len(parts) == 2 else None
+
+    try:
+        result = await freeze_player.execute(
+            FreezePlayerInput(
+                actor_tg_id=tg_identity.tg_user_id,
+                target_tg_id=target_tg_id,
+                reason=reason,
+                tg_chat_id=tg_identity.chat_id,
+            ),
+        )
+    except AuthorizationError:
+        await message.answer(presenter.not_authorized(locale=effective_locale))
+        return
+    except PlayerNotFoundError:
+        await message.answer(
+            presenter.not_found(locale=effective_locale, tg_id=target_tg_id),
+        )
+        return
+
+    if result.was_already_frozen:
+        await message.answer(
+            presenter.already(locale=effective_locale, tg_id=target_tg_id),
+        )
+        return
+
+    await message.answer(
+        presenter.ok(locale=effective_locale, tg_id=target_tg_id, reason=reason),
+    )
+
+
+@router.message(Command("unfreeze"))
+async def handle_unfreeze(
+    message: Message,
+    command: CommandObject,
+    tg_identity: TgIdentity | None,
+    unfreeze_player: UnfreezePlayer,
+    bundle: IMessageBundle,
+    locale: Locale | None = None,
+) -> None:
+    """`/unfreeze <tg_id> [reason]` — снятие заморозки (Спринт 2.5-B.3)."""
+    presenter = UnfreezePlayerPresenter(bundle=bundle)
+    effective_locale = locale or DEFAULT_LOCALE
+
+    chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
+    if chat_kind != "private" or tg_identity is None:
+        await message.answer(REPLY_NON_PRIVATE_RU)
+        return
+
+    raw = (command.args or "").strip()
+    if not raw:
+        await message.answer(presenter.usage(locale=effective_locale))
+        return
+
+    parts = raw.split(maxsplit=1)
+    try:
+        target_tg_id = int(parts[0])
+    except ValueError:
+        await message.answer(presenter.bad_id(locale=effective_locale, value=parts[0]))
+        return
+    reason = parts[1].strip() if len(parts) == 2 else None
+
+    try:
+        result = await unfreeze_player.execute(
+            UnfreezePlayerInput(
+                actor_tg_id=tg_identity.tg_user_id,
+                target_tg_id=target_tg_id,
+                reason=reason,
+                tg_chat_id=tg_identity.chat_id,
+            ),
+        )
+    except AuthorizationError:
+        await message.answer(presenter.not_authorized(locale=effective_locale))
+        return
+    except PlayerNotFoundError:
+        await message.answer(
+            presenter.not_found(locale=effective_locale, tg_id=target_tg_id),
+        )
+        return
+
+    if result.was_already_active:
+        await message.answer(
+            presenter.already(locale=effective_locale, tg_id=target_tg_id),
+        )
+        return
+
+    await message.answer(
+        presenter.ok(locale=effective_locale, tg_id=target_tg_id, reason=reason),
     )

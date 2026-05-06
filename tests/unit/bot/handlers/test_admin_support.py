@@ -18,22 +18,29 @@ from pipirik_wars.application.admin import (
     FindPlayers,
     FindPlayersOutput,
     ForestCardInfo,
+    FreezePlayer,
+    FreezePlayerOutput,
     GetPlayerCard,
     GetPlayerCardOutput,
     PlayerCard,
     PlayerSummary,
+    UnfreezePlayer,
+    UnfreezePlayerOutput,
 )
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
 from pipirik_wars.bot.handlers.admin_support import (
     REPLY_NON_PRIVATE_RU,
     handle_find_player,
+    handle_freeze,
     handle_player,
+    handle_unfreeze,
 )
 from pipirik_wars.bot.middlewares.auth import TgIdentity
 from pipirik_wars.domain.clan import ClanMemberRole, ClanStatus
 from pipirik_wars.domain.forest import ForestRunStatus
 from pipirik_wars.domain.player import PlayerStatus
+from pipirik_wars.domain.player.errors import PlayerNotFoundError
 
 _RU = Locale("ru")
 
@@ -405,3 +412,209 @@ class TestHandlePlayer:
         assert "admin-player-card-forest-active" in text
         assert "run_id=42" in text
         assert "admin-player-card-no-anticheat" in text
+
+
+# ── /freeze ─────────────────────────────────────────────────────────────────
+
+
+def _stub_freeze(*, output: FreezePlayerOutput | None = None) -> FreezePlayer:
+    fake = MagicMock(spec=FreezePlayer)
+    fake.execute = AsyncMock(return_value=output) if output is not None else AsyncMock()
+    return cast(FreezePlayer, fake)
+
+
+def _stub_unfreeze(*, output: UnfreezePlayerOutput | None = None) -> UnfreezePlayer:
+    fake = MagicMock(spec=UnfreezePlayer)
+    fake.execute = AsyncMock(return_value=output) if output is not None else AsyncMock()
+    return cast(UnfreezePlayer, fake)
+
+
+def _command_freeze(args: str | None) -> CommandObject:
+    return CommandObject(prefix="/", command="freeze", mention=None, args=args)
+
+
+def _command_unfreeze(args: str | None) -> CommandObject:
+    return CommandObject(prefix="/", command="unfreeze", mention=None, args=args)
+
+
+@pytest.mark.asyncio
+class TestHandleFreeze:
+    async def test_non_private_chat(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock(chat_type="group")
+        uc = _stub_freeze()
+        await handle_freeze(
+            message=cast(Message, msg),
+            command=_command_freeze("100"),
+            tg_identity=_identity(chat_kind="group"),
+            freeze_player=uc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        msg.answer.assert_awaited_once_with(REPLY_NON_PRIVATE_RU)
+        uc.execute.assert_not_awaited()  # type: ignore[attr-defined]
+
+    async def test_empty_args_replies_usage(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        uc = _stub_freeze()
+        await handle_freeze(
+            message=cast(Message, msg),
+            command=_command_freeze(""),
+            tg_identity=_identity(),
+            freeze_player=uc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        text = msg.answer.await_args.args[0]
+        assert "admin-freeze-usage" in text
+
+    async def test_bad_id(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        uc = _stub_freeze()
+        await handle_freeze(
+            message=cast(Message, msg),
+            command=_command_freeze("not-an-int"),
+            tg_identity=_identity(),
+            freeze_player=uc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        text = msg.answer.await_args.args[0]
+        assert "admin-freeze-bad-id" in text
+
+    async def test_authorization_error(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        uc = _stub_freeze()
+        uc.execute = AsyncMock(  # type: ignore[method-assign]
+            side_effect=AuthorizationError(requirement="x", detail="y"),
+        )
+        await handle_freeze(
+            message=cast(Message, msg),
+            command=_command_freeze("100"),
+            tg_identity=_identity(),
+            freeze_player=uc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        assert "admin-freeze-not-authorized" in msg.answer.await_args.args[0]
+
+    async def test_player_not_found(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        uc = _stub_freeze()
+        uc.execute = AsyncMock(  # type: ignore[method-assign]
+            side_effect=PlayerNotFoundError(tg_id=999),
+        )
+        await handle_freeze(
+            message=cast(Message, msg),
+            command=_command_freeze("999"),
+            tg_identity=_identity(),
+            freeze_player=uc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        text = msg.answer.await_args.args[0]
+        assert "admin-freeze-not-found" in text
+        assert "tg_id=999" in text
+
+    async def test_already_frozen(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        uc = _stub_freeze(
+            output=FreezePlayerOutput(target_tg_id=100, was_already_frozen=True),
+        )
+        await handle_freeze(
+            message=cast(Message, msg),
+            command=_command_freeze("100"),
+            tg_identity=_identity(),
+            freeze_player=uc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        assert "admin-freeze-already" in msg.answer.await_args.args[0]
+
+    async def test_ok_with_reason(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        uc = _stub_freeze(
+            output=FreezePlayerOutput(target_tg_id=100, was_already_frozen=False),
+        )
+        await handle_freeze(
+            message=cast(Message, msg),
+            command=_command_freeze("100 макрос пойман"),
+            tg_identity=_identity(),
+            freeze_player=uc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        text = msg.answer.await_args.args[0]
+        assert "admin-freeze-ok" in text
+        assert "tg_id=100" in text
+        # use-case получил reason
+        execute = cast(AsyncMock, uc.execute)
+        await_args = execute.await_args
+        assert await_args is not None
+        inp = await_args.args[0]
+        assert inp.target_tg_id == 100
+        assert inp.reason == "макрос пойман"
+
+
+@pytest.mark.asyncio
+class TestHandleUnfreeze:
+    async def test_empty_args_replies_usage(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        uc = _stub_unfreeze()
+        await handle_unfreeze(
+            message=cast(Message, msg),
+            command=_command_unfreeze(""),
+            tg_identity=_identity(),
+            unfreeze_player=uc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        text = msg.answer.await_args.args[0]
+        assert "admin-unfreeze-usage" in text
+
+    async def test_already_active(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        uc = _stub_unfreeze(
+            output=UnfreezePlayerOutput(target_tg_id=100, was_already_active=True),
+        )
+        await handle_unfreeze(
+            message=cast(Message, msg),
+            command=_command_unfreeze("100"),
+            tg_identity=_identity(),
+            unfreeze_player=uc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        assert "admin-unfreeze-already" in msg.answer.await_args.args[0]
+
+    async def test_ok(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        uc = _stub_unfreeze(
+            output=UnfreezePlayerOutput(target_tg_id=100, was_already_active=False),
+        )
+        await handle_unfreeze(
+            message=cast(Message, msg),
+            command=_command_unfreeze("100"),
+            tg_identity=_identity(),
+            unfreeze_player=uc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        text = msg.answer.await_args.args[0]
+        assert "admin-unfreeze-ok" in text
+        assert "tg_id=100" in text
+
+    async def test_player_not_found(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        uc = _stub_unfreeze()
+        uc.execute = AsyncMock(  # type: ignore[method-assign]
+            side_effect=PlayerNotFoundError(tg_id=999),
+        )
+        await handle_unfreeze(
+            message=cast(Message, msg),
+            command=_command_unfreeze("999"),
+            tg_identity=_identity(),
+            unfreeze_player=uc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        assert "admin-unfreeze-not-found" in msg.answer.await_args.args[0]

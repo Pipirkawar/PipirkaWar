@@ -572,3 +572,21 @@ admin-player-card-forest-active = 🌲 Активный поход в лес #{ 
 admin-player-card-no-forest = 🌲 Активного похода нет.
 admin-player-card-anticheat = 🛡️ Anti-cheat-бан до: { $until }.
 admin-player-card-no-anticheat = 🛡️ Anti-cheat-бан: не активен.
+
+# /freeze
+admin-freeze-usage = ⚠️ Использование: <code>/freeze &lt;tg_id&gt; [причина]</code>.
+admin-freeze-not-authorized = ❌ Только активные админы могут замораживать игроков.
+admin-freeze-bad-id = ⚠️ <code>{ $value }</code> не похож на tg_id (целое число).
+admin-freeze-not-found = 🔍 Игрок с tg_id <code>{ $tg_id }</code> не найден.
+admin-freeze-already = ❄️ Игрок <code>{ $tg_id }</code> уже заморожен.
+admin-freeze-ok = 🥶 Игрок <code>{ $tg_id }</code> заморожен.{ $reason_suffix }
+admin-freeze-reason-suffix = Причина: { $reason }.
+
+# /unfreeze
+admin-unfreeze-usage = ⚠️ Использование: <code>/unfreeze &lt;tg_id&gt; [причина]</code>.
+admin-unfreeze-not-authorized = ❌ Только активные админы могут размораживать игроков.
+admin-unfreeze-bad-id = ⚠️ <code>{ $value }</code> не похож на tg_id (целое число).
+admin-unfreeze-not-found = 🔍 Игрок с tg_id <code>{ $tg_id }</code> не найден.
+admin-unfreeze-already = ▶️ Игрок <code>{ $tg_id }</code> и так активен.
+admin-unfreeze-ok = ☀️ Игрок <code>{ $tg_id }</code> разморожен.{ $reason_suffix }
+admin-unfreeze-reason-suffix = Причина: { $reason }.

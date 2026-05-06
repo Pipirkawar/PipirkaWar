@@ -566,3 +566,21 @@ admin-player-card-forest-active = 🌲 Active forest run #{ $run_id }: from { $s
 admin-player-card-no-forest = 🌲 No active forest run.
 admin-player-card-anticheat = 🛡️ Anti-cheat ban until: { $until }.
 admin-player-card-no-anticheat = 🛡️ Anti-cheat ban: not active.
+
+# /freeze
+admin-freeze-usage = ⚠️ Usage: <code>/freeze &lt;tg_id&gt; [reason]</code>.
+admin-freeze-not-authorized = ❌ Only active admins may freeze players.
+admin-freeze-bad-id = ⚠️ <code>{ $value }</code> is not a valid tg_id (integer).
+admin-freeze-not-found = 🔍 No player with tg_id <code>{ $tg_id }</code>.
+admin-freeze-already = ❄️ Player <code>{ $tg_id }</code> is already frozen.
+admin-freeze-ok = 🥶 Player <code>{ $tg_id }</code> has been frozen.{ $reason_suffix }
+admin-freeze-reason-suffix = Reason: { $reason }.
+
+# /unfreeze
+admin-unfreeze-usage = ⚠️ Usage: <code>/unfreeze &lt;tg_id&gt; [reason]</code>.
+admin-unfreeze-not-authorized = ❌ Only active admins may unfreeze players.
+admin-unfreeze-bad-id = ⚠️ <code>{ $value }</code> is not a valid tg_id (integer).
+admin-unfreeze-not-found = 🔍 No player with tg_id <code>{ $tg_id }</code>.
+admin-unfreeze-already = ▶️ Player <code>{ $tg_id }</code> is already active.
+admin-unfreeze-ok = ☀️ Player <code>{ $tg_id }</code> has been unfrozen.{ $reason_suffix }
+admin-unfreeze-reason-suffix = Reason: { $reason }.
