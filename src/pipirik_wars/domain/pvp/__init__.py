@@ -22,6 +22,11 @@
 (`pair_attackers` / `resolve_mass_round` / `resolve_mass_duel`,
 см. `mass_services.py`). RNG для pairing инжектится через
 :class:`IRandom.shuffle`.
+
+Спринт 2.2.C добавляет агрегат `MassDuel` — жизненный цикл массового
+PvP-боя клан×клан (`IN_PROGRESS` → `COMPLETED` / `CANCELLED`) с
+lifecycle-методами `submit_move` / `force_submit_missing` / `resolve` /
+`cancel`, см. `mass_duel.py`. Symmetricaly to 1×1-`Duel`.
 """
 
 from pipirik_wars.domain.pvp.duel import (
@@ -42,10 +47,15 @@ from pipirik_wars.domain.pvp.errors import (
     DuelNotFoundError,
     InvalidDuelStateError,
     InvalidLengthError,
+    InvalidMassDuelStateError,
     InvalidRoundCountError,
+    MassDuelNotReadyError,
+    MassMoveAlreadySubmittedError,
     MoveAlreadySubmittedError,
+    NoMissingMassMovesError,
     NoMissingMovesError,
     NotADuelParticipantError,
+    NotAMassDuelParticipantError,
     PvpError,
     PvpRequirementsNotMetError,
     SelfChallengeError,
@@ -64,6 +74,10 @@ from pipirik_wars.domain.pvp.mass import (
     MassPairing,
     MassRoundChoice,
     MassRoundOutcome,
+)
+from pipirik_wars.domain.pvp.mass_duel import (
+    MassDuel,
+    MassDuelState,
 )
 from pipirik_wars.domain.pvp.mass_services import (
     pair_attackers,
@@ -91,17 +105,24 @@ __all__ = [
     "IGlobalLobbyRepository",
     "InvalidDuelStateError",
     "InvalidLengthError",
+    "InvalidMassDuelStateError",
     "InvalidRoundCountError",
     "LobbyEntry",
     "MassDamageEntry",
+    "MassDuel",
+    "MassDuelNotReadyError",
     "MassDuelOutcome",
+    "MassDuelState",
     "MassDuelWinner",
+    "MassMoveAlreadySubmittedError",
     "MassPairing",
     "MassRoundChoice",
     "MassRoundOutcome",
     "MoveAlreadySubmittedError",
+    "NoMissingMassMovesError",
     "NoMissingMovesError",
     "NotADuelParticipantError",
+    "NotAMassDuelParticipantError",
     "PendingRound",
     "Position",
     "PvpError",

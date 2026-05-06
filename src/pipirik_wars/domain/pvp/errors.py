@@ -18,6 +18,10 @@
   вызова. Спринт 2.1.B.
 * `NoMissingMovesError` — `force_complete_round` вызван, когда оба
   выбора уже отправлены (нечего фоллбэчить). Спринт 2.1.B.
+* `InvalidMassDuelStateError` / `NotAMassDuelParticipantError` /
+  `MassMoveAlreadySubmittedError` / `MassDuelNotReadyError` /
+  `NoMissingMassMovesError` — массовая (mass-PvP) часть, симметричная
+  1×1-ошибкам выше. Спринт 2.2.C.
 
 Все ошибки — `domain`-слой и не зависят от инфраструктуры.
 """
@@ -31,10 +35,15 @@ __all__ = [
     "DuelNotFoundError",
     "InvalidDuelStateError",
     "InvalidLengthError",
+    "InvalidMassDuelStateError",
     "InvalidRoundCountError",
+    "MassDuelNotReadyError",
+    "MassMoveAlreadySubmittedError",
     "MoveAlreadySubmittedError",
+    "NoMissingMassMovesError",
     "NoMissingMovesError",
     "NotADuelParticipantError",
+    "NotAMassDuelParticipantError",
     "PvpError",
     "PvpRequirementsNotMetError",
     "SelfChallengeError",
@@ -200,3 +209,81 @@ class DuelLogNoTemplatesError(PvpError):
 
     def __init__(self) -> None:
         super().__init__("PvP duel-log templates catalog is empty")
+
+
+# ────────────────────────── Спринт 2.2.C: MassDuel ──────────────────────────
+
+
+class InvalidMassDuelStateError(PvpError):
+    """Операция запрошена на агрегате `MassDuel` из неподходящего состояния.
+
+    Например, `submit_move` после `COMPLETED` или `resolve` из
+    `CANCELLED`. Use-case 2.2.D/E конвертит ошибку в локализованное
+    сообщение игроку («бой уже завершён» / «бой отменён»).
+    """
+
+    def __init__(self, *, expected: object, actual: object, op: str) -> None:
+        super().__init__(
+            f"PvP mass-duel op '{op}' requires state {expected}, but state is {actual}",
+        )
+        self.expected = expected
+        self.actual = actual
+        self.op = op
+
+
+class NotAMassDuelParticipantError(PvpError):
+    """`player_id` не входит ни в roster clan-1, ни в clan-2 этого боя.
+
+    Возникает при попытке отправить выбор от имени игрока, не
+    включённого в массовый бой (например, новый присоединившийся
+    после старта боя — ростер замораживается на момент `create_battle`).
+    Use-case конвертит в «вы не участвуете в этом массовом бою».
+    """
+
+    def __init__(self, *, player_id: int) -> None:
+        super().__init__(
+            f"player {player_id} is not a participant of this mass-duel",
+        )
+        self.player_id = player_id
+
+
+class MassMoveAlreadySubmittedError(PvpError):
+    """Повторный `submit_move` от игрока, у которого выбор уже зафиксирован.
+
+    Use-case конвертит в локализованное «вы уже выбрали в этом бою».
+    Симметрично 1×1-варианту :class:`MoveAlreadySubmittedError`, но без
+    `round_num` — массовый бой пока что одно-тиковый (ГДД §7.2).
+    """
+
+    def __init__(self, *, player_id: int) -> None:
+        super().__init__(
+            f"player {player_id} already submitted a move for this mass-duel",
+        )
+        self.player_id = player_id
+
+
+class MassDuelNotReadyError(PvpError):
+    """`resolve` вызван, когда не все участники отправили выборы.
+
+    Use-case 2.2.E обязан либо дождаться всех `submit_move`-ов, либо
+    вызвать `force_submit_missing(...)` для AFK-фоллбэка перед
+    `resolve(...)`.
+    """
+
+    def __init__(self, *, missing_count: int) -> None:
+        super().__init__(
+            f"mass-duel not ready to resolve: {missing_count} player(s) "
+            f"have not submitted a move yet",
+        )
+        self.missing_count = missing_count
+
+
+class NoMissingMassMovesError(PvpError):
+    """`force_submit_missing` вызван, когда все участники уже отправили.
+
+    AFK-фоллбэчить нечего. Сигнал багу в use-case-е 2.2.E (раунд-таймер
+    сработал после того, как все игроки уже отправили).
+    """
+
+    def __init__(self) -> None:
+        super().__init__("mass-duel has no missing moves to force-submit")
