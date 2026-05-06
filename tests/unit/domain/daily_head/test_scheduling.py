@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
-from pipirik_wars.domain.daily_head import compute_daily_head_cron_offset_minutes
+from pipirik_wars.domain.daily_head import (
+    compute_daily_head_cron_offset_minutes,
+    compute_daily_head_cron_run_at_utc,
+)
 
 
 class TestComputeDailyHeadCronOffsetMinutes:
@@ -115,3 +118,52 @@ class TestComputeDailyHeadCronOffsetMinutes:
         # Если бы мы случайно переключились на YYYYMMDD без дефисов,
         # этот тест поймал бы разницу через known_value.
         assert isinstance(offset_a, int)
+
+
+class TestComputeDailyHeadCronRunAtUtc:
+    def test_returns_utc_datetime(self) -> None:
+        run_at = compute_daily_head_cron_run_at_utc(
+            clan_id=42,
+            moscow_date=date(2026, 5, 6),
+        )
+        assert run_at.tzinfo is UTC or run_at.utcoffset() == timedelta(0)
+
+    def test_aligned_with_offset(self) -> None:
+        # 00:00 МСК = 21:00 UTC предыдущего дня (МСК = UTC+3 без DST).
+        # Для clan_id=42 / 2026-05-06 offset=256 минут.
+        offset_minutes = compute_daily_head_cron_offset_minutes(
+            clan_id=42,
+            moscow_date=date(2026, 5, 6),
+        )
+        run_at = compute_daily_head_cron_run_at_utc(
+            clan_id=42,
+            moscow_date=date(2026, 5, 6),
+        )
+        # 00:00 МСК 6 мая 2026 → 21:00 UTC 5 мая 2026.
+        msk_midnight_utc = datetime(2026, 5, 5, 21, 0, tzinfo=UTC)
+        expected = msk_midnight_utc + timedelta(minutes=offset_minutes)
+        assert run_at == expected
+
+    def test_run_at_within_full_day_window(self) -> None:
+        # Для любой пары (clan_id, date) run_at попадает в окно
+        # [00:00 МСК, 24:00 МСК) = [21:00 UTC prev_day, 21:00 UTC this_day).
+        moscow_date = date(2026, 5, 6)
+        msk_window_start = datetime(2026, 5, 5, 21, 0, tzinfo=UTC)
+        msk_window_end = datetime(2026, 5, 6, 21, 0, tzinfo=UTC)
+        for clan_id in (1, 42, 999, 1000000):
+            run_at = compute_daily_head_cron_run_at_utc(
+                clan_id=clan_id,
+                moscow_date=moscow_date,
+            )
+            assert msk_window_start <= run_at < msk_window_end
+
+    def test_deterministic_for_same_inputs(self) -> None:
+        a = compute_daily_head_cron_run_at_utc(
+            clan_id=42,
+            moscow_date=date(2026, 5, 6),
+        )
+        b = compute_daily_head_cron_run_at_utc(
+            clan_id=42,
+            moscow_date=date(2026, 5, 6),
+        )
+        assert a == b

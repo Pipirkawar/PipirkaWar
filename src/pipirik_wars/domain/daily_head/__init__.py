@@ -43,6 +43,7 @@ from pipirik_wars.domain.daily_head.repositories import (
 )
 from pipirik_wars.domain.daily_head.scheduling import (
     compute_daily_head_cron_offset_minutes,
+    compute_daily_head_cron_run_at_utc,
 )
 from pipirik_wars.domain.daily_head.services import DailyHeadService
 
@@ -59,4 +60,5 @@ __all__ = [
     "IDailyActivityRepository",
     "IDailyHeadRepository",
     "compute_daily_head_cron_offset_minutes",
+    "compute_daily_head_cron_run_at_utc",
 ]
