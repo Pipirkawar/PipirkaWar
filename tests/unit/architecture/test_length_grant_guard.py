@@ -49,6 +49,12 @@ _ALLOWED_FILES: frozenset[Path] = frozenset(
         # — прямой `with_length`, как в `UpgradeThickness`. Cap-ы 1.6
         # к вычету не применимы.
         _SRC_ROOT / "application" / "pvp" / "apply_outcome.py",
+        # Approved-use-case: списание длины защитникам массового PvP-боя
+        # (Спринт 2.2.E, ГДД §7.2). Симметрично `apply_outcome.py`, но
+        # для N×M участников: атакующие получают через
+        # `ILengthGranter.grant(source=PVP_REWARD)`, защитники теряют
+        # через прямой `with_length`. Cap-ы 1.6 к вычетам неприменимы.
+        _SRC_ROOT / "application" / "pvp" / "apply_mass_outcome.py",
     }
 )
 
