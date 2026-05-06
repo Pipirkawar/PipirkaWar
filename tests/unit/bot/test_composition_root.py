@@ -19,6 +19,7 @@ from pipirik_wars.application.admin import (
     BanPlayer,
     FindPlayers,
     FreezePlayer,
+    GetAdminAuditTrail,
     GetBalanceValue,
     GetPlayerCard,
     GrantLength,
@@ -145,6 +146,7 @@ from pipirik_wars.infrastructure.settings import (
 from tests.fakes import (
     FakeActivityLockRepository,
     FakeAdminAuditLogger,
+    FakeAdminAuditQuery,
     FakeAdminRepository,
     FakeAnticheatAdminAlerter,
     FakeAnticheatRepository,
@@ -540,6 +542,14 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         audit=admin_audit,
         clock=clock,
     )
+    admin_audit_query = FakeAdminAuditQuery()
+    get_admin_audit_trail_uc = GetAdminAuditTrail(
+        uow=uow,
+        admins=admins,
+        query=admin_audit_query,
+        audit=admin_audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -743,6 +753,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
             clock=clock,
         ),
         admin_audit=admin_audit,
+        admin_audit_query=admin_audit_query,
         admin_confirm_store=admin_confirm_store,
         totp_verifier=totp_verifier,
         find_players=find_players_uc,
@@ -756,6 +767,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         grant_thickness=grant_thickness_uc,
         get_balance_value=get_balance_value_uc,
         set_balance_value=set_balance_value_uc,
+        get_admin_audit_trail=get_admin_audit_trail_uc,
     )
 
 

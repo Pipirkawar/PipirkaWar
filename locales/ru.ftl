@@ -665,3 +665,26 @@ admin-balance-set-already-at-value = ℹ️ Ключ <code>{ $path }</code> уж
 
 # Общая для /confirm idempotency-replay
 admin-idempotency-replay = ℹ️ Эта команда (<code>{ $command_kind }</code>) уже выполнялась минуту назад — повторное выполнение пропущено.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Спринт 2.5-D.5 — read-side observability `/audit` (ГДД §18.6.4)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /audit [target_tg_id|-] [action|-] [limit]
+admin-audit-usage = ⚠️ Использование: <code>/audit [target_tg_id|-] [action|-] [limit]</code>. Все аргументы опциональны; <code>-</code> означает «без фильтра».
+admin-audit-not-authorized = ❌ Только активные админы могут смотреть аудит-лог.
+admin-audit-bad-tg-id = ⚠️ <code>{ $value }</code> не похож на tg_id (целое число) или <code>-</code>.
+admin-audit-bad-limit = ⚠️ <code>{ $value }</code> не похож на limit (целое > 0).
+admin-audit-unknown-action = ⚠️ Неизвестная action-категория <code>{ $value }</code>.
+admin-audit-target-not-found = 🔍 Админ с tg_id <code>{ $tg_id }</code> не найден.
+# Параметры $target — tg_id или «—»; $action — action-фильтр или «—».
+admin-audit-empty = 🗒️ Записей не найдено (target=<code>{ $target }</code>, action=<code>{ $action }</code>).
+# Заголовок выдачи без target-фильтра. $count — сколько строк ниже, $limit — кап.
+admin-audit-header-all = 🗒️ Аудит-лог: { $count } последних записей (limit { $limit }, все админы).
+# Заголовок выдачи с target-фильтром. $target_tg_id — tg_id админа.
+admin-audit-header-target = 🗒️ Аудит-лог админа <code>{ $target_tg_id }</code>: { $count } последних записей (limit { $limit }).
+# Дописывается к заголовку, если задан action-фильтр.
+admin-audit-filter-action-suffix = Фильтр action: <code>{ $action }</code>.
+# Одна строка списка. Параметры:
+# $id, $occurred_at (ISO-8601 UTC), $actor_tg_id, $action, $target_kind, $target_id, $source, $reason.
+admin-audit-row = • #{ $id } · { $occurred_at } · @{ $actor_tg_id } · <code>{ $action }</code> · { $target_kind }=<code>{ $target_id }</code> · src={ $source } · { $reason }

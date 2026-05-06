@@ -29,8 +29,10 @@ from pipirik_wars.domain.admin.entities import Admin, AdminRole
 from pipirik_wars.domain.admin.ports import (
     AdminAuditAction,
     AdminAuditEntry,
+    AdminAuditRecord,
     AdminAuditSource,
     IAdminAuditLogger,
+    IAdminAuditQuery,
     IAdminConfirmStore,
     ITotpVerifier,
 )
@@ -40,6 +42,7 @@ __all__ = [
     "Admin",
     "AdminAuditAction",
     "AdminAuditEntry",
+    "AdminAuditRecord",
     "AdminAuditSource",
     "AdminConfirmEntry",
     "AdminConfirmError",
@@ -50,6 +53,7 @@ __all__ = [
     "ConfirmTokenExpiredError",
     "ConfirmTokenNotFoundError",
     "IAdminAuditLogger",
+    "IAdminAuditQuery",
     "IAdminConfirmStore",
     "IAdminRepository",
     "ITotpVerifier",

@@ -39,6 +39,7 @@ from pipirik_wars.application.admin import (
     BanPlayer,
     FindPlayers,
     FreezePlayer,
+    GetAdminAuditTrail,
     GetBalanceValue,
     GetPlayerCard,
     GrantLength,
@@ -127,6 +128,7 @@ from pipirik_wars.bot.notifications import (
 )
 from pipirik_wars.domain.admin import (
     IAdminAuditLogger,
+    IAdminAuditQuery,
     IAdminConfirmStore,
     IAdminRepository,
     ITotpVerifier,
@@ -192,6 +194,7 @@ from pipirik_wars.infrastructure.db.repositories import (
 )
 from pipirik_wars.infrastructure.db.services import (
     SqlAlchemyAdminAuditLogger,
+    SqlAlchemyAdminAuditQuery,
     SqlAlchemyAuditLogger,
     SqlAlchemyIdempotencyService,
 )
@@ -360,6 +363,7 @@ class Container:
     # сгорают сразу после рестарта). `totp_verifier` — обёртка над
     # `pyotp.TOTP.verify()`. Подробнее — `infrastructure/admin/__init__.py`.
     admin_audit: IAdminAuditLogger
+    admin_audit_query: IAdminAuditQuery
     admin_confirm_store: IAdminConfirmStore
     totp_verifier: ITotpVerifier
     find_players: FindPlayers
@@ -373,6 +377,8 @@ class Container:
     grant_thickness: GrantThickness
     get_balance_value: GetBalanceValue
     set_balance_value: SetBalanceValue
+    # Спринт 2.5-D.5: read-side observability — `/audit`-листинг.
+    get_admin_audit_trail: GetAdminAuditTrail
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -881,8 +887,9 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         referrals=referrals,
         clock=clock,
     )
-    # ── Расширенный админ-интерфейс (Спринт 2.5-A + 2.5-B) ──
+    # ── Расширенный админ-интерфейс (Спринт 2.5-A + 2.5-B + 2.5-D) ──
     admin_audit = SqlAlchemyAdminAuditLogger(uow=uow)
+    admin_audit_query = SqlAlchemyAdminAuditQuery(uow=uow)
     admin_confirm_store = InMemoryAdminConfirmStore()
     totp_verifier = PyOtpTotpVerifier()
     find_players = FindPlayers(
@@ -976,6 +983,13 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=admin_audit,
         clock=clock,
     )
+    get_admin_audit_trail = GetAdminAuditTrail(
+        uow=uow,
+        admins=admins,
+        query=admin_audit_query,
+        audit=admin_audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -1060,6 +1074,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         grant_referral_thickness_milestone=grant_referral_thickness_milestone,
         run_weekly_clan_referral_summary=run_weekly_clan_referral_summary,
         admin_audit=admin_audit,
+        admin_audit_query=admin_audit_query,
         admin_confirm_store=admin_confirm_store,
         totp_verifier=totp_verifier,
         find_players=find_players,
@@ -1073,6 +1088,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         grant_thickness=grant_thickness,
         get_balance_value=get_balance_value,
         set_balance_value=set_balance_value,
+        get_admin_audit_trail=get_admin_audit_trail,
     )
 
 
@@ -1175,6 +1191,8 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["grant_thickness"] = container.grant_thickness
     dispatcher["get_balance_value"] = container.get_balance_value
     dispatcher["set_balance_value"] = container.set_balance_value
+    # Спринт 2.5-D.5 — read-side observability `/audit`.
+    dispatcher["get_admin_audit_trail"] = container.get_admin_audit_trail
     return dispatcher
 
 

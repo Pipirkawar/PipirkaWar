@@ -7,6 +7,7 @@
 """
 
 from tests.fakes.admin_audit import FakeAdminAuditLogger
+from tests.fakes.admin_audit_query import FakeAdminAuditQuery
 from tests.fakes.admin_repo import FakeAdminRepository
 from tests.fakes.anticheat_admin_alerter import (
     AnticheatAdminAlertEvent,
@@ -62,6 +63,7 @@ __all__ = [
     "DauAlertEvent",
     "FakeActivityLockRepository",
     "FakeAdminAuditLogger",
+    "FakeAdminAuditQuery",
     "FakeAdminRepository",
     "FakeAnticheatAdminAlerter",
     "FakeAnticheatRepository",

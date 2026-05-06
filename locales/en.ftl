@@ -659,3 +659,26 @@ admin-balance-set-already-at-value = ℹ️ Key <code>{ $path }</code> is alread
 
 # Shared /confirm idempotency-replay
 admin-idempotency-replay = ℹ️ This command (<code>{ $command_kind }</code>) was already executed within the last minute — replay skipped.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 2.5-D.5 — read-side observability `/audit` (GDD §18.6.4)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /audit [target_tg_id|-] [action|-] [limit]
+admin-audit-usage = ⚠️ Usage: <code>/audit [target_tg_id|-] [action|-] [limit]</code>. All arguments are optional; <code>-</code> means "no filter".
+admin-audit-not-authorized = ❌ Only active admins may inspect the audit log.
+admin-audit-bad-tg-id = ⚠️ <code>{ $value }</code> is not a valid tg_id (integer) or <code>-</code>.
+admin-audit-bad-limit = ⚠️ <code>{ $value }</code> is not a valid limit (integer > 0).
+admin-audit-unknown-action = ⚠️ Unknown action category <code>{ $value }</code>.
+admin-audit-target-not-found = 🔍 No admin with tg_id <code>{ $tg_id }</code>.
+# Params: $target (tg_id or "—"); $action (action filter or "—").
+admin-audit-empty = 🗒️ No records found (target=<code>{ $target }</code>, action=<code>{ $action }</code>).
+# Header without target filter. $count — rows below, $limit — cap.
+admin-audit-header-all = 🗒️ Audit log: { $count } most recent records (limit { $limit }, all admins).
+# Header with target filter. $target_tg_id — admin tg_id.
+admin-audit-header-target = 🗒️ Audit log for admin <code>{ $target_tg_id }</code>: { $count } most recent records (limit { $limit }).
+# Appended to header if action filter is set.
+admin-audit-filter-action-suffix = Action filter: <code>{ $action }</code>.
+# One list row. Params:
+# $id, $occurred_at (ISO-8601 UTC), $actor_tg_id, $action, $target_kind, $target_id, $source, $reason.
+admin-audit-row = • #{ $id } · { $occurred_at } · @{ $actor_tg_id } · <code>{ $action }</code> · { $target_kind }=<code>{ $target_id }</code> · src={ $source } · { $reason }
