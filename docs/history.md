@@ -23,6 +23,51 @@
 
 ---
 
+## 2026-05-05 — Спринт 2.2.B: чистый доменный движок массового PvP клан×клан
+
+**Автор:** Devin (по запросу shirline89)
+**Тип:** feature (balance + domain VO + domain pure-функции + расширение IRandom-порта)
+**Связано:** `current_tasks.md` Спринт 2.2.B, ПД 2.2.4 (`development_plan.md` §6), ГДД §7.2.
+
+После 2.2.A (`/clantop` read-only) — следующий шаг 2.2-фазы: чистая доменная часть массового боя клан×клан, готовая к интеграции в use-case 2.2.D и persistence 2.2.C. Принцип «один тик» (vs. 3 раунда в 1×1): все участники одновременно заявляют атаку+блок, RNG строит две независимые перестановки атакующих→защитников (clan1→clan2 и clan2→clan1), все удары разрешаются от стартовых длин (path-independent).
+
+Что сделано:
+
+- **Balance** (`config/balance.yaml`, `src/pipirik_wars/domain/balance/config.py`, `tests/unit/domain/balance/factories.py`, `tests/unit/domain/balance/test_pvp_config.py`):
+    - Новый pydantic-конфиг `PvpMassDuelConfig` (`cooldown_hours: int = Field(ge=1, le=72)`, `min_length_cm: int = Field(ge=0)`, `min_thickness_level: int = Field(ge=1)`, `min_clan_members: int = Field(ge=1, le=100)`).
+    - `PvpConfig` расширен обязательным полем `mass_duel: PvpMassDuelConfig` (требуется в payload — старые конфиги без секции `pvp.mass_duel` отвергаются).
+    - `config/balance.yaml`: добавлена секция `pvp.mass_duel` с дефолтами (cooldown=6h, min_length=20, min_thickness=2, min_clan_members=1).
+- **Domain VO** (`src/pipirik_wars/domain/pvp/mass.py`):
+    - `MassDuelWinner` enum (CLAN1/CLAN2/DRAW).
+    - Frozen-dataclass-ы `MassRoundChoice` (player_id+attack+block), `MassPairing` (attacker_id+defender_id, валидация «нельзя пара с самим собой»), `MassDamageEntry` (одна разрешённая атака: pair + actual attack/block + blocked + damage_cm), `MassRoundOutcome` (entries + clan1_total_dealt + clan2_total_dealt), `MassDuelOutcome` (round-результат + zero-sum дельты + winner).
+    - `MassDuelOutcome.__post_init__` форсирует zero-sum инвариант: `clan1_delta_cm + clan2_delta_cm == 0` (every cm потерянный одной стороной — приобретённый другой).
+- **Расширение IRandom-порта** (`src/pipirik_wars/domain/shared/ports/random.py`, `infrastructure/random/real_random.py`, `tests/fakes/random.py`):
+    - Добавлен абстрактный метод `shuffle(items: Sequence[T]) -> tuple[T, ...]` — иммутабельный аналог `random.shuffle` (возвращает новый кортеж, не мутирует вход; домен оперирует frozen-tuple-ами).
+    - `RealRandom.shuffle` поверх `_rng.shuffle(buffer)` (где `_rng = secrets.SystemRandom()`); `FakeRandom.shuffle` поверх `random.Random(seed)` (детерминирован).
+    - `ScriptedRandom` в `tests/unit/domain/forest/test_services.py` — заглушка `NotImplementedError("not used by forest service")`.
+- **Pure-функции движка** (`src/pipirik_wars/domain/pvp/mass_services.py`):
+    - `pair_attackers(*, attackers, defenders, random)` — возвращает `tuple[(attacker_id, defender_id), ...]`. Длина выхода = `max(|A|, |B|)`. При неравных размерах меньшая сторона переиспользуется по mod-cycle на УЖЕ перетасованных списках (`output[i] = (atks_shuffled[i % |A|], defs_shuffled[i % |B|])`). Валидация: непустые входы, все id > 0.
+    - `resolve_mass_round(*, clan1_choices, clan2_choices, clan1_initial_lengths, clan2_initial_lengths, hit_pct, random)` — один тик. Делает 2 независимых вызова `pair_attackers` (А→Б и Б→А), для каждой пары вычисляет blocked (`_hit_blocked(attack, block)` — переиспользуется из 1×1-движка `domain/pvp/services.py`) и damage (`_damage_cm(defender_length_cm, hit_pct)` — тоже из 1×1). Path-independent: все длины фиксируются на старте, не меняются между ударами в один тик. Самопары (attacker_id == defender_id) пропускаются — защита от «один игрок в обоих кланах», даже если use-case по 2.2.3 пропустит дедупликацию.
+    - `resolve_mass_duel(*, ...)` — тонкая обёртка над `resolve_mass_round` с расчётом zero-sum дельт (`delta = clan1_total_dealt - clan2_total_dealt`, `clan1_delta_cm = delta`, `clan2_delta_cm = -delta`) и определением winner (CLAN1/CLAN2/DRAW по знаку дельты).
+- **Re-export в `domain/pvp/__init__.py`**: добавлены `MassRoundChoice`, `MassPairing`, `MassDamageEntry`, `MassRoundOutcome`, `MassDuelOutcome`, `MassDuelWinner`, `pair_attackers`, `resolve_mass_round`, `resolve_mass_duel`. `domain/balance/__init__.py` дополнительно экспортирует `PvpMassDuelConfig`.
+- **Тесты**:
+    - `tests/unit/domain/pvp/test_mass_entities.py` — валидация всех 6 frozen-VO (positive id, non-negative damage, no-self-pair, zero-sum invariant).
+    - `tests/unit/domain/pvp/test_mass_services.py` — **+29 unit-тестов**: `pair_attackers` (равные размеры, асимметрия в обе стороны, singleton, mod-cycle, детерминизм по seed, разные seed-ы → разные выходы, валидация); `resolve_mass_round` (1×1 reduce-case, full-block, 2×2 happy, 3×1 unequal, валидация выборов/длин, hit_pct out-of-range, duplicate player_id, deterministic by seed); `resolve_mass_duel` (winner для всех 3 исходов, zero-sum, sweep winner-vs-dealt согласованности, path-independence на 3×1).
+    - Минорный fix: `tests/unit/bot/handlers/test_duel.py` — `_balance()` фикстура добавляет `mass_duel` в `PvpConfig` (теперь обязательно). `tests/unit/domain/pvp/test_mass_entities.py` — удалены два `# type: ignore[misc]`, которые mypy --strict помечал как unused.
+
+Результат / артефакты:
+- `src/pipirik_wars/domain/pvp/mass_services.py` — 263 строки, чистая доменная логика без `random.*` / I/O / aiogram.
+- `tests/unit/domain/pvp/test_mass_services.py` — 458 строк, 29 unit-тестов; целевое покрытие достигнуто.
+- `make ci` зелёный: 2103 passed, 1 skipped (pre-existing); coverage 95.98%; layered_architecture / domain_must_not_import_infrastructure / application_must_not_import_io_libs — все KEPT.
+
+Заметки / решения:
+- Возвращаемый тип `pair_attackers` — `tuple[tuple[int, int], ...]`, а **не** `tuple[MassPairing, ...]`: `MassPairing.__post_init__` запрещает `attacker_id == defender_id`, а `pair_attackers` не знает структуру кланов и не может гарантировать отсутствие самопар. Самопары мы фильтруем в `_resolve_one_direction(...)`; на верхнем уровне use-case 2.2.3 будет дедуплицировать состав кланов до этой точки.
+- Принципиально не вводим **«HP-пул в тике»**: длина защитника фиксирована на момент старта тика. 3 атаки в одного защитника при `length=100, hit_pct=10` дают 30 см ущерба, а не 10+9+8 (как было бы при «сначала уменьшим длину»). Это ровно то, что требует ГДД §7.2 / DP §6 для path-independence.
+- Переиспользуем `_hit_blocked` / `_damage_cm` из `domain/pvp/services.py` — нет дублирования механики 3×3-матрицы. Они объявлены через underscore-prefix как «модульно-приватные», но импорт внутри одного `domain/pvp/`-пакета — допустимая практика (сравните: `domain/forest/services.py` тоже содержит underscore-helpers, доступные сестринским модулям).
+- Интеграция в use-case (`StartMassDuel`, `SubmitMassMove`, `ResolveMassDuel`) и persistence-таблицы для масс-боев — следующие шаги 2.2.C / 2.2.D в спринте.
+
+---
+
 ## 2026-05-05 — Спринт 2.1.G: PvP — AFK-таймер раунда + scheduler integrations
 
 **Автор:** Devin (по запросу ambitious42)

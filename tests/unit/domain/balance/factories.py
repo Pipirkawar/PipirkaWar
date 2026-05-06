@@ -125,6 +125,12 @@ def valid_balance_payload() -> dict[str, Any]:
                 "chat_to_global_promotion_minutes": 3,
                 "round_timer_seconds": 45,
             },
+            "mass_duel": {
+                "cooldown_hours": 6,
+                "min_length_cm": 20,
+                "min_thickness_level": 2,
+                "min_clan_members": 1,
+            },
         },
         "content_policy": {
             "clan_quotes": {

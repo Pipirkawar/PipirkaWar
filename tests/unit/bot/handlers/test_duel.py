@@ -46,7 +46,7 @@ from pipirik_wars.bot.handlers.duel import (
     handle_share_pvp_result,
 )
 from pipirik_wars.bot.middlewares.auth import TgIdentity
-from pipirik_wars.domain.balance import PvpConfig, PvpDuel1v1Config
+from pipirik_wars.domain.balance import PvpConfig, PvpDuel1v1Config, PvpMassDuelConfig
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.player import (
     Length,
@@ -112,6 +112,12 @@ def _balance(
                     global_lobby_ttl_minutes=global_lobby_ttl_minutes,
                     chat_to_global_promotion_minutes=chat_to_global_promotion_minutes,
                     round_timer_seconds=45,
+                ),
+                mass_duel=PvpMassDuelConfig(
+                    cooldown_hours=6,
+                    min_length_cm=20,
+                    min_thickness_level=2,
+                    min_clan_members=1,
                 ),
             ),
         }

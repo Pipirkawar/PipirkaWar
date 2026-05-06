@@ -21,6 +21,7 @@ from pipirik_wars.domain.balance.config import (
     BalanceConfig,
     PvpConfig,
     PvpDuel1v1Config,
+    PvpMassDuelConfig,
 )
 from tests.unit.domain.balance.factories import valid_balance_payload
 
@@ -168,16 +169,96 @@ class TestPvpDuel1v1Config:
         assert "chat_to_global_promotion_minutes" in str(exc_info.value)
 
 
+def _build_mass(**overrides: int) -> PvpMassDuelConfig:
+    """Хелпер: собирает валидный `PvpMassDuelConfig`."""
+
+    base: dict[str, int] = {
+        "cooldown_hours": 6,
+        "min_length_cm": 20,
+        "min_thickness_level": 2,
+        "min_clan_members": 1,
+    }
+    base.update(overrides)
+    return PvpMassDuelConfig(**base)
+
+
+class TestPvpMassDuelConfig:
+    """Поля и валидаторы массового PvP (Спринт 2.2.B, ГДД §7.2)."""
+
+    def test_valid_default(self) -> None:
+        cfg = _build_mass()
+        assert cfg.cooldown_hours == 6
+        assert cfg.min_length_cm == 20
+        assert cfg.min_thickness_level == 2
+        assert cfg.min_clan_members == 1
+
+    @pytest.mark.parametrize("value", [0, -1, 73, 200])
+    def test_cooldown_hours_out_of_range(self, value: int) -> None:
+        with pytest.raises(ValidationError):
+            _build_mass(cooldown_hours=value)
+
+    @pytest.mark.parametrize("value", [1, 6, 24, 72])
+    def test_cooldown_hours_in_range(self, value: int) -> None:
+        cfg = _build_mass(cooldown_hours=value)
+        assert cfg.cooldown_hours == value
+
+    def test_min_length_cm_negative(self) -> None:
+        with pytest.raises(ValidationError):
+            _build_mass(min_length_cm=-1)
+
+    @pytest.mark.parametrize("value", [0, 20, 100])
+    def test_min_length_cm_in_range(self, value: int) -> None:
+        cfg = _build_mass(min_length_cm=value)
+        assert cfg.min_length_cm == value
+
+    def test_min_thickness_level_zero(self) -> None:
+        with pytest.raises(ValidationError):
+            _build_mass(min_thickness_level=0)
+
+    @pytest.mark.parametrize("value", [0, -1, 101, 200])
+    def test_min_clan_members_out_of_range(self, value: int) -> None:
+        with pytest.raises(ValidationError):
+            _build_mass(min_clan_members=value)
+
+    @pytest.mark.parametrize("value", [1, 5, 20, 100])
+    def test_min_clan_members_in_range(self, value: int) -> None:
+        cfg = _build_mass(min_clan_members=value)
+        assert cfg.min_clan_members == value
+
+    def test_frozen(self) -> None:
+        cfg = _build_mass()
+        with pytest.raises(ValidationError):
+            cfg.cooldown_hours = 12
+
+    def test_extra_forbid(self) -> None:
+        with pytest.raises(ValidationError):
+            PvpMassDuelConfig.model_validate(
+                {
+                    "cooldown_hours": 6,
+                    "min_length_cm": 20,
+                    "min_thickness_level": 2,
+                    "min_clan_members": 1,
+                    "unknown_field": 42,
+                }
+            )
+
+
 class TestPvpConfig:
     """Wrapper-конфиг."""
 
-    def test_valid_with_duel_1v1(self) -> None:
-        cfg = PvpConfig(duel_1v1=_build())
+    def test_valid_with_duel_1v1_and_mass_duel(self) -> None:
+        cfg = PvpConfig(duel_1v1=_build(), mass_duel=_build_mass())
         assert cfg.duel_1v1.rounds == 3
+        assert cfg.mass_duel.cooldown_hours == 6
 
     def test_missing_duel_1v1(self) -> None:
         with pytest.raises(ValidationError):
-            PvpConfig.model_validate({})
+            PvpConfig.model_validate({"mass_duel": _build_mass().model_dump()})
+
+    def test_missing_mass_duel(self) -> None:
+        with pytest.raises(ValidationError) as exc_info:
+            PvpConfig.model_validate({"duel_1v1": _build().model_dump()})
+        assert "mass_duel" in str(exc_info.value)
 
 
 class TestBalanceConfigPvpRequired:
@@ -192,6 +273,10 @@ class TestBalanceConfigPvpRequired:
         assert cfg.pvp.duel_1v1.global_lobby_ttl_minutes == 10
         assert cfg.pvp.duel_1v1.chat_to_global_promotion_minutes == 3
         assert cfg.pvp.duel_1v1.round_timer_seconds == 45
+        assert cfg.pvp.mass_duel.cooldown_hours == 6
+        assert cfg.pvp.mass_duel.min_length_cm == 20
+        assert cfg.pvp.mass_duel.min_thickness_level == 2
+        assert cfg.pvp.mass_duel.min_clan_members == 1
 
     def test_balance_config_rejects_missing_pvp(self) -> None:
         payload = copy.deepcopy(valid_balance_payload())

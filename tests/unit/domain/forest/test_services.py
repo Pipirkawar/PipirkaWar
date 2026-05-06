@@ -93,6 +93,9 @@ class ScriptedRandom(IRandom):
     def deterministic_uint(self, seed: str, modulo: int) -> int:  # pragma: no cover
         raise NotImplementedError("not used by forest service")
 
+    def shuffle(self, items: Sequence[T]) -> tuple[T, ...]:  # pragma: no cover
+        raise NotImplementedError("not used by forest service")
+
 
 def _balance() -> BalanceConfig:
     return build_valid_balance()

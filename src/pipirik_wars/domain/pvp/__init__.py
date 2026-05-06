@@ -1,4 +1,4 @@
-"""Доменный пакет PvP (ГДД §7.1).
+"""Доменный пакет PvP (ГДД §7.1, §7.2).
 
 Содержит чистый движок боя 1×1 (Спринт 2.1.A): value-objects
 `Position` / `RoundChoice` / `RoundOutcome` / `DuelOutcome` и
@@ -15,10 +15,13 @@
 (реализуется поверх таблиц `pvp_duels` + `pvp_duel_rounds`,
 см. `infrastructure/db/repositories/pvp_duel.py`).
 
-Будущие расширения (Спринты 2.1.D–H, 2.2):
-
-* Дополнительные сервисы — `pick_random_choice` (AFK-фоллбэк) и
-  `mass_pvp_resolver` для клановых N×M-битв.
+Спринт 2.2.B добавляет чистые value-objects массового PvP клан×клан
+(`MassRoundChoice` / `MassPairing` / `MassDamageEntry` /
+`MassRoundOutcome` / `MassDuelOutcome` / `MassDuelWinner`,
+см. `mass.py`) и pure-функции движка
+(`pair_attackers` / `resolve_mass_round` / `resolve_mass_duel`,
+см. `mass_services.py`). RNG для pairing инжектится через
+:class:`IRandom.shuffle`.
 """
 
 from pipirik_wars.domain.pvp.duel import (
@@ -54,6 +57,19 @@ from pipirik_wars.domain.pvp.log_template import (
     classify_round_outcome,
     pick_duel_log_template,
 )
+from pipirik_wars.domain.pvp.mass import (
+    MassDamageEntry,
+    MassDuelOutcome,
+    MassDuelWinner,
+    MassPairing,
+    MassRoundChoice,
+    MassRoundOutcome,
+)
+from pipirik_wars.domain.pvp.mass_services import (
+    pair_attackers,
+    resolve_mass_duel,
+    resolve_mass_round,
+)
 from pipirik_wars.domain.pvp.repositories import IDuelRepository
 from pipirik_wars.domain.pvp.services import (
     DEFAULT_DUEL_ROUNDS,
@@ -77,6 +93,12 @@ __all__ = [
     "InvalidLengthError",
     "InvalidRoundCountError",
     "LobbyEntry",
+    "MassDamageEntry",
+    "MassDuelOutcome",
+    "MassDuelWinner",
+    "MassPairing",
+    "MassRoundChoice",
+    "MassRoundOutcome",
     "MoveAlreadySubmittedError",
     "NoMissingMovesError",
     "NotADuelParticipantError",
@@ -89,7 +111,10 @@ __all__ = [
     "RoundOutcomeKind",
     "SelfChallengeError",
     "classify_round_outcome",
+    "pair_attackers",
     "pick_duel_log_template",
     "resolve_duel",
+    "resolve_mass_duel",
+    "resolve_mass_round",
     "resolve_round",
 ]
