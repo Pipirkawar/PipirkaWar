@@ -40,6 +40,12 @@ job всего один на бой, ключ — просто `duel_id`. Cancel
 `ResolveMassDuel` (когда все успели сами), `CancelMassDuel`
 (административная отмена) и из самого `_run_mass_duel_afk_job` (best-
 effort cleanup).
+
+Спринт 2.3.F.2: добавлен per-clan cron «Главы клана дня» —
+`schedule_daily_head_cron(*, clan_id, run_at)` ставит job, который в
+`run_at` (00:00 МСК + per-clan детерминированный offset 0..24h) дёрнет
+`RunDailyHeadCron(clan_id=...)`. Идемпотентно по `clan_id`: повторный
+вызов перезаписывает job (для recovery / ежесуточного перепланирования).
 """
 
 from __future__ import annotations
@@ -171,4 +177,35 @@ class IDelayedJobScheduler(abc.ABC):
         Вызывается из `ResolveMassDuel` (все участники успели сами),
         `CancelMassDuel` (админ отменил), `ForceResolveMassDuel`
         (best-effort cleanup на случай повторного срабатывания).
+        """
+
+    # ── Спринт 2.3.F.2: per-clan cron «Главы клана дня» ──
+
+    @abc.abstractmethod
+    async def schedule_daily_head_cron(
+        self,
+        *,
+        clan_id: int,
+        run_at: datetime,
+    ) -> None:
+        """Запланировать `RunDailyHeadCron(clan_id=...)` на `run_at` (UTC).
+
+        `run_at` — конкретный момент `00:00 МСК + offset(clan_id, date)`,
+        вычисленный через `compute_daily_head_cron_offset_minutes(...)`
+        (см. `domain/daily_head/scheduling.py`).
+
+        Идемпотентно по `clan_id`: повторный вызов перезаписывает job —
+        нужно для recovery-сценариев на старте бота и ежесуточного
+        перепланирования (на следующие сутки offset другой). Per-clan
+        ключ означает, что одновременно у клана может быть только один
+        запланированный cron-job, что соответствует «один глава в сутки».
+        """
+
+    @abc.abstractmethod
+    async def cancel_daily_head_cron(self, *, clan_id: int) -> None:
+        """Снять daily-head-cron-job для клана (NO-OP, если его нет).
+
+        Вызывается при заморозке клана (frozen-кланы не должны получать
+        главу дня — ГДД §6.1.8) и из самого callback-а после успешного
+        выполнения, чтобы не мешать перепланированию следующего дня.
         """

@@ -23,12 +23,14 @@ from typing import Final
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from pipirik_wars.application.daily_head import RunDailyHeadCron
 from pipirik_wars.application.dto.inputs import (
     EscalateChatToGlobalInput,
     ExpireLobbyEntryInput,
     FinishForestRunInput,
     ForceResolveMassDuelInput,
     ResolveAfkRoundInput,
+    RunDailyHeadCronInput,
 )
 from pipirik_wars.application.forest import (
     FinishForestRun,
@@ -50,6 +52,7 @@ _ESCALATE_JOB_PREFIX: Final[str] = "pvp_chat_to_global:"
 _EXPIRE_JOB_PREFIX: Final[str] = "pvp_global_lobby_expire:"
 _ROUND_AFK_JOB_PREFIX: Final[str] = "pvp_round_afk:"
 _MASS_DUEL_AFK_JOB_PREFIX: Final[str] = "pvp_mass_duel_afk:"
+_DAILY_HEAD_CRON_PREFIX: Final[str] = "daily_head_cron:"
 
 
 def _job_id(run_id: int) -> str:
@@ -70,6 +73,10 @@ def _round_afk_job_id(duel_id: int, round_num: int) -> str:
 
 def _mass_duel_afk_job_id(duel_id: int) -> str:
     return f"{_MASS_DUEL_AFK_JOB_PREFIX}{duel_id}"
+
+
+def _daily_head_cron_job_id(clan_id: int) -> str:
+    return f"{_DAILY_HEAD_CRON_PREFIX}{clan_id}"
 
 
 class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
@@ -104,10 +111,20 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
     выборами для AFK-участников. Use-case сам идемпотентен: если
     бой уже завершён вручную — отрабатывает no-op-ветка с
     `was_already_resolved=True`. Если фабрика не подвязана — лог + skip.
+
+    `daily_head_cron_factory` (Спринт 2.3.F.2, опциональна) — фабрика
+    `RunDailyHeadCron`-use-case-а; вызывается из job-callback-а
+    `_run_daily_head_cron_job` ровно в `00:00 МСК + per-clan offset`.
+    Use-case сам идемпотентен: если кнопка `/clan_head` уже сработала
+    раньше cron-а — `RequestDailyHead` вернёт существующего главу,
+    `RunDailyHeadCron` через общий хелпер `_resolve_or_create_assignment`
+    тоже корректно отработает no-op. Если фабрика не подвязана —
+    лог + skip.
     """
 
     __slots__ = (
         "_afk_resolution_factory",
+        "_daily_head_cron_factory",
         "_escalate_factory",
         "_expire_factory",
         "_finish_factory",
@@ -127,6 +144,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         expire_factory: Callable[[], ExpireLobbyEntry] | None = None,
         afk_resolution_factory: Callable[[], ResolveAfkRound] | None = None,
         mass_duel_afk_factory: Callable[[], ForceResolveMassDuel] | None = None,
+        daily_head_cron_factory: Callable[[], RunDailyHeadCron] | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._scheduler = scheduler
@@ -136,6 +154,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._expire_factory = expire_factory
         self._afk_resolution_factory = afk_resolution_factory
         self._mass_duel_afk_factory = mass_duel_afk_factory
+        self._daily_head_cron_factory = daily_head_cron_factory
         self._logger = logger or logging.getLogger(__name__)
 
     async def schedule_finish_forest_run(
@@ -257,6 +276,28 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
     ) -> None:
         try:
             self._scheduler.remove_job(_mass_duel_afk_job_id(duel_id))
+        except Exception:
+            return
+
+    async def schedule_daily_head_cron(
+        self,
+        *,
+        clan_id: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_daily_head_cron_job,
+            trigger="date",
+            run_date=run_at,
+            args=(clan_id,),
+            id=_daily_head_cron_job_id(clan_id),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_daily_head_cron(self, *, clan_id: int) -> None:
+        try:
+            self._scheduler.remove_job(_daily_head_cron_job_id(clan_id))
         except Exception:
             return
 
@@ -404,6 +445,35 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
             self._logger.exception(
                 "pvp_mass_duel_afk: unexpected error",
                 extra={"duel_id": duel_id, "error": type(exc).__name__},
+            )
+            return
+
+    async def _run_daily_head_cron_job(self, clan_id: int) -> None:
+        """Callback per-clan cron-а «Главы клана дня» (Спринт 2.3.F.2).
+
+        Зовёт `RunDailyHeadCron(clan_id=...)`. Если фабрика не
+        подвязана — лог + skip. Все исключения use-case-а логируются
+        и проглатываются — иначе APScheduler пометит job-у как failed
+        и оставит её в job-store. Use-case сам идемпотентен: если
+        кнопка `/clan_head` уже сработала раньше — будет no-op
+        с `was_new=False`.
+
+        Если клан заморожен (`is_frozen`), `RunDailyHeadCron` вернёт
+        `None` без ошибки — это корректное поведение для frozen-клана.
+        """
+        if self._daily_head_cron_factory is None:
+            self._logger.warning(
+                "daily_head_cron: factory not wired",
+                extra={"clan_id": clan_id},
+            )
+            return
+        try:
+            use_case = self._daily_head_cron_factory()
+            await use_case.execute(RunDailyHeadCronInput(clan_id=clan_id))
+        except Exception as exc:
+            self._logger.exception(
+                "daily_head_cron: unexpected error",
+                extra={"clan_id": clan_id, "error": type(exc).__name__},
             )
             return
 
