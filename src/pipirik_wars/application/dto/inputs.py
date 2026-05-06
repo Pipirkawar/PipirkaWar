@@ -319,6 +319,116 @@ class EscalateChatToGlobalInput(_StrictBase):
     duel_id: int = Field(gt=0, description="pvp_duels.id")
 
 
+class StartMassDuelInput(_StrictBase):
+    """Старт массового PvP-боя клан×клан (Спринт 2.2.E, ГДД §7.2 / 2.2.2).
+
+    `attacker_chat_id` — `chat_id` клана-атакующего (тот, у кого
+    инициатор нажал кнопку/команду в чате клана). `defender_chat_id` —
+    `chat_id` клана-защитника. Use-case `StartMassDuel`:
+
+    1. Резолвит оба клана по `chat_id` (`ClanRepository`); оба должны
+       быть `active`.
+    2. Запрашивает roster обеих сторон (`IClanMembershipRepository.list_by_clan`).
+    3. Игроки в обоих кланах → пропускаются (ГДД §7.2 / 2.2.3).
+    4. Каждый участник проходит eligibility-фильтр: `length_cm ≥
+       balance.pvp.mass_duel.min_length_cm` и `thickness_level ≥
+       balance.pvp.mass_duel.min_thickness_level` и `status == ACTIVE`.
+    5. Если у любой стороны нет eligible-участников →
+       `MassDuelNoParticipantsError`.
+    6. Cooldown: `find_most_recent_for_clan` для каждого из двух
+       кланов; если у любого клана был mass-duel за последние
+       `balance.pvp.mass_duel.cooldown_hours` → `MassDuelCooldownError`.
+    7. Берёт activity-lock на каждого eligible-участника.
+    8. Создаёт `MassDuel.create_battle(...)` и `IMassDuelRepository.add(...)`.
+    9. Audit `PVP_MASS_DUEL_CREATED`.
+    """
+
+    initiator_tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id игрока, инициировавшего атаку",
+    )
+    attacker_chat_id: int = Field(
+        description="Telegram chat_id клана-атакующего",
+    )
+    defender_chat_id: int = Field(
+        description="Telegram chat_id клана-защитника",
+    )
+
+    @model_validator(mode="after")
+    def _validate_clans_differ(self) -> Self:
+        if self.attacker_chat_id == self.defender_chat_id:
+            raise ValueError(
+                "attacker_chat_id and defender_chat_id must differ",
+            )
+        return self
+
+
+class SubmitMassMoveInput(_StrictBase):
+    """Отправка хода (атака+блок) в активном массовом бое (Спринт 2.2.E).
+
+    Один игрок отправляет одну атаку и один блок. Если этим вызовом
+    все участники отправили выборы — use-case остаётся в
+    `IN_PROGRESS` (не резолвит сам, резолв делается отдельно через
+    `ResolveMassDuel` или `ForceResolveMassDuel` шедулером).
+    """
+
+    duel_id: int = Field(gt=0, description="pvp_mass_duels.id")
+    tg_id: PositiveTgId = Field(gt=0, description="Telegram user_id ходящего")
+    attack: Literal["high", "mid", "low"] = Field(
+        description="Куда бьёт игрок",
+    )
+    block: Literal["high", "mid", "low"] = Field(
+        description="Какую зону защищает",
+    )
+
+
+class ResolveMassDuelInput(_StrictBase):
+    """Финальный резолв массового боя (Спринт 2.2.E).
+
+    Вызывается, когда все участники отправили выборы. Use-case:
+    1. Загружает `MassDuel`. Нет — `MassDuelNotFoundError`.
+    2. `MassDuel.resolve(random=..., now=...)` — доменный мутатор.
+       Если кто-то ещё не отправил — `MassDuelNotReadyError`.
+    3. Сохраняет агрегат с COMPLETED-статусом + damage_entries.
+    4. Применяет ±длины ко всем участникам через
+       `apply_mass_duel_outcome`.
+    5. Снимает activity-locks всех участников.
+    6. Audit `PVP_MASS_DUEL_COMPLETED`.
+    """
+
+    duel_id: int = Field(gt=0, description="pvp_mass_duels.id")
+
+
+class ForceResolveMassDuelInput(_StrictBase):
+    """AFK-фоллбэк массового боя (Спринт 2.2.E, ГДД §7.2).
+
+    Вызывается шедулером (Спринт 2.2.F) по истечении round-таймера
+    массового боя: за каждого молчаливого участника выбирается
+    случайная атака+блок через `IRandom`, после чего бой резолвится.
+    Если все уже отправили — `NoMissingMassMovesError` (use-case
+    конвертит в no-op для идемпотентности).
+    """
+
+    duel_id: int = Field(gt=0, description="pvp_mass_duels.id")
+
+
+class CancelMassDuelInput(_StrictBase):
+    """Отмена активного массового боя (Спринт 2.2.E).
+
+    Используется только для административных вмешательств (например,
+    деградация ростера, abort через админ-команду). После `COMPLETED`
+    отмена запрещена. Идемпотентна: повторная отмена уже отменённого
+    боя — no-op.
+    """
+
+    duel_id: int = Field(gt=0, description="pvp_mass_duels.id")
+    reason: str = Field(
+        default="admin_cancel",
+        max_length=64,
+        description="Короткая причина отмены (для audit-лога)",
+    )
+
+
 class ExpireLobbyEntryInput(_StrictBase):
     """Job-истечения TTL глобального лобби (Спринт 2.1.F.2).
 
