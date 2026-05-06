@@ -63,6 +63,11 @@ from pipirik_wars.application.pvp import (
     SubmitMassMove,
     SubmitMove,
 )
+from pipirik_wars.application.referral import (
+    GrantReferralSignupBonus,
+    GrantReferralThicknessMilestone,
+    RegisterReferral,
+)
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.application.top import GetTopClans, GetTopPlayers
@@ -145,6 +150,7 @@ from tests.fakes import (
     FakePlayerLocaleResolver,
     FakePlayerRepository,
     FakeRandom,
+    FakeReferralRepository,
     FakeSignupQueueRepository,
     FakeTopPlayersQuery,
     FakeUnitOfWork,
@@ -180,6 +186,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
     duels: IDuelRepository = FakeDuelRepository()
     mass_duels: IMassDuelRepository = FakeMassDuelRepository()
     global_lobby = FakeGlobalLobbyRepository()
+    referrals = FakeReferralRepository()
     balance = FakeBalanceConfig(build_valid_balance())
     dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=200)
@@ -437,6 +444,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         duels=duels,
         mass_duels=mass_duels,
         global_lobby=global_lobby,
+        referrals=referrals,
         delayed_jobs=delayed_jobs,
         register_player=RegisterPlayer(
             uow=uow,
@@ -588,6 +596,27 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         run_daily_head_cron=run_daily_head_cron,
         record_player_activity=record_player_activity,
         schedule_daily_head_cron_jobs=schedule_daily_head_cron_jobs,
+        register_referral=RegisterReferral(
+            uow=uow,
+            players=players,
+            referrals=referrals,
+            clock=clock,
+        ),
+        grant_referral_signup_bonus=GrantReferralSignupBonus(
+            uow=uow,
+            players=players,
+            referrals=referrals,
+            length_granter=add_length,
+            balance=balance,
+            clock=clock,
+        ),
+        grant_referral_thickness_milestone=GrantReferralThicknessMilestone(
+            uow=uow,
+            players=players,
+            referrals=referrals,
+            length_granter=add_length,
+            balance=balance,
+        ),
     )
 
 

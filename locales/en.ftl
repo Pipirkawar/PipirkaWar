@@ -31,6 +31,14 @@ start-queued = 🍆 The servers are full — we've put you in the queue.
     Your position: #{ $position }.
     As soon as a slot opens up, we'll register you and send a notification.
 
+# Referral arrival (Sprint 2.4.D, GDD §13.1).
+# Parameters:
+# - `$bonus_cm` — how many cm the newcomer got on top of the starting
+#   length (`balance.referral.on_signup.newbie_bonus_cm`, default 5).
+start-registered-with-referral = 🍆 Done! You are registered in Pipirik Wars.
+
+    Starting length is 2 cm + <b>{ $bonus_cm } cm bonus for arriving via a referral link</b>. Thickness is level 1. Your name and title will appear later — on your first forest run.
+
 ## /profile (Sprint 1.1.E → 1.5.C)
 
 profile-group = 🍆 The /profile command works only in the bot's DM. Open a private chat and try again.

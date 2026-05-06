@@ -11,13 +11,15 @@ I/O, не зависит от инфраструктуры — только ск
 
 Контракт ключей (см. `locales/{ru,en}.ftl`):
 
-- ``start-registered``  — успешная регистрация в ЛС.
-- ``start-already``     — игрок уже зарегистрирован.
-- ``start-group``       — `/start` пришёл в group/supergroup.
-- ``start-other``       — прочие типы чатов (channel и т.п.).
-- ``start-queued``      — DAU Gate: «серверы переполнены, позиция #N».
-                         Параметр `position` (int) → плейсхолдер
-                         `{ $position }` в .ftl.
+- ``start-registered``                — успешная регистрация в ЛС без рефки.
+- ``start-registered-with-referral``  — успешная регистрация по реф-ссылке;
+                                        параметр `bonus_cm` (int).
+- ``start-already``                   — игрок уже зарегистрирован.
+- ``start-group``                     — `/start` пришёл в group/supergroup.
+- ``start-other``                     — прочие типы чатов (channel и т.п.).
+- ``start-queued``                    — DAU Gate: «серверы переполнены, позиция #N».
+                                        Параметр `position` (int) → плейсхолдер
+                                        `{ $position }` в .ftl.
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from typing import Final
 from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
 
 _KEY_REGISTERED: Final[MessageKey] = MessageKey("start-registered")
+_KEY_REGISTERED_REF: Final[MessageKey] = MessageKey("start-registered-with-referral")
 _KEY_ALREADY: Final[MessageKey] = MessageKey("start-already")
 _KEY_GROUP: Final[MessageKey] = MessageKey("start-group")
 _KEY_OTHER: Final[MessageKey] = MessageKey("start-other")
@@ -48,6 +51,9 @@ class StartPresenter:
 
     def registered(self, *, locale: Locale) -> str:
         return self._bundle.format(_KEY_REGISTERED, locale=locale)
+
+    def registered_with_referral(self, *, locale: Locale, bonus_cm: int) -> str:
+        return self._bundle.format(_KEY_REGISTERED_REF, locale=locale, bonus_cm=bonus_cm)
 
     def already(self, *, locale: Locale) -> str:
         return self._bundle.format(_KEY_ALREADY, locale=locale)

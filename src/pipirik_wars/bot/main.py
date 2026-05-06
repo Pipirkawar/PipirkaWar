@@ -90,6 +90,11 @@ from pipirik_wars.application.pvp import (
     SubmitMassMove,
     SubmitMove,
 )
+from pipirik_wars.application.referral import (
+    GrantReferralSignupBonus,
+    GrantReferralThicknessMilestone,
+    RegisterReferral,
+)
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.application.top import (
@@ -117,6 +122,7 @@ from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.progression import ILengthGranter
 from pipirik_wars.domain.pvp import IDuelRepository, IMassDuelRepository
 from pipirik_wars.domain.pvp.lobby import IGlobalLobbyRepository
+from pipirik_wars.domain.referral import IReferralRepository
 from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import (
     IAuditLogger,
@@ -152,6 +158,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyMassDuelRepository,
     SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPlayerRepository,
+    SqlAlchemyReferralRepository,
     SqlAlchemySignupQueueRepository,
 )
 from pipirik_wars.infrastructure.db.services import (
@@ -218,6 +225,7 @@ class Container:
     duels: IDuelRepository
     mass_duels: IMassDuelRepository
     global_lobby: IGlobalLobbyRepository
+    referrals: IReferralRepository
     anticheat: IAnticheatRepository
     anticheat_admin_alerter: IAnticheatAdminAlerter
 
@@ -298,6 +306,11 @@ class Container:
     clan_quote_provider: IClanQuoteTemplateProvider
     schedule_daily_head_cron_jobs: ScheduleDailyHeadCronJobs
 
+    # Реферальная система (Спринт 2.4.D)
+    register_referral: RegisterReferral
+    grant_referral_signup_bonus: GrantReferralSignupBonus
+    grant_referral_thickness_milestone: GrantReferralThicknessMilestone
+
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
     settings: Settings | None = None,
@@ -349,6 +362,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     duels = SqlAlchemyDuelRepository(uow=uow)
     mass_duels = SqlAlchemyMassDuelRepository(uow=uow)
     global_lobby = SqlAlchemyGlobalLobbyRepository(uow=uow)
+    referrals = SqlAlchemyReferralRepository(uow=uow)
     anticheat = SqlAlchemyAnticheatRepository(uow=uow)
     anticheat_admin_alerter = StructlogAnticheatAdminAlerter()
     oracle_templates = JsonOracleTemplateProvider(
@@ -758,6 +772,27 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         scheduler=delayed_jobs,
         clock=clock,
     )
+    register_referral = RegisterReferral(
+        uow=uow,
+        players=players,
+        referrals=referrals,
+        clock=clock,
+    )
+    grant_referral_signup_bonus = GrantReferralSignupBonus(
+        uow=uow,
+        players=players,
+        referrals=referrals,
+        length_granter=add_length,
+        balance=balance,
+        clock=clock,
+    )
+    grant_referral_thickness_milestone = GrantReferralThicknessMilestone(
+        uow=uow,
+        players=players,
+        referrals=referrals,
+        length_granter=add_length,
+        balance=balance,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -779,6 +814,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         duels=duels,
         mass_duels=mass_duels,
         global_lobby=global_lobby,
+        referrals=referrals,
         anticheat=anticheat,
         anticheat_admin_alerter=anticheat_admin_alerter,
         oracle_templates=oracle_templates,
@@ -836,10 +872,13 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         record_player_activity=record_player_activity,
         clan_quote_provider=clan_quote_provider,
         schedule_daily_head_cron_jobs=schedule_daily_head_cron_jobs,
+        register_referral=register_referral,
+        grant_referral_signup_bonus=grant_referral_signup_bonus,
+        grant_referral_thickness_milestone=grant_referral_thickness_milestone,
     )
 
 
-def build_dispatcher(container: Container) -> Dispatcher:
+def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — composition root, плоский DI-список оправдан
     """Собрать aiogram `Dispatcher` со стеком middleware-ов и роутерами.
 
     Use-case-ы регистрируются в `dispatcher` workflow-data — aiogram
@@ -908,6 +947,11 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["run_daily_head_cron"] = container.run_daily_head_cron
     dispatcher["record_player_activity"] = container.record_player_activity
     dispatcher["clan_quote_provider"] = container.clan_quote_provider
+    # Реферальная система (Спринт 2.4.D) — use-cases для /start ref_<id>
+    # и /upgrade_thickness handler-ов.
+    dispatcher["register_referral"] = container.register_referral
+    dispatcher["grant_referral_signup_bonus"] = container.grant_referral_signup_bonus
+    dispatcher["grant_referral_thickness_milestone"] = container.grant_referral_thickness_milestone
     return dispatcher
 
 
