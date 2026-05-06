@@ -23,6 +23,57 @@
 
 ---
 
+## 2026-05-06 — Спринт 2.2.F часть 2: bot-слой массового PvP (`/clan_attack` handler + callback-ы + 27 unit-тестов)
+
+**Автор:** Devin (по запросу urbanviola)
+**Тип:** feature
+**Связано:** `current_tasks.md` Спринт 2.2.F (часть 2), ПД 2.2.6 (`development_plan.md` §6), ГДД §7.2; продолжение `AGENT_HANDOFF.md` от предыдущего агента (часть 1 — PR #65 — поставила локали + `MassDuelPresenter`).
+
+### Что сделано
+
+- Новый `src/pipirik_wars/bot/handlers/mass_duel.py` — bot-слой массового PvP клан×клан:
+    - **`/clan_attack`** (group/supergroup-only): резолвит `attacker_chat_id` из `tg_identity.chat_id`, `defender_chat_id` из `command.args` (числовой `chat_id`) **или** `message.reply_to_message.forward_from_chat.id` (reply на forwarded-сообщение из чата защищающегося клана). Без аргументов и без forward-reply — usage-сообщение `pvp-mass-target-needed`. Проверка self-attack (`attacker_chat_id == defender_chat_id`) → `pvp-mass-self-attack`.
+    - Зовёт `StartMassDuel.execute(StartMassDuelInput(initiator_tg_id, attacker_chat_id, defender_chat_id))` и ловит:
+        - `IntegrityError` (клан не зарегистрирован) → `pvp-mass-target-not-found`;
+        - `ClanFrozenError` → `pvp-mass-clan-frozen`;
+        - `MassDuelCooldownError(cooldown_hours)` → `pvp-mass-cooldown`;
+        - `MassDuelNoParticipantsError` → `pvp-mass-no-participants` (с `min_length_cm` / `min_thickness_level` из `balance.pvp.mass_duel`);
+        - `LockAlreadyHeldError` → `pvp-mass-lock-already-held`.
+    - На успех: `IClanRepository.get_by_id(...)` для обеих сторон → `MassDuelPresenter.started_card(attacker_title, defender_title, attacker_size, defender_size, timer_seconds)` в групповой чат. Затем для каждого `player_id ∈ clan1_member_ids ∪ clan2_member_ids`: `IPlayerRepository.get_by_id(player_id=...)` → `IPlayerLocaleResolver.resolve_for_tg_id(player.tg_id)` → `bot.send_message(chat_id=player.tg_id, text=presenter.prompt_attack(locale=...), reply_markup=presenter.attack_keyboard(duel_id, locale=...))`.
+    - **Callback `pvpm-attack:<duel_id>:<position>`**: парсит `parse_mass_attack_callback_data(...)` (на `ValueError` → toast `pvp-mass-toast-outdated` + strip keyboard); `callback.answer(toast_attack_selected)`; редактирует текст на `presenter.prompt_block(attack=Position(parsed.position))` и заменяет клавиатуру на `presenter.block_keyboard(duel_id, attack)`. Use-case не вызывается — атака зашита в новый `callback_data`.
+    - **Callback `pvpm-block:<duel_id>:<attack>:<position>`**: парсит callback_data; зовёт `SubmitMassMove.execute(SubmitMassMoveInput(duel_id, tg_id, attack, block))`. Ошибки → toast-ы (`pvp-mass-toast-not-found` / `not-participant` show_alert=True / `invalid-state` / `already-submitted`). На успех: `callback.answer(toast_move_accepted)` + strip keyboard + edit text → `pvp-mass-waiting`. Если `submitted.is_ready_to_resolve` — зовёт `ResolveMassDuel.execute(ResolveMassDuelInput(duel_id))` (на `MassDuelNotFoundError` / `InvalidMassDuelStateError` — идемпотентный no-op без broadcast); затем `_broadcast_result(...)` рассылает каждому участнику персональную DM (`result_victory_dm` / `result_defeat_dm` / `result_draw_dm` в зависимости от `outcome.winner` и принадлежности игрока к стороне, с подстановкой `winner_clan_title` / `loser_clan_title` / `total_dealt` / `total_lost` / `delta_cm`) + публичную карточку `result_chat(winner, winner_clan_title, total_dealt)` в чаты обоих кланов.
+    - Helper-функции `_resolve_defender_chat_id`, `_broadcast_attack_prompt`, `_broadcast_result`, `_iter_participants`, `_build_personal_result`, `_strip_keyboard` / `_set_message_text` / `_set_message_keyboard`. `MassDuelPresenter` (427 строк) уже был в репо — не менялся.
+- DI-провязка в `src/pipirik_wars/bot/main.py`:
+    - Новый router `mass_duel_router` зарегистрирован в `register_routers(...)` (между `duel_router` и `oracle_router`).
+    - В `build_dispatcher(...)` добавлены workflow-data ключи: `start_mass_duel`, `submit_mass_move`, `resolve_mass_duel`, `clans` (use-case-ы и `IClanRepository` из контейнера). `players` / `bundle` / `player_locale_resolver` / `bot` уже были.
+- **+27 unit-тестов** в `tests/unit/bot/handlers/test_mass_duel.py`:
+    - 11 на `/clan_attack`: silent-no-identity, private-rejected, missing-target, invalid-arg, self-attack, forward-reply happy-path, `IntegrityError` / `ClanFrozenError` / `MassDuelCooldownError` / `MassDuelNoParticipantsError` / `LockAlreadyHeldError`, success-broadcast.
+    - 4 на `pvpm-attack`: silent-no-identity, silent-no-data, invalid callback_data → outdated, success.
+    - 12 на `pvpm-block`: silent, outdated, 4 use-case ошибки, not-ready-waiting, ready-to-resolve full broadcast (4 DM + 2 чата), resolve-not-found / invalid-state идемпотентный no-broadcast, draw-flow.
+
+### Результат / артефакты
+
+- Новые/обновлённые файлы:
+    - `src/pipirik_wars/bot/handlers/mass_duel.py` (~530 строк).
+    - `src/pipirik_wars/bot/handlers/__init__.py` (+2 строки: import + `include_router`).
+    - `src/pipirik_wars/bot/main.py` (+5 строк в `build_dispatcher`).
+    - `tests/unit/bot/handlers/test_mass_duel.py` (~770 строк, 27 тестов).
+    - `docs/current_tasks.md` (+1 строка: «2.2.F часть 2 → 🔄 в работе»).
+    - `docs/history.md` (текущая запись).
+- Удалён `AGENT_HANDOFF.md` (281 строка) — спецификация продолжения от предыдущего агента, выполнена полностью.
+- `make ci` зелёный: 2337 passed, 1 skipped, coverage **95.71%** (>= 80% порог).
+
+### Заметки / решения
+
+- **Резолв `defender_chat_id`**: HANDOFF предлагал 2 варианта — числовой аргумент команды или reply на forward-сообщение из защищающегося чата. Реализованы оба в `_resolve_defender_chat_id(...)`; приоритет — аргумент команды (если есть и парсится в `int`), иначе fallback на `reply_to_message.forward_from_chat.id`. Это даёт UX-симметрию `/duel @username` (1×1 reply) и `/clan_attack -100…` (mass attack reply) без необходимости копировать chat_id вручную.
+- **Идемпотентность резолва**: callback `pvpm-block` сам вызывает `ResolveMassDuel` если `is_ready_to_resolve=True`. Параллельно может сработать AFK-шедулер 2.2.F часть 1 (`ForceResolveMassDuel`) — он уже идемпотентный (`was_already_resolved=True` если не IN_PROGRESS). Если шедулер успел первым, callback ловит `InvalidMassDuelStateError` и возвращается без broadcast (другая сторона уже получила DM/чат-карточку через шедулер). Это намеренно — Telegram гарантирует at-least-once для callback-ов, но мы не хотим дубль-DM.
+- **DM-broadcast**: `_broadcast_attack_prompt` / `_broadcast_result` оборачивают каждый `bot.send_message` в `try/except` с warning-логом — один заблокировавший бота игрок не должен ронять рассылку всем остальным. Это симметрично логике `_broadcast_attack_prompt` в `bot/handlers/duel.py` (1×1 PvP).
+- **Локали в DM**: каждый DM рендерится в персональной локали игрока через `IPlayerLocaleResolver.resolve_for_tg_id(...)` — игроки разных кланов могут видеть текст в разных языках. Чат-карточка `result_chat` идёт в `fallback_locale` (локаль инициатора атаки) — у группового чата нет «персональной» локали, и в массовом бою на 2-х сторонах нет одной общей.
+- **Не имплементируется**: ручная отмена `/clan_cancel_attack` (нужен только админу — это `CancelMassDuel` с `reason="admin_cancel"`, отдельная задача за рамками 2.2.F). AFK-таймер 2.2.F часть 1 уже сам зовёт `ForceResolveMassDuel` через шедулер — если игрок не успел нажать кнопки в `move_timer_seconds`, бой резолвится по случайным выборам.
+- **`MassDuelPresenter`** уже был полностью реализован предыдущим агентом (PR #65 / часть 1) — не трогал. Локали `pvp-mass-*` (32 ключа в `locales/{ru,en}.ftl`) тоже уже были — handler только зовёт презентер по нужным ключам.
+
+---
+
 ## 2026-05-06 — Спринт 2.2.E: application-слой массового PvP (5 use-case-ов + DI + 35 unit-тестов)
 
 **Автор:** Devin (по запросу intensive192)

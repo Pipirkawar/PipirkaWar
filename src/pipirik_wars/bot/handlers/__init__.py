@@ -19,6 +19,7 @@ from pipirik_wars.bot.handlers.clantop import router as clantop_router
 from pipirik_wars.bot.handlers.duel import router as duel_router
 from pipirik_wars.bot.handlers.forest import router as forest_router
 from pipirik_wars.bot.handlers.lang import router as lang_router
+from pipirik_wars.bot.handlers.mass_duel import router as mass_duel_router
 from pipirik_wars.bot.handlers.oracle import router as oracle_router
 from pipirik_wars.bot.handlers.profile import router as profile_router
 from pipirik_wars.bot.handlers.registration import router as registration_router
@@ -35,6 +36,7 @@ def register_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(forest_router)
     dispatcher.include_router(upgrade_router)
     dispatcher.include_router(duel_router)
+    dispatcher.include_router(mass_duel_router)
     dispatcher.include_router(oracle_router)
     dispatcher.include_router(top_router)
     dispatcher.include_router(clantop_router)

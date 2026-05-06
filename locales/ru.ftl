@@ -400,3 +400,53 @@ duel-anticheat-blocked = Антибот-проверка активна до { $
 
 # Игрок занят другой активностью (forest и т. п.).
 duel-lock-already-held = 🔒 Сейчас занят (например, в /forest). Сначала закончи активность.
+
+# === Масс-PvP клан×клан (Спринт 2.2.F, ГДД §7.2) ===
+
+# /clan_attack — usage и базовые ошибки.
+pvp-mass-needs-group-chat = ⚔️Команда `/clan_attack` работает только в групповом чате клана. Запусти её из чата клана-противника, который хочешь атаковать.
+pvp-mass-not-registered = 🍆Сначала зарегистрируйся через `/start` в ЛС бота.
+pvp-mass-attacker-not-found = ❌Этот чат не привязан к зарегистрированному клану.
+pvp-mass-attacker-not-member = 🚫Атаковать другие кланы могут только участники клана этого чата.
+pvp-mass-target-not-found = ❌Целевой чат не найден или не привязан к зарегистрированному клану.
+pvp-mass-target-needed = Использование: `/clan_attack <chat_id>` или ответом на сообщение из чата защищающегося клана.
+pvp-mass-self-attack = 🤝Нельзя атаковать собственный клан.
+pvp-mass-clan-frozen = 🧊Один из кланов заморожен — массовый бой невозможен.
+pvp-mass-cooldown = ⏳Кулдаун ещё не истёк: повторная атака возможна через { NUMBER($cooldown_hours, useGrouping: 0) } ч.
+pvp-mass-no-participants = 🪶У одной из сторон нет участников, удовлетворяющих требованиям (длина ≥ { NUMBER($min_length_cm, useGrouping: 0) } см, толщина ≥ { NUMBER($min_thickness_level, useGrouping: 0) }).
+pvp-mass-lock-already-held = 🔒Кто-то из участников занят другой активностью. Попробуй ещё раз через минуту.
+
+# Карточка старта в групповом чате.
+pvp-mass-started = ⚔️Битва кланов: <b>{ $attacker }</b> × <b>{ $defender }</b>! Состав: { NUMBER($attacker_size, useGrouping: 0) } × { NUMBER($defender_size, useGrouping: 0) }. Все участники получили инструкции в ЛС. Время на ход — { NUMBER($timer_seconds, useGrouping: 0) } сек.
+
+# DM-промпты.
+pvp-mass-prompt-attack = ⚔️Битва клан × клан. Куда бьёшь?
+pvp-mass-prompt-block = 🛡Атака выбрана: { $attack }. Что блокируешь?
+pvp-mass-waiting = ⏳Твой ход принят. Ждём остальных…
+
+# Финальный итог в ЛС каждому участнику.
+pvp-mass-result-victory = 🏆Победа! Клан <b>{ $clan }</b> выиграл и забрал { NUMBER($total_dealt, useGrouping: 0) } см. Твоя дельта: { $delta_sign }{ NUMBER($delta_cm, useGrouping: 0) } см.
+pvp-mass-result-defeat = 💀Поражение. Клан <b>{ $clan }</b> проиграл, { NUMBER($total_lost, useGrouping: 0) } см ушло противнику. Твоя дельта: { $delta_sign }{ NUMBER($delta_cm, useGrouping: 0) } см.
+pvp-mass-result-draw = 🤝Ничья. Никто не выиграл больше. Твоя дельта: { $delta_sign }{ NUMBER($delta_cm, useGrouping: 0) } см.
+
+# Финальная карточка в чат.
+pvp-mass-result-chat-victory = 🏆Битва клан × клан окончена! Победил клан <b>{ $clan }</b>, забрал { NUMBER($total_dealt, useGrouping: 0) } см.
+pvp-mass-result-chat-draw = 🤝Битва клан × клан окончена ничьёй ({ NUMBER($total_dealt, useGrouping: 0) } см с обеих сторон).
+
+# Кнопки.
+pvp-mass-button-attack-high = ⬆️ Голова
+pvp-mass-button-attack-mid = ↔ Корпус
+pvp-mass-button-attack-low = ⬇️ Ноги
+pvp-mass-button-block-high = 🛡⬆ Голова
+pvp-mass-button-block-mid = 🛡↔ Корпус
+pvp-mass-button-block-low = 🛡⬇ Ноги
+
+# Toast-уведомления.
+pvp-mass-toast-not-found = Этот бой уже неактивен.
+pvp-mass-toast-not-participant = Ты не участник этого боя.
+pvp-mass-toast-foreign-button = Эта кнопка не для тебя.
+pvp-mass-toast-invalid-state = Бой уже завершён.
+pvp-mass-toast-already-submitted = Ты уже сделал ход.
+pvp-mass-toast-outdated = Кнопка устарела.
+pvp-mass-toast-attack-selected = Атака выбрана. Теперь выбери блок.
+pvp-mass-toast-move-accepted = Ход принят!

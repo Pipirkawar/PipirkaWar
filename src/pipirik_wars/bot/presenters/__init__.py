@@ -36,6 +36,15 @@ from pipirik_wars.bot.presenters.forest import (
     forest_callback_data,
     parse_forest_callback_data,
 )
+from pipirik_wars.bot.presenters.mass_duel import (
+    MassAttackCallbackData,
+    MassBlockCallbackData,
+    MassDuelPresenter,
+    mass_attack_callback_data,
+    mass_block_callback_data,
+    parse_mass_attack_callback_data,
+    parse_mass_block_callback_data,
+)
 from pipirik_wars.bot.presenters.oracle import OraclePresenter
 from pipirik_wars.bot.presenters.profile import ProfilePresenter
 from pipirik_wars.bot.presenters.top import TopPresenter
@@ -56,6 +65,9 @@ __all__ = [
     "ForestCallbackAction",
     "ForestCallbackData",
     "ForestPresenter",
+    "MassAttackCallbackData",
+    "MassBlockCallbackData",
+    "MassDuelPresenter",
     "OraclePresenter",
     "ProfilePresenter",
     "RejectCallbackData",
@@ -68,10 +80,14 @@ __all__ = [
     "attack_callback_data",
     "block_callback_data",
     "forest_callback_data",
+    "mass_attack_callback_data",
+    "mass_block_callback_data",
     "parse_accept_callback_data",
     "parse_attack_callback_data",
     "parse_block_callback_data",
     "parse_forest_callback_data",
+    "parse_mass_attack_callback_data",
+    "parse_mass_block_callback_data",
     "parse_reject_callback_data",
     "parse_share_callback_data",
     "parse_upgrade_callback_data",

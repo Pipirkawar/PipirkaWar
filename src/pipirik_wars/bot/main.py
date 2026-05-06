@@ -796,6 +796,11 @@ def build_dispatcher(container: Container) -> Dispatcher:
     dispatcher["duel_log_templates"] = container.duel_log_templates
     dispatcher["pvp_random"] = container.random
     dispatcher["duels"] = container.duels
+    # Mass-PvP клан×клан (Спринт 2.2.F) — use-cases + clans для handler-ов.
+    dispatcher["start_mass_duel"] = container.start_mass_duel
+    dispatcher["submit_mass_move"] = container.submit_mass_move
+    dispatcher["resolve_mass_duel"] = container.resolve_mass_duel
+    dispatcher["clans"] = container.clans
     return dispatcher
 
 
