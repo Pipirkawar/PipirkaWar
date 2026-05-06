@@ -15,28 +15,27 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный спринт — **2.5-A** ([PR #79](https://github.com/Pipirkawar/PipirkaWar/pull/79), коммит `b358349`) «Каркас расширенного админ-интерфейса в боте» — `admin_audit_log` table + `AdminGuard` aiogram-middleware + TOTP-confirm scaffold (миграция `0017_admins_totp_secret`, доменные VO/порты, use-case-ы `RequestAdminConfirm`/`VerifyAdminConfirm`, in-memory store + `pyotp`-verifier, локали `admin-confirm-*`). Завершены Фазы 0, 1 (MVP), 1.6 (анти-чит) полностью; из Фазы 2 закрыты 2.1–2.4 целиком и **2.5-A** — каркас идущего сейчас спринта 2.5. Идёт **Спринт 2.5-B** (команды поддержки в боте: `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban`).
+**На `main`:** последний смерженный спринт — **2.5-B** ([PR #81](https://github.com/Pipirkawar/PipirkaWar/pull/81), коммит `3653e40`) «Команды поддержки в боте» — `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban` (TOTP) + общий `/confirm`-dispatcher; добавлен `IsAdminFilter` на `admin_support_router`, расширены `IPlayerRepository` (`find_by_query`, `freeze`, `unfreeze`) + `Player.ban` + `PlayerStatus.BANNED`, новые `AdminAuditAction`-константы (`ADMIN_PLAYER_LOOKUP/FROZEN/UNFROZEN/BANNED`), DI всех 7 admin-use-case-ов в `Container`. Завершены Фазы 0, 1 (MVP), 1.6 (анти-чит) полностью; из Фазы 2 закрыты 2.1–2.4 целиком и **2.5-A + 2.5-B** из Спринта 2.5. Идёт **Спринт 2.5-C** (команды экономики в боте: `/grant_length`, `/grant_thickness`, `/balance_get`, `/balance_set`).
 
-**Активная feature-ветка:** `devin/1778094141-sprint-2-5-b-support-commands` (от `a967197`).
+**Активная feature-ветка:** _будет создана_ под 2.5-C (от свежего `main` = `3653e40`). Текущая ветка `devin/1778097868-sprint-2-5-b-postmerge-docs` — это **postmerge-докс** (синк `current_tasks.md` под 2.5-C + запись `history.md`), а не сам 2.5-C.
 
-**Что уже есть в коде после 2.5-A:**
-- `domain/admin/{audit,confirm,entities,repositories}.py` + `domain/admin/ports/{admin_audit,admin_confirm}.py` — доменные VO `Admin` / `AdminAuditEntry` / `AdminConfirm{Request,Entry}` + ошибки + enum-ы + порты `IAdminAuditLogger` / `IAdminConfirmStore` / `ITotpVerifier`.
-- `application/admin/{request_confirm,verify_confirm}.py` — use-case-ы TOTP-confirm. Каркас под use-case-ы команд поддержки/экономики (2.5-B/C) идёт рядом, в этом же пакете.
-- `application/bootstrap/admin.py` — `BootstrapSuperAdmin` (читает `BOOTSTRAP_ADMIN_IDS`).
-- `infrastructure/db/{models,repositories}/{admin,admin_audit}.py` + Sql/Fake реализации портов; миграции `0016_admin_audit_log`, `0017_admins_totp_secret`.
-- `infrastructure/admin/{in_memory_confirm_store,pyotp_totp_verifier}.py` — реализации портов TOTP-confirm.
-- `bot/middlewares/admin_guard.py` + DI в `bot/main.py` — `data["admin"]` доступен handler-ам.
-- `bot/handlers/admin.py` — рабочие `/balance_reload`, `/admin_stats`, `/set_max_dau`, `/anticheat_unban` (старые, с авторизацией на уровне use-case-а; в 2.5-D будут перенесены под `AdminGuard` + RBAC).
-- `locales/{ru,en}.ftl` — `admin-confirm-*` ключи.
-- Пустые пакеты `src/pipirik_wars/admin/{api,auth,rbac,web}/` — зарезервированы под веб-админку в Спринте 4.5.
+**Что уже есть в коде после 2.5-B:**
+- `domain/player/{entities,repositories}.py` — `Player.ban(now)` (идемпотентный) + `PlayerStatus.BANNED`; `IPlayerRepository.find_by_query(query, limit)` / `freeze(tg_id, *, reason)` / `unfreeze(tg_id)`.
+- `application/admin/{find_players,get_player_card,freeze_player,unfreeze_player,ban_player}.py` + `request_confirm,verify_confirm` (из 2.5-A).
+- `bot/filters/admin.py` (`IsAdminFilter`) + `bot/handlers/admin_support.py` (5 handler-ов + `/confirm` dispatcher на `command_kind="ban"`) + `bot/presenters/admin_support.py`.
+- `bot/main.py` (Container) — DI `find_players`, `get_player_card`, `freeze_player`, `unfreeze_player`, `ban_player`, `request_admin_confirm`, `verify_admin_confirm` + `SqlAlchemyAdminAuditLogger` + `InMemoryAdminConfirmStore` + `PyOtpTotpVerifier` + `TokenFactory`.
+- `infrastructure/db/repositories/player.py` — Sql-impl новых методов (case-insensitive ILIKE-подстрока, экранирование `%`/`_`).
+- `tests/fakes/totp_verifier.py` (Fake для unit-тестов TOTP-flow), `tests/fakes/player_repo.py` (Fake-impl новых методов).
+- Локали `admin-find-player-*` / `admin-player-*` / `admin-freeze-*` / `admin-unfreeze-*` / `admin-ban-*` / `admin-confirm-*` в `locales/{ru,en}.ftl`.
+- Старые `bot/handlers/admin.py` (`/balance_reload`, `/admin_stats`, `/set_max_dau`, `/anticheat_unban`) — пока на старой авторизации use-case-уровня; в 2.5-D будут перенесены под `AdminGuard` + RBAC.
 
 **Скоуп Спринта 2.5 (4 PR-а):**
 - ~~**2.5-A**~~ ✅ закрыт PR #79 (`b358349`) — каркас `admin_audit_log` + `AdminGuard` + TOTP-confirm.
-- **2.5-B** (текущий PR): команды поддержки — `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban` (TOTP только на `/ban`).
-- **2.5-C**: экономика — `/grant_length`, `/grant_thickness`, `/balance_get`, `/balance_set` + TOTP на все + идемпотентность.
-- **2.5-D** (финал): кланы (`/clan`, `/freeze_clan`, `/unfreeze_clan`, `/clan_daily_head_history`) + `/announce` + `/audit` + `/admin_setup_totp` + `docs/admin_runbook.md`.
+- ~~**2.5-B**~~ ✅ закрыт PR #81 (`3653e40`) — команды поддержки + общий `/confirm`-dispatcher.
+- **2.5-C** (текущий PR): экономика — `/grant_length`, `/grant_thickness`, `/balance_get`, `/balance_set` + TOTP на все мутирующие + idempotency_key из `(admin_id, command, target, minute)`.
+- **2.5-D** (финал): кланы (`/clan`, `/freeze_clan`, `/unfreeze_clan`, `/clan_daily_head_history`) + `/announce` + `/audit` + `/admin_setup_totp` + миграция старых `/balance_reload` / `/admin_stats` / `/set_max_dau` / `/anticheat_unban` под `AdminGuard` + RBAC + `docs/admin_runbook.md`.
 
-**`make ci` на ветке 2.5-B:** зелёный — `lint` (ruff) ✅, `typecheck` (mypy --strict, 629 файлов, 0 issues) ✅, `imports` (import-linter, 3 контракта) ✅, `test` 2997 passed / 1 skipped, coverage 96.18%.
+**`make ci` на main:** зелёный (последний прогон в PR #81: 2997 passed / 1 skipped, coverage 96.18%).
 
 **`AGENT_HANDOFF.md`:** нет.
 
@@ -47,15 +46,14 @@
 | Поле | Значение |
 |---|---|
 | **Активный спринт** | `2.5 — Расширенный админ-интерфейс в боте` |
-| **Активный PR / шаг** | **2.5-B**: команды поддержки (`/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban`) |
-| **Активная feature-ветка** | `devin/1778094141-sprint-2-5-b-support-commands` |
+| **Активный PR / шаг** | **2.5-C**: команды экономики (`/grant_length`, `/grant_thickness`, `/balance_get`, `/balance_set`) |
+| **Активная feature-ветка** | _ещё не создана_ — будет ветвиться от свежего `main` (`3653e40`); сейчас идёт docs-PR с этой переразметкой на ветке `devin/1778097868-sprint-2-5-b-postmerge-docs` |
 | **Базовая ветка** | `main` |
-| **Последний коммит на main** | `a967197` (мерж PR #80 «Спринт 2.5-A postmerge docs sync») |
-| **PR (если открыт)** | _ещё не открыт_ |
-| **CI статус** | локально зелёный (`make ci` на `3c016b7`); ждём GitHub CI после открытия PR |
-| **Последний коммит на ветке** | `3c016b7` (Sprint 2.5-B.7: DI use-cases в `Container`) |
-| **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задачи 2.5.3 (find_player/player/freeze/unfreeze/ban), 2.5.5 (TOTP на /ban), 2.5.9 (use-case каркас) |
-| **Связанная спецификация в `game_design.md`** | §18.6 (основной канал администрирования — Telegram-бот) |
+| **Последний коммит на main** | `3653e40` (мерж PR #81 «Спринт 2.5-B: команды поддержки в боте») |
+| **PR (если открыт)** | _docs-PR (postmerge 2.5-B) — будет открыт этим коммитом; сам 2.5-C — ещё не открыт_ |
+| **CI статус** | зелёный (последний прогон в PR #81: 2997 passed / 1 skipped, coverage 96.18%) |
+| **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задачи 2.5.4 (`/grant_*`, `/balance_*`), 2.5.5 (TOTP на мутирующие), 2.5.9 (use-case каркас) |
+| **Связанная спецификация в `game_design.md`** | §18.6 (RBAC + 2FA для `economist`), §16 (`/grant_length`/`/grant_thickness`/`/balance_*` командные права), §6 (анти-чит окно — `/grant_length` обязан проходить через тот же rolling-24h-clamp) |
 | **`AGENT_HANDOFF.md` существует?** | нет |
 
 ---
@@ -64,18 +62,20 @@
 
 > Отмечай `[x]` по мере выполнения. **Перед каждым `git commit`** обнови этот чек-лист (даже если шаг ещё не закрыт — отметь, что начат). Это safety-net на случай, если агент прервётся в середине работы.
 
-**PR 2.5-B — команды поддержки:**
+**PR 2.5-C — команды экономики:**
 
-- [x] **2.5-B.1 — `/find_player <text>`** — поиск игрока по `tg_id` (точно), `@username` (точно), либо подстроке (ILIKE по `username`/`name`). Use-case `FindPlayers(query, limit) -> Sequence[PlayerSummary]`. Без TOTP. Запись `ADMIN_PLAYER_LOOKUP` в `admin_audit_log`. Локаль `admin-find-player-*` (RU+EN).
-- [x] **2.5-B.2 — `/player <tg_id>`** — карточка игрока: сводка (длина, толщина, статус, anticheat-soft-ban-таймер), клан + роль, активный forest-run. Use-case `GetPlayerCard(tg_id) -> PlayerCard`. Без TOTP. Запись `ADMIN_PLAYER_LOOKUP`. Локаль `admin-player-*` (RU+EN). Список последних 5 PvP/PvE-боёв вынесен в B-followup: ни `IDuelRepository`, ни `IMassDuelRepository`, ни `IForestRunRepository` не имеют метода «список последних N для игрока» — добавлять новые read-методы поверх существующих агрегатов в скоуп B.2 не входит, но это закроет full-feature-карточку.
-- [x] **2.5-B.3 — `/freeze <tg_id> [reason]`** / **`/unfreeze <tg_id>`** — установка `is_frozen=True/False` через `IPlayerRepository`. Use-cases `FreezePlayer` / `UnfreezePlayer`. Без TOTP (обратимая операция). Запись `ADMIN_PLAYER_FROZEN` / `ADMIN_PLAYER_UNFROZEN` с `before/after`. Идемпотентно: повторная заморозка/разморозка ничего не пишет в audit, возвращает `was_already_frozen=True` / `was_already_active=True`. Локали `admin-freeze-*` / `admin-unfreeze-*` (RU+EN).
-- [x] **2.5-B.4 — `/ban <tg_id> <reason>`** — необратимый бан. Добавлено: `PlayerStatus.BANNED`, `Player.ban(now)` (идемпотентно). Use-case `BanPlayer` (post-TOTP, с защитой-в-глубину `is_active` + reason-нон-empty). Handler `/ban` зовёт `RequestAdminConfirm(command_kind="ban", payload={target_tg_id, reason})`, отвечает токеном и инструкцией `/confirm <token> <code>`. Запись `ADMIN_PLAYER_BANNED` (на успешном бане). `ADMIN_BAN_BLOCKED` решено НЕ выписывать отдельно — `VerifyAdminConfirm` уже пишет `ADMIN_CONFIRM_FAILED` с привязкой `command_kind=ban`, дублирование не нужно (это можно поднять в /audit-фильтре). Локали `admin-ban-*` (RU+EN).
-- [x] **2.5-B.5 — `/confirm <token> <code>`** — общий handler для всех TOTP-команд. Зовёт `VerifyAdminConfirm`, диспатчит по `command_kind`: на MVP только `ban → BanPlayer.execute()`. На неизвестный `command_kind` или сломанный payload — `admin-confirm-unknown-command-kind`. Локали `admin-confirm-*` (RU+EN).
-- [x] **2.5-B.6 — Регистрация `admin_support_router`** через `dispatcher.include_router` в `bot/handlers/__init__.py`. Router-фильтр `IsAdminFilter` живёт прямо на самом router-е (`router.message.filter(IsAdminFilter())` + `.callback_query.filter(...)`), читает `data["admin"]` от `AdminGuard`. Не-админы тихо проходят мимо (filter возвращает `False`). Если `AdminGuard` не подключён — secure default = отказать. Файлы: `bot/filters/admin.py`, `bot/filters/__init__.py`, `bot/handlers/admin_support.py` (фильтр на router-е), `bot/handlers/__init__.py` (include_router). 4 unit-теста на фильтр.
-- [x] **2.5-B.7 — DI use-case-ов в `Container`** — `find_players`, `get_player_card`, `freeze_player`, `unfreeze_player`, `ban_player`, `request_admin_confirm`, `verify_admin_confirm` + `SqlAlchemyAdminAuditLogger` (write-side `admin_audit_log`), `InMemoryAdminConfirmStore` (singleton, переживать рестарт смысла нет — 60-секундные токены), `PyOtpTotpVerifier`, `TokenFactory = _default_admin_token_factory` (`secrets.token_urlsafe(16)`). Все 7 use-case-ов прокинуты в `dispatcher` workflow-data. Тесты: 2 новых assert-ов в `test_composition_root.py` (`TestContainer.test_container_holds_admin_support_use_cases` + расширения в `TestBuildContainer.test_build_container_returns_real_adapters` и `TestBuildDispatcher.test_build_dispatcher_assembles_full_stack`).
-- [x] **2.5-B.8 — Тесты:** покрытие добавлено вместе с каждым шагом B.1–B.7. Unit-тесты на все use-case-ы — `tests/unit/application/admin/test_find_players.py` (9), `test_get_player_card.py` (7), `test_freeze_unfreeze.py` (8), `test_ban_player.py` (7). Integration на `IPlayerRepository`: `find_by_query_*` (7 кейсов: exact tg_id / @username / substring case-insensitive / empty / LIKE-escape / включая frozen / limit / non-positive limit reject), `freeze_unfreeze_round_trip`, `save_persists_mutations` (покрывает `Player.ban` через `save`), а также существовавшие `anticheat_ban_*`. E2E на TOTP-flow `/ban`+`/confirm` — `tests/unit/bot/handlers/test_admin_support.py` (44 кейса, в т.ч. happy / token expired / token not found / admin mismatch / code invalid / TOTP not configured / unknown command_kind / payload typo / target disappeared / already banned).
-- [x] **Перед PR:** локальный `make ci` зелёный — lint ✅, mypy --strict ✅, import-linter ✅, pytest 2997/1 skipped, coverage 96.18%.
-- [ ] **Перед мерджем:** sync `current_tasks.md` под 2.5-C; запись в `history.md`.
+- [ ] **2.5-C.1 — `/grant_length <tg_id> <±cm> <reason>`** — мутирующая команда, TOTP-обязательная. Use-case `GrantLength(admin_id, target_tg_id, delta_cm, reason, idempotency_key)`. Ограничения: `delta_cm != 0`, `reason` не пустой, `target` существует и не забанен. Должен **обязательно** проходить через тот же `LENGTH_DELTA`-clamp + rolling-24h-окно из анти-чита (`source="admin_grant"`, см. ГДД §6 — попадает в окно `3000 см / сутки`). Audit: `ADMIN_GRANT_LENGTH` с `before/after/delta/reason`. Локаль `admin-grant-length-*` (RU+EN). Handler: `RequestAdminConfirm(command_kind="grant_length", payload={target_tg_id, delta_cm, reason})` → `/confirm <token> <code>` → `GrantLength.execute()`.
+- [ ] **2.5-C.2 — `/grant_thickness <tg_id> <level> <reason>`** — установка нового уровня толщины (НЕ дельта, согласно ГДД §16). Use-case `GrantThickness(admin_id, target_tg_id, new_level, reason, idempotency_key)`. Валидация `new_level` — допустимый диапазон из доменных констант (`MIN_THICKNESS_LEVEL`/`MAX_THICKNESS_LEVEL`). Audit: `ADMIN_GRANT_THICKNESS` с `before/after/reason`. Локаль `admin-grant-thickness-*`. TOTP-обязательна (`command_kind="grant_thickness"`).
+- [ ] **2.5-C.3 — `/balance_get <key>`** — read-only чтение значения из `balance.yaml` (через существующий `IBalanceConfig`). Use-case `GetBalanceValue(admin_id, key)`. БЕЗ TOTP. Audit: `ADMIN_BALANCE_GET` (опционально — поддержка может расследовать «кто что смотрел»). Локаль `admin-balance-get-*`.
+- [ ] **2.5-C.4 — `/balance_set <key> <value> <reason>`** — мутирующая команда, TOTP-обязательная. Use-case `SetBalanceValue(admin_id, key, raw_value, reason, idempotency_key)`. Должен валидировать `key` (существует в `balance.yaml`), типизировать `raw_value` (через `IBalanceWriter`), писать в файл (или БД-overlay, если используется), вызывать существующий hot-reload через `IBalanceReloader`. Audit: `ADMIN_BALANCE_SET` с `before/after/reason`. Локаль `admin-balance-set-*`. TOTP-обязательна (`command_kind="balance_set"`).
+- [ ] **2.5-C.5 — Идемпотентность мутирующих команд.** `idempotency_key = sha256(f"{admin_id}|{command}|{target}|{minute_floor(ts)}")`. Use-case-ы зовут `IIdempotencyService.try_acquire(idempotency_key)` перед мутацией; повторный вызов в ту же минуту — no-op + ответ «уже выполнено в HH:MM:SS». Покрыть тестом: дважды подряд `/grant_length 123 +5` → второй ответ «no-op», audit-лог содержит **одну** запись.
+- [ ] **2.5-C.6 — Расширить `/confirm`-dispatcher** под новые `command_kind`-ы: `grant_length` / `grant_thickness` / `balance_set`. Старый switch (был только `ban`) превращается в реестр (`{"ban": _dispatch_ban, "grant_length": _dispatch_grant_length, ...}`); неизвестный kind — `admin-confirm-unknown-command-kind` (как сейчас).
+- [ ] **2.5-C.7 — Расширить `AdminAuditAction`** enum: `ADMIN_GRANT_LENGTH`, `ADMIN_GRANT_THICKNESS`, `ADMIN_BALANCE_GET` (если решим логировать read-side), `ADMIN_BALANCE_SET`. Обновить `domain/admin/ports/admin_audit.py` + миграции/тесты не требуются (enum хранится как str в JSONB-колонке `action`).
+- [ ] **2.5-C.8 — DI use-case-ов в `Container`** — `grant_length`, `grant_thickness`, `get_balance_value`, `set_balance_value` + `IIdempotencyService` (если уже есть — переиспользовать, иначе создать adapter в инфраструктуре). Все use-case-ы прокинуты в `dispatcher` workflow-data.
+- [ ] **2.5-C.9 — Тесты:** unit на каждый новый use-case (≥ 4 кейса: happy / not_found / TOTP-fail / idempotent-replay для мутирующих); 2-3 integration-теста на запись в `balance.yaml` (или стораджи балансов) + откат при ошибке reload-а; e2e-тесты на TOTP-flow всех 3 мутирующих команд (правильный код / неверный код / истечение токена / неизвестный command_kind).
+- [ ] **2.5-C.10 — Локали** `admin-grant-length-*` / `admin-grant-thickness-*` / `admin-balance-get-*` / `admin-balance-set-*` в `locales/{ru,en}.ftl`. Сообщения об idempotent-replay — отдельный ключ `admin-idempotency-replay-*`.
+- [ ] **Перед PR:** прогон `make ci` зелёный, lint/typecheck/import-linter ✅.
+- [ ] **Перед мерджем:** sync `current_tasks.md` под 2.5-D; запись в `history.md`.
 
 ---
 
@@ -83,12 +83,14 @@
 
 > Сюда пиши **дельту** к плану: что именно меняешь, какие use-cases / порты / handler-ы / тесты затронуты. Не дублируй ТЗ из `development_plan.md` — пиши только то, что важно для **текущего PR**.
 
-**Текущая дельта (PR 2.5-B будет про):**
-- Команды поддержки **без выдачи длины/толщины/банвейв-операций над балансом** (это всё в 2.5-C). Только заморозка / разморозка / бан / lookup.
-- Новый router `admin_support_router` подцепляется к dispatcher в `bot/main.py` поверх существующего `AdminGuard` (тот уже регистрируется в композиционном root после мерджа 2.5-A).
-- Новые методы `IPlayerRepository`: `find_by_query(query, limit)`, `get_card(tg_id)`, `freeze(tg_id, *, reason)`, `unfreeze(tg_id)`, `ban(tg_id, *, reason)`. Реализуем в `SqlAlchemyPlayerRepository` + `FakePlayerRepository`.
-- Новые `AdminAuditAction` константы: `ADMIN_PLAYER_LOOKUP`, `ADMIN_PLAYER_FROZEN`, `ADMIN_PLAYER_UNFROZEN`, `ADMIN_PLAYER_BANNED`, `ADMIN_BAN_BLOCKED` (последний — когда TOTP-подтверждение провалилось до выполнения мутации).
-- Затронутые слои: `domain/admin/ports/admin_audit.py` (расширяем enum), `domain/player/{entities,ports/player_repository.py}` (методы поиска/freeze/ban), `application/admin/*.py` (новые use-case-ы), `infrastructure/db/repositories/player.py` (Sql-impl), `tests/fakes/player_repo.py` (Fake-impl), `bot/handlers/admin_support.py` (новый файл) + регистрация router-а в `bot/main.py`, `locales/{ru,en}.ftl`.
+**Текущая дельта (PR 2.5-C будет про):**
+- Все мутирующие команды (`/grant_length`, `/grant_thickness`, `/balance_set`) проходят через **тот же** `/confirm`-dispatcher и `RequestAdminConfirm`/`VerifyAdminConfirm` use-case-ы из 2.5-A. В 2.5-B мы добавили только `command_kind="ban"`; в 2.5-C расширяем реестр на 3 новых kind-а.
+- `/grant_length` ОБЯЗАН проходить через анти-чит-окно (ГДД §6, табл. «положительные `LENGTH_DELTA`», `source="admin_grant"`). Если уже существующий `LengthDeltaApplier` / clamp-сервис не покрывает админ-источник — расширяем его через **новый параметр `source`** в существующем порту, не создаём отдельный путь.
+- `/balance_set` зависит от способа хранения баланса. Текущий код использует `balance.yaml` + hot-reload (`IBalanceReloader`). Если запись в файл вызовет race-condition в проде (одновременные правки разными админами), для 2.5-C достаточно last-write-wins + serialize запись через единый `IBalanceWriter` + audit-log; full-fledged БД-overlay — отдельная задача в Фазе 4 (если потребуется веб-админкой).
+- Новые `AdminAuditAction`-константы — продолжение добавленных в 2.5-B (`ADMIN_PLAYER_*`).
+- Новый dispatcher `command_kind`-реестр — рефактор существующего switch в `bot/handlers/admin_support.py:_dispatch_confirm_*` (если он там) или вынесение в отдельный `application/admin/confirm_dispatcher.py`. Решить в первом коммите.
+- Идемпотентность — **обязательна для всех 3 мутирующих команд**. Нет защиты от двойного нажатия в Telegram = нет фичи.
+- Затронутые слои: `domain/admin/ports/admin_audit.py` (расширение enum), `application/admin/{grant_length,grant_thickness,get_balance_value,set_balance_value}.py` (новые use-case-ы), `bot/handlers/admin_support.py` (новые handler-ы) + регистрация в `admin_support_router`, `bot/main.py` (DI), `locales/{ru,en}.ftl`.
 
 ---
 
@@ -106,40 +108,3 @@
 2. Создай `AGENT_HANDOFF.md` в корне репо с расширенным контекстом по шаблону из `CONTRIBUTING.md` («Протокол передачи работы между агентами»).
 3. Закоммить + запушь свои текущие наработки на feature-ветку (даже если они не работают — в WIP-коммите явно укажи `WIP:` в заголовке и опиши состояние в теле).
 4. Не открывай PR, если ветка в полусломанном состоянии (CI красный, тесты падают): следующий агент откроет PR сам, когда доведёт до зелёного.
-
-Подробнее — в [`../CONTRIBUTING.md`](../CONTRIBUTING.md), секция «Протокол передачи работы между агентами».
-
----
-
-## ⚪ Бэклог ближайших спринтов (после текущего)
-
-> Краткая выжимка из [`development_plan.md`](development_plan.md). Полные ТЗ — там.
-
-| Спринт | Содержимое (укрупнённо) |
-|---|---|
-| **2.5-C** Админ-интерфейс — экономика | `/grant_length`, `/grant_thickness`, `/balance_get`, `/balance_set` + TOTP на все + idempotency_key из `(admin_id, command, target, minute)` |
-| **2.5-D** Админ-интерфейс — финал | `/clan`, `/freeze_clan`, `/unfreeze_clan`, `/clan_daily_head_history`, `/announce`, `/audit`, `/admin_setup_totp`, `docs/admin_runbook.md` |
-| **3.1** Горы и данжон | Новые PvE-локации с риском потери длины, drop тиров |
-| **3.2** Караваны (полная механика) | Создание (с уровня 7) + нападение (с уровня 5), лобби 20 мин, 4 роли (лидер / эскорт / защитник / рейдер), боевая механика |
-| **3.3** Рейд-боссы | Призыв (с уровня X), управление боссом, лобби, фазы, награды |
-| **4.1** Монетизация и масштаб | Stars / TON / USDT, Redis, метрики, доп. локали (PT/ES/TR/ID/FA/UK) |
-| **4.5** Опциональная веб-админ-панель 🌐 | FastAPI + Telegram Login + 2FA, RBAC из 2.5, редактор `balance.yaml` |
-| **4.9** Канал-анонсы перед публичным релизом 📣 | Публичный TG-канал бота (автопостинг итогов недели, лидербордов, релиз-нот) |
-
----
-
-## 🔵 Открытые вопросы геймдизу (блокирует часть будущих задач)
-
-> Полный список и история закрытий — в [`development_plan.md`](development_plan.md) §11. Здесь — только то, что **ещё открыто** и блокирует ближайшие спринты.
-
-| ID | Вопрос | Кому | Блокирует |
-|---|---|---|---|
-| Q9b | Доступ к опциональной веб-админ-панели (если будем делать): VPN / IP-whitelist / Cloudflare Access | PM/devops | Спринт 4.5 (Фаза 4, опционально) |
-| Q12b | Финальный триггер для титула «Нежный» (после v9 — был «первый лес», но переехал) | геймдиз | Расширенная таблица титулов (Фаза 3?) |
-| Q13 | Конкретные условия и формулировки **остальных** титулов (расширенная таблица) | геймдиз | Расширенная таблица титулов (Фаза 3?) |
-
-> До получения ответов реализовываем **значения по умолчанию из `balance.yaml`**, отмечаем `# TODO(balance):` в коде.
-
----
-
-*Файл переписывается при каждой смене активного спринта/PR. История завершённых задач — только в `history.md`. Параллельные направления (тесты / балансировка / DevOps / безопасность) — в `development_plan.md` §8.*
