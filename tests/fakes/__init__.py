@@ -17,6 +17,10 @@ from tests.fakes.balance import FakeBalanceConfig
 from tests.fakes.clan_history import FakeClanMassDuelHistoryQuery
 from tests.fakes.clan_repo import FakeClanMembershipRepository, FakeClanRepository
 from tests.fakes.clock import FakeClock
+from tests.fakes.daily_head import (
+    FakeDailyActivityRepository,
+    FakeDailyHeadRepository,
+)
 from tests.fakes.dau import (
     DauAlertEvent,
     FakeDauCounter,
@@ -63,6 +67,8 @@ __all__ = [
     "FakeClanRepository",
     "FakeClanTopQuery",
     "FakeClock",
+    "FakeDailyActivityRepository",
+    "FakeDailyHeadRepository",
     "FakeDauCounter",
     "FakeDauLimit",
     "FakeDauThresholdAlerter",

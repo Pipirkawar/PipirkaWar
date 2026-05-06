@@ -23,6 +23,62 @@
 
 ---
 
+## 2026-05-06 — Спринт 2.3.A: доменный слой «Главы клана дня» (47 тестов, фундамент гибридного триггера)
+
+**Автор:** Devin (агент урbanviola)
+**Тип:** feature
+**Связано:** ПД §5 / Спринт 2.3.1, ГДД §6.1; ветка `devin/1778056664-sprint-2-3-a-daily-head-domain` (PR следует)
+
+Что сделано:
+- Создан пакет `domain/daily_head/` — фундамент гибридного триггера «Главы клана дня» (ГДД §6.1, Q4 v9). VO + порты + сервис без I/O, чистый и детерминированно тестируемый.
+- VO `DailyHeadAssignment` (`id, clan_id, player_id, moscow_date, source, bonus_cm, assigned_at`) + enum `DailyHeadSource` (`BUTTON` / `CRON`). Frozen-датакласс с `__post_init__`-валидацией: positive id/clan/player/bonus, timezone-aware `assigned_at`. `id=None` валиден (запись до `add()`).
+- Доменные ошибки `DailyHeadInsufficientActivityError` (clan_id, active_count, required) и `DailyHeadAlreadyAssignedError` (clan_id, moscow_date) — наследуются от `DailyHeadError → DomainError`.
+- Порт `IDailyHeadRepository`: `get_by_clan_and_date(*, clan_id, moscow_date)` (UNIQUE-индекс гарантирует max 1), `add(assignment)` (`IntegrityError` на дубль `(clan_id, moscow_date)`), `list_recent_for_clan(*, clan_id, limit)` (порядок `assigned_at DESC, id DESC`, тай-брейкер обязателен).
+- Порт `IDailyActivityRepository`: `list_active_member_ids(*, clan_id, within_days)` — скрывает источник «активных за N дней» (реализация может смотреть `players.last_seen_at`, audit-лог за период и т.п.). Заморозкенные / удалённые из клана автоматически исключаются.
+- Доменный сервис `DailyHeadService.assign_or_get(*, clan_id, source)` через `IClock` + `IRandom`:
+  1. Идемпотентность по `(clan_id, moscow_date)` — повторный вызов = тот же `Assignment` (source не перезаписывается! Если cron сработал первым, кнопка получит запись с `source=CRON`).
+  2. Запрос «активные за `active_within_days` дней» из `IDailyActivityRepository`.
+  3. `min_active_members`-проверка (по умолчанию 5) → `DailyHeadInsufficientActivityError`.
+  4. Anti-repeat: исключаем `avoid_last_n` (по умолчанию 3) свежих глав через `list_recent_for_clan`.
+  5. Fail-open: если фильтр вычистил всех — берём всех активных (повтор лучше «никого»).
+  6. `IRandom.choice` из пула + `IRandom.randint(bonus_min, bonus_max)` (∈ [1, 20] по дефолту).
+  7. Возврат `DailyHeadAssignment` с `id=None` и `assigned_at=clock.now()`. Запись в БД делает use-case 2.3.C.
+- `BalanceConfig.daily_head` (`DailyHeadConfig`) уже существовал из ГДД-фазы; сервис читает из него все настройки. `IRandom.deterministic_uint(seed, modulo)` — тоже уже был, для cron-offset-логики 2.3.F.
+- **+47 unit-тестов** (~580 строк):
+  - **22 тесты VO/enum** (`tests/unit/domain/daily_head/test_entities.py`): happy-path для `BUTTON` / `CRON` source, frozen-семантика на 3 поля, инварианты (parametrize × bad_id/clan/player/bonus), naive `assigned_at` rejected, non-UTC tz allowed, `id=None` allowed.
+  - **7 тестов ошибок** (`test_errors.py`): inheritance chain, payload-поля, format-сообщений (clan_id, counts, moscow_date.isoformat).
+  - **18 тестов сервиса** (`test_service.py`): идемпотентность (returns existing с не-перезаписанным source); insufficient activity (3 vs min=5; zero active); avoid_last_n (3 свежих исключены, выбор из {4..7}); other-clan recent не влияет на фильтр; bonus всегда в `[bonus_min, bonus_max]` × 20 seed-ов; assigned_at = clock.now(); moscow_date = clock.moscow_date() (22:00 UTC = 01:00 МСК следующего дня); source preserved (BUTTON / CRON); activity-query вызвана с `within_days=7`; `list_recent_for_clan(limit=avoid_last_n)`; `avoid_last_n=0` → пул = все активные; existing с `id` ≠ None; service не пишет в repo (heads.items пуст после assign).
+- Helper-функция `_make_assignment(...)` в test_entities — типизированные kwargs (избегает mypy `dict[str, object]`-ошибок).
+- Фейки `FakeDailyHeadRepository` / `FakeDailyActivityRepository` в `tests/fakes/daily_head.py` + добавлены в `tests/fakes/__init__.py` (re-export). `FakeDailyHeadRepository.add()` бросает `IntegrityError` на UNIQUE-violation — точная имитация Postgres.
+- Фабрика `valid_balance_payload()` уже содержала секцию `daily_head` (min=5, avoid=3, bonus=[1,20], within=7) — изменений в balance/factories.py не потребовалось.
+
+Результат / артефакты:
+- `src/pipirik_wars/domain/daily_head/__init__.py` (re-export всего публичного API).
+- `src/pipirik_wars/domain/daily_head/entities.py` — `DailyHeadAssignment` + `DailyHeadSource`.
+- `src/pipirik_wars/domain/daily_head/errors.py` — `DailyHeadError` иерархия.
+- `src/pipirik_wars/domain/daily_head/repositories.py` — `IDailyHeadRepository` + `IDailyActivityRepository`.
+- `src/pipirik_wars/domain/daily_head/services.py` — `DailyHeadService.assign_or_get(...)`.
+- `tests/fakes/daily_head.py` (in-memory фейки).
+- `tests/unit/domain/daily_head/test_entities.py` (22 теста), `test_errors.py` (7), `test_service.py` (18).
+- `make ci` зелёный: **2483 passed**, 1 skipped, **coverage 95.88%**, `domain/daily_head/` — **100% coverage** (все 5 файлов: 6+28+18+7+29 строк).
+
+Заметки / решения:
+- **Источник сохраняется при идемпотентности**: если cron сработал в 03:00 МСК и игрок нажал кнопку в 09:00 МСК, у assignment остаётся `source=CRON`. Это нужно для аналитики «какой триггер был эффективнее» — не перезаписываем нечаянно.
+- **Fail-open вместо fail-closed**: если все активные оказались в last-N (теоретически возможно при `avoid_last_n >= active_count`), сервис всё равно назначает кого-то из активных, а не падает. Лучше повтор, чем «сегодня нет главы». В дефолтных настройках min_active=5 / avoid_last_n=3 эта ветка недостижима через нормальные данные, но порт `list_recent_for_clan` имеет `limit`-параметр, и реализация может вернуть >limit при ошибке — fail-open защищает.
+- **Не пишет в БД сам**: `assign_or_get` возвращает `DailyHeadAssignment` с `id=None`. Use-case 2.3.C обернёт в UoW и сделает `heads.add(...)`. Это разделение позволяет тестировать сервис без UoW / транзакций — чисто IO-агностично.
+- **Источник активности абстрагирован**: `IDailyActivityRepository` не принимает «откуда брать активность». Реализация (Спринт 2.3.B) выберет: либо `players.last_seen_at`, либо новая таблица `daily_active`, либо JOIN на audit-лог. Контракт фиксирует «player_id ∈ clan_members активен в окне».
+- **`avoid_last_n=0` отдельно протестирован**: anti-repeat-фильтр выключен, недавние главы могут быть выбраны снова. Это полезно для маленьких кланов или временно для тестов.
+- **`BUTTON` ≠ `CRON` через сравнение `set`**: mypy detects `is`/`!=` как non-overlapping когда левый и правый — разные literal-ы, поэтому в тесте distinct_members используется `{B, C} == set(DailyHeadSource)`.
+- **Async-helper `_filter_avoid_repeat`**: выделен для читаемости основного метода. Вызывается через `await`, потому что зовёт `await self._heads.list_recent_for_clan(...)`. Можно было бы синхронным, если предзагрузить recent в `assign_or_get` — но ленивая загрузка экономит запрос когда `avoid_last_n=0`.
+- **Дальнейшие шаги** (планы для серии 2.3.B-F):
+  - 2.3.B: alembic-миграция `0012_daily_heads` (UNIQUE `(clan_id, moscow_date)`, FK на `clans` / `players`) + ORM + `SqlAlchemyDailyHeadRepository`. Активность: либо отдельная `daily_active`-таблица + miграция, либо переиспользовать `players.last_seen_at` (если есть) / audit-лог.
+  - 2.3.C: use-case-ы `RequestDailyHead(clan_id, requester_id)` (button-trigger; проверка членства) и `RunDailyHeadCron(clan_id)` (cron-trigger; пропуск frozen / archived); UoW + `add_length(reason="daily_head")` через `ILengthGranter` + audit `DAILY_HEAD_ASSIGNED`.
+  - 2.3.D: `templates/clan_quotes_ru.json` + `_en.json` (≥100 цитат каждый) — стилистика «Стэтхем / паблики ВК / АУФ». `IClanQuoteProvider` + Fluent-loader.
+  - 2.3.E: bot handler `/clan_head` (group-only, проверка членства) + кнопка `🎲Назначить главу дня` + локали `clan-head-{header,empty,already-assigned,not-registered,needs-group-chat,quote}` RU+EN.
+  - 2.3.F: APScheduler-cron с per-clan `random_offset(0..24h)` от 00:00 МСК (`IRandom.deterministic_uint(seed=f"{clan_id}:{moscow_date}", modulo=24*3600)`); DI-провязка всех частей; cron не назначает повторно если кнопка сработала.
+
+---
+
 ## 2026-05-06 — Спринт 2.2.G: журнал клановых атак (`/clan_history` + read-side SQL-проекция + 88 тестов)
 
 **Автор:** Devin (по запросу urbanviola)
