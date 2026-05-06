@@ -44,9 +44,11 @@ class IDailyHeadRepository(abc.ABC):
         """Добавить новое назначение. Возвращает копию с проставленным `id`.
 
         При попытке добавить дубль на тот же `(clan_id, moscow_date)`
-        репо обязан бросить `IntegrityError` (БД-уровня UNIQUE-индекс).
-        Use-case это перехватывает в `assign_or_get(...)` как
-        race-условие и делает повторный read.
+        репо обязан бросить `DailyHeadAlreadyAssignedError`. На уровне
+        БД UNIQUE-индекс ловит race; SQL-реализация конвертирует
+        `IntegrityError` SQLAlchemy в доменную ошибку. Use-case 2.3.C
+        перехватывает её и делает повторный `get_by_clan_and_date(...)`,
+        возвращая запись победителя гонки.
         """
 
     @abc.abstractmethod

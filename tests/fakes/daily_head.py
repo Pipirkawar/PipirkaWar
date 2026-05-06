@@ -12,11 +12,11 @@ from dataclasses import dataclass, field, replace
 from datetime import date
 
 from pipirik_wars.domain.daily_head import (
+    DailyHeadAlreadyAssignedError,
     DailyHeadAssignment,
     IDailyActivityRepository,
     IDailyHeadRepository,
 )
-from pipirik_wars.shared.errors import IntegrityError
 
 
 @dataclass
@@ -44,10 +44,9 @@ class FakeDailyHeadRepository(IDailyHeadRepository):
             moscow_date=assignment.moscow_date,
         )
         if existing is not None:
-            raise IntegrityError(
-                f"daily_heads UNIQUE violation on "
-                f"(clan_id={assignment.clan_id}, "
-                f"moscow_date={assignment.moscow_date.isoformat()})"
+            raise DailyHeadAlreadyAssignedError(
+                clan_id=assignment.clan_id,
+                moscow_date=assignment.moscow_date,
             )
         if assignment.id is None:
             saved = replace(assignment, id=self._next_id)
