@@ -590,3 +590,25 @@ admin-unfreeze-not-found = 🔍 Игрок с tg_id <code>{ $tg_id }</code> не
 admin-unfreeze-already = ▶️ Игрок <code>{ $tg_id }</code> и так активен.
 admin-unfreeze-ok = ☀️ Игрок <code>{ $tg_id }</code> разморожен.{ $reason_suffix }
 admin-unfreeze-reason-suffix = Причина: { $reason }.
+
+# /ban — necessitates TOTP (B.4)
+admin-ban-usage = ⚠️ Использование: <code>/ban &lt;tg_id&gt; &lt;причина&gt;</code>. Причина обязательна.
+admin-ban-not-authorized = ❌ Только активные админы могут банить игроков.
+admin-ban-totp-not-configured = ❌ У тебя не настроен TOTP. Команда `/ban` без него недоступна.
+admin-ban-bad-id = ⚠️ <code>{ $value }</code> не похож на tg_id (целое число).
+admin-ban-no-reason = ⚠️ Причина обязательна. Использование: <code>/ban &lt;tg_id&gt; &lt;причина&gt;</code>.
+admin-ban-not-found = 🔍 Игрок с tg_id <code>{ $tg_id }</code> не найден.
+admin-ban-already = 🛑 Игрок <code>{ $tg_id }</code> уже забанен.
+admin-ban-confirm-issued = 🛡️ Подтверди операцию. Отправь: <code>/confirm { $token } &lt;6-значный код&gt;</code>. Токен живёт { $ttl_seconds } секунд.
+
+# /confirm (B.5)
+admin-confirm-usage = ⚠️ Использование: <code>/confirm &lt;token&gt; &lt;6-значный код&gt;</code>.
+admin-confirm-not-authorized = ❌ Только активные админы могут подтверждать операции.
+admin-confirm-totp-not-configured = ❌ У тебя не настроен TOTP. Подтверждение невозможно.
+admin-confirm-token-not-found = ❌ Токен <code>{ $token }</code> уже использован или не существует.
+admin-confirm-token-expired = ⌛ Токен истёк. Заведи команду заново.
+admin-confirm-admin-mismatch = ❌ Этот токен принадлежит другому админу.
+admin-confirm-code-invalid = ❌ Неверный 6-значный код.
+admin-confirm-success-ban = ✅ Игрок <code>{ $tg_id }</code> забанен.
+admin-confirm-success-ban-already = 🛑 Игрок <code>{ $tg_id }</code> уже был забанен.
+admin-confirm-unknown-command-kind = ⚠️ Неизвестный тип команды <code>{ $command_kind }</code> — обновите бота.

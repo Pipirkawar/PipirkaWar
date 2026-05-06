@@ -18,23 +18,38 @@ from aiogram.filters.command import CommandObject
 from aiogram.types import Message
 
 from pipirik_wars.application.admin import (
+    BanPlayer,
+    BanPlayerInput,
     FindPlayers,
     FindPlayersInput,
     FreezePlayer,
     FreezePlayerInput,
     GetPlayerCard,
     GetPlayerCardInput,
+    RequestAdminConfirm,
+    RequestAdminConfirmInput,
     UnfreezePlayer,
     UnfreezePlayerInput,
+    VerifyAdminConfirm,
+    VerifyAdminConfirmInput,
 )
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters.admin_support import (
+    BanPlayerPresenter,
+    ConfirmPresenter,
     FindPlayerPresenter,
     FreezePlayerPresenter,
     GetPlayerCardPresenter,
     UnfreezePlayerPresenter,
+)
+from pipirik_wars.domain.admin import (
+    ConfirmAdminMismatchError,
+    ConfirmCodeInvalidError,
+    ConfirmTokenExpiredError,
+    ConfirmTokenNotFoundError,
+    TotpNotConfiguredError,
 )
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 
@@ -267,4 +282,194 @@ async def handle_unfreeze(
 
     await message.answer(
         presenter.ok(locale=effective_locale, tg_id=target_tg_id, reason=reason),
+    )
+
+
+# ── /ban (B.4) — TOTP-двухфазный ────────────────────────────────────────────
+
+
+# Идентификатор команды в payload-е TOTP-store (используется обоими шагами).
+_COMMAND_KIND_BAN = "ban"
+
+
+@router.message(Command("ban"))
+async def handle_ban(
+    message: Message,
+    command: CommandObject,
+    tg_identity: TgIdentity | None,
+    request_admin_confirm: RequestAdminConfirm,
+    bundle: IMessageBundle,
+    locale: Locale | None = None,
+) -> None:
+    """`/ban <tg_id> <reason>` — первая фаза: запрос TOTP-подтверждения."""
+    presenter = BanPlayerPresenter(bundle=bundle)
+    effective_locale = locale or DEFAULT_LOCALE
+
+    chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
+    if chat_kind != "private" or tg_identity is None:
+        await message.answer(REPLY_NON_PRIVATE_RU)
+        return
+
+    raw = (command.args or "").strip()
+    if not raw:
+        await message.answer(presenter.usage(locale=effective_locale))
+        return
+
+    parts = raw.split(maxsplit=1)
+    try:
+        target_tg_id = int(parts[0])
+    except ValueError:
+        await message.answer(presenter.bad_id(locale=effective_locale, value=parts[0]))
+        return
+
+    reason = parts[1].strip() if len(parts) == 2 else ""
+    if not reason:
+        await message.answer(presenter.no_reason(locale=effective_locale))
+        return
+
+    try:
+        result = await request_admin_confirm.execute(
+            RequestAdminConfirmInput(
+                actor_tg_id=tg_identity.tg_user_id,
+                command_kind=_COMMAND_KIND_BAN,
+                target_kind="player",
+                target_id=str(target_tg_id),
+                payload={"target_tg_id": target_tg_id, "reason": reason},
+                tg_chat_id=tg_identity.chat_id,
+            ),
+        )
+    except AuthorizationError:
+        await message.answer(presenter.not_authorized(locale=effective_locale))
+        return
+    except TotpNotConfiguredError:
+        await message.answer(presenter.totp_not_configured(locale=effective_locale))
+        return
+
+    await message.answer(
+        presenter.confirm_issued(
+            locale=effective_locale,
+            token=result.token,
+            ttl_seconds=result.ttl_seconds,
+        ),
+    )
+
+
+# ── /confirm (B.5) — общий handler 2-й фазы ─────────────────────────────────
+
+
+@router.message(Command("confirm"))
+async def handle_confirm(  # noqa: PLR0911,PLR0912 — каждая ветка-возврат = отдельная UX-ошибка
+    message: Message,
+    command: CommandObject,
+    tg_identity: TgIdentity | None,
+    verify_admin_confirm: VerifyAdminConfirm,
+    ban_player: BanPlayer,
+    bundle: IMessageBundle,
+    locale: Locale | None = None,
+) -> None:
+    """`/confirm <token> <code>` — второй шаг для всех опасных admin-команд."""
+    presenter = ConfirmPresenter(bundle=bundle)
+    effective_locale = locale or DEFAULT_LOCALE
+
+    chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
+    if chat_kind != "private" or tg_identity is None:
+        await message.answer(REPLY_NON_PRIVATE_RU)
+        return
+
+    raw = (command.args or "").strip()
+    if not raw:
+        await message.answer(presenter.usage(locale=effective_locale))
+        return
+    parts = raw.split()
+    if len(parts) != 2:
+        await message.answer(presenter.usage(locale=effective_locale))
+        return
+    token, code = parts[0], parts[1]
+
+    try:
+        result = await verify_admin_confirm.execute(
+            VerifyAdminConfirmInput(
+                actor_tg_id=tg_identity.tg_user_id,
+                token=token,
+                code=code,
+                tg_chat_id=tg_identity.chat_id,
+            ),
+        )
+    except AuthorizationError:
+        await message.answer(presenter.not_authorized(locale=effective_locale))
+        return
+    except TotpNotConfiguredError:
+        await message.answer(presenter.totp_not_configured(locale=effective_locale))
+        return
+    except ConfirmTokenNotFoundError:
+        await message.answer(
+            presenter.token_not_found(locale=effective_locale, token=token),
+        )
+        return
+    except ConfirmTokenExpiredError:
+        await message.answer(presenter.token_expired(locale=effective_locale))
+        return
+    except ConfirmAdminMismatchError:
+        await message.answer(presenter.admin_mismatch(locale=effective_locale))
+        return
+    except ConfirmCodeInvalidError:
+        await message.answer(presenter.code_invalid(locale=effective_locale))
+        return
+
+    if result.command_kind == _COMMAND_KIND_BAN:
+        target_tg_id_raw = result.payload.get("target_tg_id")
+        reason_raw = result.payload.get("reason")
+        if not isinstance(target_tg_id_raw, int) or not isinstance(reason_raw, str):
+            # Теоретически не должно произойти — мы сами кладём
+            # эти ключи в `RequestAdminConfirm`. Но если payload-схема
+            # эволюционирует, оставим явный fail-fast.
+            await message.answer(
+                presenter.unknown_command_kind(
+                    locale=effective_locale,
+                    command_kind=result.command_kind,
+                ),
+            )
+            return
+
+        try:
+            ban_result = await ban_player.execute(
+                BanPlayerInput(
+                    actor_tg_id=tg_identity.tg_user_id,
+                    target_tg_id=target_tg_id_raw,
+                    reason=reason_raw,
+                    tg_chat_id=tg_identity.chat_id,
+                ),
+            )
+        except AuthorizationError:
+            await message.answer(presenter.not_authorized(locale=effective_locale))
+            return
+        except PlayerNotFoundError:
+            # Игрока удалили после issue-токена — редчайший edge-case.
+            await message.answer(
+                BanPlayerPresenter(bundle=bundle).not_found(
+                    locale=effective_locale,
+                    tg_id=target_tg_id_raw,
+                ),
+            )
+            return
+
+        if ban_result.was_already_banned:
+            await message.answer(
+                presenter.success_ban_already(
+                    locale=effective_locale,
+                    tg_id=target_tg_id_raw,
+                ),
+            )
+            return
+        await message.answer(
+            presenter.success_ban(locale=effective_locale, tg_id=target_tg_id_raw),
+        )
+        return
+
+    # Если прилетел неизвестный command_kind — не знаем, что делать.
+    await message.answer(
+        presenter.unknown_command_kind(
+            locale=effective_locale,
+            command_kind=result.command_kind,
+        ),
     )

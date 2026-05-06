@@ -12,6 +12,11 @@ Use-case-ы, общие для всех опасных команд:
 живут в `application/admin/<command>/` и появятся в Спринтах 2.5-B/C/D.
 """
 
+from pipirik_wars.application.admin.ban_player import (
+    BanPlayer,
+    BanPlayerInput,
+    BanPlayerOutput,
+)
 from pipirik_wars.application.admin.find_players import (
     DEFAULT_FIND_PLAYERS_LIMIT,
     FindPlayers,
@@ -52,6 +57,9 @@ from pipirik_wars.application.admin.verify_confirm import (
 
 __all__ = [
     "DEFAULT_FIND_PLAYERS_LIMIT",
+    "BanPlayer",
+    "BanPlayerInput",
+    "BanPlayerOutput",
     "ClanCardInfo",
     "FindPlayers",
     "FindPlayersInput",

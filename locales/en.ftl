@@ -584,3 +584,25 @@ admin-unfreeze-not-found = 🔍 No player with tg_id <code>{ $tg_id }</code>.
 admin-unfreeze-already = ▶️ Player <code>{ $tg_id }</code> is already active.
 admin-unfreeze-ok = ☀️ Player <code>{ $tg_id }</code> has been unfrozen.{ $reason_suffix }
 admin-unfreeze-reason-suffix = Reason: { $reason }.
+
+# /ban — necessitates TOTP (B.4)
+admin-ban-usage = ⚠️ Usage: <code>/ban &lt;tg_id&gt; &lt;reason&gt;</code>. Reason is required.
+admin-ban-not-authorized = ❌ Only active admins may ban players.
+admin-ban-totp-not-configured = ❌ Your TOTP is not configured. `/ban` is unavailable.
+admin-ban-bad-id = ⚠️ <code>{ $value }</code> is not a valid tg_id (integer).
+admin-ban-no-reason = ⚠️ Reason is required. Usage: <code>/ban &lt;tg_id&gt; &lt;reason&gt;</code>.
+admin-ban-not-found = 🔍 No player with tg_id <code>{ $tg_id }</code>.
+admin-ban-already = 🛑 Player <code>{ $tg_id }</code> is already banned.
+admin-ban-confirm-issued = 🛡️ Confirm this operation. Send: <code>/confirm { $token } &lt;6-digit code&gt;</code>. Token TTL: { $ttl_seconds } sec.
+
+# /confirm (B.5)
+admin-confirm-usage = ⚠️ Usage: <code>/confirm &lt;token&gt; &lt;6-digit code&gt;</code>.
+admin-confirm-not-authorized = ❌ Only active admins may confirm operations.
+admin-confirm-totp-not-configured = ❌ Your TOTP is not configured. Confirmation impossible.
+admin-confirm-token-not-found = ❌ Token <code>{ $token }</code> is already used or does not exist.
+admin-confirm-token-expired = ⌛ Token expired. Rerun the command.
+admin-confirm-admin-mismatch = ❌ This token belongs to another admin.
+admin-confirm-code-invalid = ❌ Invalid 6-digit code.
+admin-confirm-success-ban = ✅ Player <code>{ $tg_id }</code> has been banned.
+admin-confirm-success-ban-already = 🛑 Player <code>{ $tg_id }</code> was already banned.
+admin-confirm-unknown-command-kind = ⚠️ Unknown command kind <code>{ $command_kind }</code> — please update the bot.

@@ -36,16 +36,22 @@ from pipirik_wars.domain.player.value_objects import (
 
 
 class PlayerStatus(str, enum.Enum):
-    """Статус игрока (ГДД §1.5 / Спринт 1.1.6).
+    """Статус игрока (ГДД §1.5 / Спринт 1.1.6 / Спринт 2.5-B.4).
 
     `ACTIVE` — играет нормально.
     `FROZEN` — данные сохранены, но играть нельзя (бот удалён из чата
         клана / админ заморозил вручную). При этом сами данные не
         теряются — игрока можно «разморозить» обратно.
+    `BANNED` — необратимый бан админом (`/ban` с TOTP, ГДД §18.6).
+        Данные не удаляются (этим занимается `/forget` GDPR-команда),
+        но игрок **никогда** не сможет играть. Никаких use-case-ов
+        восстановления BANNED→ACTIVE не предусмотрено: если бан
+        ошибочный, разрабатывается миграция вручную в БД.
     """
 
     ACTIVE = "active"
     FROZEN = "frozen"
+    BANNED = "banned"
 
 
 # Стартовые значения регистрации (ГДД §1.1, закрыто Q1/Q2/Q3 в ГДД v8).
@@ -150,10 +156,31 @@ class Player:
         return replace(self, status=PlayerStatus.FROZEN, updated_at=now)
 
     def unfreeze(self, *, now: datetime) -> Player:
-        """Разморозить игрока. Идемпотентно: уже активный — no-op."""
+        """Разморозить игрока. Идемпотентно: уже активный — no-op.
+
+        Не позволяет «разморозить» BANNED — `BANNED → ACTIVE` это
+        отдельный, ручной процесс восстановления (в скоупе MVP не
+        реализуется). Сюда такая ситуация не попадёт: handler
+        `/unfreeze` короткий и не вызывается под BANNED-ом — но если
+        мутацию пытаются сделать программно, лучше явно отказать.
+        """
         if self.status is PlayerStatus.ACTIVE:
             return self
+        if self.status is PlayerStatus.BANNED:
+            raise PlayerFrozenError(tg_id=self.tg_id)
         return replace(self, status=PlayerStatus.ACTIVE, updated_at=now)
+
+    def ban(self, *, now: datetime) -> Player:
+        """Необратимый бан (Спринт 2.5-B.4, ГДД §18.6).
+
+        Идемпотентно: уже забаненный игрок — no-op (use-case узнаёт
+        об этом по тождеству ссылок и не пишет в audit). Бан можно
+        наложить и поверх FROZEN — данные просто перейдут в `BANNED`,
+        и игрок больше никогда не сможет играть.
+        """
+        if self.status is PlayerStatus.BANNED:
+            return self
+        return replace(self, status=PlayerStatus.BANNED, updated_at=now)
 
     def with_locale_override(self, locale_override: str | None, *, now: datetime) -> Player:
         """Переписать явный выбор языка игрока (Спринт 1.5.F, `/lang`).

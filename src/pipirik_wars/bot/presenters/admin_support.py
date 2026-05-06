@@ -326,7 +326,160 @@ class UnfreezePlayerPresenter:
         )
 
 
+# ── /ban ─────────────────────────────────────────────────────────────────────
+
+_KEY_BAN_USAGE: Final[MessageKey] = MessageKey("admin-ban-usage")
+_KEY_BAN_NOT_AUTHORIZED: Final[MessageKey] = MessageKey("admin-ban-not-authorized")
+_KEY_BAN_TOTP_NOT_CONFIGURED: Final[MessageKey] = MessageKey(
+    "admin-ban-totp-not-configured",
+)
+_KEY_BAN_BAD_ID: Final[MessageKey] = MessageKey("admin-ban-bad-id")
+_KEY_BAN_NO_REASON: Final[MessageKey] = MessageKey("admin-ban-no-reason")
+_KEY_BAN_NOT_FOUND: Final[MessageKey] = MessageKey("admin-ban-not-found")
+_KEY_BAN_ALREADY: Final[MessageKey] = MessageKey("admin-ban-already")
+_KEY_BAN_CONFIRM_ISSUED: Final[MessageKey] = MessageKey("admin-ban-confirm-issued")
+
+
+class BanPlayerPresenter:
+    """Локализованные ответы первой стадии `/ban` (запрос подтверждения)."""
+
+    __slots__ = ("_bundle",)
+
+    def __init__(self, *, bundle: IMessageBundle) -> None:
+        self._bundle = bundle
+
+    def usage(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_BAN_USAGE, locale=locale)
+
+    def not_authorized(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_BAN_NOT_AUTHORIZED, locale=locale)
+
+    def totp_not_configured(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_BAN_TOTP_NOT_CONFIGURED, locale=locale)
+
+    def bad_id(self, *, locale: Locale, value: str) -> str:
+        return self._bundle.format(_KEY_BAN_BAD_ID, locale=locale, value=value)
+
+    def no_reason(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_BAN_NO_REASON, locale=locale)
+
+    def not_found(self, *, locale: Locale, tg_id: int) -> str:
+        return self._bundle.format(
+            _KEY_BAN_NOT_FOUND,
+            locale=locale,
+            tg_id=str(tg_id),
+        )
+
+    def already(self, *, locale: Locale, tg_id: int) -> str:
+        return self._bundle.format(
+            _KEY_BAN_ALREADY,
+            locale=locale,
+            tg_id=str(tg_id),
+        )
+
+    def confirm_issued(
+        self,
+        *,
+        locale: Locale,
+        token: str,
+        ttl_seconds: int,
+    ) -> str:
+        return self._bundle.format(
+            _KEY_BAN_CONFIRM_ISSUED,
+            locale=locale,
+            token=token,
+            ttl_seconds=str(ttl_seconds),
+        )
+
+
+# ── /confirm ─────────────────────────────────────────────────────────────────
+
+_KEY_CONFIRM_USAGE: Final[MessageKey] = MessageKey("admin-confirm-usage")
+_KEY_CONFIRM_NOT_AUTHORIZED: Final[MessageKey] = MessageKey(
+    "admin-confirm-not-authorized",
+)
+_KEY_CONFIRM_TOTP_NOT_CONFIGURED: Final[MessageKey] = MessageKey(
+    "admin-confirm-totp-not-configured",
+)
+_KEY_CONFIRM_TOKEN_NOT_FOUND: Final[MessageKey] = MessageKey(
+    "admin-confirm-token-not-found",
+)
+_KEY_CONFIRM_TOKEN_EXPIRED: Final[MessageKey] = MessageKey(
+    "admin-confirm-token-expired",
+)
+_KEY_CONFIRM_ADMIN_MISMATCH: Final[MessageKey] = MessageKey(
+    "admin-confirm-admin-mismatch",
+)
+_KEY_CONFIRM_CODE_INVALID: Final[MessageKey] = MessageKey(
+    "admin-confirm-code-invalid",
+)
+_KEY_CONFIRM_SUCCESS_BAN: Final[MessageKey] = MessageKey("admin-confirm-success-ban")
+_KEY_CONFIRM_SUCCESS_BAN_ALREADY: Final[MessageKey] = MessageKey(
+    "admin-confirm-success-ban-already",
+)
+_KEY_CONFIRM_UNKNOWN_COMMAND_KIND: Final[MessageKey] = MessageKey(
+    "admin-confirm-unknown-command-kind",
+)
+
+
+class ConfirmPresenter:
+    """Локализованные ответы общего `/confirm <token> <code>`."""
+
+    __slots__ = ("_bundle",)
+
+    def __init__(self, *, bundle: IMessageBundle) -> None:
+        self._bundle = bundle
+
+    def usage(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_CONFIRM_USAGE, locale=locale)
+
+    def not_authorized(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_CONFIRM_NOT_AUTHORIZED, locale=locale)
+
+    def totp_not_configured(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_CONFIRM_TOTP_NOT_CONFIGURED, locale=locale)
+
+    def token_not_found(self, *, locale: Locale, token: str) -> str:
+        return self._bundle.format(
+            _KEY_CONFIRM_TOKEN_NOT_FOUND,
+            locale=locale,
+            token=token,
+        )
+
+    def token_expired(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_CONFIRM_TOKEN_EXPIRED, locale=locale)
+
+    def admin_mismatch(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_CONFIRM_ADMIN_MISMATCH, locale=locale)
+
+    def code_invalid(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_CONFIRM_CODE_INVALID, locale=locale)
+
+    def success_ban(self, *, locale: Locale, tg_id: int) -> str:
+        return self._bundle.format(
+            _KEY_CONFIRM_SUCCESS_BAN,
+            locale=locale,
+            tg_id=str(tg_id),
+        )
+
+    def success_ban_already(self, *, locale: Locale, tg_id: int) -> str:
+        return self._bundle.format(
+            _KEY_CONFIRM_SUCCESS_BAN_ALREADY,
+            locale=locale,
+            tg_id=str(tg_id),
+        )
+
+    def unknown_command_kind(self, *, locale: Locale, command_kind: str) -> str:
+        return self._bundle.format(
+            _KEY_CONFIRM_UNKNOWN_COMMAND_KIND,
+            locale=locale,
+            command_kind=command_kind,
+        )
+
+
 __all__ = [
+    "BanPlayerPresenter",
+    "ConfirmPresenter",
     "FindPlayerPresenter",
     "FreezePlayerPresenter",
     "GetPlayerCardPresenter",
