@@ -35,6 +35,9 @@ PvP массовый клан×клан (Спринт 2.2.D):
 Глава клана дня (Спринт 2.3.B):
 - `DailyHeadAssignmentORM` — таблица `daily_heads`.
 - `DailyActiveORM` — таблица `daily_active`.
+
+Реферальная система (Спринт 2.4.B):
+- `ReferralORM` — таблица `referrals`.
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
@@ -52,6 +55,7 @@ from pipirik_wars.infrastructure.db.models.pvp import (
     PvpMassDuelDamageEntryORM,
     PvpMassDuelORM,
 )
+from pipirik_wars.infrastructure.db.models.referral import ReferralORM
 from pipirik_wars.infrastructure.db.models.security import (
     ActivityLockORM,
     AuditLogORM,
@@ -76,6 +80,7 @@ __all__ = [
     "PvpMassDuelChoiceORM",
     "PvpMassDuelDamageEntryORM",
     "PvpMassDuelORM",
+    "ReferralORM",
     "SignupQueueORM",
     "UserORM",
 ]

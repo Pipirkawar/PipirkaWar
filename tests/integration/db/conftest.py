@@ -36,6 +36,7 @@ from pipirik_wars.infrastructure.db.models import (  # noqa: F401  (регист
     PvpMassDuelChoiceORM,
     PvpMassDuelDamageEntryORM,
     PvpMassDuelORM,
+    ReferralORM,
     SignupQueueORM,
     UserORM,
 )

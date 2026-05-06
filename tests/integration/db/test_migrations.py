@@ -63,6 +63,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0012_daily_heads" in revisions
         assert "0013_daily_active" in revisions
         assert "0014_audit_source_daily_head" in revisions
+        assert "0015_referrals" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -173,6 +174,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260506_0012_daily_heads.py",
             "20260506_0013_daily_active.py",
             "20260506_0014_audit_source_daily_head.py",
+            "20260506_0015_referrals.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -224,6 +226,7 @@ class TestAlembicMigrationsApplyCleanly:
             "pvp_mass_duel_damage_entries",
             "daily_heads",
             "daily_active",
+            "referrals",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 
