@@ -169,6 +169,7 @@ anticheat:
     - caravan_reward
     - raid_reward
     - admin_grant
+    - daily_head
   donate_sources:             # blacklist: эти источники игнорируются хардкапом
     - stars_payment
     - ton_payment

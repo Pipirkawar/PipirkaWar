@@ -1,8 +1,12 @@
-"""Тесты на whitelist `AuditSource` (Спринт 1.6.A).
+"""Тесты на whitelist `AuditSource` (Спринт 1.6.A + расширения).
 
 Цель — поймать рассогласование enum-а в `domain.shared.ports.audit` и
-БД-CHECK-инварианта (`audit_log.source` whitelist в миграции 0007). Если
-кто-то добавит источник только в одно из мест — тест упадёт.
+БД-CHECK-инварианта (`audit_log.source` whitelist). Если кто-то добавит
+источник только в одно из мест — тест упадёт.
+
+Whitelist первоначально создан в миграции 0007 и расширяется
+последующими миграциями. Тест читает whitelist из **последней расширяющей
+миграции** — 0014 (`daily_head`, Спринт 2.3.C).
 """
 
 from __future__ import annotations
@@ -14,19 +18,19 @@ from pipirik_wars.domain.shared.ports.audit import AuditSource
 
 
 def _load_migration_whitelist() -> tuple[str, ...]:
-    """Грузим whitelist прямо из файла миграции 0007 (по абсолютному пути).
+    """Грузим whitelist прямо из файла последней расширяющей миграции.
 
-    Файл миграции назван с timestamp-префиксом (`20260505_0007_*.py`), что
+    Файл миграции назван с timestamp-префиксом (`20260506_0014_*.py`), что
     не валиден как Python-идентификатор; обычный `import` не работает.
     """
     repo_root = Path(__file__).resolve().parents[5]
     migration_path = (
         repo_root
         / "src/pipirik_wars/infrastructure/db/migrations/versions"
-        / "20260505_0007_anticheat_foundation.py"
+        / "20260506_0014_audit_source_daily_head.py"
     )
     spec = importlib.util.spec_from_file_location(
-        "_migration_0007_anticheat_foundation",
+        "_migration_0014_audit_source_daily_head",
         migration_path,
     )
     assert spec is not None and spec.loader is not None

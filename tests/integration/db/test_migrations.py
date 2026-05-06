@@ -62,6 +62,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0011_pvp_mass_duels" in revisions
         assert "0012_daily_heads" in revisions
         assert "0013_daily_active" in revisions
+        assert "0014_audit_source_daily_head" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -147,6 +148,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0013 is not None
         assert rev_0013.down_revision == "0012_daily_heads"
 
+    def test_0014_descends_from_0013(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0014 = script.get_revision("0014_audit_source_daily_head")
+        assert rev_0014 is not None
+        assert rev_0014.down_revision == "0013_daily_active"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -164,6 +172,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260505_0011_pvp_mass_duels.py",
             "20260506_0012_daily_heads.py",
             "20260506_0013_daily_active.py",
+            "20260506_0014_audit_source_daily_head.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
