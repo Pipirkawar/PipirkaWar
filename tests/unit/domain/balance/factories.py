@@ -97,6 +97,11 @@ def valid_balance_payload() -> dict[str, Any]:
                     "right_hand": 14,
                     "left_hand": 14,
                 },
+                "scroll_drops": {
+                    "regular_chance_percent": 3,
+                    "blessed_chance_percent": 0,
+                    "category_weights": {"weapon": 1, "armor": 1, "jewelry": 1},
+                },
             },
         },
         "dungeon": {
@@ -122,6 +127,11 @@ def valid_balance_payload() -> dict[str, Any]:
                     "chain": 10,
                     "right_hand": 20,
                     "left_hand": 20,
+                },
+                "scroll_drops": {
+                    "regular_chance_percent": 6,
+                    "blessed_chance_percent": 1,
+                    "category_weights": {"weapon": 1, "armor": 1, "jewelry": 1},
                 },
             },
         },

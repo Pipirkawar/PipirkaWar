@@ -275,6 +275,56 @@ class PveOutcomeConfig(_Frozen):
         return self
 
 
+class ScrollCategoryWeights(_Frozen):
+    """Веса категорий скроллов в дропе скроллов (ГДД §2.8.1, Спринт 3.1-D).
+
+    После того, как Bernoulli-ролл `regular_chance_percent` /
+    `blessed_chance_percent` решил «дропается ли скролл», эти веса
+    выбирают конкретную категорию (`weapon`/`armor`/`jewelry`).
+
+    Сумма весов должна быть `> 0`, иначе `weighted_choice` упал бы.
+    Веса категорий с нулём из выборки выпадают (что нормально,
+    если, например, новой категории ещё нет в каталоге предметов).
+    """
+
+    weapon: int = Field(ge=0)
+    armor: int = Field(ge=0)
+    jewelry: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _validate_sum_positive(self) -> ScrollCategoryWeights:
+        if self.weapon + self.armor + self.jewelry <= 0:
+            raise ValueError("scroll category_weights: at least one category must have weight > 0")
+        return self
+
+
+class ScrollDropConfig(_Frozen):
+    """Параметры дропа скроллов заточки за поход PvE (ГДД §2.8.5, Спринт 3.1-D).
+
+    Дроп скроллов — две **независимые** Bernoulli-попытки за поход
+    (поверх дропа предметов, не вместо него):
+
+    - `regular_chance_percent` — шанс дропа обычного скролла
+      (`blessed=False`). По ГДД §2.8.5 — «очень-очень малый» в горах,
+      «очень малый» в данжоне; конкретные числа в `balance.yaml`.
+    - `blessed_chance_percent` — шанс дропа благословлённого скролла
+      (`blessed=True`). По ГДД §2.8.5 — `0` в горах (горы blessed
+      не дают), «очень-очень малый» в данжоне.
+    - `category_weights` — после того, как Bernoulli решил «дропается»,
+      выбирается категория (`weapon`/`armor`/`jewelry`). Лес скроллы
+      не дропает в принципе (поэтому `ForestDropConfig.scroll_drops`
+      нет — это сделано через отсутствие поля, а не нулевые шансы).
+
+    Семантика «0..2 скролла за поход»: и regular, и blessed —
+    независимые роллы; в один поход можно получить и regular, и
+    blessed, или только один, или ни одного.
+    """
+
+    regular_chance_percent: int = Field(ge=0, le=100)
+    blessed_chance_percent: int = Field(ge=0, le=100)
+    category_weights: ScrollCategoryWeights
+
+
 class PveDropConfig(_Frozen):
     """Параметры дропа за один поход PvE (горы / данжон) (ГДД §8.2 / §1.3.5).
 
@@ -287,6 +337,10 @@ class PveDropConfig(_Frozen):
       что даёт распределение `Binomial(max_drops, p)` для итогового
       числа предметов: `0..max_drops`. Семантика **«до N предметов»**
       из ГДД §8 («0–1 шт» / «0–3 шт») реализуется именно так.
+    - `scroll_drops` (Спринт 3.1-D) — параметры дропа скроллов
+      заточки. Бернулли-роллы независимы от дропа предметов: в один
+      поход можно одновременно получить предмет и скролл, или только
+      одно, или ничего.
 
     `slot_weights` (Спринт 3.1-C) — распределение слотов внутри
     каждого дропа: для каждого «слота дропа» сначала ролится слот
@@ -300,6 +354,7 @@ class PveDropConfig(_Frozen):
     max_drops: int = Field(ge=1, le=10)
     rarity_weights: ForestRarityWeights
     slot_weights: SlotWeights
+    scroll_drops: ScrollDropConfig
 
 
 class _PveLocationConfig(_Frozen):
