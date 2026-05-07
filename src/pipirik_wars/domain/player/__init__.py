@@ -6,7 +6,7 @@ from pipirik_wars.domain.player.errors import (
     PlayerFrozenError,
     PlayerNotFoundError,
 )
-from pipirik_wars.domain.player.repositories import IPlayerRepository
+from pipirik_wars.domain.player.repositories import BroadcastRecipient, IPlayerRepository
 from pipirik_wars.domain.player.value_objects import (
     DisplayName,
     Length,
@@ -17,6 +17,7 @@ from pipirik_wars.domain.player.value_objects import (
 )
 
 __all__ = [
+    "BroadcastRecipient",
     "DisplayName",
     "IPlayerRepository",
     "Length",

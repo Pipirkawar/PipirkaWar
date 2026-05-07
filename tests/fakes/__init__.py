@@ -21,6 +21,11 @@ from tests.fakes.anticheat_admin_alerter import (
 from tests.fakes.anticheat_repo import FakeAnticheatRepository
 from tests.fakes.audit import FakeAuditLogger
 from tests.fakes.balance import FakeBalanceConfig
+from tests.fakes.broadcast import (
+    FakeBroadcastSender,
+    InlineBroadcastTaskSpawner,
+    TaskGroupBroadcastTaskSpawner,
+)
 from tests.fakes.clan_history import FakeClanMassDuelHistoryQuery
 from tests.fakes.clan_quotes import FakeClanQuoteTemplateProvider
 from tests.fakes.clan_repo import FakeClanMembershipRepository, FakeClanRepository
@@ -77,6 +82,7 @@ __all__ = [
     "FakeAnticheatRepository",
     "FakeAuditLogger",
     "FakeBalanceConfig",
+    "FakeBroadcastSender",
     "FakeClanMassDuelHistoryQuery",
     "FakeClanMembershipRepository",
     "FakeClanQuoteTemplateProvider",
@@ -106,7 +112,9 @@ __all__ = [
     "FakeTopPlayersQuery",
     "FakeTotpVerifier",
     "FakeUnitOfWork",
+    "InlineBroadcastTaskSpawner",
     "ScheduledFinish",
     "ScheduledLobbyJob",
     "ScheduledRoundAfkJob",
+    "TaskGroupBroadcastTaskSpawner",
 ]

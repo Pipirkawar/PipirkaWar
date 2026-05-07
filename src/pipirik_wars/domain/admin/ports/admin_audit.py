@@ -119,6 +119,19 @@ class AdminAuditAction(str, enum.Enum):
     # для удобства фильтра.
     ADMIN_AUTHORIZATION_DENIED = "admin_authorization_denied"
 
+    # ── Спринт 2.5-D.4 (broadcast `/announce`) ──
+    # Write-side: глобальное объявление от super-admin-а. Пишется
+    # **после** того, как фоновая задача-рассылка завершилась, и фиксирует
+    # фактический результат: `recipient_count` (сколько в выборку попало),
+    # `sent_count` (успешно доставлено), `failed_count` (transport-ошибки),
+    # `blocked_count` (игрок забанил бота / TelegramForbiddenError).
+    # `target_kind="locale_filter"` / `target_id=<ru|en|all>` — для
+    # фильтра в `/audit` по типу broadcast-а; `after.message_preview`
+    # хранит первые 200 символов сообщения, чтобы super-admin видел в
+    # `/audit`, что именно было разослано. Идемпотентность на уровне
+    # `/confirm`-токена: повторный TOTP уже не сработает.
+    ADMIN_BROADCAST_SENT = "admin_broadcast_sent"
+
 
 class AdminAuditSource(str, enum.Enum):
     """Источник админ-команды.

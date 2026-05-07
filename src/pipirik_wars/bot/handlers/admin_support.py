@@ -27,8 +27,10 @@ from pipirik_wars.application.admin import (
     GetPlayerCardInput,
     GrantLength,
     GrantThickness,
+    IBroadcastTaskSpawner,
     RequestAdminConfirm,
     RequestAdminConfirmInput,
+    RunBroadcastAnnouncement,
     SetBalanceValue,
     UnfreezePlayer,
     UnfreezePlayerInput,
@@ -379,6 +381,8 @@ async def handle_confirm(  # noqa: PLR0911 — каждая ветка-возв�
     grant_length: GrantLength,
     grant_thickness: GrantThickness,
     set_balance_value: SetBalanceValue,
+    run_broadcast_announcement: RunBroadcastAnnouncement,
+    broadcast_task_spawner: IBroadcastTaskSpawner,
     clock: IClock,
     bundle: IMessageBundle,
     locale: Locale | None = None,
@@ -443,6 +447,8 @@ async def handle_confirm(  # noqa: PLR0911 — каждая ветка-возв�
             grant_thickness=grant_thickness,
             set_balance_value=set_balance_value,
             ban_player=ban_player,
+            run_broadcast_announcement=run_broadcast_announcement,
+            broadcast_task_spawner=broadcast_task_spawner,
             clock=clock,
         )
         await dispatcher(result, message, tg_identity, effective_locale, bundle, deps)

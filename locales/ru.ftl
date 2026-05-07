@@ -746,3 +746,19 @@ admin-clan-daily-head-history-empty = 👑 Клан #{ $clan_id } «{ $title }»
 admin-clan-daily-head-history-header = 👑 Клан #{ $clan_id } «{ $title }», последние { $count } назначений «Главы дня»:
 admin-clan-daily-head-history-row = • <b>{ $moscow_date }</b> — { $tg_id } (@{ $username }, { $name }) +{ $bonus } см ({ $source })
 admin-clan-daily-head-history-row-orphan = • <b>{ $moscow_date }</b> — игрок удалён +{ $bonus } см ({ $source })
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Спринт 2.5-D.4 — `/announce` (broadcast с TOTP-confirm)
+# ─────────────────────────────────────────────────────────────────────────────
+
+admin-announce-usage = ⚠ Использование: <code>/announce &lt;ru|en|*&gt; &lt;текст&gt;</code>. Локаль выбирает аудиторию: ru — игроки с RU-локалью, en — с EN или без явного выбора (default), * — все активные.
+admin-announce-non-private = 🍆 Админ-команды доступны только в ЛС бота.
+admin-announce-not-authorized = ❌Только активные админы могут запускать broadcast.
+admin-announce-totp-not-configured = ❌У тебя не настроен TOTP. <code>/announce</code> без него недоступен.
+admin-announce-bad-locale = ⚠ <code>{ $value }</code> — неизвестный фильтр локали. Допустимо: <code>ru</code>, <code>en</code>, <code>*</code>.
+admin-announce-empty-message = ⚠ Текст объявления не может быть пустым.
+admin-announce-too-long = ⚠ Сообщение слишком длинное: { $length } символов, максимум { $max_length }.
+admin-announce-confirm-issued = 🛡 Готов разослать <b>{ $recipient_count }</b> игрокам (фильтр: { $locale_filter }). Подтверди: <code>/confirm { $token } &lt;6-значный код&gt;</code>. Токен живёт { $ttl_seconds } секунд.
+admin-announce-progress-start = 📤 Запускаю рассылку: { $recipient_count } получателей (фильтр: { $locale_filter }). По окончании пришлю отчёт.
+admin-announce-progress-final = ✅ Рассылка завершена. Получателей: { $recipient_count }, доставлено: { $sent_count }, ошибок: { $failed_count }, забанили бота: { $blocked_count }.
+admin-announce-progress-failed = ⚠ Фоновая рассылка завершилась с ошибкой. Подробности — в логах бота и admin-аудите.

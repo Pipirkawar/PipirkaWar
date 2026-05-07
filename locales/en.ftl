@@ -740,3 +740,19 @@ admin-clan-daily-head-history-empty = 👑 Clan #{ $clan_id } "{ $title }": dail
 admin-clan-daily-head-history-header = 👑 Clan #{ $clan_id } "{ $title }", last { $count } daily-head assignments:
 admin-clan-daily-head-history-row = • <b>{ $moscow_date }</b> — { $tg_id } (@{ $username }, { $name }) +{ $bonus } cm ({ $source })
 admin-clan-daily-head-history-row-orphan = • <b>{ $moscow_date }</b> — player deleted +{ $bonus } cm ({ $source })
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 2.5-D.4 — `/announce` (broadcast with TOTP-confirm)
+# ─────────────────────────────────────────────────────────────────────────────
+
+admin-announce-usage = ⚠ Usage: <code>/announce &lt;ru|en|*&gt; &lt;text&gt;</code>. Locale picks the audience: ru — players with RU locale, en — with EN or no explicit choice (default), * — all active players.
+admin-announce-non-private = 🍆 Admin commands are available only in DM with the bot.
+admin-announce-not-authorized = ❌Only active admins can launch broadcasts.
+admin-announce-totp-not-configured = ❌Your TOTP is not configured. <code>/announce</code> is unavailable without it.
+admin-announce-bad-locale = ⚠ <code>{ $value }</code> is not a known locale filter. Allowed: <code>ru</code>, <code>en</code>, <code>*</code>.
+admin-announce-empty-message = ⚠ Announcement text cannot be empty.
+admin-announce-too-long = ⚠ Message is too long: { $length } characters, max { $max_length }.
+admin-announce-confirm-issued = 🛡 Ready to broadcast to <b>{ $recipient_count }</b> players (filter: { $locale_filter }). Confirm: <code>/confirm { $token } &lt;6-digit code&gt;</code>. Token lives { $ttl_seconds } seconds.
+admin-announce-progress-start = 📤 Starting broadcast: { $recipient_count } recipients (filter: { $locale_filter }). I'll report back when done.
+admin-announce-progress-final = ✅ Broadcast complete. Recipients: { $recipient_count }, delivered: { $sent_count }, failed: { $failed_count }, blocked: { $blocked_count }.
+admin-announce-progress-failed = ⚠ Background broadcast failed. Details in bot logs and admin audit.

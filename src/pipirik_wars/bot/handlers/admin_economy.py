@@ -39,8 +39,10 @@ from pipirik_wars.application.admin import (
     GrantThickness,
     GrantThicknessBlockedError,
     GrantThicknessInput,
+    IBroadcastTaskSpawner,
     RequestAdminConfirm,
     RequestAdminConfirmInput,
+    RunBroadcastAnnouncement,
     SetBalanceValue,
     SetBalanceValueInput,
     ThicknessLevelInvalidError,
@@ -412,6 +414,8 @@ class ConfirmDispatchDeps:
     grant_thickness: GrantThickness
     set_balance_value: SetBalanceValue
     ban_player: BanPlayer
+    run_broadcast_announcement: RunBroadcastAnnouncement
+    broadcast_task_spawner: IBroadcastTaskSpawner
     clock: IClock
 
 

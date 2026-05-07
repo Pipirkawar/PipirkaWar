@@ -17,6 +17,7 @@ from pydantic import SecretStr
 
 from pipirik_wars.application.admin import (
     BanPlayer,
+    BroadcastAnnouncement,
     FindPlayers,
     FreezeClanAdmin,
     FreezePlayer,
@@ -28,6 +29,7 @@ from pipirik_wars.application.admin import (
     GrantLength,
     GrantThickness,
     RequestAdminConfirm,
+    RunBroadcastAnnouncement,
     SetBalanceValue,
     UnfreezeClanAdmin,
     UnfreezePlayer,
@@ -157,6 +159,7 @@ from tests.fakes import (
     FakeAnticheatRepository,
     FakeAuditLogger,
     FakeBalanceConfig,
+    FakeBroadcastSender,
     FakeClanMassDuelHistoryQuery,
     FakeClanMembershipRepository,
     FakeClanQuoteTemplateProvider,
@@ -184,6 +187,7 @@ from tests.fakes import (
     FakeTopPlayersQuery,
     FakeTotpVerifier,
     FakeUnitOfWork,
+    InlineBroadcastTaskSpawner,
 )
 from tests.unit.domain.balance.factories import build_valid_balance
 
@@ -604,6 +608,25 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         clock=clock,
         authz=admin_authz,
     )
+    broadcast_announcement_uc = BroadcastAnnouncement(
+        uow=uow,
+        admins=admins,
+        players=players,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    broadcast_sender = FakeBroadcastSender()
+    broadcast_task_spawner = InlineBroadcastTaskSpawner()
+    run_broadcast_announcement_uc = RunBroadcastAnnouncement(
+        uow=uow,
+        admins=admins,
+        players=players,
+        sender=broadcast_sender,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -833,6 +856,10 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         freeze_clan_admin=freeze_clan_admin_uc,
         unfreeze_clan_admin=unfreeze_clan_admin_uc,
         get_clan_daily_head_history=get_clan_daily_head_history_uc,
+        broadcast_announcement=broadcast_announcement_uc,
+        run_broadcast_announcement=run_broadcast_announcement_uc,
+        broadcast_sender=broadcast_sender,
+        broadcast_task_spawner=broadcast_task_spawner,
     )
 
 
