@@ -92,6 +92,9 @@ class TestMountainsScripted:
             randints=[
                 cfg.mountains.outcomes[0].min,  # length
                 100,  # drop slot 0: 100 > 25 → no drop
+                # Спринт 3.1-D: scroll-Bernoulli — оба miss-а (regular + blessed).
+                100,
+                100,
             ],
         )
         outcome = pick_pve_outcome(
@@ -113,6 +116,9 @@ class TestMountainsScripted:
             randints=[
                 cfg.mountains.outcomes[3].max,  # length=8
                 100,  # no drop
+                # Спринт 3.1-D: scroll-Bernoulli — оба miss.
+                100,
+                100,
             ],
         )
         outcome = pick_pve_outcome(
@@ -138,6 +144,9 @@ class TestMountainsScripted:
             randints=[
                 cfg.mountains.outcomes[0].min,  # length
                 25,  # drop slot 0: 25 <= 25 → дроп
+                # Спринт 3.1-D: scroll-Bernoulli — оба miss.
+                100,
+                100,
             ],
             choices=[0],  # первый предмет в pool (HAT, COMMON)
         )
@@ -154,7 +163,13 @@ class TestMountainsScripted:
         cfg = _balance()
         scripted = ScriptedRandom(
             weighted_indexes=[0, 0, 0],  # branch, slot=HAT, rarity=common
-            randints=[cfg.mountains.outcomes[0].min, 1],  # 1 ≤ 25 → дроп
+            randints=[
+                cfg.mountains.outcomes[0].min,
+                1,  # 1 ≤ 25 → дроп
+                # Спринт 3.1-D: scroll-Bernoulli — оба miss.
+                100,
+                100,
+            ],
             choices=[0],
         )
         outcome = pick_pve_outcome(
@@ -179,6 +194,9 @@ class TestDungeonScripted:
                 100,
                 100,
                 100,  # 3 drop rolls, все > 50 → no drops
+                # Спринт 3.1-D: scroll-Bernoulli — оба miss.
+                100,
+                100,
             ],
         )
         outcome = pick_pve_outcome(
@@ -195,7 +213,15 @@ class TestDungeonScripted:
         # outcomes[4] = heavy_loss
         scripted = ScriptedRandom(
             weighted_indexes=[4],
-            randints=[cfg.dungeon.outcomes[4].max, 100, 100, 100],
+            randints=[
+                cfg.dungeon.outcomes[4].max,
+                100,
+                100,
+                100,
+                # Спринт 3.1-D: scroll-Bernoulli — оба miss.
+                100,
+                100,
+            ],
         )
         outcome = pick_pve_outcome(
             location=PveLocationKind.DUNGEON,
@@ -225,6 +251,9 @@ class TestDungeonScripted:
                 1,
                 1,
                 1,  # 3 drop rolls, all <= 50 → 3 дропа
+                # Спринт 3.1-D: scroll-Bernoulli — оба miss.
+                100,
+                100,
             ],
             choices=[0, 0, 0],  # 3 предмета из (HAT, COMMON) pool
         )
@@ -246,6 +275,9 @@ class TestDungeonScripted:
                 1,  # slot 0: drop
                 100,  # slot 1: skip
                 1,  # slot 2: drop
+                # Спринт 3.1-D: scroll-Bernoulli — оба miss.
+                100,
+                100,
             ],
             choices=[0, 0],
         )

@@ -36,15 +36,19 @@ from __future__ import annotations
 from pipirik_wars.domain.balance.config import (
     BalanceConfig,
     PveSign,
+    ScrollCategoryWeights,
+    ScrollDropConfig,
     _PveLocationConfig,
 )
 from pipirik_wars.domain.balance.picking import pick_drop_item_entry
+from pipirik_wars.domain.enchantment.entities import Scroll, ScrollCategory
 from pipirik_wars.domain.forest.entities import Item, Rarity, Slot
 from pipirik_wars.domain.pve.entities import (
     PveItemDrop,
     PveLocationKind,
     PveOutcomeBranch,
     PveRunOutcome,
+    PveScrollDrop,
 )
 from pipirik_wars.domain.shared.ports import IRandom
 
@@ -65,9 +69,15 @@ def pick_pve_outcome(
 
     branch = _roll_branch(cfg=cfg, random=random)
     drops = tuple(_roll_drops(cfg=cfg, balance=balance, random=random))
+    scroll_drops = tuple(_roll_scroll_drops(cfg=cfg.drop.scroll_drops, random=random))
 
     length_delta_cm = branch.length_cm if branch.sign is PveSign.GAIN else -branch.length_cm
-    return PveRunOutcome(branch=branch, length_delta_cm=length_delta_cm, drops=drops)
+    return PveRunOutcome(
+        branch=branch,
+        length_delta_cm=length_delta_cm,
+        drops=drops,
+        scroll_drops=scroll_drops,
+    )
 
 
 def _resolve_location_config(
@@ -131,6 +141,65 @@ def _roll_item_drop(
         rarity=Rarity(entry.rarity),
     )
     return PveItemDrop(item=item)
+
+
+def _roll_scroll_drops(
+    *,
+    cfg: ScrollDropConfig,
+    random: IRandom,
+) -> list[PveScrollDrop]:
+    """Разыграть дроп скроллов заточки за один поход (Спринт 3.1-D, ГДД §2.8.5).
+
+    Две **независимые** Bernoulli-попытки:
+    - `regular` (`blessed=False`) с шансом `cfg.regular_chance_percent`;
+    - `blessed` (`blessed=True`) с шансом `cfg.blessed_chance_percent`.
+
+    Если попытка успешна — категория (weapon/armor/jewelry) выбирается
+    `weighted_choice` на `cfg.category_weights`. За один поход можно
+    получить 0 / 1 / 2 скролла (regular и blessed не взаимоисключающие).
+    """
+    drops: list[PveScrollDrop] = []
+    if random.randint(1, 100) <= cfg.regular_chance_percent:
+        drops.append(
+            PveScrollDrop(
+                scroll=Scroll(
+                    category=_pick_scroll_category(weights=cfg.category_weights, random=random),
+                    blessed=False,
+                ),
+            )
+        )
+    if random.randint(1, 100) <= cfg.blessed_chance_percent:
+        drops.append(
+            PveScrollDrop(
+                scroll=Scroll(
+                    category=_pick_scroll_category(weights=cfg.category_weights, random=random),
+                    blessed=True,
+                ),
+            )
+        )
+    return drops
+
+
+def _pick_scroll_category(
+    *,
+    weights: ScrollCategoryWeights,
+    random: IRandom,
+) -> ScrollCategory:
+    """Выбрать категорию скролла через `weighted_choice`.
+
+    Категории с весом `0` отфильтровываются (`weighted_choice` требует
+    `weight > 0`). Pre: сумма весов > 0 (гарантирует
+    `ScrollCategoryWeights._validate_sum_positive`).
+    """
+    pairs: tuple[tuple[ScrollCategory, int], ...] = (
+        (ScrollCategory.WEAPON, weights.weapon),
+        (ScrollCategory.ARMOR, weights.armor),
+        (ScrollCategory.JEWELRY, weights.jewelry),
+    )
+    non_zero = tuple((c, w) for c, w in pairs if w > 0)
+    categories = [c for c, _ in non_zero]
+    ws = [w for _, w in non_zero]
+    return random.weighted_choice(categories, ws)
 
 
 __all__ = ["pick_pve_outcome"]

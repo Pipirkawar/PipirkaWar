@@ -15,9 +15,10 @@ picker — общие, см. `domain/pve/services.py`.
 from __future__ import annotations
 
 import enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pipirik_wars.domain.balance.config import PveSign, Rarity, Slot
+from pipirik_wars.domain.enchantment.entities import Scroll, ScrollCategory
 from pipirik_wars.domain.forest.entities import Item
 
 __all__ = [
@@ -26,8 +27,11 @@ __all__ = [
     "PveLocationKind",
     "PveOutcomeBranch",
     "PveRunOutcome",
+    "PveScrollDrop",
     "PveSign",
     "Rarity",
+    "Scroll",
+    "ScrollCategory",
     "Slot",
 ]
 
@@ -85,14 +89,42 @@ class PveItemDrop:
 
 
 @dataclass(frozen=True, slots=True)
+class PveScrollDrop:
+    """Один дроп скролла заточки из PvE-локации (Спринт 3.1-D, ГДД §2.8.5).
+
+    Скелетная сущность: `Scroll`-VO заворачивается так же, как `Item`
+    в `PveItemDrop`. В Спринте 3.1-D скроллы **не накапливаются** в
+    инвентаре игрока (см. `docs/development_plan.md` §6.3.1+ — «до
+    тех пор скроллы из дропа просто пишутся в audit_log как дроп
+    будущей механики»). Это значит, что `MountainRun`/`DungeonRun`
+    их не несут: `Run.starting(outcome=)` копирует только
+    `outcome.drops` (предметы), а `outcome.scroll_drops` остаётся в
+    `PveRunOutcome` исключительно для покрытия частот в тестах
+    (D-тесты), audit-лога и будущих use-cases (Спринт 3.4).
+    """
+
+    scroll: Scroll
+
+
+@dataclass(frozen=True, slots=True)
 class PveRunOutcome:
     """Результат расчёта PvE-похода (без I/O).
 
     `branch` — какая из веток сработала; `length_delta_cm` —
     **знаковое** значение прибавки/потери длины (применяется как есть:
     положительное → `add_length`, отрицательное → `subtract_length`).
-    `drops` — упорядоченный список дропов (от 0 до `drop.max_drops`),
-    каждый — `PveItemDrop`. Имена в этой локации не дропаются.
+    `drops` — упорядоченный список дропов предметов (от 0 до
+    `drop.max_drops`), каждый — `PveItemDrop`. Имена в этой локации
+    не дропаются.
+
+    `scroll_drops` (Спринт 3.1-D) — упорядоченный список дропов
+    скроллов заточки, **независимых** от item-дропов: 0..2 элементов
+    (regular + blessed — каждый по независимой Bernoulli-попытке).
+    Default `()` — большинство существующих тестов (forest, упрощённые
+    PvE-фикстуры) не роллят скроллы. Скроллы из этого поля в Спринте
+    3.1-D **никуда не сохраняются** (выходит за скоуп — см. ГДД §2.8
+    и `development_plan.md` §6.3.1+); поле существует, чтобы тесты
+    picker-а могли проверять частоты.
 
     Use-case `Finish*Run` (Спринт 3.1-B) превратит этот VO в side-эффекты:
     запись в `mountain_runs`/`dungeon_runs`, прибавку/списание длины,
@@ -102,6 +134,7 @@ class PveRunOutcome:
     branch: PveOutcomeBranch
     length_delta_cm: int
     drops: tuple[PveItemDrop, ...]
+    scroll_drops: tuple[PveScrollDrop, ...] = field(default=())
 
     def __post_init__(self) -> None:
         if self.branch.sign is PveSign.GAIN and self.length_delta_cm < 0:
