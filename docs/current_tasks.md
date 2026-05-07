@@ -15,9 +15,9 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный PR — **2.5-D.6** ([PR #90](https://github.com/Pipirkawar/PipirkaWar/pull/90), коммит `4c2b100`) — `/admin_setup_totp <bootstrap_password>`: self-service выдача TOTP-секрета живому `SUPER_ADMIN`-у; defense-in-depth (constant-time-сравнение пароля, RBAC, idempotency `TotpAlreadyConfiguredError`); секрет и `otpauth://`-URI пишутся ТОЛЬКО в structlog-логи на VM (не в Telegram-чат); audit `ADMIN_TOTP_SETUP`. Перед ним: postmerge 2.5-D.4 (PR #89, `8df66e7`) и 2.5-D.4 (PR #88, `774bd7c`) — `/announce` broadcast с TOTP-confirm + throttle. До этого: 2.5-A (PR #79), 2.5-B (PR #81), 2.5-C (PR #83), постмердж-доки (PR #84), 2.5-D часть 1 (PR #85), 2.5-D.7 (PR #86), postmerge 2.5-D.7 (PR #87). Из Спринта 2.5 остаётся: **D.10** (`docs/admin_runbook.md`), **D.11** (доптесты RBAC), **D.12** (расширение локалей).
+**На `main`:** последний смерженный PR — **postmerge 2.5-D.6** ([PR #91](https://github.com/Pipirkawar/PipirkaWar/pull/91), коммит `cb40c2e`) — sync `history.md` + `current_tasks.md` под D.6-в-main, без изменений кода. Перед ним: 2.5-D.6 (PR #90, `4c2b100`) — `/admin_setup_totp <bootstrap_password>` self-service выдача TOTP-секрета `SUPER_ADMIN`-у; postmerge 2.5-D.4 (PR #89, `8df66e7`); 2.5-D.4 (PR #88, `774bd7c`) — `/announce` broadcast с TOTP-confirm + throttle. До этого: 2.5-A (PR #79), 2.5-B (PR #81), 2.5-C (PR #83), постмердж-доки (PR #84), 2.5-D часть 1 (PR #85), 2.5-D.7 (PR #86), postmerge 2.5-D.7 (PR #87). Из Спринта 2.5 остаётся: **D.10** (`docs/admin_runbook.md`) — в работе сейчас, **D.11** (доптесты RBAC), **D.12** (расширение локалей).
 
-**Активная feature-ветка:** `devin/1778159721-sprint-2-5-d.6-postmerge` (текущий PR — postmerge 2.5-D.6: sync `history.md` + `current_tasks.md` под `main = 4c2b100`, без изменений кода).
+**Активная feature-ветка:** `devin/1778160466-sprint-2-5-d.10-admin-runbook` (текущий PR — **2.5-D.10**: новый файл `docs/admin_runbook.md` — операционная документация для админ-команды; обновление `current_tasks.md` под смену PR; без изменений кода/тестов/локалей).
 
 **Что уже есть в коде после 2.5-D.6 (PR #90):**
 - `domain/admin/authorization.py` — `AdminCommandKind` (whitelist 27 команд, включая `BROADCAST_ANNOUNCEMENT` и `SETUP_TOTP`), `IAdminAuthorizationPolicy`, `RoleBasedAdminAuthorizationPolicy` (file-closed-матрица; `SETUP_TOTP` → только `SUPER_ADMIN`), `AdminAuthorizationDeniedError`.
@@ -39,10 +39,11 @@
 - ~~**2.5-D.4**~~ ✅ закрыт PR #88 (`774bd7c`) — `/announce` broadcast с TOTP-confirm + фоновый throttle.
 - ~~**postmerge 2.5-D.4**~~ ✅ закрыт PR #89 (`8df66e7`) — sync `history.md` + `current_tasks.md` под D.4-в-main. Без изменений кода.
 - ~~**2.5-D.6**~~ ✅ закрыт PR #90 (`4c2b100`) — `/admin_setup_totp <bootstrap_password>`: self-service выдача TOTP-секрета `SUPER_ADMIN`-у; constant-time-сравнение пароля; secret + `otpauth://`-URI пишутся ТОЛЬКО в structlog-логи; audit `ADMIN_TOTP_SETUP`.
-- **Текущий PR (postmerge 2.5-D.6):** sync `history.md` + `current_tasks.md` под `main = 4c2b100`. Без изменений кода.
-- **Дальше:** D.11 (доптесты RBAC), D.12 (локали), D.10 (`admin_runbook.md`) — отдельными PR-ами.
+- ~~**postmerge 2.5-D.6**~~ ✅ закрыт PR #91 (`cb40c2e`) — sync `history.md` + `current_tasks.md` под `main = 4c2b100`. Без изменений кода.
+- **Текущий PR (2.5-D.10):** новый файл `docs/admin_runbook.md` — operational doc для админ-команды (RBAC-матрица, TOTP setup, `/audit`-чтение, recovery при потере 2FA, ротация `BOOTSTRAP_ADMIN_PASSWORD`); пересинк `current_tasks.md` под D.10. Без изменений кода/тестов/локалей.
+- **Дальше:** D.11 (доптесты RBAC), D.12 (локали) — отдельными PR-ами.
 
-**`make ci` локально на `main` (после 2.5-D.6):** зелёный — 3337 passed / 1 skipped, coverage **95.90%** (~1:38).
+**`make ci` локально на `main` (после postmerge 2.5-D.6):** зелёный — 3337 passed / 1 skipped, coverage **95.90%** (~1:38). На текущей feature-ветке D.10 — будет прогон перед открытием PR.
 
 **`AGENT_HANDOFF.md`:** нет.
 
@@ -53,15 +54,15 @@
 | Поле | Значение |
 |---|---|
 | **Активный спринт** | `2.5 — Расширенный админ-интерфейс в боте (финал)` |
-| **Активный PR / шаг** | **postmerge 2.5-D.6 (sync docs)**: запись `2026-05-07 — Спринт 2.5-D.6` в `history.md`; обновить «Снимок состояния» / «Текущая позиция» / «Чек-лист текущего PR» под `main = 4c2b100`. Без изменений кода. |
-| **Активная feature-ветка** | `devin/1778159721-sprint-2-5-d.6-postmerge` (создана от `main = 4c2b100`) |
+| **Активный PR / шаг** | **2.5-D.10 (`docs/admin_runbook.md`)**: новый файл `docs/admin_runbook.md` — operational doc для админ-команды (RBAC-матрица live из кода, TOTP-setup через `/admin_setup_totp`, чтение `/audit`, recovery при потере 2FA, ротация `BOOTSTRAP_ADMIN_PASSWORD`); пересинк `current_tasks.md` под D.10. **Без изменений кода/тестов/локалей.** |
+| **Активная feature-ветка** | `devin/1778160466-sprint-2-5-d.10-admin-runbook` (создана от `main = cb40c2e`) |
 | **Базовая ветка** | `main` |
-| **Последний коммит на main** | `4c2b100` (мерж PR #90 «Sprint 2.5-D.6: `/admin_setup_totp` self-service TOTP bootstrap») |
+| **Последний коммит на main** | `cb40c2e` (мерж PR #91 «postmerge 2.5-D.6: history.md +1 запись, current_tasks.md sync под D.6-в-main») |
 | **Последний коммит на feature-ветке** | будет зафиксирован при первом push-е |
 | **PR (если открыт)** | будет открыт после локального зелёного `make ci` |
 | **CI статус** | на main зелёный: `make ci` — 3337 passed / 1 skipped, coverage 95.90% |
-| **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задача 2.5.8 (общая инфраструктура `admin_audit_log` + RBAC); постмердж-PR-ы — служебные, тз для них нет |
-| **Связанная спецификация в `game_design.md`** | §18.6 (`admins.totp_secret`, `admin_audit_log`), §18.6.2 (RBAC — `SETUP_TOTP` → `SUPER_ADMIN`), §18.6.5 (TOTP-flow для опасных команд) |
+| **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задача 2.5.8 (общая инфраструктура `admin_audit_log` + RBAC); D.10 — operational documentation для уже реализованных D.1–D.9 + D.4 + D.6 |
+| **Связанная спецификация в `game_design.md`** | §18.6 (целиком: интерфейс админ-панели), §18.6.4 (безопасность, bootstrap super-admin), §18.6.5 (TOTP-flow для опасных команд). Runbook не дублирует спеку — ссылается на неё. |
 | **`AGENT_HANDOFF.md` существует?** | нет |
 
 ---
@@ -70,15 +71,16 @@
 
 > Отмечай `[x]` по мере выполнения. **Перед каждым `git commit`** обнови этот чек-лист (даже если шаг ещё не закрыт — отметь, что начат). Это safety-net на случай, если агент прервётся в середине работы.
 
-**Текущий PR — postmerge 2.5-D.6 (sync docs):**
+**Текущий PR — 2.5-D.10 (`docs/admin_runbook.md`):**
 
-- [x] Добавить запись **2.5-D.6** в `docs/history.md` (свежие — сверху): `/admin_setup_totp` self-service TOTP bootstrap, PR #90, merge `4c2b100`.
-- [x] Обновить «Снимок состояния проекта» в `docs/current_tasks.md` под фактический `main = 4c2b100`.
-- [x] Обновить «Текущая позиция» под postmerge 2.5-D.6.
-- [x] Заменить «Чек-лист текущего PR» на постмердж-список (этот блок).
-- [ ] **Перед PR:** `make ci` локально зелёный (доки-only — должен быть идентичен main-CI).
-- [ ] Открыть PR `docs(postmerge 2.5-D.6): history.md +1 запись, current_tasks.md sync под D.6-в-main`.
-- [ ] **После мерджа:** перейти к следующей задаче из остатка Спринта 2.5 (D.11 → D.12 → D.10 — рекомендованный порядок: низкий риск → coverage/локали → operational doc).
+- [x] Завести feature-ветку `devin/1778160466-sprint-2-5-d.10-admin-runbook` от `main = cb40c2e`.
+- [x] Изучить источники: `game_design.md §18.6`, `domain/admin/authorization.py` (`AdminCommandKind` whitelist + RBAC-матрица), все `application/admin/*.py` (use-case-ы), все `bot/handlers/admin*.py` (canonical command list + TOTP-required).
+- [x] Собрать live-список admin-команд по разделам (lookup / support игроки / support кланы / экономика / super-admin) с пометкой TOTP — синхронно с `CONFIRM_DISPATCHERS` registry в `bot/handlers/admin_economy.py`.
+- [x] Написать `docs/admin_runbook.md`: §0 канал интерфейса → §1 ролевая модель → §2 полный список команд → §3 `/admin_setup_totp` пошаговый флоу → §4 RBAC и обработка отказов → §5 TOTP-confirm для опасных команд → §6 чтение `/audit` (полный whitelist `AdminAuditAction`) → §7 recovery при потере 2FA (3 сценария) → §8 ротация `BOOTSTRAP_ADMIN_PASSWORD` → §9 FAQ → §10 куда идти за подробностями. Ссылки на `game_design.md` / `history.md` / `development_plan.md` — без дублирования содержимого.
+- [x] Обновить «Снимок состояния» / «Текущая позиция» / «Чек-лист текущего PR» в `current_tasks.md` под D.10.
+- [ ] **Перед PR:** `make ci` локально зелёный (docs-only — должен быть идентичен main-CI; runbook не импортируется кодом).
+- [ ] Открыть PR `docs(2.5-D.10): admin_runbook.md — operational doc для админ-команды`.
+- [ ] **После мерджа:** перейти к следующей задаче (D.11 → D.12 — выбор пользователя).
 
 **Спринт 2.5 — что ещё осталось (детализация на референс):**
 
