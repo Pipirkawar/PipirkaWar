@@ -23,6 +23,48 @@
 
 ---
 
+## 2026-05-07 — Спринт 2.5-D.4: `/announce` — broadcast с TOTP-confirm и фоновым throttle
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 2.5 ([`current_tasks.md`](current_tasks.md)), ПД §5 / задача 2.5.6 (broadcast с TOTP), ГДД §17 (моратории / broadcast), §18.6.5 (TOTP-обязательные команды), [PR #88](https://github.com/Pipirkawar/PipirkaWar/pull/88) (мерж — `774bd7c`)
+
+Что сделано:
+- **Two-phase flow `/announce <ru|en|*> <text>`** (как у `/grant_length`/`/grant_thickness`/`/balance_set`/`/ban`):
+  - **Phase 1 — handle_announce** (`bot/handlers/admin_communication.py`): валидация `BroadcastLocaleFilter` (`ru`/`en`/`all`) + длины (≤ `BROADCAST_MESSAGE_MAX_LEN = 4000`); `BroadcastAnnouncement.execute(...)` делает RBAC-проверку (только `SUPER_ADMIN`) и pre-flight `IPlayerRepository.list_active_for_broadcast(locale_filter)` → `recipient_count`; затем `RequestAdminConfirm.execute(...)` выдаёт `/confirm`-токен с `payload = { locale_filter, message, recipient_count }`. Админу отвечает «токен `TOK`, TTL 120s; будет отправлено N игрокам».
+  - **Phase 2 — dispatch_announce** (зарегистрирован в `CONFIRM_DISPATCHERS["broadcast_announcement"]`): sanity-проверка payload-а (типы, валидность `BroadcastLocaleFilter`); немедленный ответ admin-у `progress_start` («отправляю N игрокам, локаль X»); `IBroadcastTaskSpawner.spawn(coro)` → `RunBroadcastAnnouncement.execute(...)` фоном.
+- **Use-case `RunBroadcastAnnouncement`** (`application/admin/run_broadcast_announcement.py`): RBAC-проверка повторно (админ мог быть `revoke`-нут между Phase 1 и Phase 2); пересчитанный `list_active_for_broadcast(...)`; рассылка батчами размера `BROADCAST_BATCH_SIZE=25` через `IBroadcastSender.send(...)` (внутри батча `asyncio.gather(...)` параллельно), между батчами `asyncio.sleep(BROADCAST_BATCH_INTERVAL_SECONDS=1.0)` → ~25 msg/sec (ниже Telegram-лимита bot-API ~30 msg/sec); `BroadcastSendResult` literal `"sent" | "failed" | "blocked"` агрегируется в счётчики; аудит `ADMIN_BROADCAST_SENT` с `after = { sent_count, failed_count, blocked_count, recipient_count, locale_filter, message_preview }` (preview-длина `BROADCAST_AUDIT_MESSAGE_PREVIEW_LEN = 200`).
+- **Domain-расширения:** `AdminAuditAction.ADMIN_BROADCAST_SENT`; `BroadcastRecipient` value-object и `IPlayerRepository.list_active_for_broadcast(locale_filter)` (фильтр по `locale_override` или `*`); SQLA-имплементация в `infrastructure/db/repositories/player.py`.
+- **Production-адаптеры** (`infrastructure/telegram/broadcast.py`):
+  - `AiogramBroadcastSender` — `aiogram.Bot.send_message(...)`; `TelegramForbiddenError` → `"blocked"` (юзер закрыл чат); `TelegramRetryAfter`/`TelegramBadRequest`/прочие исключения → `"failed"` (логируются, наружу не падают).
+  - `AsyncIOBroadcastTaskSpawner` — `asyncio.create_task(...)` с сильной ссылкой на task до завершения (Python 3.12+, защита от GC); `done_callback` снимает ссылку.
+  - `NoopBroadcastSender` — stub для режима `bot=None` (CLI/scheduler-only).
+- **DI в `bot/main.py::build_container`** — провязка `BroadcastAnnouncement`/`RunBroadcastAnnouncement` use-case-ов + production-сендеров. `Container` расширен полями `broadcast_announcement`/`run_broadcast_announcement`/`broadcast_sender`/`broadcast_task_spawner`. `dispatcher["..."]` пробрасывает их в handler-ы.
+- **`ConfirmDispatchDeps` extension** (`bot/handlers/admin_economy.py`) + проброс через `handle_confirm` в `admin_support.py` — broadcast-deps теперь часть единого dispatch-канала.
+- **Локали** (`locales/{ru,en}.ftl`) — 11 ключей `admin-announce-*` (usage, confirm-issued, progress-start/final/failed, ошибки локали/длины, RBAC-deny, TOTP-not-configured).
+- **Тесты:**
+  - `tests/unit/application/admin/test_broadcast_announcement.py` — 13 unit-тестов (валидация локали, валидация длины, RBAC, happy-path с pre-flight count, locale-парсинг).
+  - `tests/unit/application/admin/test_run_broadcast_announcement.py` — 9 unit-тестов (RBAC, single-batch без sleep-а, multi-batch со sleep-ами, mixed-results aggregate, audit, message preview-truncation, validation `batch_size`/`batch_interval_seconds`).
+  - `tests/unit/bot/handlers/test_admin_communication.py` — 13 unit-тестов handler-а (parsing, RBAC-deny, TOTP-not-configured, ошибки локали/длины, happy-path выдачи `/confirm`-токена, dispatch sanity-проверки, spawn-в-фон, регистрация в `CONFIRM_DISPATCHERS`).
+  - `tests/integration/admin/test_broadcast_e2e.py` — 3 integration-теста (real `asyncio.sleep` throttle с measurable wall-clock, `AsyncIOBroadcastTaskSpawner.spawn(...)` действительно отдаёт coro фоновой задаче, отсутствие task-leak после завершения).
+  - `tests/fakes/broadcast.py` — `FakeBroadcastSender` (results_by_tg_id, default_result), `InlineBroadcastTaskSpawner` (детерминированный, для unit-тестов), `TaskGroupBroadcastTaskSpawner` (asyncio.TaskGroup-обёртка).
+
+Результат / артефакты:
+- Коммиты на ветке `devin/1778146423-sprint-2-5-d.4-announce`: `1732fdd`, `b934bf4`, `74e6cf4`. Merge-коммит: `774bd7c`.
+- Локальный `make ci`: зелёный — 3306 passed / 1 skipped, coverage **95.86%** (~1:30).
+- Все 5 TOTP-обязательных admin-команд (`grant_length`/`grant_thickness`/`set_balance_value`/`ban`/`broadcast_announcement`) живут под единым registry-паттерном `CONFIRM_DISPATCHERS` (PR #83/#85/#88) — добавление новой мутирующей команды = «добавить пару `(kind, fn)` в реестр».
+- `/announce` — первая команда, которая запускает фоновую задачу через `IBroadcastTaskSpawner` (раньше все use-case-ы были sync-в-handler-е). Production-адаптер `AsyncIOBroadcastTaskSpawner` хранит strong-ref на task до завершения — это паттерн для будущих фоновых long-running операций.
+
+Заметки / решения:
+- **Throttle-формула** `BROADCAST_BATCH_SIZE / BROADCAST_BATCH_INTERVAL_SECONDS = 25 msg/sec` выбрана с запасом ниже Telegram-лимита ~30 msg/sec для bot-API (ПД §5, риск «rate-limit на массовые рассылки»). Если в проде увидим `RetryAfter`-ошибки в логах `AiogramBroadcastSender`, — снижать `BATCH_SIZE` до 20 (без правки use-case-а: оба константы — `Final[int]`, прокидываются как kwargs из `bot/main.py`).
+- **Sleep-инъекция** — `RunBroadcastAnnouncement.__init__` принимает `sleep: SleepFn | None = None`-аргумент (по дефолту — `asyncio.sleep`). Тесты прокидывают `_RecordingSleep` для проверки call-pattern-а (что sleep вызывается между батчами, не перед первым и не после последнего).
+- **Idempotency-ключ** `admin_broadcast_announcement` строится по тому же шаблону, что и `admin_grant_length`/`admin_ban`/...: `sha256(actor|kind|locale_filter|minute_floor(ts))` — защита от двойной отправки в пределах той же минуты.
+- **Циклический импорт** между D.4 (`admin_communication`) и C-командами (`admin_economy`) разрешён в одну сторону: `admin_communication` импортирует `CONFIRM_DISPATCHERS`/`ConfirmDispatchDeps` из `admin_economy` и **мутирует** dict при module-load. `bot/handlers/__init__.py` явно регистрирует `admin_communication_router` после `admin_economy_router` — это гарантирует, что mutation выполняется до первого использования.
+- **`bot=None` graceful degradation** — `BroadcastSender` инициализируется условно (`AiogramBroadcastSender(bot=bot) if bot is not None else NoopBroadcastSender()`), чтобы CLI/scheduler-only режимы (без Telegram-bot-а) не падали при сборке `Container`-а. `NoopBroadcastSender.send(...)` всегда возвращает `"failed"` и пишет warning в лог.
+- Из Спринта 2.5 остаётся: **D.6** (`/admin_setup_totp`), **D.10** (`docs/admin_runbook.md`), **D.11** (доптесты RBAC), **D.12** (расширение локалей).
+
+---
+
 ## 2026-05-07 — Спринт 2.5-D.7: миграция legacy admin-команд под `AdminGuard` + RBAC (`/balance_reload`, `/admin_stats`, `/set_max_dau`, `/anticheat_unban`)
 
 **Автор:** Devin (агент)
