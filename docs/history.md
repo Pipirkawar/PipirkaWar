@@ -23,6 +23,53 @@
 
 ---
 
+## 2026-05-07 — Спринт 2.5-D.6: `/admin_setup_totp` — self-service выдача TOTP-секрета SUPER_ADMIN-у
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 2.5 ([`current_tasks.md`](current_tasks.md)), ПД §5 / задача 2.5.8 (косвенно — общая инфраструктура `admin_audit_log`), ГДД §18.6 (`admins.totp_secret`, `admin_audit_log`), §18.6.2 (RBAC — `SETUP_TOTP` → `SUPER_ADMIN`), §18.6.5 (TOTP-flow для опасных команд), [PR #90](https://github.com/Pipirkawar/PipirkaWar/pull/90) (мерж — `4c2b100`)
+
+Что сделано:
+- **Команда `/admin_setup_totp <bootstrap_password>`** — self-service инициализация TOTP-секрета для живого `SUPER_ADMIN`-а без миграций и raw-SQL. Закрывает разрыв: до D.6 опасные команды (`/grant_*`, `/set_balance_value`, `/ban_player`, `/announce`) уже были под TOTP-confirm, но сам `Admin.totp_secret` мог быть выдан только напрямую через миграцию `0017_admins_totp_secret`.
+- **Domain** (`domain/admin/`):
+  - `AdminAuditAction.ADMIN_TOTP_SETUP` — новое значение enum-а для admin-audit-журнала.
+  - `IAdminRepository.set_totp_secret(*, admin_id: int, secret: str) -> None` — новый абстрактный метод порта (mechanism-only; политика overwrite — на уровне use-case-а).
+  - `domain/admin/ports/totp_secret_generator.py::ITotpSecretGenerator.generate() -> str` — новый порт, возвращает BASE32-секрет (RFC 4648).
+  - `domain/admin/setup_totp_errors.py` — три новые доменные ошибки (наследники `DomainError`): `BootstrapPasswordNotConfiguredError` (env `BOOTSTRAP_ADMIN_PASSWORD` не задан), `BootstrapPasswordInvalidError` (constant-time-сравнение не прошло), `TotpAlreadyConfiguredError` (у этого админа уже есть `totp_secret` — переотдача через эту команду запрещена).
+- **Application** (`application/admin/setup_totp.py::SetupAdminTotp`) — use-case-фасад полного flow: (1) `ensure_admin_authorized(...)` → `AdminCommandKind.SETUP_TOTP` (только `SUPER_ADMIN`, denial → `ADMIN_AUTHORIZATION_DENIED` в коротком UoW); (2) проверка `bootstrap_password is not None` → иначе `BootstrapPasswordNotConfiguredError`; (3) `hmac.compare_digest(...)` против ENV-пароля → иначе `BootstrapPasswordInvalidError`; (4) `IAdminRepository.get_by_tg_id(...)` + проверка `admin.totp_secret is None` → иначе `TotpAlreadyConfiguredError`; (5) `ITotpSecretGenerator.generate()` → `IAdminRepository.set_totp_secret(...)` в основном UoW; (6) `IAdminAuditLogger.record(action=ADMIN_TOTP_SETUP, ...)`; (7) возврат `(secret, otpauth://`-URI`)` handler-у. Use-case = policy, repo = mechanism (split задокументирован в `test_set_totp_secret_overwrites_existing_value` integration-тесте).
+- **Infrastructure**:
+  - `infrastructure/admin/pyotp_totp_secret_generator.py::PyOtpTotpSecretGenerator` — обёртка над `pyotp.random_base32()` (160 бит энтропии).
+  - `infrastructure/db/repositories/admin.py::SqlAlchemyAdminRepository.set_totp_secret(...)` — single `UPDATE admins SET totp_secret = :secret WHERE id = :admin_id`; `rowcount == 0` → `ConcurrencyError` (use-case откатит свою UoW).
+  - `infrastructure/settings/settings.py::BootstrapSettings.admin_password: SecretStr | None` — поле для env `BOOTSTRAP_ADMIN_PASSWORD`. Если не задан — use-case выдаёт `BootstrapPasswordNotConfiguredError` (silent allow-through исключён).
+- **Bot/handlers**:
+  - `bot/handlers/admin_setup_totp.py::handle_admin_setup_totp` — handler `/admin_setup_totp <password>`, парсинг аргументов, **только в ЛС** (`message.chat.type == "private"` → `admin-setup-totp-non-private`), локализованные ответы для всех ошибок. **Секрет и `otpauth://`-URI пишутся ТОЛЬКО в `structlog.info(event="admin_totp_setup", actor_tg_id=..., secret=..., provisioning_uri=...)` — в Telegram-чат уходит ЛИШЬ локализованный `admin-setup-totp-success` без секретного материала.** Оператор копирует URI из логов бота на VM и импортирует в свой Authenticator (Authy / Google Authenticator).
+  - `bot/presenters/admin_setup_totp.py` — `AdminSetupTotpPresenter`: рендер локализованных сообщений (usage / non-private / not-authorized / password-not-configured / password-invalid / already-configured / success).
+  - `bot/handlers/__init__.py::register_routers` — подключение нового router-а.
+  - `bot/main.py::Container` + `build_container(...)` — два новых поля `totp_secret_generator: ITotpSecretGenerator`, `setup_admin_totp: SetupAdminTotp`; `BootstrapSettings.admin_password.get_secret_value()` пробрасывается в use-case как `bootstrap_password: str | None`.
+- **Локали** (`locales/{ru,en}.ftl`) — 7 ключей `admin-setup-totp-{usage,non-private,not-authorized,password-not-configured,password-invalid,already-configured,success}` (RU + EN, всего +14 строк × 2 файла).
+- **Тесты:**
+  - `tests/unit/application/admin/test_setup_totp.py` — 9 unit-тестов на use-case (RBAC-deny, password-not-configured, password-invalid, already-configured, генерация secret, store + audit, отдача `otpauth://`-URI, разные varieties аргументов).
+  - `tests/unit/bot/handlers/test_admin_setup_totp.py` — 11 unit-тестов handler-а (usage, non-private, not-authorized, password-not-configured, password-invalid, already-configured, happy-path с `structlog.testing.LogCapture()` для проверки структурированных событий, парсинг аргументов с пробелами).
+  - `tests/integration/db/test_admin_repository.py` — +3 integration-теста (`set_totp_secret_persists_after_commit`, `set_totp_secret_overwrites_existing_value`, `set_totp_secret_unknown_admin_raises_concurrency_error`).
+  - `tests/fakes/admin_repo.py` + `tests/unit/application/test_bootstrap_admin.py::FakeAdminRepo` — реализации `set_totp_secret(...)` (через `dataclasses.replace`) для всех `IAdminRepository`-фейков, чтобы абстрактный класс полностью покрывался.
+  - `tests/unit/bot/test_composition_root.py::_container_with_fakes` — провязка нового use-case-а в test-DI.
+
+Результат / артефакты:
+- Коммиты на ветке `devin/1778151428-sprint-2-5-d.6-admin-setup-totp`: `8e8fda6`, `ab8e3ef`, `07eb70f`, `4323d54`, `03e5977`, `1f17bbf`, `1addd63`, `6caedcb`, `e8298be`. Merge-коммит: `4c2b100`.
+- Локальный `make ci`: зелёный — 3337 passed / 1 skipped, coverage **95.90%** (~1:38).
+- Все 6 RBAC-чувствительных команд (`SETUP_TOTP` + 5 TOTP-confirm-команд) теперь живут под единым каналом `IAdminAuthorizationPolicy` + `ensure_admin_authorized` helper — pattern замкнут.
+
+Заметки / решения:
+- **Канал доставки секрета — bot-логи, не Telegram-чат.** Альтернатива (отправка `otpauth://`-URI или QR-кода в личку) — отброшена: Telegram-канал не считается trusted (история в облаке, доступ к чату не гарантирует доступа к VM). Логи бота на VM читаются только тем, у кого SSH/VPN-доступ — это уже barrier-of-entry, эквивалентный compromise всего хоста. RFC 6238 `otpauth://totp/PipirikWars:<tg_id>?secret=<base32>&issuer=PipirikWars` пишется в `structlog.info(...)` структурированным полем `provisioning_uri` — оператор `grep`-ает event-маркер `admin_totp_setup` и копирует URI.
+- **Constant-time-сравнение пароля** — `hmac.compare_digest(stored_password.encode(), supplied_password.encode())`. Защита от timing-атак: длина пароля сравнивается обычным `==`, но содержимое — фиксированно по времени.
+- **Plain-text BASE32 в БД** — миграция `0017_admins_totp_secret` (D.4-prep, до D.6) сохраняет секрет в открытом виде, без envelope-encryption. Threat-model: операционная безопасность сводится к шифрованию-at-rest на уровне диска (SSD encryption + ограниченный доступ к VM); добавление прикладного шифрования откладывается до отдельного спринта (если придёт требование от security-review).
+- **Idempotency = политика на use-case-уровне.** Use-case проверяет `admin.totp_secret is not None` и поднимает `TotpAlreadyConfiguredError` — то есть переотдача секрета невозможна без сначала reset-а в БД (отдельный manual-step в `admin_runbook.md` D.10). Repo-метод (`SqlAlchemyAdminRepository.set_totp_secret`) НЕ enforce-ит это — он чисто mechanism, и `test_set_totp_secret_overwrites_existing_value` это документирует. Split (policy в use-case, mechanism в repo) — стандартный для всего проекта.
+- **Bootstrap-пароль одноразовый по умолчанию.** ENV `BOOTSTRAP_ADMIN_PASSWORD` валиден, пока оператор не уберёт его из инфраструктуры (`fly secrets unset` / `kubectl delete secret` / etc.). Followup D.6.1 — автоматическая «само-инвалидизация» (например, write `BOOTSTRAP_ADMIN_PASSWORD_USED_AT` в admin-audit и rejecting запросы по дате) — отложен до D.10 runbook-а (там же будет step-by-step rotation procedure).
+- **Container DI расширение.** `Container` получил два новых поля (`totp_secret_generator`, `setup_admin_totp`) — это нарушает обратную совместимость для downstream-тестов, которые строят `Container(...)` напрямую (как `_container_with_fakes` в `test_composition_root.py`). Все internal call-site-ы обновлены в этом PR; внешних потребителей `Container`-а нет.
+- Из Спринта 2.5 остаётся: **D.10** (`docs/admin_runbook.md`), **D.11** (доптесты RBAC), **D.12** (расширение локалей).
+
+---
+
 ## 2026-05-07 — Спринт 2.5-D.4: `/announce` — broadcast с TOTP-confirm и фоновым throttle
 
 **Автор:** Devin (агент)
