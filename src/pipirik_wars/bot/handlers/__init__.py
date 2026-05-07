@@ -21,6 +21,7 @@ from pipirik_wars.bot.handlers.admin_communication import (
     router as admin_communication_router,
 )
 from pipirik_wars.bot.handlers.admin_economy import router as admin_economy_router
+from pipirik_wars.bot.handlers.admin_setup_totp import router as admin_setup_totp_router
 from pipirik_wars.bot.handlers.admin_support import router as admin_support_router
 from pipirik_wars.bot.handlers.clan_head import router as clan_head_router
 from pipirik_wars.bot.handlers.clan_history import router as clan_history_router
@@ -72,6 +73,9 @@ def register_routers(dispatcher: Dispatcher) -> None:
     # Спринт 2.5-D.1+: команды поддержки кланов (`/clan` и далее).
     # Фильтр `is_admin` — на самом router-е.
     dispatcher.include_router(admin_clan_router)
+    # Спринт 2.5-D.6: self-service выдача TOTP-секрета (`/admin_setup_totp`).
+    # Фильтр `is_admin` — на самом router-е.
+    dispatcher.include_router(admin_setup_totp_router)
     dispatcher.include_router(registration_router)
 
 

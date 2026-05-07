@@ -53,6 +53,7 @@ from pipirik_wars.application.admin import (
     RequestAdminConfirm,
     RunBroadcastAnnouncement,
     SetBalanceValue,
+    SetupAdminTotp,
     UnfreezeClanAdmin,
     UnfreezePlayer,
     VerifyAdminConfirm,
@@ -140,6 +141,7 @@ from pipirik_wars.domain.admin import (
     IAdminAuthorizationPolicy,
     IAdminConfirmStore,
     IAdminRepository,
+    ITotpSecretGenerator,
     ITotpVerifier,
     RoleBasedAdminAuthorizationPolicy,
 )
@@ -171,6 +173,7 @@ from pipirik_wars.domain.shared.ports import (
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
 from pipirik_wars.infrastructure.admin import (
     InMemoryAdminConfirmStore,
+    PyOtpTotpSecretGenerator,
     PyOtpTotpVerifier,
 )
 from pipirik_wars.infrastructure.anticheat import StructlogAnticheatAdminAlerter
@@ -381,6 +384,7 @@ class Container:
     admin_audit_query: IAdminAuditQuery
     admin_confirm_store: IAdminConfirmStore
     totp_verifier: ITotpVerifier
+    totp_secret_generator: ITotpSecretGenerator
     admin_authz: IAdminAuthorizationPolicy
     find_players: FindPlayers
     get_player_card: GetPlayerCard
@@ -407,6 +411,8 @@ class Container:
     run_broadcast_announcement: RunBroadcastAnnouncement
     broadcast_sender: IBroadcastSender
     broadcast_task_spawner: IBroadcastTaskSpawner
+    # Спринт 2.5-D.6: self-service выдача TOTP-секрета (`/admin_setup_totp`).
+    setup_admin_totp: SetupAdminTotp
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -935,6 +941,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     admin_audit_query = SqlAlchemyAdminAuditQuery(uow=uow)
     admin_confirm_store = InMemoryAdminConfirmStore()
     totp_verifier = PyOtpTotpVerifier()
+    totp_secret_generator = PyOtpTotpSecretGenerator()
     find_players = FindPlayers(
         uow=uow,
         admins=admins,
@@ -1103,6 +1110,23 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clock=clock,
         authz=admin_authz,
     )
+    # Спринт 2.5-D.6: out-of-band bootstrap-пароль для `/admin_setup_totp`.
+    # `None` ⇒ команда отказывает (fail-closed); use-case дальше сравнивает
+    # пароль через `hmac.compare_digest()` constant-time-сравнением.
+    bootstrap_admin_password = (
+        settings.bootstrap.admin_password.get_secret_value()
+        if settings.bootstrap.admin_password is not None
+        else None
+    )
+    setup_admin_totp = SetupAdminTotp(
+        uow=uow,
+        admins=admins,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+        secret_generator=totp_secret_generator,
+        bootstrap_password=bootstrap_admin_password,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -1190,6 +1214,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         admin_audit_query=admin_audit_query,
         admin_confirm_store=admin_confirm_store,
         totp_verifier=totp_verifier,
+        totp_secret_generator=totp_secret_generator,
         admin_authz=admin_authz,
         find_players=find_players,
         get_player_card=get_player_card,
@@ -1211,6 +1236,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         run_broadcast_announcement=run_broadcast_announcement,
         broadcast_sender=broadcast_sender,
         broadcast_task_spawner=broadcast_task_spawner,
+        setup_admin_totp=setup_admin_totp,
     )
 
 
@@ -1326,6 +1352,8 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["broadcast_announcement"] = container.broadcast_announcement
     dispatcher["run_broadcast_announcement"] = container.run_broadcast_announcement
     dispatcher["broadcast_task_spawner"] = container.broadcast_task_spawner
+    # Спринт 2.5-D.6 — `/admin_setup_totp` (self-service выдача TOTP-секрета).
+    dispatcher["setup_admin_totp"] = container.setup_admin_totp
     return dispatcher
 
 
