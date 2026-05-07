@@ -53,7 +53,7 @@ class TestScrollVO:
     def test_scroll_is_frozen(self) -> None:
         scroll = Scroll(category=ScrollCategory.WEAPON, blessed=False)
         with pytest.raises(dataclasses.FrozenInstanceError):
-            scroll.category = ScrollCategory.ARMOR  # type: ignore[misc]
+            scroll.category = ScrollCategory.ARMOR
 
     def test_two_equal_scrolls_compare_equal(self) -> None:
         a = Scroll(category=ScrollCategory.WEAPON, blessed=True)
