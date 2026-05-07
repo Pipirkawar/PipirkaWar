@@ -23,6 +23,63 @@
 
 ---
 
+## 2026-05-07 — Спринт 3.1-B: use-cases `Start/Finish{Mountain,Dungeon}Run` + persistence + миграция `0018_pve_runs` + DI
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 3.1 ([`current_tasks.md`](current_tasks.md)), ПД §6.3 / задачи 3.1.1, 3.1.2 (use-case + persistence для гор и данжона), ГДД §8 «Походы (PvE)», §3.1 «Правило 20 см», §3.3 «Анти-чит хардкап», [PR #101](https://github.com/Pipirkawar/PipirkaWar/pull/101) (мерж — `5f25ca0`)
+
+Что сделано:
+- **Infra-фундамент PvE (commit `5a1a411`):**
+  - `domain/shared/ports/audit.AuditAction` — +4 акшна `MOUNTAIN_RUN_STARTED/FINISHED`, `DUNGEON_RUN_STARTED/FINISHED`.
+  - `domain/shared/ports/audit.AuditSource` — +`MOUNTAINS`, `DUNGEON` (organic, попадают под hardcap-канон ГДД §3.3).
+  - `domain/security/entities.LockReason` — +`MOUNTAINS`, `DUNGEON`.
+  - `domain/shared/ports/scheduler.IDelayedJobScheduler` — 4 abstract-метода `schedule_finish_{mountain,dungeon}_run` + `cancel_finish_*` (идемпотентны по `run_id`, recovery после рестарта воркера).
+  - `infrastructure/scheduler/aps.APSchedulerDelayedJobScheduler` — stub-реализация (factory-wiring `mountain_finish_factory`/`dungeon_finish_factory` будет в 3.1-E с bot-handler-ами).
+  - `tests/fakes/delayed_job_scheduler.FakeDelayedJobScheduler` — in-memory dict + cancelled-list.
+  - `config/balance.yaml::anticheat.organic_sources` — +`mountains`, `dungeon`.
+  - **Миграция `0018_pve_runs`** — расширение whitelist `audit_log_source_whitelist` + создание `mountain_runs` и `dungeon_runs` (зеркальные структуры: id, player_id, status, started_at, ends_at, branch_name, branch_sign, length_delta_cm signed, drops JSON, finished_at) с CHECK-инвариантами (status ∈ {in_progress, finished}; branch_sign ∈ {gain, loss}; sign↔delta consistency; `finished_at`↔status consistency; `ends_at > started_at`); индексы `(player_id, status)`, `(status, ends_at)`, partial unique `(player_id) WHERE status='in_progress'`.
+- **DTOs + ORM (commit `70ee23f`):**
+  - `application/dto/inputs.py` — 4 новых DTO `Start/Finish{Mountain,Dungeon}RunInput`. Контракт зеркалит forest (`tg_id` для старта, `run_id` для финиша).
+  - `infrastructure/db/models/pve_runs.py::MountainRunORM`, `DungeonRunORM` — ORM-модели с полным набором CHECK-инвариантов и индексов из миграции 0018. Общий factory-хелпер `_pve_run_table_args(table_name)`.
+- **Application — горы (commit `9f94951`):**
+  - `application/mountains/start_run.StartMountainRun` (по образцу `StartForestRun`):
+    - проверки входа: `thickness ≥ unlock_levels.mountains` (по умолчанию 3), `length ≥ 20 см` (ГДД §3.1);
+    - `activity_lock(player, MOUNTAINS, ttl=cooldown)`;
+    - outcome ролится один раз через `pick_pve_outcome(MOUNTAINS, ...)`;
+    - `scheduler.schedule_finish_mountain_run(run_id, ends_at)`;
+    - audit `MOUNTAIN_RUN_STARTED` с idempotency_key.
+  - `application/mountains/finish_run.FinishMountainRun`:
+    - +-исходы — через `progression.add_length(...)` с `source=AuditSource.MOUNTAINS` (hardcap-канон ГДД §3.3);
+    - −-исходы — прямая `player.with_length(...)` + audit `LENGTH_REVOKE` с idempotency_key `mountain_run_loss_revoke:<run_id>` (whitelist для `length_grant_guard`);
+    - `scheduler.cancel_finish_mountain_run(run_id)`;
+    - идемпотентен (повторный финиш — no-op, возвращает уже-сохранённый run).
+  - `tests/fakes/mountain_run_repo.FakeMountainRunRepository` (in-memory dict + active-by-player tracking).
+  - **+25 unit-тестов** (`tests/unit/application/mountains/test_{start,finish}_run.py`): входные проверки (NotEnoughThicknessError/Length, AlreadyInMountains), happy-path для +/−-исходов, idempotency, scheduler invocation, lock release, audit fields.
+- **Application — данжон (commit `17126c2`):** зеркало гор. Различия: `LockReason.DUNGEON`, `AuditAction.DUNGEON_RUN_*`, `AuditSource.DUNGEON`; `thickness ≥ unlock_levels.dungeon` (по умолчанию 6); cooldown 40–60 мин, `max_drops=3` (горы: 20–40 мин, `max_drops=1`); `scheduler.schedule_finish_dungeon_run(...)`; idempotency-key-и `dungeon_run_started/finished/loss_revoke` + `add_length:dungeon_run`. **+24 unit-теста**.
+- **Persistence — Sql impls + integration (commit `46bad85`):**
+  - `infrastructure/db/repositories/mountain_run.SqlAlchemyMountainRunRepository`, `dungeon_run.SqlAlchemyDungeonRunRepository` — реализации портов поверх таблиц `mountain_runs`/`dungeon_runs`. Зеркальные структуры; общая логика — JSON-сериализация `tuple[PveItemDrop, ...]` в `[{"item_id": ...}]`, восстановление `Item` через `IBalanceConfig.items_catalog`, вывод `branch_sign` из знака `length_delta_cm`, partial-unique на `(player_id) WHERE status='in_progress'`.
+  - **Integration round-trip** `tests/integration/db/test_pve_run_repositories.py` (446 строк): `add → get_by_id → save(finished) → get_active_by_player`, корректность сериализации drops, проверка CHECK-инвариантов через `IntegrityError`, partial-unique на двух IN_PROGRESS-ах одного игрока.
+- **DI-wiring (commit `5b2f695`):**
+  - `bot/main.py::Container` — импорт `Start/Finish{Mountain,Dungeon}Run` use-case-ов + портов `IMountainRunRepository`/`IDungeonRunRepository` + Sql-реализаций. Container получает 6 новых полей: `mountain_runs`, `dungeon_runs` (репозитории) + 4 use-case-а. Bot-handler-ов `/mountains` / `/dungeon` **нет** — это 3.1-E.
+- **Архитектурные тесты:** `tests/unit/architecture/test_length_grant_guard.py` — добавлены 4 файла application/{mountains,dungeon}/finish_run.py в whitelist прямой записи длины (−-исходы пишут `player.with_length(...)` напрямую, как `application/pvp/apply_outcome.py`).
+
+Результат / артефакты:
+- **41 файл изменён**, +3609 / −47 строк.
+- **+~290 unit/integration-тестов** (49 unit для mountains+dungeon use-cases + integration round-trip).
+- **Миграция:** `infrastructure/db/migrations/versions/20260507_0018_pve_runs.py` (новые таблицы + расширение CHECK whitelist).
+- **CI на момент мерджа PR #101:** зелёный — 3571 passed / 1 skipped, coverage 95.88%, ruff/mypy/import-linter — clean.
+- 5 коммитов на feature-ветке `devin/1778174890-sprint-3-1-B-pve-persistence` (`5a1a411` → `70ee23f` → `9f94951` → `17126c2` → `46bad85` → `5b2f695`) + 1 doc-sync коммит `1d2312d` mid-flight.
+
+Заметки / решения:
+- **Зеркальные модули вместо унификации.** В 3.1-A было решено держать `domain/{mountains,dungeon}/` отдельно (а не один общий модуль). 3.1-B продолжил эту линию для `application/`-слоя: `application/mountains/` и `application/dungeon/` — отдельные пакеты, общая логика выражена через одинаковую сигнатуру use-case-ов (DI-инвариант) и единый picker `pick_pve_outcome` в `domain/pve/services.py`. Дублирование use-case-кода (~50 строк) — осознанная цена за независимость файлов: 3.1-E (bot-handler-ы) добавит свой пакет на каждую локацию, а 3.1-C (дроп оружия) и 3.1-D (скроллы) ничего не меняют в структуре application/{mountains,dungeon}.
+- **+-исходы через `ILengthGranter` (hardcap-канон).** Любой organic-источник (forest, mountains, dungeon) обязан проходить через `progression.add_length(source=AuditSource.<...>)` — он применяет rolling 24ч / 7д hardcap из ГДД §3.3. Прямая запись через `player.with_length(...)` остаётся только для −-исходов (revoke), отдельный whitelist в `tests/unit/architecture/test_length_grant_guard.py`.
+- **Idempotency-keys** прозрачно зеркальны для гор и данжона: `<location>_run_started/finished:<run_id>`, `<location>_run_loss_revoke:<run_id>`, `add_length:<location>_run:<run_id>`. Это позволяет двойной финиш / двойной revoke не создавать повторных audit-записей.
+- **Scheduler — stub в APS.** `APSchedulerDelayedJobScheduler.schedule_finish_{mountain,dungeon}_run` пока логирует `factory not wired` (callback-фабрики `mountain_finish_factory`/`dungeon_finish_factory` будут привязаны в 3.1-E с bot-handler-ами, как у `forest`). Use-case-ы при этом полностью функциональны и тестируются через `FakeDelayedJobScheduler`.
+- **Bot-handler-ов нет в 3.1-B.** Скоуп этого PR — domain → application → infrastructure (persistence) + DI. UI-слой (`/mountains`, `/dungeon`, презентеры, локали `mountains-*`/`dungeon-*`) — отдельный PR 3.1-E (после 3.1-C, 3.1-D), см. `development_plan.md` §6.3.1+.
+
+---
+
 ## 2026-05-07 — Спринт 3.1-A: каркас доменов гор и данжона + общий picker `pick_pve_outcome`
 
 **Автор:** Devin (агент)
