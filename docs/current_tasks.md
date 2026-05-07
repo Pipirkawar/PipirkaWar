@@ -15,9 +15,9 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный PR — **2.5-D.10** ([PR #92](https://github.com/Pipirkawar/PipirkaWar/pull/92), коммит `a8f26e5`) — новый файл `docs/admin_runbook.md` (операционная документация для админ-команды: RBAC-матрица из кода, TOTP-setup, чтение `/audit`, recovery при потере 2FA, ротация `BOOTSTRAP_ADMIN_PASSWORD`); без изменений кода. Перед ним: postmerge 2.5-D.6 (PR #91, `cb40c2e`); 2.5-D.6 (PR #90, `4c2b100`); postmerge 2.5-D.4 (PR #89, `8df66e7`); 2.5-D.4 (PR #88, `774bd7c`). До этого: 2.5-A (PR #79), 2.5-B (PR #81), 2.5-C (PR #83), постмердж-доки (PR #84), 2.5-D часть 1 (PR #85), 2.5-D.7 (PR #86), postmerge 2.5-D.7 (PR #87). Из Спринта 2.5 остаётся: **D.11** (доптесты RBAC), **D.12** (расширение локалей).
+**На `main`:** последний смерженный PR — **postmerge 2.5-D.10** ([PR #93](https://github.com/Pipirkawar/PipirkaWar/pull/93), коммит `3288fc6`) — sync `history.md` + `current_tasks.md` под D.10-в-main, без изменений кода. Перед ним: 2.5-D.10 (PR #92, `a8f26e5`) — новый файл `docs/admin_runbook.md`; postmerge 2.5-D.6 (PR #91, `cb40c2e`); 2.5-D.6 (PR #90, `4c2b100`); postmerge 2.5-D.4 (PR #89, `8df66e7`); 2.5-D.4 (PR #88, `774bd7c`). До этого: 2.5-A (PR #79), 2.5-B (PR #81), 2.5-C (PR #83), постмердж-доки (PR #84), 2.5-D часть 1 (PR #85), 2.5-D.7 (PR #86), postmerge 2.5-D.7 (PR #87). Из Спринта 2.5 остаётся: **D.11** (доптесты RBAC — текущий PR), **D.12** (расширение локалей).
 
-**Активная feature-ветка:** `devin/1778162036-sprint-2-5-d.10-postmerge` (текущий PR — postmerge 2.5-D.10: sync `history.md` + `current_tasks.md` под `main = a8f26e5`, без изменений кода).
+**Активная feature-ветка:** `devin/1778164769-sprint-2-5-d.11-rbac-tests` (текущий PR — 2.5-D.11: exhaustive RBAC-матрица в unit-тестах + helper-coverage по `actor_role`. Без изменений production-кода).
 
 **Что уже есть в коде после 2.5-D.10 (PR #92) — в коде ничего нового (D.10 = docs-only); срез кода отражает состояние после 2.5-D.6 (PR #90):**
 - `domain/admin/authorization.py` — `AdminCommandKind` (whitelist 27 команд, включая `BROADCAST_ANNOUNCEMENT` и `SETUP_TOTP`), `IAdminAuthorizationPolicy`, `RoleBasedAdminAuthorizationPolicy` (file-closed-матрица; `SETUP_TOTP` → только `SUPER_ADMIN`), `AdminAuthorizationDeniedError`.
@@ -41,10 +41,11 @@
 - ~~**2.5-D.6**~~ ✅ закрыт PR #90 (`4c2b100`) — `/admin_setup_totp <bootstrap_password>`: self-service выдача TOTP-секрета `SUPER_ADMIN`-у; constant-time-сравнение пароля; secret + `otpauth://`-URI пишутся ТОЛЬКО в structlog-логи; audit `ADMIN_TOTP_SETUP`.
 - ~~**postmerge 2.5-D.6**~~ ✅ закрыт PR #91 (`cb40c2e`) — sync `history.md` + `current_tasks.md` под `main = 4c2b100`. Без изменений кода.
 - ~~**2.5-D.10**~~ ✅ закрыт PR #92 (`a8f26e5`) — новый файл `docs/admin_runbook.md` (operational doc, ~324 строки, 10 секций). Без изменений кода.
-- **Текущий PR (postmerge 2.5-D.10):** sync `history.md` + `current_tasks.md` под `main = a8f26e5`. Без изменений кода.
-- **Дальше:** D.11 (доптесты RBAC), D.12 (локали) — отдельными PR-ами.
+- ~~**postmerge 2.5-D.10**~~ ✅ закрыт PR #93 (`3288fc6`) — sync `history.md` + `current_tasks.md` под `main = a8f26e5`. Без изменений кода.
+- **Текущий PR (2.5-D.11):** exhaustive RBAC-матрица в `tests/unit/domain/admin/test_authorization.py` (88 кейсов через `itertools.product` + consistency-test, что все `AdminCommandKind` покрыты ожиданиями + inactive-deny per-role) + parametrized helper-test в `tests/unit/application/admin/test_authorization_helper.py` (verify `actor_role`/`command_kind` propagation для каждой роли × запрещённой команды). Без изменений production-кода / локалей / миграций.
+- **Дальше:** D.12 (локали) — отдельным PR-ом.
 
-**`make ci` локально на `main` (после 2.5-D.10):** зелёный — 3337 passed / 1 skipped, coverage **95.90%** (~1:27). На текущей feature-ветке postmerge — будет прогон перед открытием PR.
+**`make ci` локально на `main` (после postmerge 2.5-D.10 = `3288fc6`):** зелёный — 3337 passed / 1 skipped, coverage **95.90%** (~1:37). На текущей feature-ветке D.11 — будет прогон перед открытием PR (ожидание: ~3340+ тестов / 1 skipped, coverage не падает — добавляются только тесты).
 
 **`AGENT_HANDOFF.md`:** нет.
 
@@ -55,15 +56,15 @@
 | Поле | Значение |
 |---|---|
 | **Активный спринт** | `2.5 — Расширенный админ-интерфейс в боте (финал)` |
-| **Активный PR / шаг** | **postmerge 2.5-D.10 (sync docs)**: запись `2026-05-07 — Спринт 2.5-D.10` в `history.md`; обновить «Снимок состояния» / «Текущая позиция» / «Чек-лист текущего PR» под `main = a8f26e5`. Без изменений кода. |
-| **Активная feature-ветка** | `devin/1778162036-sprint-2-5-d.10-postmerge` (создана от `main = a8f26e5`) |
+| **Активный PR / шаг** | **2.5-D.11 (доптесты RBAC)**: exhaustive matrix `AdminRole × AdminCommandKind` (88 кейсов через `itertools.product`), consistency-test «все enum-значения покрыты ожиданиями», inactive-deny per-role; helper-test verify `actor_role`/`command_kind` propagation per role × forbidden command. Без изменений production-кода. |
+| **Активная feature-ветка** | `devin/1778164769-sprint-2-5-d.11-rbac-tests` (создана от `main = 3288fc6`) |
 | **Базовая ветка** | `main` |
-| **Последний коммит на main** | `a8f26e5` (мерж PR #92 «docs(2.5-D.10): admin_runbook.md — operational doc для админ-команды») |
+| **Последний коммит на main** | `3288fc6` (мерж PR #93 «docs(postmerge 2.5-D.10): history.md +1 запись, current_tasks.md sync под D.10-в-main») |
 | **Последний коммит на feature-ветке** | будет зафиксирован при первом push-е |
 | **PR (если открыт)** | будет открыт после локального зелёного `make ci` |
 | **CI статус** | на main зелёный: `make ci` — 3337 passed / 1 skipped, coverage 95.90% |
-| **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задача 2.5.8 (общая инфраструктура `admin_audit_log` + RBAC); постмердж-PR-ы — служебные, тз для них нет |
-| **Связанная спецификация в `game_design.md`** | §18.6 (целиком), §18.6.4 (bootstrap super-admin), §18.6.5 (TOTP-flow). Runbook в PR #92 уже в main. |
+| **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задача 2.5.8 (общая инфраструктура `admin_audit_log` + RBAC); D.11 — закрытие пробела «неравномерное coverage RBAC-deny по `AdminCommandKind × AdminRole`» |
+| **Связанная спецификация в `game_design.md`** | §18.6.2 (RBAC-матрица: какие роли что могут). Тесты независимо кодируют это правило, чтобы дрейф `_matrix` от ГДД падал на ревью. |
 | **`AGENT_HANDOFF.md` существует?** | нет |
 
 ---
@@ -72,15 +73,17 @@
 
 > Отмечай `[x]` по мере выполнения. **Перед каждым `git commit`** обнови этот чек-лист (даже если шаг ещё не закрыт — отметь, что начат). Это safety-net на случай, если агент прервётся в середине работы.
 
-**Текущий PR — postmerge 2.5-D.10 (sync docs):**
+**Текущий PR — 2.5-D.11 (доптесты RBAC):**
 
-- [x] Добавить запись **2.5-D.10** в `docs/history.md` (свежие — сверху): `docs/admin_runbook.md` operational doc, PR #92, merge `a8f26e5`.
-- [x] Обновить «Снимок состояния проекта» в `docs/current_tasks.md` под фактический `main = a8f26e5`.
-- [x] Обновить «Текущая позиция» под postmerge 2.5-D.10.
-- [x] Заменить «Чек-лист текущего PR» на постмердж-список (этот блок).
-- [ ] **Перед PR:** `make ci` локально зелёный (docs-only — должен быть идентичен main-CI).
-- [ ] Открыть PR `docs(postmerge 2.5-D.10): history.md +1 запись, current_tasks.md sync под D.10-в-main`.
-- [ ] **После мерджа:** перейти к следующей задаче (D.11 → D.12 — выбор пользователя).
+- [x] Создать ветку `devin/1778164769-sprint-2-5-d.11-rbac-tests` от `main = 3288fc6`.
+- [x] Прочитать `domain/admin/authorization.py` (`AdminCommandKind` ×22 значения, `RoleBasedAdminAuthorizationPolicy._matrix`) и `domain/admin/entities.py` (`AdminRole` ×4 значения).
+- [x] В `tests/unit/domain/admin/test_authorization.py` независимо специфицировать ожидания (frozenset-группы по §18.6.2 ГДД: read-side / confirm-flow / support-ops / economy / super-only) — отдельно от `_matrix` в коде, чтобы любой дрейф ловился на CI.
+- [x] Сгенерировать exhaustive-матрицу через `itertools.product(AdminRole, AdminCommandKind)` → 88 кейсов; добавить consistency-test (все enum-значения покрыты ожиданиями) + per-role inactive-deny-test.
+- [x] В `tests/unit/application/admin/test_authorization_helper.py` параметризовать helper по 11 (роль × запрещённая команда), verify `actor_role`/`command_kind` в `after`-snapshot, в `reason`, в исключении.
+- [x] Обновить «Снимок состояния», «Текущая позиция», «Что ровно сейчас в работе», «Чек-лист текущего PR» в `docs/current_tasks.md` под D.11.
+- [ ] **Перед PR:** `make ci` локально зелёный (test-only PR — coverage не падает).
+- [ ] Открыть PR `test(2.5-D.11): exhaustive RBAC matrix tests (22 × 4 = 88 cases) + helper-coverage по actor_role`.
+- [ ] **После мерджа:** перейти к D.12 (локали).
 
 **Спринт 2.5 — что ещё осталось (детализация на референс):**
 
@@ -98,13 +101,13 @@
 
 > Сюда пиши **дельту** к плану: что именно меняешь, какие use-cases / порты / handler-ы / тесты затронуты. Не дублируй ТЗ из `development_plan.md` — пиши только то, что важно для **текущего PR**.
 
-**Текущий PR (postmerge 2.5-D.10) — только доки, без изменений кода:**
-- `docs/history.md` — одна запись сверху (свежие — первыми): `2026-05-07 — Спринт 2.5-D.10: docs/admin_runbook.md — operational doc для админ-команды` (PR #92, merge `a8f26e5`). По канону: «Что сделано» / «Результат / артефакты» / «Заметки / решения», ссылки на коммиты и PR.
-- `docs/current_tasks.md` — переписана секция «Снимок состояния» под `main = a8f26e5`, обновлена таблица «Текущая позиция», заменён чек-лист на постмердж-список 2.5-D.10, обновлён этот блок, обновлён референс в «Спринт 2.5 — что ещё осталось» (D.10 → ✅ закрыт).
-- **Без изменений кода.** `make ci` гонится для подтверждения, что postmerge-PR не ломает ничего.
+**Текущий PR (2.5-D.11) — только тесты, без изменений production-кода:**
+- `tests/unit/domain/admin/test_authorization.py` — добавлены: independent-спецификация ожидаемых ролей по группам команд (frozenset-ы `_READ_SIDE_COMMANDS` / `_CONFIRM_FLOW_COMMANDS` / `_SUPPORT_OPS_COMMANDS` / `_ECONOMY_COMMANDS` / `_SUPER_ONLY_COMMANDS`), функция `_build_expected_matrix()` собирающая ожидания, `_FULL_MATRIX_CASES` через `itertools.product(AdminRole, AdminCommandKind) → 88 кейсов`, класс `TestRoleCommandMatrixExhaustive` с тремя методами: `test_consistency_every_command_kind_has_expected_rule`, `test_full_matrix_active_admin` (88 параметризованных кейсов), `test_inactive_admin_denied_for_every_role` (4 кейса). Существующие hand-picked tests (`TestRoleBasedAdminAuthorizationPolicy`) сохранены.
+- `tests/unit/application/admin/test_authorization_helper.py` — добавлен `test_deny_audit_entry_carries_correct_actor_role_and_command` (11 параметризованных кейсов: `READ_ONLY × 3` + `SUPPORT × 4` + `ECONOMIST × 4`), verify что helper не «затирает» `actor_role`/`command_kind` константой, а пробрасывает их в `after`-snapshot, в `reason`, в `AdminAuthorizationDeniedError`.
+- `docs/current_tasks.md` — обновлены 4 секции под D.11.
+- **Без изменений production-кода / локалей / миграций.** `make ci` будет прогон перед открытием PR — coverage не падает (только добавляются тесты).
 
-**Следующий PR (после мерджа этого) — выбор пользователя из остатка Спринта 2.5:**
-- **D.11 — доптесты RBAC** (рекомендован первым: низкий риск, добивает coverage). Coverage для каждой admin-команды на отказ для недостаточной роли (`READ_ONLY`/`SUPPORT`/`ECONOMIST`/`SUPER_ADMIN` × 27 `AdminCommandKind`-значений). Параметризованная матрица в `tests/unit/domain/admin/test_authorization_matrix.py` + integration-тесты на helper-уровне (`ensure_admin_authorized`).
+**Следующий PR (после мерджа этого) — D.12:**
 - **D.12 — расширение локалей** — пройти по `locales/{ru,en}.ftl` и убедиться, что для всех admin-команд из D.1–D.9 + D.4 + D.6 + D.10 есть полный набор `*-confirm-issued`/`*-not-authorized`/`*-success`/etc. ключей. Linter-проверка соответствия RU/EN ключей (нет drift-а).
 
 ---

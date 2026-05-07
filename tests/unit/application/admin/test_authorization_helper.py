@@ -1,4 +1,10 @@
-"""Unit-тесты `ensure_admin_authorized` helper-а (Спринт 2.5-D.8)."""
+"""Unit-тесты `ensure_admin_authorized` helper-а (Спринт 2.5-D.8 + D.11).
+
+D.11 — выровненная coverage: для каждой роли из `AdminRole`
+проверяется, что при отказе helper пишет audit-запись с правильным
+`actor_role` и `command_kind`. Это страхует regression-ы вида
+«helper всегда пишет actor_role=read_only, что бы ни передали».
+"""
 
 from __future__ import annotations
 
@@ -107,3 +113,62 @@ class TestEnsureAdminAuthorized:
                 reason_suffix="ban_player",
             )
         assert "ban_player" in (audit.entries[0].reason or "")
+
+    @pytest.mark.parametrize(
+        ("role", "command"),
+        [
+            (AdminRole.READ_ONLY, AdminCommandKind.BAN_PLAYER),
+            (AdminRole.READ_ONLY, AdminCommandKind.REQUEST_ADMIN_CONFIRM),
+            (AdminRole.READ_ONLY, AdminCommandKind.SET_BALANCE_VALUE),
+            (AdminRole.SUPPORT, AdminCommandKind.GRANT_LENGTH),
+            (AdminRole.SUPPORT, AdminCommandKind.SET_BALANCE_VALUE),
+            (AdminRole.SUPPORT, AdminCommandKind.SETUP_TOTP),
+            (AdminRole.SUPPORT, AdminCommandKind.LIFT_ANTICHEAT_BAN),
+            (AdminRole.ECONOMIST, AdminCommandKind.BAN_PLAYER),
+            (AdminRole.ECONOMIST, AdminCommandKind.FREEZE_CLAN),
+            (AdminRole.ECONOMIST, AdminCommandKind.LIFT_ANTICHEAT_BAN),
+            (AdminRole.ECONOMIST, AdminCommandKind.BROADCAST_ANNOUNCEMENT),
+        ],
+        ids=lambda v: v.value if hasattr(v, "value") else str(v),
+    )
+    async def test_deny_audit_entry_carries_correct_actor_role_and_command(
+        self,
+        *,
+        role: AdminRole,
+        command: AdminCommandKind,
+    ) -> None:
+        """Helper не «затирает» actor_role/command_kind константой.
+
+        Любая комбинация (роль × запрещённая команда) → audit-запись
+        c `after = {"command_kind": <это>, "actor_role": <это>}`,
+        `reason` содержит и роль, и команду, исключение несёт ту же
+        пару. Параметризовано по разным ролям и командам, чтобы
+        regression вида «helper пишет actor_role=read_only независимо
+        от admin.role» падал немедленно.
+        """
+        audit = FakeAdminAuditLogger()
+        uow = FakeUnitOfWork()
+        with pytest.raises(AdminAuthorizationDeniedError) as exc_info:
+            await ensure_admin_authorized(
+                admin=_admin(role=role),
+                command_kind=command,
+                policy=FakeAdminAuthzDenyAll(),
+                audit=audit,
+                uow=uow,
+                target_kind="player",
+                target_id="12345",
+                tg_chat_id=999,
+                occurred_at=_NOW,
+            )
+        assert exc_info.value.command_kind is command
+        assert exc_info.value.actor_role is role
+        assert uow.commits == 1
+        assert len(audit.entries) == 1
+        entry = audit.entries[0]
+        assert entry.action is AdminAuditAction.ADMIN_AUTHORIZATION_DENIED
+        assert entry.after == {
+            "command_kind": command.value,
+            "actor_role": role.value,
+        }
+        assert command.value in (entry.reason or "")
+        assert role.value in (entry.reason or "")
