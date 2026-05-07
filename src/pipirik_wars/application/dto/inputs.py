@@ -128,6 +128,38 @@ class FinishForestRunInput(_StrictBase):
     run_id: int = Field(gt=0, description="forest_runs.id")
 
 
+class StartMountainRunInput(_StrictBase):
+    """Старт похода в горы (Спринт 3.1-B, ГДД §8).
+
+    Аналогично `StartForestRunInput`: bot-handler видит игрока по `tg_id`,
+    use-case резолвит `player.id` через `IPlayerRepository.get_by_tg_id`.
+    """
+
+    tg_id: PositiveTgId = Field(gt=0, description="Telegram user_id игрока")
+
+
+class FinishMountainRunInput(_StrictBase):
+    """Финиш похода в горы (Спринт 3.1-B).
+
+    На вход — `run_id` записи `mountain_runs`. Источник вызова —
+    APScheduler-job, запланированный `StartMountainRun` на `ends_at`.
+    """
+
+    run_id: int = Field(gt=0, description="mountain_runs.id")
+
+
+class StartDungeonRunInput(_StrictBase):
+    """Старт похода в данжон (Спринт 3.1-B, ГДД §8). Зеркалит горный."""
+
+    tg_id: PositiveTgId = Field(gt=0, description="Telegram user_id игрока")
+
+
+class FinishDungeonRunInput(_StrictBase):
+    """Финиш похода в данжон (Спринт 3.1-B). Зеркалит горный."""
+
+    run_id: int = Field(gt=0, description="dungeon_runs.id")
+
+
 class ApplyForestNameDropInput(_StrictBase):
     """Применить выпавшее в лесу имя (Спринт 1.3.D, ГДД §2.5 / §8.2).
 
