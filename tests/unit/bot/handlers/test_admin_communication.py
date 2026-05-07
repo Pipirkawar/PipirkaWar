@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable
 from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import cast
@@ -132,9 +133,9 @@ class _SpyTaskSpawner(IBroadcastTaskSpawner):
     """Запоминает `spawn(coro)`-вызов; не запускает coro немедленно."""
 
     def __init__(self) -> None:
-        self.spawned: list[object] = []
+        self.spawned: list[Awaitable[None]] = []
 
-    def spawn(self, coro: object) -> None:  # type: ignore[override]
+    def spawn(self, coro: Awaitable[None]) -> None:
         self.spawned.append(coro)
 
 
@@ -189,8 +190,8 @@ class TestHandleAnnounceParsing:
         )
 
         msg.answer.assert_awaited_once_with(REPLY_NON_PRIVATE_RU)
-        announce_uc.execute.assert_not_awaited()
-        confirm_uc.execute.assert_not_awaited()
+        announce_uc.execute.assert_not_awaited()  # type: ignore[attr-defined]
+        confirm_uc.execute.assert_not_awaited()  # type: ignore[attr-defined]
 
     async def test_no_args_replies_usage(self, bundle: IMessageBundle) -> None:
         msg = _msg_mock()
@@ -210,7 +211,7 @@ class TestHandleAnnounceParsing:
         # Usage-сообщение содержит ключ admin-announce-usage.
         msg.answer.assert_awaited_once()
         assert "admin-announce-usage" in msg.answer.await_args.args[0]
-        announce_uc.execute.assert_not_awaited()
+        announce_uc.execute.assert_not_awaited()  # type: ignore[attr-defined]
 
     async def test_only_locale_no_message_replies_usage(self, bundle: IMessageBundle) -> None:
         msg = _msg_mock()
@@ -229,7 +230,7 @@ class TestHandleAnnounceParsing:
 
         msg.answer.assert_awaited_once()
         assert "admin-announce-usage" in msg.answer.await_args.args[0]
-        announce_uc.execute.assert_not_awaited()
+        announce_uc.execute.assert_not_awaited()  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
@@ -255,7 +256,7 @@ class TestHandleAnnounceAuthorization:
 
         msg.answer.assert_awaited_once()
         assert "admin-announce-not-authorized" in msg.answer.await_args.args[0]
-        confirm_uc.execute.assert_not_awaited()
+        confirm_uc.execute.assert_not_awaited()  # type: ignore[attr-defined]
 
     async def test_totp_not_configured_replies_locale_string(self, bundle: IMessageBundle) -> None:
         msg = _msg_mock()
@@ -383,15 +384,15 @@ class TestHandleAnnounceHappyPath:
         )
 
         # Phase 1 должна вызвать use-case с правильным input-ом.
-        announce_uc.execute.assert_awaited_once()
-        announce_call = announce_uc.execute.await_args.args[0]
+        announce_uc.execute.assert_awaited_once()  # type: ignore[attr-defined]
+        announce_call = announce_uc.execute.await_args.args[0]  # type: ignore[attr-defined]
         assert announce_call.actor_tg_id == 42
         assert announce_call.locale_filter_raw == "ru"
         assert announce_call.message_raw == "hello"
 
         # И затем — выдать `/confirm`-токен с тем же payload-ом.
-        confirm_uc.execute.assert_awaited_once()
-        confirm_call = confirm_uc.execute.await_args.args[0]
+        confirm_uc.execute.assert_awaited_once()  # type: ignore[attr-defined]
+        confirm_call = confirm_uc.execute.await_args.args[0]  # type: ignore[attr-defined]
         assert confirm_call.command_kind == COMMAND_KIND_BROADCAST_ANNOUNCEMENT
         assert confirm_call.target_kind == "locale_filter"
         assert confirm_call.target_id == "ru"

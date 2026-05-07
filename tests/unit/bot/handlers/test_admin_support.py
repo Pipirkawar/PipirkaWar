@@ -26,10 +26,12 @@ from pipirik_wars.application.admin import (
     GetPlayerCardOutput,
     GrantLength,
     GrantThickness,
+    IBroadcastTaskSpawner,
     PlayerCard,
     PlayerSummary,
     RequestAdminConfirm,
     RequestAdminConfirmOutput,
+    RunBroadcastAnnouncement,
     SetBalanceValue,
     UnfreezePlayer,
     UnfreezePlayerOutput,
@@ -686,12 +688,25 @@ def _stub_clock() -> object:
     return fake
 
 
+def _stub_run_broadcast_announcement() -> RunBroadcastAnnouncement:
+    fake = MagicMock(spec=RunBroadcastAnnouncement)
+    fake.execute = AsyncMock()
+    return cast(RunBroadcastAnnouncement, fake)
+
+
+def _stub_broadcast_task_spawner() -> IBroadcastTaskSpawner:
+    fake = MagicMock(spec=IBroadcastTaskSpawner)
+    return cast(IBroadcastTaskSpawner, fake)
+
+
 def _confirm_extra_kwargs() -> dict[str, object]:
-    """Дефолты новых параметров `handle_confirm` (Спринт 2.5-C)."""
+    """Дефолты новых параметров `handle_confirm` (Спринт 2.5-C/D.4)."""
     return {
         "grant_length": _stub_grant_length(),
         "grant_thickness": _stub_grant_thickness(),
         "set_balance_value": _stub_set_balance_value(),
+        "run_broadcast_announcement": _stub_run_broadcast_announcement(),
+        "broadcast_task_spawner": _stub_broadcast_task_spawner(),
         "clock": _stub_clock(),
     }
 
