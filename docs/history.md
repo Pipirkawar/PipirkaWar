@@ -23,6 +23,45 @@
 
 ---
 
+## 2026-05-07 — Спринт 2.5-D.10: `docs/admin_runbook.md` — operational doc для админ-команды
+
+**Автор:** Devin (агент)
+**Тип:** doc
+**Связано:** Спринт 2.5 ([`current_tasks.md`](current_tasks.md)), ГДД §18.6 (целиком: интерфейс админ-панели), §18.6.4 (безопасность, bootstrap super-admin), §18.6.5 (TOTP-flow для опасных команд), [PR #92](https://github.com/Pipirkawar/PipirkaWar/pull/92) (мерж — `a8f26e5`)
+
+Что сделано:
+- **Новый файл `docs/admin_runbook.md`** (~324 строки, 10 секций) — операционная инструкция для команды поддержки / экономистов / super-admin-ов. **Не дублирует `game_design.md`** — ссылается на канонические разделы. Источник правды для матрицы команд и RBAC — код (`domain/admin/authorization.py`, `bot/handlers/admin*.py`, `CONFIRM_DISPATCHERS` registry), не спека.
+- **Структура runbook-а:**
+  - **§0** — канал админ-интерфейса: только ЛС бота (`chat_kind == "private"`); router-уровневый `IsAdminFilter` тихо отбрасывает не-админов; недостаточная роль → handler ловит `AdminAuthorizationDeniedError` + audit `ADMIN_AUTHORIZATION_DENIED`; write-side требует `reason ≥ 10` символов; опасные команды двухфазны через TOTP-confirm.
+  - **§1** — ролевая модель (whitelist `AdminRole`): `read_only` (только read-side), `support` (+ freeze/ban), `economist` (+ правки баланса), `super_admin` (всё + уникальные команды). Bootstrap первого super-admin-а через env `BOOTSTRAP_ADMIN_IDS`.
+  - **§2** — **полный live-список admin-команд** по разделам с пометкой TOTP: read-side / lookup (5 команд, 0 TOTP), support — игроки (3 команды, 1 TOTP `/ban`), support — кланы (2 команды, 0 TOTP), экономика (3 команды, 3 TOTP), super-admin only (4 команды, 1 TOTP `/announce`). Итого **5 TOTP-required команд**, синхронно с `CONFIRM_DISPATCHERS` registry в `bot/handlers/admin_economy.py`.
+  - **§3** — пошаговый флоу `/admin_setup_totp <bootstrap_password>`: одноразовый bootstrap-пароль → secret пишется в bot-логи на VM (`structlog.info(event="admin_totp_setup", ...)`) → оператор копирует `otpauth://`-URI из логов → импортирует в Authenticator (Authy / Google Authenticator) → проверка через `/grant_*` или `/balance_set` с тестовой суммой.
+  - **§4** — RBAC и обработка отказов: что видит оператор при недостаточной роли, как super-admin находит запись в `/audit` (`action = ADMIN_AUTHORIZATION_DENIED`).
+  - **§5** — TOTP-confirm для опасных команд: 5 действий (`grant_length`, `grant_thickness`, `set_balance_value`, `ban_player`, `broadcast_announcement`); токен живёт `BROADCAST_CONFIRM_TOKEN_TTL_SECONDS=120`; что делать при `/confirm` invalid / expired / wrong code.
+  - **§6** — чтение `/audit`: фильтры по `actor_admin_id`, `target_player_id`, временному окну, `action`-у; **полный whitelist `AdminAuditAction` enum** (всего ~22 значений с короткими описаниями); мета-аудит `ADMIN_AUDIT_LOG_VIEWED` пишется при каждом чтении (super-admin видит, кто что смотрел).
+  - **§7** — recovery при потере 2FA, **3 сценария**: (7.1) свой Authenticator потерян, но `super_admin` ещё на связи → super-admin делает manual `UPDATE admins SET totp_secret = NULL WHERE id = ...` + audit запись; (7.2) `support`/`economist` потерял Authenticator → super-admin делает то же; (7.3) **утраченный SUPER_ADMIN 2FA** (нет ни одного активного super-admin-а) → direct DB rotation: `BOOTSTRAP_ADMIN_PASSWORD` ротация в env-секретах + `UPDATE admins SET totp_secret = NULL WHERE role = 'super_admin'` + повторный `/admin_setup_totp` → audit-запись о disaster-recovery.
+  - **§8** — ротация `BOOTSTRAP_ADMIN_PASSWORD` (env-переменная `PIPIRIK_BOOTSTRAP_ADMIN_PASSWORD`, scope: org-secrets): когда менять (после каждого использования / при подозрении на утечку / по расписанию), как менять (Devin Secret rewrite + bot restart), что зафиксировать в `admin_audit_log` (manual-запись или хук в incident-tracking).
+  - **§9** — FAQ: «что если бот не отвечает на админ-команду?», «зачем админ-команда требует `reason`?», «можно ли восстановить старый TOTP без reset-а?», «почему секрет в логах, а не в чате?».
+  - **§10** — куда идти за подробностями: ссылки на `game_design.md §0/§16/§18.6` (правила и формулы), `development_plan.md` (план + критерии приёмки), `history.md` (исторические заметки и решения), `current_tasks.md` (активный PR / feature-ветка).
+- **Обновлён `docs/current_tasks.md`** — снимок состояния под `main = cb40c2e` (теперь `a8f26e5`); «Текущая позиция» под D.10; чек-лист текущего PR — D.10 шаги.
+
+Результат / артефакты:
+- Коммит на ветке `devin/1778160466-sprint-2-5-d.10-admin-runbook`: `351c170`. Merge-коммит: `a8f26e5`.
+- Локальный `make ci`: зелёный — 3337 passed / 1 skipped, coverage **95.90%** (~1:27, идентично main, ибо docs-only).
+- CI на PR #92: 3 проверки зелёные (`lint + types + tests (py3.11)`, `lint + types + tests (py3.12)`, `pip-audit (security)`).
+- Без изменений кода / тестов / локалей / миграций / БД.
+
+Заметки / решения:
+- **Принцип «runbook = операционка, спека = `game_design.md`».** Дублирование запрещено `CONTRIBUTING.md`: «Каждый документ имеет ровно одну роль; писать одно и то же в нескольких местах — запрещено». Поэтому RBAC-матрица в runbook-е не повторяет `game_design.md §18.6.2` дословно — она перечисляет команды (которые в спеке могут быть описаны под другими углами) и ссылается на спеку для деталей политики.
+- **Источник правды для матрицы команд = код**, не спека. Если в `domain/admin/authorization.py::RoleBasedAdminAuthorizationPolicy._matrix` есть строка, которой нет в runbook-е — это **баг runbook-а**. Если есть строка в спеке, которой нет в коде — это баг кода (или incomplete-фича). Это сделано чтобы оператор не действовал на основании устаревшей доки.
+- **§7.3 (recovery утраченного SUPER_ADMIN)** — самая рискованная процедура. Прописана с явным предупреждением: это **disaster-recovery**, manual `UPDATE` в production-БД, после процедуры обязателен incident-report в admin-audit (manual-запись). Если в будущем найдётся способ self-service-recovery без direct DB access — runbook обновляется тем же PR-ом, что добавляет такую команду.
+- **§8 (ротация bootstrap-password)** — ENV `BOOTSTRAP_ADMIN_PASSWORD` (внутри Pydantic settings: `BootstrapSettings.admin_password`) меняется через Devin Secrets / `fly secrets set` / `kubectl set secret`. Префикс `PIPIRIK_` — часть `model_config.env_prefix`, без него инжект не сработает; в runbook-е это явно написано, чтобы оператор не наступил на грабли.
+- **Канал доставки 2FA-секрета — bot-логи на VM, не Telegram-чат** (см. запись 2.5-D.6). В runbook-е это отдельным под-разделом с пояснением почему: Telegram-история в облаке, не trusted; SSH/VPN-доступ к VM = barrier-of-entry, эквивалентный compromise хоста.
+- **Followup для будущих PR-ов** (упомянуто в FAQ runbook-а): автоматическая «само-инвалидизация» bootstrap-password (writing `BOOTSTRAP_ADMIN_PASSWORD_USED_AT` в admin-audit + rejecting повторных попыток); envelope-encryption для `Admin.totp_secret` при появлении security-review-требования; web-панель админа (фаза 4.5+ по плану).
+- Из Спринта 2.5 остаётся: **D.11** (доптесты RBAC matrix coverage), **D.12** (аудит локалей `admin-*` ключей).
+
+---
+
 ## 2026-05-07 — Спринт 2.5-D.6: `/admin_setup_totp` — self-service выдача TOTP-секрета SUPER_ADMIN-у
 
 **Автор:** Devin (агент)
