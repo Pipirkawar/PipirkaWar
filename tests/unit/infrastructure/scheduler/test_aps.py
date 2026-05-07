@@ -958,3 +958,238 @@ class TestWeeklyClanReferralSummaryCron:
         await adapter._run_weekly_clan_referral_summary_cron_job()
         assert notifier.notified_clan_ids == [1]
         assert logger.exception.called
+
+
+# ============================================================
+# Спринт 3.1-E: PvE-finish-callback-и (mountain / dungeon)
+# ============================================================
+
+
+from pipirik_wars.application.dto.inputs import (  # noqa: E402
+    FinishDungeonRunInput,
+    FinishMountainRunInput,
+)
+from pipirik_wars.application.dungeon import (  # noqa: E402
+    DungeonRunFinished,
+    FinishDungeonRun,
+    IDungeonFinishNotifier,
+)
+from pipirik_wars.application.mountains import (  # noqa: E402
+    FinishMountainRun,
+    IMountainFinishNotifier,
+    MountainRunFinished,
+)
+from pipirik_wars.domain.dungeon import (  # noqa: E402
+    DungeonRun,
+    DungeonRunNotFoundError,
+    DungeonRunStatus,
+)
+from pipirik_wars.domain.mountains import (  # noqa: E402
+    MountainRun,
+    MountainRunNotFoundError,
+    MountainRunStatus,
+)
+
+
+@dataclass
+class _FakeMountainFinishUseCase:
+    calls: list[FinishMountainRunInput] = field(default_factory=list)
+    raise_exc: BaseException | None = None
+
+    async def execute(self, input_dto: FinishMountainRunInput) -> MountainRunFinished:
+        self.calls.append(input_dto)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+        run = MountainRun(
+            id=input_dto.run_id,
+            player_id=1,
+            status=MountainRunStatus.FINISHED,
+            started_at=_NOW,
+            ends_at=_NOW + timedelta(minutes=30),
+            finished_at=_NOW + timedelta(minutes=30),
+            branch_name="normal_gain",
+            length_delta_cm=5,
+            drops=(),
+        )
+        player = Player.new(tg_id=1, username=Username(value="alice"), now=_NOW)
+        return MountainRunFinished(
+            run=run,
+            player_before=player,
+            player_after=player,
+            was_already_finished=False,
+        )
+
+
+@dataclass
+class _FakeDungeonFinishUseCase:
+    calls: list[FinishDungeonRunInput] = field(default_factory=list)
+    raise_exc: BaseException | None = None
+
+    async def execute(self, input_dto: FinishDungeonRunInput) -> DungeonRunFinished:
+        self.calls.append(input_dto)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+        run = DungeonRun(
+            id=input_dto.run_id,
+            player_id=1,
+            status=DungeonRunStatus.FINISHED,
+            started_at=_NOW,
+            ends_at=_NOW + timedelta(minutes=60),
+            finished_at=_NOW + timedelta(minutes=60),
+            branch_name="normal_gain",
+            length_delta_cm=5,
+            drops=(),
+        )
+        player = Player.new(tg_id=1, username=Username(value="alice"), now=_NOW)
+        return DungeonRunFinished(
+            run=run,
+            player_before=player,
+            player_after=player,
+            was_already_finished=False,
+        )
+
+
+@dataclass
+class _FakeMountainNotifier(IMountainFinishNotifier):
+    calls: list[MountainRunFinished] = field(default_factory=list)
+    raise_exc: BaseException | None = None
+
+    async def notify(self, result: MountainRunFinished) -> None:
+        self.calls.append(result)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+
+
+@dataclass
+class _FakeDungeonNotifier(IDungeonFinishNotifier):
+    calls: list[DungeonRunFinished] = field(default_factory=list)
+    raise_exc: BaseException | None = None
+
+    async def notify(self, result: DungeonRunFinished) -> None:
+        self.calls.append(result)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+
+
+def _build_pve_adapter(
+    *,
+    mountain_uc: _FakeMountainFinishUseCase | None = None,
+    mountain_notifier: IMountainFinishNotifier | None = None,
+    dungeon_uc: _FakeDungeonFinishUseCase | None = None,
+    dungeon_notifier: IDungeonFinishNotifier | None = None,
+    logger: logging.Logger | None = None,
+) -> APSchedulerDelayedJobScheduler:
+    return APSchedulerDelayedJobScheduler(
+        scheduler=AsyncIOScheduler(),
+        finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+        mountain_finish_factory=(
+            (lambda: cast(FinishMountainRun, mountain_uc)) if mountain_uc is not None else None
+        ),
+        mountain_notifier=mountain_notifier,
+        dungeon_finish_factory=(
+            (lambda: cast(FinishDungeonRun, dungeon_uc)) if dungeon_uc is not None else None
+        ),
+        dungeon_notifier=dungeon_notifier,
+        logger=logger,
+    )
+
+
+class TestMountainFinishCallback:
+    @pytest.mark.asyncio
+    async def test_callback_invokes_use_case(self) -> None:
+        uc = _FakeMountainFinishUseCase()
+        adapter = _build_pve_adapter(mountain_uc=uc)
+        await adapter._run_mountain_finish_job(run_id=11)
+        assert uc.calls == [FinishMountainRunInput(run_id=11)]
+
+    @pytest.mark.asyncio
+    async def test_callback_calls_notifier(self) -> None:
+        uc = _FakeMountainFinishUseCase()
+        notifier = _FakeMountainNotifier()
+        adapter = _build_pve_adapter(mountain_uc=uc, mountain_notifier=notifier)
+        await adapter._run_mountain_finish_job(run_id=11)
+        assert len(notifier.calls) == 1
+        assert notifier.calls[0].run.id == 11
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_run_not_found(self) -> None:
+        uc = _FakeMountainFinishUseCase(raise_exc=MountainRunNotFoundError(run_id=11))
+        notifier = _FakeMountainNotifier()
+        logger = MagicMock(spec=logging.Logger)
+        adapter = _build_pve_adapter(mountain_uc=uc, mountain_notifier=notifier, logger=logger)
+        await adapter._run_mountain_finish_job(run_id=11)
+        assert logger.warning.called
+        assert notifier.calls == []
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_unexpected_error(self) -> None:
+        uc = _FakeMountainFinishUseCase(raise_exc=RuntimeError("kaboom"))
+        notifier = _FakeMountainNotifier()
+        logger = MagicMock(spec=logging.Logger)
+        adapter = _build_pve_adapter(mountain_uc=uc, mountain_notifier=notifier, logger=logger)
+        await adapter._run_mountain_finish_job(run_id=11)
+        assert logger.exception.called
+        assert notifier.calls == []
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_notifier_error(self) -> None:
+        uc = _FakeMountainFinishUseCase()
+        notifier = _FakeMountainNotifier(raise_exc=RuntimeError("network down"))
+        logger = MagicMock(spec=logging.Logger)
+        adapter = _build_pve_adapter(mountain_uc=uc, mountain_notifier=notifier, logger=logger)
+        # Не должно бросать наружу.
+        await adapter._run_mountain_finish_job(run_id=11)
+        assert logger.exception.called
+        assert len(notifier.calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_factory_not_wired_logs_warning(self) -> None:
+        logger = MagicMock(spec=logging.Logger)
+        adapter = _build_pve_adapter(logger=logger)
+        await adapter._run_mountain_finish_job(run_id=11)
+        assert logger.warning.called
+
+
+class TestDungeonFinishCallback:
+    @pytest.mark.asyncio
+    async def test_callback_invokes_use_case(self) -> None:
+        uc = _FakeDungeonFinishUseCase()
+        adapter = _build_pve_adapter(dungeon_uc=uc)
+        await adapter._run_dungeon_finish_job(run_id=11)
+        assert uc.calls == [FinishDungeonRunInput(run_id=11)]
+
+    @pytest.mark.asyncio
+    async def test_callback_calls_notifier(self) -> None:
+        uc = _FakeDungeonFinishUseCase()
+        notifier = _FakeDungeonNotifier()
+        adapter = _build_pve_adapter(dungeon_uc=uc, dungeon_notifier=notifier)
+        await adapter._run_dungeon_finish_job(run_id=11)
+        assert len(notifier.calls) == 1
+        assert notifier.calls[0].run.id == 11
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_run_not_found(self) -> None:
+        uc = _FakeDungeonFinishUseCase(raise_exc=DungeonRunNotFoundError(run_id=11))
+        notifier = _FakeDungeonNotifier()
+        logger = MagicMock(spec=logging.Logger)
+        adapter = _build_pve_adapter(dungeon_uc=uc, dungeon_notifier=notifier, logger=logger)
+        await adapter._run_dungeon_finish_job(run_id=11)
+        assert logger.warning.called
+        assert notifier.calls == []
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_unexpected_error(self) -> None:
+        uc = _FakeDungeonFinishUseCase(raise_exc=RuntimeError("kaboom"))
+        notifier = _FakeDungeonNotifier()
+        logger = MagicMock(spec=logging.Logger)
+        adapter = _build_pve_adapter(dungeon_uc=uc, dungeon_notifier=notifier, logger=logger)
+        await adapter._run_dungeon_finish_job(run_id=11)
+        assert logger.exception.called
+        assert notifier.calls == []
+
+    @pytest.mark.asyncio
+    async def test_factory_not_wired_logs_warning(self) -> None:
+        logger = MagicMock(spec=logging.Logger)
+        adapter = _build_pve_adapter(logger=logger)
+        await adapter._run_dungeon_finish_job(run_id=11)
+        assert logger.warning.called

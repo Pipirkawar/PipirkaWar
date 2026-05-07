@@ -92,7 +92,11 @@ def parse_pve_callback_data(data: str) -> PveCallbackData:
         kind = PveLocationKind(kind_raw)
     except ValueError as exc:
         raise ValueError(f"unknown PvE kind: {kind_raw!r}") from exc
-    if action_raw not in _VALID_ACTIONS:
+    if action_raw == "equip_item":
+        action: PveCallbackAction = "equip_item"
+    elif action_raw == "drop_item":
+        action = "drop_item"
+    else:
         raise ValueError(f"unknown PvE action: {action_raw!r}")
     try:
         run_id = int(run_id_raw)
@@ -101,10 +105,9 @@ def parse_pve_callback_data(data: str) -> PveCallbackData:
         raise ValueError(f"PvE callback ints malformed in {data!r}") from exc
     if run_id <= 0 or drop_idx < 0:
         raise ValueError(f"PvE callback ints out of range in {data!r}")
-    # mypy: action_raw уже проверен на принадлежность _VALID_ACTIONS.
     return PveCallbackData(
         kind=kind,
-        action=action_raw,  # type: ignore[arg-type]
+        action=action,
         run_id=run_id,
         drop_idx=drop_idx,
     )

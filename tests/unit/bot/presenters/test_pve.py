@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -28,6 +29,7 @@ from pipirik_wars.application.dungeon import DungeonRunFinished
 from pipirik_wars.application.i18n import IMessageBundle, Locale
 from pipirik_wars.application.mountains import MountainRunFinished
 from pipirik_wars.bot.presenters._pve import (
+    PveCallbackAction,
     PveCallbackData,
     PvePresenter,
     is_pve_callback,
@@ -158,19 +160,10 @@ class TestCallbackData:
     @pytest.mark.parametrize("kind", [PveLocationKind.MOUNTAINS, PveLocationKind.DUNGEON])
     @pytest.mark.parametrize("action", ["equip_item", "drop_item"])
     def test_round_trip(self, kind: PveLocationKind, action: str) -> None:
-        raw = pve_callback_data(
-            kind=kind,
-            action=action,
-            run_id=42,
-            drop_idx=1,  # type: ignore[arg-type]
-        )
+        action_typed = cast(PveCallbackAction, action)
+        raw = pve_callback_data(kind=kind, action=action_typed, run_id=42, drop_idx=1)
         parsed = parse_pve_callback_data(raw)
-        assert parsed == PveCallbackData(
-            kind=kind,
-            action=action,
-            run_id=42,
-            drop_idx=1,  # type: ignore[arg-type]
-        )
+        assert parsed == PveCallbackData(kind=kind, action=action_typed, run_id=42, drop_idx=1)
 
     def test_serialize_format_mountains(self) -> None:
         assert (
