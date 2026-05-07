@@ -101,7 +101,7 @@ class TestGetBalanceValue:
         out = await uc.execute(
             GetBalanceValueInput(actor_tg_id=42, key="thickness.unlock_levels"),
         )
-        assert out.raw_value == {"forest": 1, "pvp_chat": 2, "mountains": 3}
+        assert out.raw_value == {"forest": 1, "pvp_chat": 2, "mountains": 3, "dungeon": 6}
 
     async def test_unknown_key_raises_key_error(self) -> None:
         uc, admins, _, audit, _ = _build()

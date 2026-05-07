@@ -31,7 +31,7 @@ class TestLookupPath:
         # thickness.unlock_levels — это dict[str, int]
         result = lookup_path(cfg, "thickness.unlock_levels")
         assert isinstance(result, dict)
-        assert result == {"forest": 1, "pvp_chat": 2, "mountains": 3}
+        assert result == {"forest": 1, "pvp_chat": 2, "mountains": 3, "dungeon": 6}
 
     def test_dict_value_lookup(self, cfg: BalanceConfig) -> None:
         # Можно нырнуть внутрь dict-а
