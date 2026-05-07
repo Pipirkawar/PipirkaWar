@@ -1,7 +1,18 @@
-"""Unit-тесты RBAC-политики (Спринт 2.5-D.8, ГДД §18.6.2)."""
+"""Unit-тесты RBAC-политики (Спринт 2.5-D.8 + D.11, ГДД §18.6.2).
+
+D.11 — выровненная coverage: каждая команда из `AdminCommandKind`
+проверяется против каждой роли из `AdminRole` (полная матрица
+22 × 4 = 88 кейсов через `itertools.product`). Кейсы генерируются
+из независимо заданной группировки команд по уровням доступа
+(`_EXPECTED_ALLOWED_ROLES` ниже) — если в политике появится дрейф от
+ГДД, тесты упадут до ревью.
+Также: инвариант fail-closed для inactive-админа проверяется
+для каждой роли (не только SUPER_ADMIN).
+"""
 
 from __future__ import annotations
 
+import itertools
 from datetime import UTC, datetime
 
 import pytest
@@ -30,6 +41,82 @@ def _admin(role: AdminRole, *, is_active: bool = True) -> Admin:
     )
 
 
+# ── Authoritative expected matrix (D.11) ────────────────────────────────
+# Группы команд из ГДД §18.6.2; роли, которым группа разрешена,
+# перечислены в `_build_expected_matrix()`. Из этого собирается
+# полная таблица `(command_kind) → frozenset[AdminRole]`. Тесты сверяют
+# реализацию политики против этой таблицы независимо от того, как
+# реализована матрица в `RoleBasedAdminAuthorizationPolicy._matrix`.
+_READ_SIDE_COMMANDS: frozenset[AdminCommandKind] = frozenset(
+    {
+        AdminCommandKind.FIND_PLAYER,
+        AdminCommandKind.GET_PLAYER_CARD,
+        AdminCommandKind.GET_CLAN_CARD,
+        AdminCommandKind.GET_CLAN_DAILY_HEAD_HISTORY,
+        AdminCommandKind.GET_BALANCE_VALUE,
+        AdminCommandKind.GET_ADMIN_AUDIT_TRAIL,
+        AdminCommandKind.ADMIN_STATS,
+    },
+)
+_CONFIRM_FLOW_COMMANDS: frozenset[AdminCommandKind] = frozenset(
+    {
+        AdminCommandKind.REQUEST_ADMIN_CONFIRM,
+        AdminCommandKind.VERIFY_ADMIN_CONFIRM,
+    },
+)
+_SUPPORT_OPS_COMMANDS: frozenset[AdminCommandKind] = frozenset(
+    {
+        AdminCommandKind.FREEZE_PLAYER,
+        AdminCommandKind.UNFREEZE_PLAYER,
+        AdminCommandKind.BAN_PLAYER,
+        AdminCommandKind.FREEZE_CLAN,
+        AdminCommandKind.UNFREEZE_CLAN,
+    },
+)
+_ECONOMY_COMMANDS: frozenset[AdminCommandKind] = frozenset(
+    {
+        AdminCommandKind.GRANT_LENGTH,
+        AdminCommandKind.GRANT_THICKNESS,
+        AdminCommandKind.SET_BALANCE_VALUE,
+        AdminCommandKind.RELOAD_BALANCE,
+    },
+)
+_SUPER_ONLY_COMMANDS: frozenset[AdminCommandKind] = frozenset(
+    {
+        AdminCommandKind.LIFT_ANTICHEAT_BAN,
+        AdminCommandKind.SET_MAX_DAU,
+        AdminCommandKind.BROADCAST_ANNOUNCEMENT,
+        AdminCommandKind.SETUP_TOTP,
+    },
+)
+
+
+def _build_expected_matrix() -> dict[AdminCommandKind, frozenset[AdminRole]]:
+    matrix: dict[AdminCommandKind, frozenset[AdminRole]] = {}
+    for command in _READ_SIDE_COMMANDS:
+        matrix[command] = frozenset(AdminRole)
+    for command in _CONFIRM_FLOW_COMMANDS:
+        matrix[command] = frozenset(
+            {AdminRole.SUPER_ADMIN, AdminRole.ECONOMIST, AdminRole.SUPPORT},
+        )
+    for command in _SUPPORT_OPS_COMMANDS:
+        matrix[command] = frozenset({AdminRole.SUPER_ADMIN, AdminRole.SUPPORT})
+    for command in _ECONOMY_COMMANDS:
+        matrix[command] = frozenset({AdminRole.SUPER_ADMIN, AdminRole.ECONOMIST})
+    for command in _SUPER_ONLY_COMMANDS:
+        matrix[command] = frozenset({AdminRole.SUPER_ADMIN})
+    return matrix
+
+
+_EXPECTED_ALLOWED_ROLES: dict[AdminCommandKind, frozenset[AdminRole]] = _build_expected_matrix()
+
+
+_FULL_MATRIX_CASES: list[tuple[AdminRole, AdminCommandKind, bool]] = [
+    (role, command, role in _EXPECTED_ALLOWED_ROLES[command])
+    for role, command in itertools.product(AdminRole, AdminCommandKind)
+]
+
+
 class TestRoleBasedAdminAuthorizationPolicy:
     def test_super_admin_allows_all_known_commands(self) -> None:
         policy = RoleBasedAdminAuthorizationPolicy()
@@ -42,55 +129,33 @@ class TestRoleBasedAdminAuthorizationPolicy:
         admin = _admin(AdminRole.SUPER_ADMIN, is_active=False)
         assert not policy.is_authorized(admin, AdminCommandKind.BAN_PLAYER)
 
+
+class TestRoleCommandMatrixExhaustive:
+    """Полная матрица `AdminRole × AdminCommandKind` (D.11).
+
+    Любая новая команда / роль автоматически расширяет это покрытие
+    (через `itertools.product` + `_EXPECTED_ALLOWED_ROLES`); если в
+    политике добавится команда без правила или у группы изменится
+    политика без правки этих тестов — упадём с понятным дифом.
+    """
+
+    def test_consistency_every_command_kind_has_expected_rule(self) -> None:
+        """Все значения `AdminCommandKind` покрыты ожиданиями.
+
+        Защищает от ситуации «добавили команду в enum, но не в
+        тесты» — иначе exhaustive-матрица «по тихому» пропустит её.
+        """
+        assert set(_EXPECTED_ALLOWED_ROLES) == set(AdminCommandKind)
+
     @pytest.mark.parametrize(
         ("role", "command", "expected"),
-        [
-            # Read-only — все доступно.
-            (AdminRole.READ_ONLY, AdminCommandKind.FIND_PLAYER, True),
-            (AdminRole.READ_ONLY, AdminCommandKind.GET_PLAYER_CARD, True),
-            (AdminRole.READ_ONLY, AdminCommandKind.GET_BALANCE_VALUE, True),
-            (AdminRole.READ_ONLY, AdminCommandKind.GET_ADMIN_AUDIT_TRAIL, True),
-            # Read-only НЕ может мутировать.
-            (AdminRole.READ_ONLY, AdminCommandKind.BAN_PLAYER, False),
-            (AdminRole.READ_ONLY, AdminCommandKind.FREEZE_CLAN, False),
-            (AdminRole.READ_ONLY, AdminCommandKind.GRANT_LENGTH, False),
-            (AdminRole.READ_ONLY, AdminCommandKind.SET_BALANCE_VALUE, False),
-            (AdminRole.READ_ONLY, AdminCommandKind.LIFT_ANTICHEAT_BAN, False),
-            (AdminRole.READ_ONLY, AdminCommandKind.REQUEST_ADMIN_CONFIRM, False),
-            # Support — операционка над игроками/кланами.
-            (AdminRole.SUPPORT, AdminCommandKind.FREEZE_PLAYER, True),
-            (AdminRole.SUPPORT, AdminCommandKind.UNFREEZE_PLAYER, True),
-            (AdminRole.SUPPORT, AdminCommandKind.BAN_PLAYER, True),
-            (AdminRole.SUPPORT, AdminCommandKind.FREEZE_CLAN, True),
-            (AdminRole.SUPPORT, AdminCommandKind.UNFREEZE_CLAN, True),
-            (AdminRole.SUPPORT, AdminCommandKind.REQUEST_ADMIN_CONFIRM, True),
-            (AdminRole.SUPPORT, AdminCommandKind.VERIFY_ADMIN_CONFIRM, True),
-            # Support НЕ может править экономику.
-            (AdminRole.SUPPORT, AdminCommandKind.GRANT_LENGTH, False),
-            (AdminRole.SUPPORT, AdminCommandKind.GRANT_THICKNESS, False),
-            (AdminRole.SUPPORT, AdminCommandKind.SET_BALANCE_VALUE, False),
-            (AdminRole.SUPPORT, AdminCommandKind.RELOAD_BALANCE, False),
-            # Support НЕ может в super-admin-команды.
-            (AdminRole.SUPPORT, AdminCommandKind.LIFT_ANTICHEAT_BAN, False),
-            (AdminRole.SUPPORT, AdminCommandKind.SETUP_TOTP, False),
-            (AdminRole.SUPPORT, AdminCommandKind.BROADCAST_ANNOUNCEMENT, False),
-            # Economist — экономика + read-side.
-            (AdminRole.ECONOMIST, AdminCommandKind.GRANT_LENGTH, True),
-            (AdminRole.ECONOMIST, AdminCommandKind.GRANT_THICKNESS, True),
-            (AdminRole.ECONOMIST, AdminCommandKind.SET_BALANCE_VALUE, True),
-            (AdminRole.ECONOMIST, AdminCommandKind.RELOAD_BALANCE, True),
-            (AdminRole.ECONOMIST, AdminCommandKind.GET_BALANCE_VALUE, True),
-            (AdminRole.ECONOMIST, AdminCommandKind.REQUEST_ADMIN_CONFIRM, True),
-            # Economist НЕ может банить/морозить.
-            (AdminRole.ECONOMIST, AdminCommandKind.BAN_PLAYER, False),
-            (AdminRole.ECONOMIST, AdminCommandKind.FREEZE_PLAYER, False),
-            (AdminRole.ECONOMIST, AdminCommandKind.FREEZE_CLAN, False),
-            # Economist НЕ может в super-admin-команды.
-            (AdminRole.ECONOMIST, AdminCommandKind.LIFT_ANTICHEAT_BAN, False),
-            (AdminRole.ECONOMIST, AdminCommandKind.SETUP_TOTP, False),
+        _FULL_MATRIX_CASES,
+        ids=[
+            f"{role.value}-{command.value}-{'allow' if expected else 'deny'}"
+            for role, command, expected in _FULL_MATRIX_CASES
         ],
     )
-    def test_matrix(
+    def test_full_matrix_active_admin(
         self,
         *,
         role: AdminRole,
@@ -99,6 +164,24 @@ class TestRoleBasedAdminAuthorizationPolicy:
     ) -> None:
         policy = RoleBasedAdminAuthorizationPolicy()
         assert policy.is_authorized(_admin(role), command) is expected
+
+    @pytest.mark.parametrize("role", list(AdminRole), ids=lambda r: r.value)
+    def test_inactive_admin_denied_for_every_role(
+        self,
+        *,
+        role: AdminRole,
+    ) -> None:
+        """Inactive-админ всегда отказан, даже если роль покрывает команду.
+
+        Last-line-of-defense: use-case по контракту проверяет
+        `is_active` до вызова policy, но политика обязана
+        возвращать `False` сама. Проверяем для команды, которая в
+        активном состоянии для этой роли разрешена (read-side есть
+        у всех ролей).
+        """
+        policy = RoleBasedAdminAuthorizationPolicy()
+        admin = _admin(role, is_active=False)
+        assert not policy.is_authorized(admin, AdminCommandKind.FIND_PLAYER)
 
 
 class TestAdminAuthorizationDeniedError:
