@@ -22,6 +22,7 @@ from aiogram.types import Chat, Message
 
 from pipirik_wars.application.admin import (
     BalanceKeyError,
+    BanPlayer,
     GetBalanceValue,
     GetBalanceValueOutput,
     GrantLength,
@@ -573,16 +574,22 @@ def _verify_output_balance_set(
     )
 
 
+def _stub_ban_player() -> BanPlayer:
+    return MagicMock(spec=BanPlayer)
+
+
 def _deps(
     *,
     grant_length: GrantLength | None = None,
     grant_thickness: GrantThickness | None = None,
     set_balance: SetBalanceValue | None = None,
+    ban_player: BanPlayer | None = None,
 ) -> ConfirmDispatchDeps:
     return ConfirmDispatchDeps(
         grant_length=grant_length or _stub_grant_length(),
         grant_thickness=grant_thickness or _stub_grant_thickness(),
         set_balance_value=set_balance or _stub_set_balance(),
+        ban_player=ban_player or _stub_ban_player(),
         clock=_fixed_clock(),
     )
 

@@ -15,6 +15,12 @@
   команд, Спринт 2.5-A.3).
 """
 
+from pipirik_wars.domain.admin.authorization import (
+    AdminAuthorizationDeniedError,
+    AdminCommandKind,
+    IAdminAuthorizationPolicy,
+    RoleBasedAdminAuthorizationPolicy,
+)
 from pipirik_wars.domain.admin.confirm import (
     AdminConfirmEntry,
     AdminConfirmError,
@@ -29,8 +35,10 @@ from pipirik_wars.domain.admin.entities import Admin, AdminRole
 from pipirik_wars.domain.admin.ports import (
     AdminAuditAction,
     AdminAuditEntry,
+    AdminAuditRecord,
     AdminAuditSource,
     IAdminAuditLogger,
+    IAdminAuditQuery,
     IAdminConfirmStore,
     ITotpVerifier,
 )
@@ -40,7 +48,10 @@ __all__ = [
     "Admin",
     "AdminAuditAction",
     "AdminAuditEntry",
+    "AdminAuditRecord",
     "AdminAuditSource",
+    "AdminAuthorizationDeniedError",
+    "AdminCommandKind",
     "AdminConfirmEntry",
     "AdminConfirmError",
     "AdminConfirmRequest",
@@ -50,8 +61,11 @@ __all__ = [
     "ConfirmTokenExpiredError",
     "ConfirmTokenNotFoundError",
     "IAdminAuditLogger",
+    "IAdminAuditQuery",
+    "IAdminAuthorizationPolicy",
     "IAdminConfirmStore",
     "IAdminRepository",
     "ITotpVerifier",
+    "RoleBasedAdminAuthorizationPolicy",
     "TotpNotConfiguredError",
 ]

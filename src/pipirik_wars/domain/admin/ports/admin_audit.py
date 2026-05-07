@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import abc
 import enum
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -89,6 +90,34 @@ class AdminAuditAction(str, enum.Enum):
     # мы бы потеряли запись о попытке. Откат YAML-файла при сбое reload-а — на
     # стороне `IBalanceWriter`-а (записывает atomic `tmp + os.replace`).
     ADMIN_BALANCE_SET = "admin_balance_set"
+
+    # ── Спринт 2.5-D (read-side: /audit) ──
+    # Read-side листинг `admin_audit_log`-а (`/audit`). Запись пишется
+    # каждый раз, когда любой админ читает аудит-лог: super-admin должен
+    # видеть, кто и какой срез аудита смотрел (ГДД §18.6.4).
+    ADMIN_AUDIT_QUERIED = "admin_audit_queried"
+
+    # ── Спринт 2.5-D (команды поддержки кланов) ──
+    # Read-side lookup карточки клана (`/clan`, `/clan_daily_head_history`).
+    # Пишем по аналогии с `ADMIN_PLAYER_LOOKUP` — каждая «пробивка» клана
+    # тоже видна в `/audit`.
+    ADMIN_CLAN_LOOKUP = "admin_clan_lookup"
+    # Write-side: ручная заморозка клана админом (`/freeze_clan`).
+    # Отличается от автоматической `CLAN_FREEZE` (общий аудит) тем, что
+    # пишется в admin-аудит и привязана к конкретному админу. Идемпотентна.
+    ADMIN_CLAN_FROZEN = "admin_clan_frozen"
+    # Write-side: ручная разморозка клана админом (`/unfreeze_clan`).
+    ADMIN_CLAN_UNFROZEN = "admin_clan_unfrozen"
+
+    # ── Спринт 2.5-D.8 (RBAC) ──
+    # Admin вызвал команду, на которую ему не хватает роли. Пишется
+    # **до** того, как use-case бросит `AdminAuthorizationDeniedError`,
+    # чтобы super-admin в `/audit` видел попытки эскалации привилегий
+    # (типичный сигнал — кто-то с `support`-ролью пытается дёрнуть
+    # `/grant_length`). `target_kind`/`target_id` сохраняют контекст
+    # запрошенной команды; `after.command_kind` дублирует имя команды
+    # для удобства фильтра.
+    ADMIN_AUTHORIZATION_DENIED = "admin_authorization_denied"
 
 
 class AdminAuditSource(str, enum.Enum):
@@ -147,9 +176,80 @@ class IAdminAuditLogger(abc.ABC):
         """Записать одно событие админ-аудит-лога."""
 
 
+@dataclass(frozen=True, slots=True)
+class AdminAuditRecord:
+    """Запись `admin_audit_log` для read-side листинга (`/audit`, ГДД §18.6.4).
+
+    В отличие от `AdminAuditEntry` (write-VO), `AdminAuditRecord`
+    содержит публичный идентификатор админа — `actor_tg_id` —
+    чтобы handler-у `/audit` не приходилось делать второй round-trip
+    в `IAdminRepository` для каждой записи. Само сопоставление
+    `admin_id ↔ tg_id` делает реализация порта (JOIN с `admins`).
+
+    Дополнительно хранится `id` из БД (PK `admin_audit_log.id`) —
+    используется в выдаче для cite-по-номеру и для будущей пагинации.
+    """
+
+    id: int
+    actor_admin_id: int
+    actor_tg_id: int
+    action: AdminAuditAction
+    target_kind: str
+    target_id: str
+    before: dict[str, object] | None
+    after: dict[str, object] | None
+    reason: str
+    idempotency_key: str | None
+    source: AdminAuditSource
+    tg_chat_id: int | None
+    ip: str | None
+    occurred_at: datetime
+
+
+class IAdminAuditQuery(abc.ABC):
+    """Read-side порт `admin_audit_log` (Спринт 2.5-D.5).
+
+    Отделён от `IAdminAuditLogger` по ISP: `record(...)` нужен внутри
+    каждой админ-мутации, `list_recent(...)` — только handler-у `/audit`.
+    Реализация (`SqlAlchemyAdminAuditQuery`) делает один SELECT с JOIN
+    к `admins`, чтобы handler получил `actor_tg_id` без отдельных
+    запросов на каждую строку.
+
+    Запросы исполняются внутри контекста `IUnitOfWork` — отдельная
+    транзакция не открывается; результат — упорядочённый по
+    `occurred_at DESC` срез последних `limit` записей.
+    """
+
+    @abc.abstractmethod
+    async def list_recent(
+        self,
+        *,
+        limit: int,
+        target_admin_id: int | None = None,
+        action: AdminAuditAction | None = None,
+    ) -> Sequence[AdminAuditRecord]:
+        """Последние `limit` записей админ-аудит-лога с опц. фильтрами.
+
+        Параметры:
+
+        - `limit` — верхняя граница (use-case ограничивает её сверху,
+          репо не накладывает свой кап).
+        - `target_admin_id` — если задан, только записи этого админа
+          (по внутреннему `Admin.id`, не `tg_id`).
+        - `action` — если задан, только записи этой категории.
+
+        Сортировка: `occurred_at DESC, id DESC` (свежие — сверху, при
+        равенстве timestamp-а ID-ы тоже идут сверху-вниз, чтобы
+        результат был детерминированным даже на нашем sub-millisecond
+        потоке записи).
+        """
+
+
 __all__ = [
     "AdminAuditAction",
     "AdminAuditEntry",
+    "AdminAuditRecord",
     "AdminAuditSource",
     "IAdminAuditLogger",
+    "IAdminAuditQuery",
 ]

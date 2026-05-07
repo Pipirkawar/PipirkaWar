@@ -35,6 +35,7 @@ from pipirik_wars.domain.progression.length_granter import (
 )
 from pipirik_wars.domain.shared.ports.audit import AuditSource
 from tests.fakes.admin_audit import FakeAdminAuditLogger
+from tests.fakes.admin_authz import FakeAdminAuthzAllowAll
 from tests.fakes.admin_repo import FakeAdminRepository
 from tests.fakes.clock import FakeClock
 from tests.fakes.player_repo import FakePlayerRepository
@@ -116,6 +117,7 @@ def _build() -> tuple[
             length_granter=granter,
             audit=audit,
             clock=FakeClock(_NOW),
+            authz=FakeAdminAuthzAllowAll(),
         ),
         admins,
         players,

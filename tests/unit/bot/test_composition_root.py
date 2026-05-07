@@ -18,13 +18,18 @@ from pydantic import SecretStr
 from pipirik_wars.application.admin import (
     BanPlayer,
     FindPlayers,
+    FreezeClanAdmin,
     FreezePlayer,
+    GetAdminAuditTrail,
     GetBalanceValue,
+    GetClanCard,
+    GetClanDailyHeadHistory,
     GetPlayerCard,
     GrantLength,
     GrantThickness,
     RequestAdminConfirm,
     SetBalanceValue,
+    UnfreezeClanAdmin,
     UnfreezePlayer,
     VerifyAdminConfirm,
 )
@@ -145,6 +150,8 @@ from pipirik_wars.infrastructure.settings import (
 from tests.fakes import (
     FakeActivityLockRepository,
     FakeAdminAuditLogger,
+    FakeAdminAuditQuery,
+    FakeAdminAuthzAllowAll,
     FakeAdminRepository,
     FakeAnticheatAdminAlerter,
     FakeAnticheatRepository,
@@ -450,12 +457,14 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
     admin_audit = FakeAdminAuditLogger()
     admin_confirm_store: IAdminConfirmStore = InMemoryAdminConfirmStore()
     totp_verifier: ITotpVerifier = FakeTotpVerifier()
+    admin_authz = FakeAdminAuthzAllowAll()
     find_players_uc = FindPlayers(
         uow=uow,
         admins=admins,
         players=players,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     get_player_card_uc = GetPlayerCard(
         uow=uow,
@@ -466,6 +475,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         forest_runs=forest_runs,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     freeze_player_uc = FreezePlayer(
         uow=uow,
@@ -473,6 +483,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         players=players,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     unfreeze_player_uc = UnfreezePlayer(
         uow=uow,
@@ -480,6 +491,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         players=players,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     ban_player_uc = BanPlayer(
         uow=uow,
@@ -487,6 +499,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         players=players,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     request_admin_confirm_uc = RequestAdminConfirm(
         uow=uow,
@@ -495,6 +508,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         audit=admin_audit,
         clock=clock,
         token_factory=lambda: "test-token",
+        authz=admin_authz,
     )
     verify_admin_confirm_uc = VerifyAdminConfirm(
         uow=uow,
@@ -503,6 +517,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         totp=totp_verifier,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     grant_length_uc = GrantLength(
         uow=uow,
@@ -511,6 +526,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         length_granter=add_length,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     grant_thickness_uc = GrantThickness(
         uow=uow,
@@ -520,6 +536,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         idempotency=idempotency,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     get_balance_value_uc = GetBalanceValue(
         uow=uow,
@@ -527,6 +544,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         balance=balance,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     set_balance_value_uc = SetBalanceValue(
         uow=uow,
@@ -539,6 +557,52 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         idempotency=idempotency,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
+    )
+    admin_audit_query = FakeAdminAuditQuery()
+    get_admin_audit_trail_uc = GetAdminAuditTrail(
+        uow=uow,
+        admins=admins,
+        query=admin_audit_query,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    get_clan_card_uc = GetClanCard(
+        uow=uow,
+        admins=admins,
+        players=players,
+        clans=clans,
+        clan_members=members,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    freeze_clan_admin_uc = FreezeClanAdmin(
+        uow=uow,
+        admins=admins,
+        clans=clans,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    unfreeze_clan_admin_uc = UnfreezeClanAdmin(
+        uow=uow,
+        admins=admins,
+        clans=clans,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    get_clan_daily_head_history_uc = GetClanDailyHeadHistory(
+        uow=uow,
+        admins=admins,
+        clans=clans,
+        players=players,
+        daily_heads=daily_heads,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
     )
     return Container(
         clock=clock,
@@ -743,8 +807,10 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
             clock=clock,
         ),
         admin_audit=admin_audit,
+        admin_audit_query=admin_audit_query,
         admin_confirm_store=admin_confirm_store,
         totp_verifier=totp_verifier,
+        admin_authz=admin_authz,
         find_players=find_players_uc,
         get_player_card=get_player_card_uc,
         freeze_player=freeze_player_uc,
@@ -756,6 +822,11 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         grant_thickness=grant_thickness_uc,
         get_balance_value=get_balance_value_uc,
         set_balance_value=set_balance_value_uc,
+        get_admin_audit_trail=get_admin_audit_trail_uc,
+        get_clan_card=get_clan_card_uc,
+        freeze_clan_admin=freeze_clan_admin_uc,
+        unfreeze_clan_admin=unfreeze_clan_admin_uc,
+        get_clan_daily_head_history=get_clan_daily_head_history_uc,
     )
 
 

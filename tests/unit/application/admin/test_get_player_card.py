@@ -34,6 +34,7 @@ from pipirik_wars.domain.player import (
     Username,
 )
 from tests.fakes.admin_audit import FakeAdminAuditLogger
+from tests.fakes.admin_authz import FakeAdminAuthzAllowAll
 from tests.fakes.admin_repo import FakeAdminRepository
 from tests.fakes.clan_repo import (
     FakeClanMembershipRepository,
@@ -73,6 +74,7 @@ def _build() -> tuple[
         forest_runs=forest,
         audit=audit,
         clock=FakeClock(_FIXED_NOW),
+        authz=FakeAdminAuthzAllowAll(),
     )
     return use_case, admins, players, clans, clan_members, forest, audit, uow
 

@@ -23,6 +23,7 @@ from pipirik_wars.domain.player import (
     Username,
 )
 from tests.fakes.admin_audit import FakeAdminAuditLogger
+from tests.fakes.admin_authz import FakeAdminAuthzAllowAll
 from tests.fakes.admin_repo import FakeAdminRepository
 from tests.fakes.clock import FakeClock
 from tests.fakes.player_repo import FakePlayerRepository
@@ -50,6 +51,7 @@ def _build() -> tuple[
         players=players,
         audit=audit,
         clock=clock,
+        authz=FakeAdminAuthzAllowAll(),
         limit=10,
     )
     return use_case, admins, players, audit, uow, clock
@@ -215,5 +217,6 @@ class TestFindPlayers:
                 players=FakePlayerRepository(),
                 audit=FakeAdminAuditLogger(),
                 clock=FakeClock(_FIXED_NOW),
+                authz=FakeAdminAuthzAllowAll(),
                 limit=0,
             )

@@ -28,16 +28,19 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+from pipirik_wars.application.admin._authorization import ensure_admin_authorized
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.domain.admin import (
     AdminAuditAction,
     AdminAuditEntry,
     AdminAuditSource,
+    AdminCommandKind,
     ConfirmAdminMismatchError,
     ConfirmCodeInvalidError,
     ConfirmTokenExpiredError,
     ConfirmTokenNotFoundError,
     IAdminAuditLogger,
+    IAdminAuthorizationPolicy,
     IAdminConfirmStore,
     IAdminRepository,
     ITotpVerifier,
@@ -69,7 +72,7 @@ class VerifyAdminConfirmOutput:
 class VerifyAdminConfirm:
     """Проверка 6-значного TOTP-кода и возврат payload-а команды."""
 
-    __slots__ = ("_admins", "_audit", "_clock", "_store", "_totp", "_uow")
+    __slots__ = ("_admins", "_audit", "_authz", "_clock", "_store", "_totp", "_uow")
 
     def __init__(
         self,
@@ -80,6 +83,7 @@ class VerifyAdminConfirm:
         totp: ITotpVerifier,
         audit: IAdminAuditLogger,
         clock: IClock,
+        authz: IAdminAuthorizationPolicy,
     ) -> None:
         self._uow = uow
         self._admins = admins
@@ -87,6 +91,7 @@ class VerifyAdminConfirm:
         self._totp = totp
         self._audit = audit
         self._clock = clock
+        self._authz = authz
 
     async def execute(self, inp: VerifyAdminConfirmInput) -> VerifyAdminConfirmOutput:
         admin = await self._admins.get_by_tg_id(inp.actor_tg_id)
@@ -103,6 +108,18 @@ class VerifyAdminConfirm:
         if admin_id is None:  # pragma: no cover — invariant of the repo
             raise RuntimeError("admin.id is None after get_by_tg_id")
         secret = admin.totp_secret
+
+        await ensure_admin_authorized(
+            admin=admin,
+            command_kind=AdminCommandKind.VERIFY_ADMIN_CONFIRM,
+            policy=self._authz,
+            audit=self._audit,
+            uow=self._uow,
+            target_kind="admin_confirm_token",
+            target_id=inp.token,
+            tg_chat_id=inp.tg_chat_id,
+            occurred_at=self._clock.now(),
+        )
 
         # `pop` сразу удаляет запись — токен одноразовый.
         entry = await self._store.pop(token=inp.token)

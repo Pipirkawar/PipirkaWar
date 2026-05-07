@@ -29,6 +29,8 @@ from aiogram.types import Message
 
 from pipirik_wars.application.admin import (
     BalanceKeyError,
+    BanPlayer,
+    BanPlayerInput,
     GetBalanceValue,
     GetBalanceValueInput,
     GrantLength,
@@ -56,6 +58,10 @@ from pipirik_wars.bot.presenters.admin_economy import (
     IdempotencyReplayPresenter,
     SetBalanceValuePresenter,
 )
+from pipirik_wars.bot.presenters.admin_support import (
+    BanPlayerPresenter,
+    ConfirmPresenter,
+)
 from pipirik_wars.domain.admin import TotpNotConfiguredError
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from pipirik_wars.domain.progression.errors import (
@@ -71,6 +77,7 @@ router.callback_query.filter(IsAdminFilter())
 
 REPLY_NON_PRIVATE_RU = "🍆 Админ-команды доступны только в ЛС бота."
 
+COMMAND_KIND_BAN = "ban"
 COMMAND_KIND_GRANT_LENGTH = "grant_length"
 COMMAND_KIND_GRANT_THICKNESS = "grant_thickness"
 COMMAND_KIND_BALANCE_SET = "balance_set"
@@ -404,6 +411,7 @@ class ConfirmDispatchDeps:
     grant_length: GrantLength
     grant_thickness: GrantThickness
     set_balance_value: SetBalanceValue
+    ban_player: BanPlayer
     clock: IClock
 
 
@@ -707,7 +715,59 @@ class ConfirmPayloadInvalidPresenter:
         )
 
 
+async def dispatch_ban(
+    result: VerifyAdminConfirmOutput,
+    message: Message,
+    identity: TgIdentity,
+    locale: Locale,
+    bundle: IMessageBundle,
+    deps: ConfirmDispatchDeps,
+) -> None:
+    """Dispatch для `command_kind="ban"` — финализирует бан игрока."""
+    presenter = ConfirmPresenter(bundle=bundle)
+    ban_presenter = BanPlayerPresenter(bundle=bundle)
+
+    target_tg_id_raw = result.payload.get("target_tg_id")
+    reason_raw = result.payload.get("reason")
+    if not isinstance(target_tg_id_raw, int) or not isinstance(reason_raw, str):
+        await message.answer(
+            presenter.unknown_command_kind(
+                locale=locale,
+                command_kind=result.command_kind,
+            ),
+        )
+        return
+
+    try:
+        ban_result = await deps.ban_player.execute(
+            BanPlayerInput(
+                actor_tg_id=identity.tg_user_id,
+                target_tg_id=target_tg_id_raw,
+                reason=reason_raw,
+                tg_chat_id=identity.chat_id,
+            ),
+        )
+    except AuthorizationError:
+        await message.answer(presenter.not_authorized(locale=locale))
+        return
+    except PlayerNotFoundError:
+        await message.answer(
+            ban_presenter.not_found(locale=locale, tg_id=target_tg_id_raw),
+        )
+        return
+
+    if ban_result.was_already_banned:
+        await message.answer(
+            presenter.success_ban_already(locale=locale, tg_id=target_tg_id_raw),
+        )
+        return
+    await message.answer(
+        presenter.success_ban(locale=locale, tg_id=target_tg_id_raw),
+    )
+
+
 CONFIRM_DISPATCHERS: dict[str, ConfirmDispatcher] = {
+    COMMAND_KIND_BAN: dispatch_ban,
     COMMAND_KIND_GRANT_LENGTH: dispatch_grant_length,
     COMMAND_KIND_GRANT_THICKNESS: dispatch_grant_thickness,
     COMMAND_KIND_BALANCE_SET: dispatch_balance_set,
@@ -716,12 +776,14 @@ CONFIRM_DISPATCHERS: dict[str, ConfirmDispatcher] = {
 
 __all__ = [
     "COMMAND_KIND_BALANCE_SET",
+    "COMMAND_KIND_BAN",
     "COMMAND_KIND_GRANT_LENGTH",
     "COMMAND_KIND_GRANT_THICKNESS",
     "CONFIRM_DISPATCHERS",
     "ConfirmDispatchDeps",
     "ConfirmDispatcher",
     "dispatch_balance_set",
+    "dispatch_ban",
     "dispatch_grant_length",
     "dispatch_grant_thickness",
     "router",

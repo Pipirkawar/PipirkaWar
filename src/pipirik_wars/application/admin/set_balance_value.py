@@ -33,13 +33,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from pipirik_wars.application.admin._authorization import ensure_admin_authorized
 from pipirik_wars.application.admin._balance_path import lookup_path
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.domain.admin import (
     AdminAuditAction,
     AdminAuditEntry,
     AdminAuditSource,
+    AdminCommandKind,
     IAdminAuditLogger,
+    IAdminAuthorizationPolicy,
     IAdminRepository,
 )
 from pipirik_wars.domain.balance.errors import BalanceKeyError
@@ -75,6 +78,7 @@ class SetBalanceValue:
     __slots__ = (
         "_admins",
         "_audit",
+        "_authz",
         "_balance",
         "_clock",
         "_idempotency",
@@ -92,6 +96,7 @@ class SetBalanceValue:
         idempotency: IIdempotencyKey,
         audit: IAdminAuditLogger,
         clock: IClock,
+        authz: IAdminAuthorizationPolicy,
     ) -> None:
         self._uow = uow
         self._admins = admins
@@ -100,6 +105,7 @@ class SetBalanceValue:
         self._idempotency = idempotency
         self._audit = audit
         self._clock = clock
+        self._authz = authz
 
     async def execute(self, inp: SetBalanceValueInput) -> SetBalanceValueOutput:
         admin = await self._admins.get_by_tg_id(inp.actor_tg_id)
@@ -122,6 +128,17 @@ class SetBalanceValue:
         previous_raw = lookup_path(snapshot_before, inp.key)
 
         now = self._clock.now()
+        await ensure_admin_authorized(
+            admin=admin,
+            command_kind=AdminCommandKind.SET_BALANCE_VALUE,
+            policy=self._authz,
+            audit=self._audit,
+            uow=self._uow,
+            target_kind="balance_key",
+            target_id=inp.key,
+            tg_chat_id=inp.tg_chat_id,
+            occurred_at=now,
+        )
         async with self._uow:
             if await self._idempotency.is_seen(inp.idempotency_key):
                 return SetBalanceValueOutput(

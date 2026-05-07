@@ -2,6 +2,7 @@
 
 from pipirik_wars.infrastructure.db.services.admin_audit import (
     SqlAlchemyAdminAuditLogger,
+    SqlAlchemyAdminAuditQuery,
 )
 from pipirik_wars.infrastructure.db.services.audit import SqlAlchemyAuditLogger
 from pipirik_wars.infrastructure.db.services.idempotency import (
@@ -10,6 +11,7 @@ from pipirik_wars.infrastructure.db.services.idempotency import (
 
 __all__ = [
     "SqlAlchemyAdminAuditLogger",
+    "SqlAlchemyAdminAuditQuery",
     "SqlAlchemyAuditLogger",
     "SqlAlchemyIdempotencyService",
 ]

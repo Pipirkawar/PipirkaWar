@@ -19,8 +19,10 @@ TTL-store ожидающих подтверждений + обёртка над 
 from pipirik_wars.domain.admin.ports.admin_audit import (
     AdminAuditAction,
     AdminAuditEntry,
+    AdminAuditRecord,
     AdminAuditSource,
     IAdminAuditLogger,
+    IAdminAuditQuery,
 )
 from pipirik_wars.domain.admin.ports.admin_confirm import (
     IAdminConfirmStore,
@@ -30,8 +32,10 @@ from pipirik_wars.domain.admin.ports.admin_confirm import (
 __all__ = [
     "AdminAuditAction",
     "AdminAuditEntry",
+    "AdminAuditRecord",
     "AdminAuditSource",
     "IAdminAuditLogger",
+    "IAdminAuditQuery",
     "IAdminConfirmStore",
     "ITotpVerifier",
 ]

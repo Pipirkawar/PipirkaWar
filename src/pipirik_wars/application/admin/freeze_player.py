@@ -20,12 +20,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pipirik_wars.application.admin._authorization import ensure_admin_authorized
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.domain.admin import (
     AdminAuditAction,
     AdminAuditEntry,
     AdminAuditSource,
+    AdminCommandKind,
     IAdminAuditLogger,
+    IAdminAuthorizationPolicy,
     IAdminRepository,
 )
 from pipirik_wars.domain.player import IPlayerRepository, PlayerStatus
@@ -50,7 +53,7 @@ class FreezePlayerOutput:
 class FreezePlayer:
     """Use-case ручной заморозки игрока."""
 
-    __slots__ = ("_admins", "_audit", "_clock", "_players", "_uow")
+    __slots__ = ("_admins", "_audit", "_authz", "_clock", "_players", "_uow")
 
     def __init__(
         self,
@@ -60,12 +63,14 @@ class FreezePlayer:
         players: IPlayerRepository,
         audit: IAdminAuditLogger,
         clock: IClock,
+        authz: IAdminAuthorizationPolicy,
     ) -> None:
         self._uow = uow
         self._admins = admins
         self._players = players
         self._audit = audit
         self._clock = clock
+        self._authz = authz
 
     async def execute(self, inp: FreezePlayerInput) -> FreezePlayerOutput:
         admin = await self._admins.get_by_tg_id(inp.actor_tg_id)
@@ -79,6 +84,17 @@ class FreezePlayer:
             raise RuntimeError("admin.id is None after get_by_tg_id")
 
         now = self._clock.now()
+        await ensure_admin_authorized(
+            admin=admin,
+            command_kind=AdminCommandKind.FREEZE_PLAYER,
+            policy=self._authz,
+            audit=self._audit,
+            uow=self._uow,
+            target_kind="player",
+            target_id=str(inp.target_tg_id),
+            tg_chat_id=inp.tg_chat_id,
+            occurred_at=now,
+        )
         async with self._uow:
             player = await self._players.get_by_tg_id(inp.target_tg_id)
             if player is None:

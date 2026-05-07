@@ -26,14 +26,17 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from types import MappingProxyType
 
+from pipirik_wars.application.admin._authorization import ensure_admin_authorized
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.domain.admin import (
     AdminAuditAction,
     AdminAuditEntry,
     AdminAuditSource,
+    AdminCommandKind,
     AdminConfirmEntry,
     AdminConfirmRequest,
     IAdminAuditLogger,
+    IAdminAuthorizationPolicy,
     IAdminConfirmStore,
     IAdminRepository,
     TotpNotConfiguredError,
@@ -76,6 +79,7 @@ class RequestAdminConfirm:
     __slots__ = (
         "_admins",
         "_audit",
+        "_authz",
         "_clock",
         "_store",
         "_token_factory",
@@ -92,6 +96,7 @@ class RequestAdminConfirm:
         audit: IAdminAuditLogger,
         clock: IClock,
         token_factory: TokenFactory,
+        authz: IAdminAuthorizationPolicy,
         ttl: timedelta = DEFAULT_CONFIRM_TTL,
     ) -> None:
         self._uow = uow
@@ -100,6 +105,7 @@ class RequestAdminConfirm:
         self._audit = audit
         self._clock = clock
         self._token_factory = token_factory
+        self._authz = authz
         self._ttl = ttl
 
     async def execute(self, inp: RequestAdminConfirmInput) -> RequestAdminConfirmOutput:
@@ -121,6 +127,18 @@ class RequestAdminConfirm:
 
         token = self._token_factory()
         now = self._clock.now()
+        await ensure_admin_authorized(
+            admin=admin,
+            command_kind=AdminCommandKind.REQUEST_ADMIN_CONFIRM,
+            policy=self._authz,
+            audit=self._audit,
+            uow=self._uow,
+            target_kind=inp.target_kind,
+            target_id=inp.target_id,
+            tg_chat_id=inp.tg_chat_id,
+            occurred_at=now,
+            reason_suffix=inp.command_kind,
+        )
         entry = AdminConfirmEntry(
             request=AdminConfirmRequest(
                 admin_id=admin_id,

@@ -659,3 +659,84 @@ admin-balance-set-already-at-value = ℹ️ Key <code>{ $path }</code> is alread
 
 # Shared /confirm idempotency-replay
 admin-idempotency-replay = ℹ️ This command (<code>{ $command_kind }</code>) was already executed within the last minute — replay skipped.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 2.5-D.5 — read-side observability `/audit` (GDD §18.6.4)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /audit [target_tg_id|-] [action|-] [limit]
+admin-audit-usage = ⚠️ Usage: <code>/audit [target_tg_id|-] [action|-] [limit]</code>. All arguments are optional; <code>-</code> means "no filter".
+admin-audit-not-authorized = ❌ Only active admins may inspect the audit log.
+admin-audit-bad-tg-id = ⚠️ <code>{ $value }</code> is not a valid tg_id (integer) or <code>-</code>.
+admin-audit-bad-limit = ⚠️ <code>{ $value }</code> is not a valid limit (integer > 0).
+admin-audit-unknown-action = ⚠️ Unknown action category <code>{ $value }</code>.
+admin-audit-target-not-found = 🔍 No admin with tg_id <code>{ $tg_id }</code>.
+# Params: $target (tg_id or "—"); $action (action filter or "—").
+admin-audit-empty = 🗒️ No records found (target=<code>{ $target }</code>, action=<code>{ $action }</code>).
+# Header without target filter. $count — rows below, $limit — cap.
+admin-audit-header-all = 🗒️ Audit log: { $count } most recent records (limit { $limit }, all admins).
+# Header with target filter. $target_tg_id — admin tg_id.
+admin-audit-header-target = 🗒️ Audit log for admin <code>{ $target_tg_id }</code>: { $count } most recent records (limit { $limit }).
+# Appended to header if action filter is set.
+admin-audit-filter-action-suffix = Action filter: <code>{ $action }</code>.
+# One list row. Params:
+# $id, $occurred_at (ISO-8601 UTC), $actor_tg_id, $action, $target_kind, $target_id, $source, $reason.
+admin-audit-row = • #{ $id } · { $occurred_at } · @{ $actor_tg_id } · <code>{ $action }</code> · { $target_kind }=<code>{ $target_id }</code> · src={ $source } · { $reason }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 2.5-D.1 — `/clan` read-only clan card (GDD §18.6.5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /clan <id|chat_id>
+admin-clan-usage = ⚠ Usage: <code>/clan &lt;id|chat_id&gt;</code>.
+admin-clan-not-authorized = ❌Only active admins can view clan cards.
+admin-clan-bad-id = ⚠ <code>{ $value }</code> is not a clan id (integer).
+admin-clan-not-found = 🔍Clan with id/chat_id <code>{ $query }</code> not found.
+# Card header. Params: $clan_id, $chat_id, $chat_kind, $title, $status, $created_at, $updated_at, $member_count, $active_member_count, $total_length_cm.
+admin-clan-card-summary =
+    🛡 Clan #{ $clan_id }: <b>{ $title }</b>
+    chat_id: <code>{ $chat_id }</code> ({ $chat_kind })
+    Status: { $status }
+    Created: { $created_at } · updated: { $updated_at }
+    Members: { $member_count } (active { $active_member_count }) · total length: { $total_length_cm } cm.
+# Caravan leader. Params: $tg_id, $username, $name, $length_cm, $joined_at.
+admin-clan-card-leader = 👑 Leader: @{ $username } ({ $name }, tg_id <code>{ $tg_id }</code>) · length { $length_cm } cm · since { $joined_at }.
+admin-clan-card-no-leader = 👑 Leader: —
+# One member row. Params: $tg_id, $username, $name, $length_cm, $thickness_level, $status, $role, $joined_at.
+admin-clan-card-member-row = • @{ $username } ({ $name }, tg_id <code>{ $tg_id }</code>) · { $length_cm } cm · t{ $thickness_level } · { $status } · { $role } · since { $joined_at }
+admin-clan-card-no-members = (clan has no members)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 2.5-D.2 — `/freeze_clan` / `/unfreeze_clan` (GDD §18.6.5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /freeze_clan <id|chat_id> [reason]
+admin-freeze-clan-usage = ⚠ Usage: <code>/freeze_clan &lt;id|chat_id&gt; [reason]</code>.
+admin-freeze-clan-not-authorized = ❌Only active admins can freeze clans.
+admin-freeze-clan-bad-id = ⚠ <code>{ $value }</code> is not a clan id (integer).
+admin-freeze-clan-not-found = 🔍Clan with id/chat_id <code>{ $query }</code> not found.
+admin-freeze-clan-already = ℹ Clan #{ $clan_id } is already frozen.
+admin-freeze-clan-ok = ❄ Clan #{ $clan_id } frozen.{ $reason_suffix }
+admin-freeze-clan-reason-suffix = Reason: { $reason }.
+
+# /unfreeze_clan <id|chat_id>
+admin-unfreeze-clan-usage = ⚠ Usage: <code>/unfreeze_clan &lt;id|chat_id&gt;</code>.
+admin-unfreeze-clan-not-authorized = ❌Only active admins can unfreeze clans.
+admin-unfreeze-clan-bad-id = ⚠ <code>{ $value }</code> is not a clan id (integer).
+admin-unfreeze-clan-not-found = 🔍Clan with id/chat_id <code>{ $query }</code> not found.
+admin-unfreeze-clan-already = ℹ Clan #{ $clan_id } is already active.
+admin-unfreeze-clan-ok = 🔥 Clan #{ $clan_id } unfrozen.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 2.5-D.3 — `/clan_daily_head_history` (read-only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+admin-clan-daily-head-history-usage = ⚠ Usage: <code>/clan_daily_head_history &lt;id|chat_id&gt; [N=10]</code>.
+admin-clan-daily-head-history-not-authorized = ❌Only active admins can see daily-head history.
+admin-clan-daily-head-history-bad-id = ⚠ <code>{ $value }</code> is not a clan id (integer).
+admin-clan-daily-head-history-bad-limit = ⚠ <code>{ $value }</code> is not a limit (integer 1..50).
+admin-clan-daily-head-history-not-found = 🔍Clan with id/chat_id <code>{ $query }</code> not found.
+admin-clan-daily-head-history-empty = 👑 Clan #{ $clan_id } "{ $title }": daily-head history is empty.
+admin-clan-daily-head-history-header = 👑 Clan #{ $clan_id } "{ $title }", last { $count } daily-head assignments:
+admin-clan-daily-head-history-row = • <b>{ $moscow_date }</b> — { $tg_id } (@{ $username }, { $name }) +{ $bonus } cm ({ $source })
+admin-clan-daily-head-history-row-orphan = • <b>{ $moscow_date }</b> — player deleted +{ $bonus } cm ({ $source })

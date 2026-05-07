@@ -19,6 +19,7 @@ from pipirik_wars.domain.balance.errors import BalanceKeyError
 from pipirik_wars.domain.balance.ports import IBalanceWriter
 from pipirik_wars.shared.errors import ConfigError
 from tests.fakes.admin_audit import FakeAdminAuditLogger
+from tests.fakes.admin_authz import FakeAdminAuthzAllowAll
 from tests.fakes.admin_repo import FakeAdminRepository
 from tests.fakes.balance import FakeBalanceConfig
 from tests.fakes.clock import FakeClock
@@ -86,6 +87,7 @@ def _build() -> tuple[
             idempotency=idempotency,
             audit=audit,
             clock=FakeClock(_NOW),
+            authz=FakeAdminAuthzAllowAll(),
         ),
         admins,
         balance,

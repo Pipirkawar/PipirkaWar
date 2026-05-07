@@ -38,13 +38,18 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pipirik_wars.application.admin import (
     BanPlayer,
     FindPlayers,
+    FreezeClanAdmin,
     FreezePlayer,
+    GetAdminAuditTrail,
     GetBalanceValue,
+    GetClanCard,
+    GetClanDailyHeadHistory,
     GetPlayerCard,
     GrantLength,
     GrantThickness,
     RequestAdminConfirm,
     SetBalanceValue,
+    UnfreezeClanAdmin,
     UnfreezePlayer,
     VerifyAdminConfirm,
 )
@@ -127,9 +132,12 @@ from pipirik_wars.bot.notifications import (
 )
 from pipirik_wars.domain.admin import (
     IAdminAuditLogger,
+    IAdminAuditQuery,
+    IAdminAuthorizationPolicy,
     IAdminConfirmStore,
     IAdminRepository,
     ITotpVerifier,
+    RoleBasedAdminAuthorizationPolicy,
 )
 from pipirik_wars.domain.anticheat import IAnticheatAdminAlerter, IAnticheatRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
@@ -192,6 +200,7 @@ from pipirik_wars.infrastructure.db.repositories import (
 )
 from pipirik_wars.infrastructure.db.services import (
     SqlAlchemyAdminAuditLogger,
+    SqlAlchemyAdminAuditQuery,
     SqlAlchemyAuditLogger,
     SqlAlchemyIdempotencyService,
 )
@@ -360,8 +369,10 @@ class Container:
     # сгорают сразу после рестарта). `totp_verifier` — обёртка над
     # `pyotp.TOTP.verify()`. Подробнее — `infrastructure/admin/__init__.py`.
     admin_audit: IAdminAuditLogger
+    admin_audit_query: IAdminAuditQuery
     admin_confirm_store: IAdminConfirmStore
     totp_verifier: ITotpVerifier
+    admin_authz: IAdminAuthorizationPolicy
     find_players: FindPlayers
     get_player_card: GetPlayerCard
     freeze_player: FreezePlayer
@@ -373,6 +384,15 @@ class Container:
     grant_thickness: GrantThickness
     get_balance_value: GetBalanceValue
     set_balance_value: SetBalanceValue
+    # Спринт 2.5-D.5: read-side observability — `/audit`-листинг.
+    get_admin_audit_trail: GetAdminAuditTrail
+    # Спринт 2.5-D.1: read-side карточка клана — `/clan`.
+    get_clan_card: GetClanCard
+    # Спринт 2.5-D.2: ручная заморозка/разморозка клана админом.
+    freeze_clan_admin: FreezeClanAdmin
+    unfreeze_clan_admin: UnfreezeClanAdmin
+    # Спринт 2.5-D.3: read-only история daily-head назначений клана.
+    get_clan_daily_head_history: GetClanDailyHeadHistory
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -881,16 +901,19 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         referrals=referrals,
         clock=clock,
     )
-    # ── Расширенный админ-интерфейс (Спринт 2.5-A + 2.5-B) ──
+    # ── Расширенный админ-интерфейс (Спринт 2.5-A + 2.5-B + 2.5-D) ──
     admin_audit = SqlAlchemyAdminAuditLogger(uow=uow)
+    admin_audit_query = SqlAlchemyAdminAuditQuery(uow=uow)
     admin_confirm_store = InMemoryAdminConfirmStore()
     totp_verifier = PyOtpTotpVerifier()
+    admin_authz: IAdminAuthorizationPolicy = RoleBasedAdminAuthorizationPolicy()
     find_players = FindPlayers(
         uow=uow,
         admins=admins,
         players=players,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     get_player_card = GetPlayerCard(
         uow=uow,
@@ -901,6 +924,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         forest_runs=forest_runs,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     freeze_player = FreezePlayer(
         uow=uow,
@@ -908,6 +932,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         players=players,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     unfreeze_player = UnfreezePlayer(
         uow=uow,
@@ -915,6 +940,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         players=players,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     ban_player = BanPlayer(
         uow=uow,
@@ -922,6 +948,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         players=players,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     request_admin_confirm = RequestAdminConfirm(
         uow=uow,
@@ -930,6 +957,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=admin_audit,
         clock=clock,
         token_factory=_default_admin_token_factory,
+        authz=admin_authz,
     )
     verify_admin_confirm = VerifyAdminConfirm(
         uow=uow,
@@ -938,6 +966,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         totp=totp_verifier,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     grant_length = GrantLength(
         uow=uow,
@@ -946,6 +975,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         length_granter=add_length,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     grant_thickness = GrantThickness(
         uow=uow,
@@ -955,6 +985,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         idempotency=idempotency,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     get_balance_value = GetBalanceValue(
         uow=uow,
@@ -962,6 +993,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         balance=balance,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     balance_writer = YamlBalanceWriter(
         path=balance_yaml_path or _DEFAULT_BALANCE_YAML,
@@ -975,6 +1007,51 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         idempotency=idempotency,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
+    )
+    get_admin_audit_trail = GetAdminAuditTrail(
+        uow=uow,
+        admins=admins,
+        query=admin_audit_query,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    get_clan_card = GetClanCard(
+        uow=uow,
+        admins=admins,
+        players=players,
+        clans=clans,
+        clan_members=clan_members,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    freeze_clan_admin = FreezeClanAdmin(
+        uow=uow,
+        admins=admins,
+        clans=clans,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    unfreeze_clan_admin = UnfreezeClanAdmin(
+        uow=uow,
+        admins=admins,
+        clans=clans,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    get_clan_daily_head_history = GetClanDailyHeadHistory(
+        uow=uow,
+        admins=admins,
+        clans=clans,
+        players=players,
+        daily_heads=daily_heads,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
     )
     return Container(
         clock=clock,
@@ -1060,8 +1137,10 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         grant_referral_thickness_milestone=grant_referral_thickness_milestone,
         run_weekly_clan_referral_summary=run_weekly_clan_referral_summary,
         admin_audit=admin_audit,
+        admin_audit_query=admin_audit_query,
         admin_confirm_store=admin_confirm_store,
         totp_verifier=totp_verifier,
+        admin_authz=admin_authz,
         find_players=find_players,
         get_player_card=get_player_card,
         freeze_player=freeze_player,
@@ -1073,6 +1152,11 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         grant_thickness=grant_thickness,
         get_balance_value=get_balance_value,
         set_balance_value=set_balance_value,
+        get_admin_audit_trail=get_admin_audit_trail,
+        get_clan_card=get_clan_card,
+        freeze_clan_admin=freeze_clan_admin,
+        unfreeze_clan_admin=unfreeze_clan_admin,
+        get_clan_daily_head_history=get_clan_daily_head_history,
     )
 
 
@@ -1175,6 +1259,15 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["grant_thickness"] = container.grant_thickness
     dispatcher["get_balance_value"] = container.get_balance_value
     dispatcher["set_balance_value"] = container.set_balance_value
+    # Спринт 2.5-D.5 — read-side observability `/audit`.
+    dispatcher["get_admin_audit_trail"] = container.get_admin_audit_trail
+    # Спринт 2.5-D.1 — read-side карточка клана `/clan`.
+    dispatcher["get_clan_card"] = container.get_clan_card
+    # Спринт 2.5-D.2 — `/freeze_clan`, `/unfreeze_clan` (admin-side).
+    dispatcher["freeze_clan_admin"] = container.freeze_clan_admin
+    dispatcher["unfreeze_clan_admin"] = container.unfreeze_clan_admin
+    # Спринт 2.5-D.3 — `/clan_daily_head_history` (read-only).
+    dispatcher["get_clan_daily_head_history"] = container.get_clan_daily_head_history
     return dispatcher
 
 

@@ -665,3 +665,84 @@ admin-balance-set-already-at-value = ℹ️ Ключ <code>{ $path }</code> уж
 
 # Общая для /confirm idempotency-replay
 admin-idempotency-replay = ℹ️ Эта команда (<code>{ $command_kind }</code>) уже выполнялась минуту назад — повторное выполнение пропущено.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Спринт 2.5-D.5 — read-side observability `/audit` (ГДД §18.6.4)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /audit [target_tg_id|-] [action|-] [limit]
+admin-audit-usage = ⚠️ Использование: <code>/audit [target_tg_id|-] [action|-] [limit]</code>. Все аргументы опциональны; <code>-</code> означает «без фильтра».
+admin-audit-not-authorized = ❌ Только активные админы могут смотреть аудит-лог.
+admin-audit-bad-tg-id = ⚠️ <code>{ $value }</code> не похож на tg_id (целое число) или <code>-</code>.
+admin-audit-bad-limit = ⚠️ <code>{ $value }</code> не похож на limit (целое > 0).
+admin-audit-unknown-action = ⚠️ Неизвестная action-категория <code>{ $value }</code>.
+admin-audit-target-not-found = 🔍 Админ с tg_id <code>{ $tg_id }</code> не найден.
+# Параметры $target — tg_id или «—»; $action — action-фильтр или «—».
+admin-audit-empty = 🗒️ Записей не найдено (target=<code>{ $target }</code>, action=<code>{ $action }</code>).
+# Заголовок выдачи без target-фильтра. $count — сколько строк ниже, $limit — кап.
+admin-audit-header-all = 🗒️ Аудит-лог: { $count } последних записей (limit { $limit }, все админы).
+# Заголовок выдачи с target-фильтром. $target_tg_id — tg_id админа.
+admin-audit-header-target = 🗒️ Аудит-лог админа <code>{ $target_tg_id }</code>: { $count } последних записей (limit { $limit }).
+# Дописывается к заголовку, если задан action-фильтр.
+admin-audit-filter-action-suffix = Фильтр action: <code>{ $action }</code>.
+# Одна строка списка. Параметры:
+# $id, $occurred_at (ISO-8601 UTC), $actor_tg_id, $action, $target_kind, $target_id, $source, $reason.
+admin-audit-row = • #{ $id } · { $occurred_at } · @{ $actor_tg_id } · <code>{ $action }</code> · { $target_kind }=<code>{ $target_id }</code> · src={ $source } · { $reason }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Спринт 2.5-D.1 — read-only карточка клана `/clan` (ГДД §18.6.5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /clan <id|chat_id>
+admin-clan-usage = ⚠ Использование: <code>/clan &lt;id|chat_id&gt;</code>.
+admin-clan-not-authorized = ❌Только активные админы могут смотреть карточку клана.
+admin-clan-bad-id = ⚠ <code>{ $value }</code> не похож на id клана (целое число).
+admin-clan-not-found = 🔍Клан с id/chat_id <code>{ $query }</code> не найден.
+# Шапка карточки. Параметры: $clan_id, $chat_id, $chat_kind, $title, $status, $created_at, $updated_at, $member_count, $active_member_count, $total_length_cm.
+admin-clan-card-summary =
+    🛡 Клан #{ $clan_id }: <b>{ $title }</b>
+    chat_id: <code>{ $chat_id }</code> ({ $chat_kind })
+    Статус: { $status }
+    Создан: { $created_at } · обновлён: { $updated_at }
+    Участников: { $member_count } (активных { $active_member_count }) · сумма длин: { $total_length_cm } см.
+# Лидер каравана. Параметры: $tg_id, $username, $name, $length_cm, $joined_at.
+admin-clan-card-leader = 👑 Лидер: @{ $username } ({ $name }, tg_id <code>{ $tg_id }</code>) · длина { $length_cm } см · с { $joined_at }.
+admin-clan-card-no-leader = 👑 Лидер: —
+# Одна строка участника. Параметры: $tg_id, $username, $name, $length_cm, $thickness_level, $status, $role, $joined_at.
+admin-clan-card-member-row = • @{ $username } ({ $name }, tg_id <code>{ $tg_id }</code>) · { $length_cm } см · t{ $thickness_level } · { $status } · { $role } · с { $joined_at }
+admin-clan-card-no-members = (в клане нет участников)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Спринт 2.5-D.2 — `/freeze_clan` / `/unfreeze_clan` (ГДД §18.6.5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# /freeze_clan <id|chat_id> [reason]
+admin-freeze-clan-usage = ⚠ Использование: <code>/freeze_clan &lt;id|chat_id&gt; [reason]</code>.
+admin-freeze-clan-not-authorized = ❌Только активные админы могут замораживать кланы.
+admin-freeze-clan-bad-id = ⚠ <code>{ $value }</code> не похож на id клана (целое число).
+admin-freeze-clan-not-found = 🔍Клан с id/chat_id <code>{ $query }</code> не найден.
+admin-freeze-clan-already = ℹ Клан #{ $clan_id } уже заморожен.
+admin-freeze-clan-ok = ❄ Клан #{ $clan_id } заморожен.{ $reason_suffix }
+admin-freeze-clan-reason-suffix = Причина: { $reason }.
+
+# /unfreeze_clan <id|chat_id>
+admin-unfreeze-clan-usage = ⚠ Использование: <code>/unfreeze_clan &lt;id|chat_id&gt;</code>.
+admin-unfreeze-clan-not-authorized = ❌Только активные админы могут размораживать кланы.
+admin-unfreeze-clan-bad-id = ⚠ <code>{ $value }</code> не похож на id клана (целое число).
+admin-unfreeze-clan-not-found = 🔍Клан с id/chat_id <code>{ $query }</code> не найден.
+admin-unfreeze-clan-already = ℹ Клан #{ $clan_id } уже активен.
+admin-unfreeze-clan-ok = 🔥 Клан #{ $clan_id } разморожен.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Спринт 2.5-D.3 — `/clan_daily_head_history` (read-only)
+# ─────────────────────────────────────────────────────────────────────────────
+
+admin-clan-daily-head-history-usage = ⚠ Использование: <code>/clan_daily_head_history &lt;id|chat_id&gt; [N=10]</code>.
+admin-clan-daily-head-history-not-authorized = ❌Только активные админы могут смотреть историю «Главы клана дня».
+admin-clan-daily-head-history-bad-id = ⚠ <code>{ $value }</code> не похож на id клана (целое число).
+admin-clan-daily-head-history-bad-limit = ⚠ <code>{ $value }</code> не похож на лимит (целое число 1..50).
+admin-clan-daily-head-history-not-found = 🔍Клан с id/chat_id <code>{ $query }</code> не найден.
+admin-clan-daily-head-history-empty = 👑 Клан #{ $clan_id } «{ $title }»: история «Главы дня» пуста.
+admin-clan-daily-head-history-header = 👑 Клан #{ $clan_id } «{ $title }», последние { $count } назначений «Главы дня»:
+admin-clan-daily-head-history-row = • <b>{ $moscow_date }</b> — { $tg_id } (@{ $username }, { $name }) +{ $bonus } см ({ $source })
+admin-clan-daily-head-history-row-orphan = • <b>{ $moscow_date }</b> — игрок удалён +{ $bonus } см ({ $source })

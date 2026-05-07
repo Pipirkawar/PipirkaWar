@@ -18,12 +18,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
+from pipirik_wars.application.admin._authorization import ensure_admin_authorized
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.domain.admin import (
     AdminAuditAction,
     AdminAuditEntry,
     AdminAuditSource,
+    AdminCommandKind,
     IAdminAuditLogger,
+    IAdminAuthorizationPolicy,
     IAdminRepository,
 )
 from pipirik_wars.domain.player import IPlayerRepository, Player, PlayerStatus
@@ -93,7 +96,7 @@ def player_to_summary(player: Player) -> PlayerSummary:
 class FindPlayers:
     """Use-case поиска игроков для админских команд поддержки."""
 
-    __slots__ = ("_admins", "_audit", "_clock", "_limit", "_players", "_uow")
+    __slots__ = ("_admins", "_audit", "_authz", "_clock", "_limit", "_players", "_uow")
 
     def __init__(
         self,
@@ -103,6 +106,7 @@ class FindPlayers:
         players: IPlayerRepository,
         audit: IAdminAuditLogger,
         clock: IClock,
+        authz: IAdminAuthorizationPolicy,
         limit: int = DEFAULT_FIND_PLAYERS_LIMIT,
     ) -> None:
         if limit <= 0:
@@ -112,6 +116,7 @@ class FindPlayers:
         self._players = players
         self._audit = audit
         self._clock = clock
+        self._authz = authz
         self._limit = limit
 
     async def execute(self, inp: FindPlayersInput) -> FindPlayersOutput:
@@ -129,6 +134,17 @@ class FindPlayers:
         normalized_query = inp.query.strip()
         now = self._clock.now()
 
+        await ensure_admin_authorized(
+            admin=admin,
+            command_kind=AdminCommandKind.FIND_PLAYER,
+            policy=self._authz,
+            audit=self._audit,
+            uow=self._uow,
+            target_kind="player_query",
+            target_id=normalized_query or "<empty>",
+            tg_chat_id=inp.tg_chat_id,
+            occurred_at=now,
+        )
         async with self._uow:
             if not normalized_query:
                 rows: Sequence[Player] = ()
