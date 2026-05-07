@@ -413,6 +413,61 @@ class DungeonConfig(_PveLocationConfig):
     """
 
 
+class CaravanRewardMultipliers(_Frozen):
+    """Множители наград за победу в караване (ГДД §9.6, Спринт 3.2.6).
+
+    `leader=4` означает, что лидер успешного каравана получает в 4 раза
+    больше длины, чем «базовая» награда (`base_reward_cm` ниже).
+    Все множители — целые ≥ 0 (можно поставить 0, чтобы выключить
+    награды конкретной роли).
+    """
+
+    leader: int = Field(ge=0)
+    caravaneer: int = Field(ge=0)
+    defender: int = Field(ge=0)
+    raider: int = Field(ge=0)
+
+
+class CaravansConfig(_Frozen):
+    """Конфиг караванов (ГДД §9, Спринт 3.2-A).
+
+    Все балансовые числа караванной механики:
+    - `min_thickness_level_leader=7` — минимальный уровень для создания
+      каравана (ГДД §9.1).
+    - `min_thickness_level_raider=5` — для участия рейдером (ГДД §9.5).
+    - Остальные роли (`caravaneer` / `defender`) — без минимального
+      уровня (только длина).
+    - `min_length_cm=20` / `min_length_after_contribution_cm=20` — ГДД §9.2 / §9.3
+      (после взноса остаётся ≥ 20 см).
+    - `lobby_minutes=20`, `battle_minutes=60` — ГДД §9.3 / §9.5.
+    - `clan_cooldown_hours=12` — ГДД §9.3.
+    - Capacity-предели (`max_raiders_per_caravaneer=4`,
+      `max_defenders_per_caravaneer=2`) — ГДД §9.5.
+    - `base_reward_cm` — базовая награда за победу. Конкретные
+      выплаты считаются как `base_reward_cm * reward_multipliers.<role>`.
+      ГДД §9.6: ×4 / ×3 / ×1 / -.
+    - `clan_bonus_cm=1` — клан-получатель получает ровно +1 см к
+      «общей длине клана» при успешном получении каравана (ГДД §9.6).
+
+    Подсекции `lobby_minutes`/`battle_minutes` НЕ объединены в единый
+    `cooldown_min/max` (как у PvE), потому что у каравана это две
+    разные фазы, не два конца окна.
+    """
+
+    min_thickness_level_leader: int = Field(ge=1)
+    min_thickness_level_raider: int = Field(ge=1)
+    min_length_cm: int = Field(gt=0)
+    min_length_after_contribution_cm: int = Field(gt=0)
+    lobby_minutes: int = Field(gt=0)
+    battle_minutes: int = Field(gt=0)
+    clan_cooldown_hours: int = Field(ge=0)
+    max_raiders_per_caravaneer: int = Field(ge=0)
+    max_defenders_per_caravaneer: int = Field(ge=0)
+    base_reward_cm: int = Field(ge=0)
+    reward_multipliers: CaravanRewardMultipliers
+    clan_bonus_cm: int = Field(ge=0)
+
+
 class OracleConfig(_Frozen):
     """Конфиг предсказателя `/oracle` (ГДД §11)."""
 
@@ -706,6 +761,7 @@ class BalanceConfig(_Frozen):
     forest: ForestConfig
     mountains: MountainsConfig
     dungeon: DungeonConfig
+    caravans: CaravansConfig
     oracle: OracleConfig
     referral: ReferralConfig
     thickness: ThicknessConfig
