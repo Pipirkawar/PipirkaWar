@@ -54,6 +54,7 @@ from tests.fakes.idempotency import FakeIdempotencyKey
 from tests.fakes.lock_repo import FakeActivityLockRepository
 from tests.fakes.mass_duel_repo import FakeMassDuelRepository
 from tests.fakes.message_bundle import FakeMessageBundle
+from tests.fakes.mountain_run_repo import FakeMountainRunRepository
 from tests.fakes.oracle import (
     FakeOracleHistoryRepository,
     FakeOracleTemplateProvider,
@@ -102,6 +103,7 @@ __all__ = [
     "FakeIdempotencyKey",
     "FakeMassDuelRepository",
     "FakeMessageBundle",
+    "FakeMountainRunRepository",
     "FakeOracleHistoryRepository",
     "FakeOracleTemplateProvider",
     "FakePlayerLocaleResolver",
