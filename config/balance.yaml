@@ -75,6 +75,19 @@ forest:
       common: 70
       rare: 25
       epic: 5
+    # Спринт 3.1-C: per-location распределение слотов внутри дропа.
+    # В лесу оружие НЕ дропает (ГДД §8 — оружие только в горах/данжоне),
+    # поэтому `right_hand` / `left_hand` имеют вес 0. 6 слотов «обвеса»
+    # распределены примерно равномерно с лёгким уклоном к hat/body/legs.
+    slot_weights:
+      hat: 20
+      body: 20
+      legs: 20
+      boots: 15
+      ring: 12
+      chain: 13
+      right_hand: 0
+      left_hand: 0
 
 # -----------------------------------------------------------------------------
 # §8 — горы (Спринт 3.1.1). Уровень 3+, длина ≥ 20 см, кулдаун 20–40 мин.
@@ -108,6 +121,18 @@ mountains:
       common: 60
       rare: 30
       epic: 10
+    # Спринт 3.1-C: горы дают и обвес, и оружие. Доля оружия выше, чем
+    # в лесу (где она 0%), но ниже, чем в данжоне (см. ниже). Соотношение
+    # right_hand/left_hand близко к 50/50 — обе руки равноценны для UX.
+    slot_weights:
+      hat: 12
+      body: 12
+      legs: 12
+      boots: 12
+      ring: 12
+      chain: 12
+      right_hand: 14
+      left_hand: 14
 
 # -----------------------------------------------------------------------------
 # §8 — данжон (Спринт 3.1.2). Уровень 6+, длина ≥ 20 см, кулдаун 40–60 мин.
@@ -133,6 +158,18 @@ dungeon:
       common: 50
       rare: 35
       epic: 15
+    # Спринт 3.1-C: данжон даёт самую большую долю оружия — это
+    # «крепость» PvE-контура (ГДД §8). Веса оружия выше, чем веса
+    # любого отдельного слота обвеса.
+    slot_weights:
+      hat: 10
+      body: 10
+      legs: 10
+      boots: 10
+      ring: 10
+      chain: 10
+      right_hand: 20
+      left_hand: 20
 
 # -----------------------------------------------------------------------------
 # §11 — предсказатель. Кулдаун — по Москве (UTC+3), сброс в 00:00 MSK.
@@ -327,6 +364,18 @@ items_catalog:
   - { id: "item.chain.beads_shaman",     slot: "chain", display_name: "Бусы Шамана",         rarity: "rare" }
   - { id: "item.chain.gold_rinok",       slot: "chain", display_name: "Голда с Рынка",       rarity: "rare" }
   - { id: "item.chain.chain_obsidian",   slot: "chain", display_name: "Обсидиановая Цепь",   rarity: "epic" }
+  # 🥊 Правая рука (основное оружие, Спринт 3.1-C). Дропает в горах/данжоне.
+  - { id: "item.right_hand.kastet_starshego", slot: "right_hand", display_name: "Кастет Старшего",  rarity: "common" }
+  - { id: "item.right_hand.bita_garazhnaya",  slot: "right_hand", display_name: "Бита Гаражная",    rarity: "common" }
+  - { id: "item.right_hand.nun_chuck_palych", slot: "right_hand", display_name: "Нунчаки Палыча",   rarity: "rare" }
+  - { id: "item.right_hand.tesak_myasnika",   slot: "right_hand", display_name: "Тесак Мясника",    rarity: "rare" }
+  - { id: "item.right_hand.katana_lombard",   slot: "right_hand", display_name: "Катана из Ломбарда", rarity: "epic" }
+  # 🛡️ Левая рука (щит / второе оружие, Спринт 3.1-C). Дропает в горах/данжоне.
+  - { id: "item.left_hand.kryshka_kastrul",   slot: "left_hand",  display_name: "Крышка от Кастрюли", rarity: "common" }
+  - { id: "item.left_hand.zaslonka_pechi",    slot: "left_hand",  display_name: "Заслонка от Печи",  rarity: "common" }
+  - { id: "item.left_hand.shchit_zaboristyi", slot: "left_hand",  display_name: "Щит-Заборник",      rarity: "rare" }
+  - { id: "item.left_hand.kop_yebrut",        slot: "left_hand",  display_name: "Копьё-Брют",        rarity: "rare" }
+  - { id: "item.left_hand.zerkalo_meduzy",    slot: "left_hand",  display_name: "Зеркало Медузы",    rarity: "epic" }
 
 # -----------------------------------------------------------------------------
 # §2.5 / §1.3.5 — каталог имён. ≥ 30 строк. Имя — отдельная сущность

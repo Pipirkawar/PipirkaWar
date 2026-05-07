@@ -152,11 +152,16 @@ class TestDropProbability:
 
     def test_drop_taken_when_roll_at_threshold(self) -> None:
         # probability_percent = 50 → roll 50 → дроп. И 100 → не имя → предмет.
-        # rarity_weights idx 0 = common; choice(0) — первый предмет каталога.
+        # Спринт 3.1-C: drop-engine сначала катит слот (`weighted_choice` на
+        # `slot_weights`), потом редкость, потом `random.choice` по пулу.
+        # Для леса в фикстуре веса [hat:20, body:20, legs:20, boots:15,
+        # ring:12, chain:13, right_hand:0, left_hand:0] → в `weighted_choice`
+        # передаётся только 6 ненулевых; индекс 0 = HAT.
         cfg = _balance()
         scripted = ScriptedRandom(
             weighted_indexes=[
                 0,  # branch=scarce
+                0,  # slot=HAT (первый ненулевой)
                 0,  # rarity=common
             ],
             randints=[
@@ -164,7 +169,7 @@ class TestDropProbability:
                 50,  # drop hits (== probability_percent)
                 100,  # name_share roll (> 5) → предмет
             ],
-            choices=[0],  # первый предмет в pool
+            choices=[0],  # первый предмет в pool (slot=HAT, rarity=COMMON)
         )
         outcome = compute_forest_outcome(balance=cfg, random=scripted)
         assert isinstance(outcome.drop, ItemDrop)
@@ -202,7 +207,7 @@ class TestNameVsItemSplit:
     def test_item_drop_when_share_roll_above_threshold(self) -> None:
         cfg = _balance()
         scripted = ScriptedRandom(
-            weighted_indexes=[0, 1],  # branch=scarce, rarity=rare
+            weighted_indexes=[0, 0, 1],  # branch=scarce, slot=HAT, rarity=rare
             randints=[
                 cfg.forest.outcomes[0].min,
                 1,  # drop hits
@@ -221,7 +226,7 @@ class TestRaritySelection:
         rarities = (Rarity.COMMON, Rarity.RARE, Rarity.EPIC)
         for rarity_idx, rarity in enumerate(rarities):
             scripted = ScriptedRandom(
-                weighted_indexes=[0, rarity_idx],
+                weighted_indexes=[0, 0, rarity_idx],  # branch, slot=HAT, rarity
                 randints=[
                     cfg.forest.outcomes[0].min,
                     1,

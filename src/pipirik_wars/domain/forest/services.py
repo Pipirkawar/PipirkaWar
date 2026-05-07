@@ -8,9 +8,12 @@
 2. Прибавка длины — `random.randint(branch.min, branch.max)`.
 3. Дроп — `random.randint(1, 100)` против `forest.drop.probability_percent`.
    Если выпал дроп — `random.randint(1, 100)` против `name_share_percent`
-   решает «имя или предмет». Для предмета сначала разыгрывается редкость
-   через `random.weighted_choice` на `forest.drop.rarity_weights`,
-   затем `random.choice` среди предметов нужной редкости.
+   решает «имя или предмет». Для предмета вызывается общий хелпер
+   `pick_drop_item_entry` (`domain/balance/picking.py`): слот через
+   `weighted_choice` на `forest.drop.slot_weights` (для леса оружие
+   отключено: `right_hand`/`left_hand` имеют вес 0) → редкость через
+   `weighted_choice` на `forest.drop.rarity_weights` → `random.choice`
+   из `items_catalog`, отфильтрованного по `(slot, rarity)`.
 
 Никаких side-эффектов: запись в БД / начисление длины / смена ника
 будут в use-case-е `FinishForestRun` (Спринт 1.3.C).
@@ -23,6 +26,7 @@
 from __future__ import annotations
 
 from pipirik_wars.domain.balance.config import BalanceConfig
+from pipirik_wars.domain.balance.picking import pick_drop_item_entry
 from pipirik_wars.domain.forest.entities import (
     Drop,
     ForestRunOutcome,
@@ -83,14 +87,12 @@ def _roll_name_drop(*, balance: BalanceConfig, random: IRandom) -> NameDrop:
 
 
 def _roll_item_drop(*, balance: BalanceConfig, random: IRandom) -> ItemDrop:
-    rarity_cfg = balance.forest.drop.rarity_weights
-    rarities: list[Rarity] = [Rarity.COMMON, Rarity.RARE, Rarity.EPIC]
-    weights = [rarity_cfg.common, rarity_cfg.rare, rarity_cfg.epic]
-    rarity = random.weighted_choice(rarities, weights)
-
-    pool = [e for e in balance.items_catalog if e.rarity is rarity]
-    # Pre-условие, гарантированное pydantic-валидатором: pool непуст.
-    entry = random.choice(pool)
+    entry = pick_drop_item_entry(
+        balance=balance,
+        slot_weights=balance.forest.drop.slot_weights,
+        rarity_weights=balance.forest.drop.rarity_weights,
+        random=random,
+    )
     item = Item(
         id=entry.id,
         slot=Slot(entry.slot),
