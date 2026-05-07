@@ -22,12 +22,17 @@ import pytest
 
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.balance import ReloadBalance
-from pipirik_wars.domain.admin import AdminRole
+from pipirik_wars.domain.admin import (
+    AdminAuthorizationDeniedError,
+    AdminRole,
+    RoleBasedAdminAuthorizationPolicy,
+)
 from pipirik_wars.domain.balance import IBalanceReloader
 from pipirik_wars.domain.balance.config import BalanceConfig
 from pipirik_wars.domain.shared.ports import AuditAction
 from pipirik_wars.shared.errors import ConfigError
 from tests.fakes import (
+    FakeAdminAuditLogger,
     FakeAdminRepository,
     FakeAuditLogger,
     FakeBalanceConfig,
@@ -54,9 +59,11 @@ def _build(
     FakeAuditLogger,
     FakeUnitOfWork,
     FakeClock,
+    FakeAdminAuditLogger,
 ]:
     uow = FakeUnitOfWork()
     audit = FakeAuditLogger()
+    admin_audit = FakeAdminAuditLogger()
     admins = FakeAdminRepository()
     balance = FakeBalanceConfig(_build_balance_with_version(initial_version))
     clock = FakeClock(datetime(2026, 5, 4, 12, 0, tzinfo=UTC))
@@ -66,15 +73,17 @@ def _build(
         balance=balance,
         reloader=balance,
         audit=audit,
+        admin_audit=admin_audit,
+        authz=RoleBasedAdminAuthorizationPolicy(),
         clock=clock,
     )
-    return use_case, admins, balance, audit, uow, clock
+    return use_case, admins, balance, audit, uow, clock, admin_audit
 
 
 @pytest.mark.asyncio
 class TestAuthorization:
     async def test_super_admin_can_reload(self) -> None:
-        use_case, admins, balance, audit, _, _ = _build()
+        use_case, admins, balance, audit, _, _, _ = _build()
         admins.seed(tg_id=42, role=AdminRole.SUPER_ADMIN)
         balance.queue_next_reload(_build_balance_with_version(2))
 
@@ -85,7 +94,7 @@ class TestAuthorization:
         assert len(audit.entries) == 1
 
     async def test_economist_can_reload(self) -> None:
-        use_case, admins, balance, audit, _, _ = _build()
+        use_case, admins, balance, audit, _, _, _ = _build()
         admins.seed(tg_id=42, role=AdminRole.ECONOMIST)
         balance.queue_next_reload(_build_balance_with_version(2))
 
@@ -95,7 +104,7 @@ class TestAuthorization:
         assert len(audit.entries) == 1
 
     async def test_unknown_user_raises_authorization_error(self) -> None:
-        use_case, _, balance, audit, _, _ = _build()
+        use_case, _, balance, audit, _, _, _ = _build()
         # Никого не подкладывали — repo админов пуст.
 
         with pytest.raises(AuthorizationError) as exc_info:
@@ -107,28 +116,35 @@ class TestAuthorization:
         assert audit.entries == []
 
     async def test_support_role_cannot_reload_balance(self) -> None:
-        # ГДД §18.6: support — операционные действия, но `/balance_*`
-        # доступны только economist+/super_admin (Admin.can_write_balance).
-        use_case, admins, balance, audit, _, _ = _build()
+        # Спринт 2.5-D.7: support — по RBAC-матрице D.8 RELOAD_BALANCE
+        # доступен только super_admin+economist; попытка эскалации фиксируется
+        # в admin_audit как `ADMIN_AUTHORIZATION_DENIED`.
+        use_case, admins, balance, audit, _, _, admin_audit = _build()
         admins.seed(tg_id=42, role=AdminRole.SUPPORT)
 
-        with pytest.raises(AuthorizationError):
+        with pytest.raises(AdminAuthorizationDeniedError):
             await use_case.execute(actor_tg_id=42)
 
         assert balance.get().version == 1
         assert audit.entries == []
+        assert len(admin_audit.entries) == 1
+        assert admin_audit.entries[0].action.value == "admin_authorization_denied"
 
     async def test_read_only_admin_cannot_reload_balance(self) -> None:
-        use_case, admins, _, audit, _, _ = _build()
+        use_case, admins, _, audit, _, _, admin_audit = _build()
         admins.seed(tg_id=42, role=AdminRole.READ_ONLY)
 
-        with pytest.raises(AuthorizationError):
+        with pytest.raises(AdminAuthorizationDeniedError):
             await use_case.execute(actor_tg_id=42)
 
         assert audit.entries == []
+        assert len(admin_audit.entries) == 1
 
     async def test_deactivated_super_admin_cannot_reload(self) -> None:
-        use_case, admins, _, audit, _, _ = _build()
+        # Inactive-admin отбивается defense-in-depth-проверкой в use-case-е
+        # до RBAC — поэтому admin_audit пуст (мы не светим деактивацию
+        # через audit-лог: это ответственность системы admin-management).
+        use_case, admins, _, audit, _, _, admin_audit = _build()
         admins.seed(tg_id=42, role=AdminRole.SUPER_ADMIN)
         admins.deactivate(tg_id=42)
 
@@ -136,12 +152,13 @@ class TestAuthorization:
             await use_case.execute(actor_tg_id=42)
 
         assert audit.entries == []
+        assert admin_audit.entries == []
 
 
 @pytest.mark.asyncio
 class TestReload:
     async def test_audit_entry_contains_versions_and_actor(self) -> None:
-        use_case, admins, balance, audit, uow, clock = _build()
+        use_case, admins, balance, audit, uow, clock, _ = _build()
         admin = admins.seed(tg_id=42, role=AdminRole.SUPER_ADMIN)
         balance.queue_next_reload(_build_balance_with_version(7))
 
@@ -164,7 +181,7 @@ class TestReload:
 
     async def test_same_version_after_reload_is_valid(self) -> None:
         # Файл не меняли — reload прошёл, before == after.
-        use_case, admins, _, audit, _, _ = _build(initial_version=3)
+        use_case, admins, _, audit, _, _, _ = _build(initial_version=3)
         admins.seed(tg_id=42, role=AdminRole.SUPER_ADMIN)
 
         result = await use_case.execute(actor_tg_id=42)
@@ -191,6 +208,8 @@ class TestReload:
             balance=balance,
             reloader=broken_reloader,
             audit=audit,
+            admin_audit=FakeAdminAuditLogger(),
+            authz=RoleBasedAdminAuthorizationPolicy(),
             clock=FakeClock(datetime(2026, 5, 4, tzinfo=UTC)),
         )
 

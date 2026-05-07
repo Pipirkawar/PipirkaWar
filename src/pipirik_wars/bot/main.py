@@ -537,12 +537,20 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         players=players,
         balance=balance,
     )
+    # Расширенный админ-интерфейс (Спринт 2.5-A + 2.5-B + 2.5-D) — admin-audit
+    # и RBAC-политика. Определяем раньше use-case-ов, которые их
+    # инжектят (`ReloadBalance`/`SetMaxDau`/`LiftAnticheatBan` в D.7,
+    # плюс все D.8-use-case-ы ниже).
+    admin_audit = SqlAlchemyAdminAuditLogger(uow=uow)
+    admin_authz: IAdminAuthorizationPolicy = RoleBasedAdminAuthorizationPolicy()
     reload_balance = ReloadBalance(
         uow=uow,
         admins=admins,
         balance=balance,
         reloader=balance,
         audit=audit,
+        admin_audit=admin_audit,
+        authz=admin_authz,
         clock=clock,
     )
     get_dau_stats = GetDauStats(counter=dau_counter, limit=dau_limit)
@@ -551,6 +559,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         admins=admins,
         limit=dau_limit,
         audit=audit,
+        admin_audit=admin_audit,
+        authz=admin_authz,
         clock=clock,
     )
     promote_from_queue = PromoteFromQueue(
@@ -669,12 +679,15 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=audit,
         clock=clock,
     )
-    # /anticheat_unban (Спринт 1.6.G) — admin-команда снятия soft-ban-а.
+    # /anticheat_unban (Спринт 1.6.G → 2.5-D.7) — admin-команда снятия
+    # soft-ban-а. RBAC через ensure_admin_authorized + admin_audit (D.7).
     lift_anticheat_ban = LiftAnticheatBan(
         uow=uow,
         admins=admins,
         players=players,
         audit=audit,
+        admin_audit=admin_audit,
+        authz=admin_authz,
         clock=clock,
     )
     # PvP 1×1 use-cases (Спринт 2.1.D, ГДД §7.1)
@@ -901,12 +914,13 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         referrals=referrals,
         clock=clock,
     )
-    # ── Расширенный админ-интерфейс (Спринт 2.5-A + 2.5-B + 2.5-D) ──
-    admin_audit = SqlAlchemyAdminAuditLogger(uow=uow)
+    # ── Расширенный админ-интерфейс (Спринт 2.5-B + 2.5-D) ──
+    # NOTE: `admin_audit` и `admin_authz` уже инициализированы выше
+    # (перед reload_balance/set_max_dau/lift_anticheat_ban) — здесь
+    # добавляем только оставшиеся (read-side query, confirm-store, TOTP).
     admin_audit_query = SqlAlchemyAdminAuditQuery(uow=uow)
     admin_confirm_store = InMemoryAdminConfirmStore()
     totp_verifier = PyOtpTotpVerifier()
-    admin_authz: IAdminAuthorizationPolicy = RoleBasedAdminAuthorizationPolicy()
     find_players = FindPlayers(
         uow=uow,
         admins=admins,

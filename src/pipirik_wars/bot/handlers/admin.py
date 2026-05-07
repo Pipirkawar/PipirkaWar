@@ -1,25 +1,35 @@
-"""Админ-handler-ы (Спринт 1.1.E + 1.2.B).
+"""Legacy-админ-handler-ы (Спринт 1.1.E + 1.2.B + 1.6.G → 2.5-D.7).
 
-Команды доступны только в ЛС (групповые админ-команды появятся в
-Фазе 4 в виде `/admin_*`, см. ГДД §18.6.5). Авторизация — на стороне
-use-case-а: handler ловит `AuthorizationError` и шлёт friendly-текст.
+Команды доступны только в ЛС. С 2.5-D.7 router отбрасывает не-админов
+тихо через `IsAdminFilter` (как в `admin_support`/`admin_economy`/...);
+RBAC-проверка делается use-case-ом через `ensure_admin_authorized(...)` —
+при отказе use-case бросает `AdminAuthorizationDeniedError`, handler
+конвертирует его в локализованный «недостаточно прав».
 
 Доступные команды:
 
-- `/balance_reload` (Спринт 1.1.8) — hot-reload `config/balance.yaml`.
-- `/admin_stats` (Спринт 1.2.3) — текущий DAU и MAX_DAU.
-- `/set_max_dau N` (Спринт 1.2.6) — изменить runtime-лимит DAU.
+- `/balance_reload` (1.1.8) — hot-reload `config/balance.yaml`
+  (`AdminCommandKind.RELOAD_BALANCE`; `super_admin`/`economist`).
+- `/admin_stats` (1.2.3) — текущий DAU/MAX_DAU и размер очереди
+  (`AdminCommandKind.ADMIN_STATS`; все активные админы).
+- `/set_max_dau N` (1.2.6) — изменить runtime-`MAX_DAU`
+  (`AdminCommandKind.SET_MAX_DAU`; только `super_admin`).
+- `/anticheat_unban <tg_id> <reason>` (1.6.G) — снять anti-cheat
+  soft-ban с игрока (`AdminCommandKind.LIFT_ANTICHEAT_BAN`;
+  только `super_admin`).
 
 Дружелюбные тексты:
 
-- Не из-под админа → handler ловит `AuthorizationError` и шлёт текст
-  «недостаточно прав». В audit_log такой случай **не пишется**: use-case
-  поднимает ошибку до записи. Это by design — мы не хотим, чтобы
-  внешний пользователь мог «засветить» команду, увидев в каком-то
-  будущем `/audit`-листинге чужой `tg_id`.
+- Не-админ → router-уровневый `IsAdminFilter` отбрасывает апдейт
+  тихо. В audit_log такой случай **не пишется**: `AdminGuard`
+  даже не загружает `Admin` для непривязанных tg_id.
+- Активный админ с недостаточной ролью → `AdminAuthorizationDeniedError`
+  ловится handler-ом, шлёт friendly-текст. **Audit-запись
+  `ADMIN_AUTHORIZATION_DENIED` уже сделана внутри use-case-а** в
+  отдельном UoW (см. `application/admin/_authorization.py`).
 - Невалидный YAML → handler ловит `ConfigError` и шлёт текст «файл
   невалиден, старый снимок остался в силе»; ошибка детально
-  логируется через `ErrorHandlerMiddleware` (тот же `structlog`).
+  логируется через `ErrorHandlerMiddleware` (`structlog`).
 - Успех → «версия N → M» (или «версия N» если файл не меняли).
 """
 
@@ -36,13 +46,20 @@ from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.dau import GetDauStats, SetMaxDau
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.application.signup_queue import PromoteFromQueue
+from pipirik_wars.bot.filters import IsAdminFilter
 from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters.anticheat import AnticheatUnbanPresenter
+from pipirik_wars.domain.admin import AdminAuthorizationDeniedError
 from pipirik_wars.domain.player import PlayerNotFoundError
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
 from pipirik_wars.shared.errors import ConfigError
 
 router = Router(name="admin")
+# Спринт 2.5-D.7: отбрасываем не-админов на уровне router-а (как и
+# другие admin-router-ы). RBAC внутри ролей — это уже use-case через
+# `ensure_admin_authorized(...)` (Спринт 2.5-D.8).
+router.message.filter(IsAdminFilter())
+router.callback_query.filter(IsAdminFilter())
 
 REPLY_NON_PRIVATE_RU = "🍆 Админ-команды доступны только в ЛС бота."
 REPLY_FORBIDDEN_RU = (
@@ -73,7 +90,7 @@ async def handle_balance_reload(
     tg_identity: TgIdentity | None,
     reload_balance: ReloadBalance,
 ) -> None:
-    """Hot-reload `config/balance.yaml` (super_admin / economist)."""
+    """Hot-reload `config/balance.yaml` (super_admin / economist по матрице D.8)."""
     chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
     if chat_kind != "private" or tg_identity is None:
         await message.answer(REPLY_NON_PRIVATE_RU)
@@ -81,7 +98,10 @@ async def handle_balance_reload(
 
     try:
         result = await reload_balance.execute(actor_tg_id=tg_identity.tg_user_id)
-    except AuthorizationError:
+    except (AuthorizationError, AdminAuthorizationDeniedError):
+        # `AuthorizationError` — admin не существует / не активен (defense-in-depth).
+        # `AdminAuthorizationDeniedError` — RBAC-роль не покрывает RELOAD_BALANCE
+        # (audit-запись `ADMIN_AUTHORIZATION_DENIED` уже сделана use-case-ом).
         await message.answer(REPLY_FORBIDDEN_RU)
         return
     except ConfigError:
@@ -108,10 +128,12 @@ async def handle_admin_stats(
     get_dau_stats: GetDauStats,
     signup_queue: ISignupQueueRepository,
 ) -> None:
-    """Текущий DAU, MAX_DAU и размер очереди. Только в ЛС.
+    """Текущий DAU, MAX_DAU и размер очереди.
 
-    Семантически команда «админская», но режим read-only без
-    чувствительных данных делает RBAC-гейт избыточным на текущей фазе.
+    `IsAdminFilter` уже отфильтровал не-админов на уровне router-а —
+    дополнительная RBAC-проверка не нужна (по матрице D.8 read-only
+    `ADMIN_STATS` доступен любой активной роли). Сам факт чтения
+    статистики не считается чувствительным, аудит не пишется.
     """
     chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
     if chat_kind != "private" or tg_identity is None:
@@ -147,7 +169,7 @@ async def handle_set_max_dau(
     set_max_dau: SetMaxDau,
     promote_from_queue: PromoteFromQueue,
 ) -> None:
-    """Изменить runtime-`MAX_DAU` (super_admin only).
+    """Изменить runtime-`MAX_DAU` (super_admin only по матрице D.8).
 
     Если лимит вырос — сразу же зовём `PromoteFromQueue.execute()`,
     чтобы поднять из очереди всех, кого влезает по новой ёмкости.
@@ -168,7 +190,8 @@ async def handle_set_max_dau(
             actor_tg_id=tg_identity.tg_user_id,
             new_max_dau=new_value,
         )
-    except AuthorizationError:
+    except (AuthorizationError, AdminAuthorizationDeniedError):
+        # См. handle_balance_reload — обе ошибки конвертим в один friendly-текст.
         await message.answer(REPLY_DAU_FORBIDDEN_RU)
         return
 
@@ -221,14 +244,15 @@ async def handle_anticheat_unban(
     bundle: IMessageBundle,
     locale: Locale | None = None,
 ) -> None:
-    """Снять anti-cheat soft-ban с игрока (Спринт 1.6.G; super_admin only).
+    """Снять anti-cheat soft-ban с игрока (Спринт 1.6.G; super_admin only по матрице D.8).
 
     Использование: `/anticheat_unban <tg_id> <reason>`. Reason обязательна,
     идёт в `audit_log` как причина снятия.
 
     Ответы локализованы (`anticheat-unban-*` в `locales/{ru,en}.ftl`).
     Не из ЛС → стандартный ответ «только в ЛС». Не super_admin →
-    `not_authorized`-текст без светки попытки в audit (намеренно).
+    `not_authorized`-текст (audit-запись о попытке эскалации уже сделана
+    внутри use-case-а через `ensure_admin_authorized`).
     """
     presenter = AnticheatUnbanPresenter(bundle=bundle)
     effective_locale = locale or DEFAULT_LOCALE
@@ -249,7 +273,7 @@ async def handle_anticheat_unban(
             target_tg_id=target_tg_id,
             reason=reason,
         )
-    except AuthorizationError:
+    except (AuthorizationError, AdminAuthorizationDeniedError):
         await message.answer(presenter.not_authorized(locale=effective_locale))
         return
     except PlayerNotFoundError:
