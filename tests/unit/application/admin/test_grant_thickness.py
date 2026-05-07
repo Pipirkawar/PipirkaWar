@@ -161,13 +161,13 @@ class TestGrantThickness:
                 GrantThicknessInput(
                     actor_tg_id=42,
                     target_tg_id=999,
-                    new_level=99,  # max в factories = 3
+                    new_level=99,  # max в factories = 6 (dungeon unlock_level)
                     reason="r",
                     idempotency_key="k",
                 ),
             )
         assert ctx.value.reason_code == "above_max"
-        assert ctx.value.max_level == 3
+        assert ctx.value.max_level == 6
 
     async def test_empty_reason_rejected(self) -> None:
         uc, admins, players, _, _, _, _ = _build()

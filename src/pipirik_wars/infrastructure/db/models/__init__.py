@@ -49,6 +49,10 @@ from pipirik_wars.infrastructure.db.models.daily_head import DailyHeadAssignment
 from pipirik_wars.infrastructure.db.models.forest import ForestRunORM
 from pipirik_wars.infrastructure.db.models.oracle import OracleInvocationORM
 from pipirik_wars.infrastructure.db.models.player import UserORM
+from pipirik_wars.infrastructure.db.models.pve_runs import (
+    DungeonRunORM,
+    MountainRunORM,
+)
 from pipirik_wars.infrastructure.db.models.pvp import (
     PvpDuelORM,
     PvpDuelRoundORM,
@@ -74,8 +78,10 @@ __all__ = [
     "ClanORM",
     "DailyActiveORM",
     "DailyHeadAssignmentORM",
+    "DungeonRunORM",
     "ForestRunORM",
     "IdempotencyKeyORM",
+    "MountainRunORM",
     "OracleInvocationORM",
     "PvpDuelORM",
     "PvpDuelRoundORM",

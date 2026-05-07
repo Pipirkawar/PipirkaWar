@@ -73,6 +73,13 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
     cancelled_daily_head_cron: list[int] = field(default_factory=list)
     # 2.4.E: глобальный cron weekly-сводки рефералов клана (один на бота).
     scheduled_weekly_clan_referral_summary_cron: bool = False
+    # 3.1-B: per-run_id finish-job для гор / данжона. Те же контракты, что
+    # у `scheduled` (forest): идемпотентно по `run_id`, cancel — NO-OP
+    # если job-а нет.
+    scheduled_mountain_finish: dict[int, ScheduledFinish] = field(default_factory=dict)
+    cancelled_mountain_finish: list[int] = field(default_factory=list)
+    scheduled_dungeon_finish: dict[int, ScheduledFinish] = field(default_factory=dict)
+    cancelled_dungeon_finish: list[int] = field(default_factory=list)
 
     async def schedule_finish_forest_run(
         self,
@@ -165,6 +172,30 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
     async def cancel_daily_head_cron(self, *, clan_id: int) -> None:
         self.cancelled_daily_head_cron.append(clan_id)
         self.scheduled_daily_head_cron.pop(clan_id, None)
+
+    async def schedule_finish_mountain_run(
+        self,
+        *,
+        run_id: int,
+        run_at: datetime,
+    ) -> None:
+        self.scheduled_mountain_finish[run_id] = ScheduledFinish(run_id=run_id, run_at=run_at)
+
+    async def cancel_finish_mountain_run(self, *, run_id: int) -> None:
+        self.cancelled_mountain_finish.append(run_id)
+        self.scheduled_mountain_finish.pop(run_id, None)
+
+    async def schedule_finish_dungeon_run(
+        self,
+        *,
+        run_id: int,
+        run_at: datetime,
+    ) -> None:
+        self.scheduled_dungeon_finish[run_id] = ScheduledFinish(run_id=run_id, run_at=run_at)
+
+    async def cancel_finish_dungeon_run(self, *, run_id: int) -> None:
+        self.cancelled_dungeon_finish.append(run_id)
+        self.scheduled_dungeon_finish.pop(run_id, None)
 
     async def schedule_weekly_clan_referral_summary_cron(self) -> None:
         self.scheduled_weekly_clan_referral_summary_cron = True

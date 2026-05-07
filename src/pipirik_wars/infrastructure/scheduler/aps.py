@@ -63,6 +63,9 @@ _EXPIRE_JOB_PREFIX: Final[str] = "pvp_global_lobby_expire:"
 _ROUND_AFK_JOB_PREFIX: Final[str] = "pvp_round_afk:"
 _MASS_DUEL_AFK_JOB_PREFIX: Final[str] = "pvp_mass_duel_afk:"
 _DAILY_HEAD_CRON_PREFIX: Final[str] = "daily_head_cron:"
+# 3.1-B (PvE: горы и данжон, ГДД §8). Те же контракты, что у леса.
+_MOUNTAIN_FINISH_JOB_PREFIX: Final[str] = "mountain_run_finish:"
+_DUNGEON_FINISH_JOB_PREFIX: Final[str] = "dungeon_run_finish:"
 _DAILY_HEAD_RESCHEDULE_JOB_ID: Final[str] = "daily_head_reschedule_cron"
 _WEEKLY_REFERRAL_SUMMARY_JOB_ID: Final[str] = "weekly_clan_referral_summary_cron"
 #: Расписание weekly-сводки рефералов клана: вс. 18:00 UTC (ГДД §13.3).
@@ -94,6 +97,14 @@ def _mass_duel_afk_job_id(duel_id: int) -> str:
 
 def _daily_head_cron_job_id(clan_id: int) -> str:
     return f"{_DAILY_HEAD_CRON_PREFIX}{clan_id}"
+
+
+def _mountain_finish_job_id(run_id: int) -> str:
+    return f"{_MOUNTAIN_FINISH_JOB_PREFIX}{run_id}"
+
+
+def _dungeon_finish_job_id(run_id: int) -> str:
+    return f"{_DUNGEON_FINISH_JOB_PREFIX}{run_id}"
 
 
 class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
@@ -329,6 +340,80 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
             self._scheduler.remove_job(_daily_head_cron_job_id(clan_id))
         except Exception:
             return
+
+    # ── Спринт 3.1-B: PvE-походы (горы и данжон, ГДД §8) ──
+    #
+    # Регистрируем date-job-ы, callback-и которых ловят `factory not wired`
+    # (полный wiring `mountain_finish_factory` / `dungeon_finish_factory` —
+    # в Спринте 3.1-E, когда появятся bot-handler-ы `/mountains` /
+    # `/dungeon`). До этого callback логирует «factory not wired» и
+    # тихо выходит.
+
+    async def schedule_finish_mountain_run(
+        self,
+        *,
+        run_id: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_mountain_finish_job,
+            trigger="date",
+            run_date=run_at,
+            args=(run_id,),
+            id=_mountain_finish_job_id(run_id),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_finish_mountain_run(self, *, run_id: int) -> None:
+        try:
+            self._scheduler.remove_job(_mountain_finish_job_id(run_id))
+        except Exception:
+            return
+
+    async def schedule_finish_dungeon_run(
+        self,
+        *,
+        run_id: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_dungeon_finish_job,
+            trigger="date",
+            run_date=run_at,
+            args=(run_id,),
+            id=_dungeon_finish_job_id(run_id),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_finish_dungeon_run(self, *, run_id: int) -> None:
+        try:
+            self._scheduler.remove_job(_dungeon_finish_job_id(run_id))
+        except Exception:
+            return
+
+    async def _run_mountain_finish_job(self, run_id: int) -> None:
+        """Callback `FinishMountainRun`-job-а (Спринт 3.1-B).
+
+        До wiring-а в 3.1-E фабрика `FinishMountainRun` не подвязана —
+        callback логирует «factory not wired» и тихо выходит.
+        """
+        self._logger.warning(
+            "mountain_run_finish: factory not wired",
+            extra={"run_id": run_id},
+        )
+
+    async def _run_dungeon_finish_job(self, run_id: int) -> None:
+        """Callback `FinishDungeonRun`-job-а (Спринт 3.1-B).
+
+        До wiring-а в 3.1-E фабрика `FinishDungeonRun` не подвязана —
+        callback логирует «factory not wired» и тихо выходит.
+        """
+        self._logger.warning(
+            "dungeon_run_finish: factory not wired",
+            extra={"run_id": run_id},
+        )
 
     async def schedule_weekly_clan_referral_summary_cron(self) -> None:
         """Зарегистрировать глобальный cron weekly-сводки рефералов (Спринт 2.4.E).

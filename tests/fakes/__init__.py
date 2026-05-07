@@ -48,12 +48,14 @@ from tests.fakes.delayed_job_scheduler import (
 )
 from tests.fakes.duel_log_templates import FakeDuelLogTemplateProvider
 from tests.fakes.duel_repo import FakeDuelRepository
+from tests.fakes.dungeon_run_repo import FakeDungeonRunRepository
 from tests.fakes.forest_run_repo import FakeForestRunRepository
 from tests.fakes.global_lobby_repo import FakeGlobalLobbyRepository
 from tests.fakes.idempotency import FakeIdempotencyKey
 from tests.fakes.lock_repo import FakeActivityLockRepository
 from tests.fakes.mass_duel_repo import FakeMassDuelRepository
 from tests.fakes.message_bundle import FakeMessageBundle
+from tests.fakes.mountain_run_repo import FakeMountainRunRepository
 from tests.fakes.oracle import (
     FakeOracleHistoryRepository,
     FakeOracleTemplateProvider,
@@ -97,11 +99,13 @@ __all__ = [
     "FakeDelayedJobScheduler",
     "FakeDuelLogTemplateProvider",
     "FakeDuelRepository",
+    "FakeDungeonRunRepository",
     "FakeForestRunRepository",
     "FakeGlobalLobbyRepository",
     "FakeIdempotencyKey",
     "FakeMassDuelRepository",
     "FakeMessageBundle",
+    "FakeMountainRunRepository",
     "FakeOracleHistoryRepository",
     "FakeOracleTemplateProvider",
     "FakePlayerLocaleResolver",

@@ -15,6 +15,8 @@ class LockReason(str, enum.Enum):
     """
 
     FOREST = "forest"
+    MOUNTAINS = "mountains"
+    DUNGEON = "dungeon"
     ORACLE = "oracle"
     RAID = "raid"
     CARAVAN = "caravan"

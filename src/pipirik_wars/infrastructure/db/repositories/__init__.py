@@ -22,11 +22,17 @@ from pipirik_wars.infrastructure.db.repositories.daily_activity import (
 from pipirik_wars.infrastructure.db.repositories.daily_head import (
     SqlAlchemyDailyHeadRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.dungeon_run import (
+    SqlAlchemyDungeonRunRepository,
+)
 from pipirik_wars.infrastructure.db.repositories.forest_run import (
     SqlAlchemyForestRunRepository,
 )
 from pipirik_wars.infrastructure.db.repositories.global_lobby import (
     SqlAlchemyGlobalLobbyRepository,
+)
+from pipirik_wars.infrastructure.db.repositories.mountain_run import (
+    SqlAlchemyMountainRunRepository,
 )
 from pipirik_wars.infrastructure.db.repositories.oracle_history import (
     SqlAlchemyOracleHistoryRepository,
@@ -57,9 +63,11 @@ __all__ = [
     "SqlAlchemyDailyActivityRepository",
     "SqlAlchemyDailyHeadRepository",
     "SqlAlchemyDuelRepository",
+    "SqlAlchemyDungeonRunRepository",
     "SqlAlchemyForestRunRepository",
     "SqlAlchemyGlobalLobbyRepository",
     "SqlAlchemyMassDuelRepository",
+    "SqlAlchemyMountainRunRepository",
     "SqlAlchemyOracleHistoryRepository",
     "SqlAlchemyPlayerRepository",
     "SqlAlchemyReferralRepository",

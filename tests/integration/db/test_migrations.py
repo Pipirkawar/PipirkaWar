@@ -172,6 +172,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0017 is not None
         assert rev_0017.down_revision == "0016_admin_audit_log"
 
+    def test_0018_descends_from_0017(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0018 = script.get_revision("0018_pve_runs")
+        assert rev_0018 is not None
+        assert rev_0018.down_revision == "0017_admins_totp_secret"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -193,6 +200,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260506_0015_referrals.py",
             "20260507_0016_admin_audit_log.py",
             "20260507_0017_admins_totp_secret.py",
+            "20260507_0018_pve_runs.py",
         ]
 
     def test_upgrade_head_creates_all_tables(

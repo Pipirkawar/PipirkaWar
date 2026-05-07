@@ -55,6 +55,14 @@ _ALLOWED_FILES: frozenset[Path] = frozenset(
         # `ILengthGranter.grant(source=PVP_REWARD)`, защитники теряют
         # через прямой `with_length`. Cap-ы 1.6 к вычетам неприменимы.
         _SRC_ROOT / "application" / "pvp" / "apply_mass_outcome.py",
+        # Approved-use-case: списание длины при loss-исходе похода в горы
+        # (Спринт 3.1-B, ГДД §8). Прибавка (gain) — через
+        # `ILengthGranter.grant(source=MOUNTAINS)`; вычет (loss) — прямой
+        # `with_length`. Cap-ы 1.6 к вычетам неприменимы.
+        _SRC_ROOT / "application" / "mountains" / "finish_run.py",
+        # Approved-use-case: списание длины при loss-исходе похода в данжон
+        # (Спринт 3.1-B, ГДД §8). Симметрично `mountains/finish_run.py`.
+        _SRC_ROOT / "application" / "dungeon" / "finish_run.py",
     }
 )
 

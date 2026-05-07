@@ -78,6 +78,10 @@ from pipirik_wars.application.dau import (
     GetDauStats,
     SetMaxDau,
 )
+from pipirik_wars.application.dungeon import (
+    FinishDungeonRun,
+    StartDungeonRun,
+)
 from pipirik_wars.application.forest import (
     ApplyForestNameDrop,
     FinishForestRun,
@@ -85,6 +89,10 @@ from pipirik_wars.application.forest import (
     StartForestRun,
 )
 from pipirik_wars.application.i18n import IMessageBundle, IPlayerLocaleResolver
+from pipirik_wars.application.mountains import (
+    FinishMountainRun,
+    StartMountainRun,
+)
 from pipirik_wars.application.oracle import (
     InvokeOracle,
     IOracleTemplateProvider,
@@ -154,7 +162,9 @@ from pipirik_wars.domain.daily_head import (
     IDailyHeadRepository,
 )
 from pipirik_wars.domain.dau import IDauCounter, IDauLimit, IDauThresholdAlerter
+from pipirik_wars.domain.dungeon import IDungeonRunRepository
 from pipirik_wars.domain.forest import IForestRunRepository
+from pipirik_wars.domain.mountains import IMountainRunRepository
 from pipirik_wars.domain.oracle import IOracleHistoryRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.progression import ILengthGranter
@@ -197,9 +207,11 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyDailyActivityRepository,
     SqlAlchemyDailyHeadRepository,
     SqlAlchemyDuelRepository,
+    SqlAlchemyDungeonRunRepository,
     SqlAlchemyForestRunRepository,
     SqlAlchemyGlobalLobbyRepository,
     SqlAlchemyMassDuelRepository,
+    SqlAlchemyMountainRunRepository,
     SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemyReferralRepository,
@@ -282,6 +294,8 @@ class Container:
     signup_queue: ISignupQueueRepository
     activity_locks: IActivityLockRepository
     forest_runs: IForestRunRepository
+    mountain_runs: IMountainRunRepository
+    dungeon_runs: IDungeonRunRepository
     oracle_history: IOracleHistoryRepository
     duels: IDuelRepository
     mass_duels: IMassDuelRepository
@@ -329,6 +343,13 @@ class Container:
     start_forest_run: StartForestRun
     finish_forest_run: FinishForestRun
     apply_forest_name_drop: ApplyForestNameDrop
+    # PvE-походы (Спринт 3.1-B, ГДД §8). Bot-handler-ы /mountains и
+    # /dungeon — в Спринте 3.1-E. Сейчас use-case-ы и репозитории
+    # доступны через Container, но в dispatcher не пробрасываются.
+    start_mountain_run: StartMountainRun
+    finish_mountain_run: FinishMountainRun
+    start_dungeon_run: StartDungeonRun
+    finish_dungeon_run: FinishDungeonRun
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
@@ -468,6 +489,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     signup_queue = SqlAlchemySignupQueueRepository(uow=uow)
     activity_locks = SqlAlchemyActivityLockRepository(uow=uow)
     forest_runs = SqlAlchemyForestRunRepository(uow=uow, balance=balance)
+    mountain_runs = SqlAlchemyMountainRunRepository(uow=uow, balance=balance)
+    dungeon_runs = SqlAlchemyDungeonRunRepository(uow=uow, balance=balance)
     oracle_history = SqlAlchemyOracleHistoryRepository(uow=uow)
     duels = SqlAlchemyDuelRepository(uow=uow)
     mass_duels = SqlAlchemyMassDuelRepository(uow=uow)
@@ -672,6 +695,50 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         runs=forest_runs,
         audit=audit,
         clock=clock,
+    )
+    # PvE-походы гор и данжона (Спринт 3.1-B, ГДД §8). Bot-handler-ы
+    # /mountains и /dungeon — 3.1-E. До тех пор `_run_mountain_finish_job` /
+    # `_run_dungeon_finish_job` в `APSchedulerDelayedJobScheduler` пишут
+    # warning «factory not wired» и тихо выходят (см. `aps.py`).
+    finish_mountain_run = FinishMountainRun(
+        uow=uow,
+        players=players,
+        runs=mountain_runs,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        audit=audit,
+        clock=clock,
+    )
+    start_mountain_run = StartMountainRun(
+        uow=uow,
+        players=players,
+        runs=mountain_runs,
+        locks=activity_lock_service,
+        balance=balance,
+        random=RealRandom(),
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
+    )
+    finish_dungeon_run = FinishDungeonRun(
+        uow=uow,
+        players=players,
+        runs=dungeon_runs,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        audit=audit,
+        clock=clock,
+    )
+    start_dungeon_run = StartDungeonRun(
+        uow=uow,
+        players=players,
+        runs=dungeon_runs,
+        locks=activity_lock_service,
+        balance=balance,
+        random=RealRandom(),
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
     )
     upgrade_thickness = UpgradeThickness(
         uow=uow,
@@ -1144,6 +1211,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         signup_queue=signup_queue,
         activity_locks=activity_locks,
         forest_runs=forest_runs,
+        mountain_runs=mountain_runs,
+        dungeon_runs=dungeon_runs,
         oracle_history=oracle_history,
         duels=duels,
         mass_duels=mass_duels,
@@ -1177,6 +1246,10 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         start_forest_run=start_forest_run,
         finish_forest_run=finish_forest_run,
         apply_forest_name_drop=apply_forest_name_drop,
+        start_mountain_run=start_mountain_run,
+        finish_mountain_run=finish_mountain_run,
+        start_dungeon_run=start_dungeon_run,
+        finish_dungeon_run=finish_dungeon_run,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,

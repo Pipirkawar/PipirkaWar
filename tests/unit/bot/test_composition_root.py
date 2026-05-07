@@ -55,12 +55,20 @@ from pipirik_wars.application.dau import (
     GetDauStats,
     SetMaxDau,
 )
+from pipirik_wars.application.dungeon import (
+    FinishDungeonRun,
+    StartDungeonRun,
+)
 from pipirik_wars.application.forest import (
     ApplyForestNameDrop,
     FinishForestRun,
     StartForestRun,
 )
 from pipirik_wars.application.i18n import IMessageBundle
+from pipirik_wars.application.mountains import (
+    FinishMountainRun,
+    StartMountainRun,
+)
 from pipirik_wars.application.oracle import InvokeOracle
 from pipirik_wars.application.player import (
     GetProfile,
@@ -98,7 +106,9 @@ from pipirik_wars.bot.main import Container, build_container, build_dispatcher
 from pipirik_wars.domain.admin import IAdminConfirmStore, IAdminRepository, ITotpVerifier
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.daily_head import DailyHeadService
+from pipirik_wars.domain.dungeon import IDungeonRunRepository
 from pipirik_wars.domain.forest import IForestRunRepository
+from pipirik_wars.domain.mountains import IMountainRunRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.pvp import IDuelRepository, IMassDuelRepository
 from pipirik_wars.domain.security import IActivityLockRepository
@@ -126,9 +136,11 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyDailyActivityRepository,
     SqlAlchemyDailyHeadRepository,
     SqlAlchemyDuelRepository,
+    SqlAlchemyDungeonRunRepository,
     SqlAlchemyForestRunRepository,
     SqlAlchemyGlobalLobbyRepository,
     SqlAlchemyMassDuelRepository,
+    SqlAlchemyMountainRunRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemySignupQueueRepository,
 )
@@ -174,11 +186,13 @@ from tests.fakes import (
     FakeDelayedJobScheduler,
     FakeDuelLogTemplateProvider,
     FakeDuelRepository,
+    FakeDungeonRunRepository,
     FakeForestRunRepository,
     FakeGlobalLobbyRepository,
     FakeIdempotencyKey,
     FakeMassDuelRepository,
     FakeMessageBundle,
+    FakeMountainRunRepository,
     FakeOracleHistoryRepository,
     FakeOracleTemplateProvider,
     FakePlayerLocaleResolver,
@@ -219,6 +233,8 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
     signup_queue: ISignupQueueRepository = FakeSignupQueueRepository()
     activity_locks: IActivityLockRepository = FakeActivityLockRepository()
     forest_runs: IForestRunRepository = FakeForestRunRepository()
+    mountain_runs: IMountainRunRepository = FakeMountainRunRepository()
+    dungeon_runs: IDungeonRunRepository = FakeDungeonRunRepository()
     duels: IDuelRepository = FakeDuelRepository()
     mass_duels: IMassDuelRepository = FakeMassDuelRepository()
     global_lobby = FakeGlobalLobbyRepository()
@@ -278,6 +294,46 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         length_granter=add_length,
         audit=audit,
         clock=clock,
+    )
+    finish_mountain_run = FinishMountainRun(
+        uow=uow,
+        players=players,
+        runs=mountain_runs,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        audit=audit,
+        clock=clock,
+    )
+    start_mountain_run = StartMountainRun(
+        uow=uow,
+        players=players,
+        runs=mountain_runs,
+        locks=activity_lock_service,
+        balance=balance,
+        random=rng,
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
+    )
+    finish_dungeon_run = FinishDungeonRun(
+        uow=uow,
+        players=players,
+        runs=dungeon_runs,
+        locks=activity_lock_service,
+        length_granter=add_length,
+        audit=audit,
+        clock=clock,
+    )
+    start_dungeon_run = StartDungeonRun(
+        uow=uow,
+        players=players,
+        runs=dungeon_runs,
+        locks=activity_lock_service,
+        balance=balance,
+        random=rng,
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
     )
     challenge_duel = ChallengeDuel(
         uow=uow,
@@ -656,6 +712,8 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         signup_queue=signup_queue,
         activity_locks=activity_locks,
         forest_runs=forest_runs,
+        mountain_runs=mountain_runs,
+        dungeon_runs=dungeon_runs,
         duels=duels,
         mass_duels=mass_duels,
         global_lobby=global_lobby,
@@ -749,6 +807,10 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         ),
         finish_forest_run=finish_forest_run,
         apply_forest_name_drop=apply_forest_name_drop,
+        start_mountain_run=start_mountain_run,
+        finish_mountain_run=finish_mountain_run,
+        start_dungeon_run=start_dungeon_run,
+        finish_dungeon_run=finish_dungeon_run,
         upgrade_thickness=UpgradeThickness(
             uow=uow,
             players=players,
@@ -878,7 +940,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
 
 
 class TestContainer:
-    def test_container_holds_all_ports(self) -> None:
+    def test_container_holds_all_ports(self) -> None:  # noqa: PLR0915
         c = _container_with_fakes()
         assert isinstance(c.clock, FakeClock)
         assert isinstance(c.random, FakeRandom)
@@ -917,6 +979,13 @@ class TestContainer:
         # Forest finish + scheduler (Спринт 1.3.C).
         assert isinstance(c.delayed_jobs, FakeDelayedJobScheduler)
         assert isinstance(c.finish_forest_run, FinishForestRun)
+        # PvE-походы гор и данжона (Спринт 3.1-B).
+        assert isinstance(c.mountain_runs, FakeMountainRunRepository)
+        assert isinstance(c.start_mountain_run, StartMountainRun)
+        assert isinstance(c.finish_mountain_run, FinishMountainRun)
+        assert isinstance(c.dungeon_runs, FakeDungeonRunRepository)
+        assert isinstance(c.start_dungeon_run, StartDungeonRun)
+        assert isinstance(c.finish_dungeon_run, FinishDungeonRun)
         # Thickness upgrade (Спринт 1.4.A).
         assert isinstance(c.upgrade_thickness, UpgradeThickness)
         # i18n bundle (Спринт 1.5.A → 1.5.B).
@@ -1053,6 +1122,13 @@ class TestBuildContainer:
         # Forest finish + scheduler (Спринт 1.3.C).
         assert isinstance(c.delayed_jobs, APSchedulerDelayedJobScheduler)
         assert isinstance(c.finish_forest_run, FinishForestRun)
+        # PvE-походы гор и данжона (Спринт 3.1-B): реальные SQL-репозитории.
+        assert isinstance(c.mountain_runs, SqlAlchemyMountainRunRepository)
+        assert isinstance(c.start_mountain_run, StartMountainRun)
+        assert isinstance(c.finish_mountain_run, FinishMountainRun)
+        assert isinstance(c.dungeon_runs, SqlAlchemyDungeonRunRepository)
+        assert isinstance(c.start_dungeon_run, StartDungeonRun)
+        assert isinstance(c.finish_dungeon_run, FinishDungeonRun)
         # Thickness upgrade (Спринт 1.4.A).
         assert isinstance(c.upgrade_thickness, UpgradeThickness)
         # i18n bundle (Спринт 1.5.A → 1.5.B): реальный FluentMessageBundle.
