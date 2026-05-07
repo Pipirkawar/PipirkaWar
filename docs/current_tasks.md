@@ -15,17 +15,18 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный спринт — **2.5-D.4** ([PR #88](https://github.com/Pipirkawar/PipirkaWar/pull/88), коммит `774bd7c`) — `/announce <ru|en|*> <text>`: broadcast с TOTP-confirm, RBAC (`SUPER_ADMIN`), фоновая рассылка через `IBroadcastTaskSpawner` с throttle (~25 msg/sec), audit `ADMIN_BROADCAST_SENT`. До этого были смержены 2.5-A (PR #79), 2.5-B (PR #81), 2.5-C (PR #83), постмердж-доки (PR #84), 2.5-D часть 1 (PR #85), 2.5-D.7 (PR #86), postmerge 2.5-D.7 (PR #87). Из Спринта 2.5 остаётся: **D.6** (`/admin_setup_totp`), **D.10** (`docs/admin_runbook.md`), **D.11** (доптесты RBAC), **D.12** (локали).
+**На `main`:** последний смерженный PR — **postmerge 2.5-D.4** ([PR #89](https://github.com/Pipirkawar/PipirkaWar/pull/89), коммит `8df66e7`) — sync док (без изменений кода). Перед ним: 2.5-D.4 ([PR #88](https://github.com/Pipirkawar/PipirkaWar/pull/88), коммит `774bd7c`) — `/announce <ru|en|*> <text>`: broadcast с TOTP-confirm, RBAC (`SUPER_ADMIN`), фоновая рассылка через `IBroadcastTaskSpawner` с throttle (~25 msg/sec), audit `ADMIN_BROADCAST_SENT`. До этого были смержены 2.5-A (PR #79), 2.5-B (PR #81), 2.5-C (PR #83), постмердж-доки (PR #84), 2.5-D часть 1 (PR #85), 2.5-D.7 (PR #86), postmerge 2.5-D.7 (PR #87). Из Спринта 2.5 остаётся: **D.6** (`/admin_setup_totp` — в работе), **D.10** (`docs/admin_runbook.md`), **D.11** (доптесты RBAC), **D.12** (локали).
 
-**Активная feature-ветка:** `devin/1778149111-sprint-2-5-d.4-postmerge-docs` (текущий PR — postmerge 2.5-D.4: запись в `history.md` + sync «Снимок» / «Текущая позиция» под D.4-в-main и переход к следующей фиче спринта 2.5).
+**Активная feature-ветка:** `devin/1778151428-sprint-2-5-d.6-admin-setup-totp` (текущий PR — Спринт 2.5-D.6: `/admin_setup_totp` — выдача TOTP-секрета живому админу с защитой одноразовым `bootstrap_admin_password`, audit `ADMIN_TOTP_SETUP`).
 
-**Что уже есть в коде после 2.5-D.4 (PR #88):**
-- `domain/admin/authorization.py` — `AdminCommandKind` (whitelist 27 команд, включая `BROADCAST_ANNOUNCEMENT`), `IAdminAuthorizationPolicy`, `RoleBasedAdminAuthorizationPolicy` (file-closed-матрица), `AdminAuthorizationDeniedError`.
+**Что уже есть в коде после 2.5-D.4 (PR #88, sync PR #89):**
+- `domain/admin/authorization.py` — `AdminCommandKind` (whitelist 27 команд, включая `BROADCAST_ANNOUNCEMENT` и `SETUP_TOTP`), `IAdminAuthorizationPolicy`, `RoleBasedAdminAuthorizationPolicy` (file-closed-матрица; `SETUP_TOTP` → только `SUPER_ADMIN`), `AdminAuthorizationDeniedError`.
 - `application/admin/_authorization.py` — helper `ensure_admin_authorized(...)` с отдельным коротким UoW для `ADMIN_AUTHORIZATION_DENIED`-аудита.
 - **Все 18 admin-use-case-ов** (с D.4 добавились `BroadcastAnnouncement` Phase 1 и `RunBroadcastAnnouncement` Phase 2) принимают `authz: IAdminAuthorizationPolicy` и зовут helper до основного UoW.
 - `bot/main.py::build_container` — `admin_audit: IAdminAuditLogger` + `admin_authz: IAdminAuthorizationPolicy` создаются раньше, пробрасываются во все admin-use-case-ы. В D.4 добавлены production-адаптеры `AiogramBroadcastSender`/`AsyncIOBroadcastTaskSpawner`/`NoopBroadcastSender` (из `infrastructure/telegram/broadcast.py`).
 - `CONFIRM_DISPATCHERS` registry — **5** TOTP-обязательных команд (`grant_length`, `grant_thickness`, `set_balance_value`, `ban_player`, `broadcast_announcement`); D.4 регистрируется через мутацию dict-а в `bot/handlers/admin_communication.py` (порядок включения router-ов в `bot/handlers/__init__.py` гарантирует mutation до первого использования).
-- **Чего нет:** `/admin_setup_totp` (D.6) — не реализован (TOTP-выдаётся сейчас только через `bootstrap_admin_password` на старте; нет выдачи нового секрета живому админу). `docs/admin_runbook.md` (D.10) — не существует.
+- `domain/admin/entities.py::Admin.totp_secret: str | None`, миграция `0017_admins_totp_secret` (BASE32 plain-text, обоснование plain в самой миграции). `infrastructure/admin/pyotp_totp_verifier.py::PyOtpTotpVerifier` — проверка 6-значных кодов с `valid_window=1`.
+- **Чего нет до D.6:** `/admin_setup_totp` — не реализован. TOTP сейчас задаётся только напрямую миграцией/SQL; нет команды-self-service для выдачи нового секрета живому super-admin-у. `IAdminRepository.set_totp_secret(...)`, `ITotpSecretGenerator`, `BootstrapSettings.admin_password` ещё не созданы. `docs/admin_runbook.md` (D.10) — не существует.
 
 **Скоуп Спринта 2.5 (история PR-ов):**
 - ~~**2.5-A**~~ ✅ закрыт PR #79 (`b358349`) — каркас `admin_audit_log` + `AdminGuard` + TOTP-confirm.
@@ -35,10 +36,11 @@
 - ~~**2.5-D.7**~~ ✅ закрыт PR #86 (`12f9ea0`) — миграция legacy admin-команд под RBAC.
 - ~~**postmerge 2.5-D.7**~~ ✅ закрыт PR #87 — sync док (без кода).
 - ~~**2.5-D.4**~~ ✅ закрыт PR #88 (`774bd7c`) — `/announce` broadcast с TOTP-confirm + фоновый throttle.
-- **Текущий PR (postmerge 2.5-D.4):** sync `history.md` + `current_tasks.md` под D.4-в-main и выбор следующей фичи (D.6 / D.10 / D.11 / D.12). Без изменений кода.
-- **Дальше:** D.6 (`/admin_setup_totp`), D.10 (`admin_runbook.md`), D.11 (доптесты RBAC), D.12 (локали) — отдельными PR-ами. Выбор следующей вернётся агенту после мерджа текущего postmerge-PR-а.
+- ~~**postmerge 2.5-D.4**~~ ✅ закрыт PR #89 (`8df66e7`) — sync `history.md` + `current_tasks.md` под D.4-в-main. Без изменений кода.
+- **Текущий PR (Спринт 2.5-D.6):** `/admin_setup_totp` — выдача TOTP-секрета живому super-admin-у с защитой одноразовым `bootstrap_admin_password`, audit `ADMIN_TOTP_SETUP`. Новые порты `IAdminRepository.set_totp_secret(...)` и `ITotpSecretGenerator`. Локали `admin-setup-totp-*` (RU/EN). Тесты на use-case (RBAC, плохой пароль, повторная настройка, успех) и handler (парсинг команды, локализация, не-ЛС).
+- **Дальше:** D.10 (`admin_runbook.md`), D.11 (доптесты RBAC), D.12 (локали) — отдельными PR-ами.
 
-**`make ci` локально на `main` (после D.4):** зелёный — 3306 passed / 1 skipped, coverage **95.86%** (~1:30).
+**`make ci` локально на `main` (после `postmerge 2.5-D.4`):** зелёный — 3306 passed / 1 skipped, coverage **95.86%** (~1:30).
 
 **`AGENT_HANDOFF.md`:** нет.
 
@@ -49,15 +51,15 @@
 | Поле | Значение |
 |---|---|
 | **Активный спринт** | `2.5 — Расширенный админ-интерфейс в боте (финал)` |
-| **Активный PR / шаг** | **postmerge 2.5-D.4**: запись 2.5-D.4 в `history.md` + sync «Снимок» / «Текущая позиция» / чек-лист в `current_tasks.md` под D.4-в-main. Без изменений кода. После мерджа — выбор следующей фичи (D.6 / D.10 / D.11 / D.12). |
-| **Активная feature-ветка** | `devin/1778149111-sprint-2-5-d.4-postmerge-docs` (создана от `main = 774bd7c`) |
+| **Активный PR / шаг** | **2.5-D.6 `/admin_setup_totp`**: выдача TOTP-секрета живому super-admin-у; защита одноразовым `bootstrap_admin_password`; audit `ADMIN_TOTP_SETUP`; вывод `otpauth://`-URL только в логи бота (не в Telegram-чат). |
+| **Активная feature-ветка** | `devin/1778151428-sprint-2-5-d.6-admin-setup-totp` (создана от `main = 8df66e7`) |
 | **Базовая ветка** | `main` |
-| **Последний коммит на main** | `774bd7c` (мерж PR #88 «Спринт 2.5-D.4: `/announce` broadcast») |
-| **Последний коммит на feature-ветке** | будет зафиксирован при push-е postmerge-коммита |
-| **PR (если открыт)** | будет открыт после первого push-а |
+| **Последний коммит на main** | `8df66e7` (мерж PR #89 «postmerge 2.5-D.4 docs») |
+| **Последний коммит на feature-ветке** | будет зафиксирован при первом push-е |
+| **PR (если открыт)** | будет открыт после готовности кода + локального зелёного `make ci` |
 | **CI статус** | на main зелёный: `make ci` — 3306 passed / 1 skipped, coverage 95.86% |
-| **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задачи 2.5.8 (`/admin_setup_totp` — D.6), 2.5.10 (`admin_runbook.md` — D.10) |
-| **Связанная спецификация в `game_design.md`** | §18.6.2 (RBAC — D.11), §18.6.5 (TOTP — D.6) |
+| **Связанная задача в `development_plan.md`** | §5 / Спринт 2.5 / задача 2.5.8 (косвенно — общая инфраструктура `admin_audit_log`); сама команда D.6 описана в чек-листе ниже и в `current_tasks.md` истории |
+| **Связанная спецификация в `game_design.md`** | §18.6 (`admins.totp_secret`, `admin_audit_log`), §18.6.2 (RBAC — `SETUP_TOTP` → `SUPER_ADMIN`), §18.6.5 (TOTP-flow для опасных команд) |
 | **`AGENT_HANDOFF.md` существует?** | нет |
 
 ---
@@ -66,15 +68,32 @@
 
 > Отмечай `[x]` по мере выполнения. **Перед каждым `git commit`** обнови этот чек-лист (даже если шаг ещё не закрыт — отметь, что начат). Это safety-net на случай, если агент прервётся в середине работы.
 
-**Текущий PR — postmerge 2.5-D.4 (sync docs):**
+**Текущий PR — Спринт 2.5-D.6 (`/admin_setup_totp`):**
 
-- [x] Добавить запись **2.5-D.4** в `docs/history.md` (свежие — сверху): `/announce` broadcast с TOTP-confirm + фоновый throttle, PR #88, merge `774bd7c`.
-- [x] Обновить «Снимок состояния проекта» в `docs/current_tasks.md` под фактический `main = 774bd7c`.
-- [x] Обновить «Текущая позиция» под postmerge 2.5-D.4.
-- [x] Заменить «Чек-лист текущего PR» на постмердж-список (этот блок).
-- [ ] **Перед PR:** `make ci` локально зелёный (доки-only — должен быть идентичен main-CI).
-- [ ] Открыть PR `docs(postmerge 2.5-D.4): history.md +1 запись, current_tasks.md sync под D.4-в-main`.
-- [ ] **После мерджа:** выбрать следующую фичу (D.6 / D.10 / D.11 / D.12) по решению юзера.
+- [x] Завести feature-ветку `devin/1778151428-sprint-2-5-d.6-admin-setup-totp` от `main = 8df66e7` и обновить `current_tasks.md` под D.6.
+- [ ] **Domain:**
+  - `domain/admin/ports/admin_audit.py` — добавить `AdminAuditAction.ADMIN_TOTP_SETUP`.
+  - `domain/admin/repositories.py::IAdminRepository` — добавить абстрактный метод `set_totp_secret(admin_id, secret)`.
+  - `domain/admin/ports/totp_secret_generator.py` — новый порт `ITotpSecretGenerator.generate() -> str` (BASE32).
+  - `domain/admin/setup_totp_errors.py` — новые `BootstrapPasswordNotConfiguredError`, `BootstrapPasswordInvalidError`, `TotpAlreadyConfiguredError` (наследники `DomainError`).
+- [ ] **Application:** `application/admin/setup_totp.py::SetupAdminTotp` — use-case (RBAC через `ensure_admin_authorized` → constant-time проверка пароля → если `admin.totp_secret is not None` → `TotpAlreadyConfiguredError` → генерация secret → `IAdminRepository.set_totp_secret(...)` → `AdminAuditAction.ADMIN_TOTP_SETUP` → возврат `otpauth://`-URL handler-у).
+- [ ] **Infrastructure:**
+  - `infrastructure/admin/pyotp_totp_secret_generator.py::PyOtpTotpSecretGenerator` (использует `pyotp.random_base32()`).
+  - `infrastructure/db/repositories/admin.py::SqlAlchemyAdminRepository.set_totp_secret(...)` (SQL `UPDATE admins SET totp_secret = :secret WHERE id = :admin_id`).
+  - `infrastructure/settings/settings.py::BootstrapSettings.admin_password: SecretStr | None` (env `BOOTSTRAP_ADMIN_PASSWORD`).
+- [ ] **Bot/handlers:**
+  - `bot/handlers/admin_setup_totp.py` — handler `/admin_setup_totp <password>`, парсинг аргументов, локализованные ответы, **только в ЛС**, `IsAdminFilter` на router-е, `otpauth://`-URL пишется в `structlog`-логи на INFO с явным маркером.
+  - Регистрация в `bot/handlers/__init__.py::register_routers`.
+  - DI в `bot/main.py::build_container`: `bootstrap_admin_password` (из settings), `totp_secret_generator: ITotpSecretGenerator`, `setup_admin_totp: SetupAdminTotp`.
+- [ ] **Локали:** `locales/{ru,en}.ftl` — ключи `admin-setup-totp-*` (usage / non-private / not-authorized / password-not-configured / password-invalid / already-configured / success).
+- [ ] **Тесты:**
+  - `tests/unit/application/admin/test_setup_totp.py` — RBAC-deny, password-not-configured, password-invalid, already-configured, success (audit + secret saved + otpauth URL).
+  - `tests/unit/bot/handlers/test_admin_setup_totp.py` — usage, non-private, not-authorized, success/error.
+  - `tests/integration/admin/` — integration тест на `SqlAlchemyAdminRepository.set_totp_secret` (если такой папки нет — добавить).
+  - Coverage ≥ 80% на новый код.
+- [ ] **Перед PR:** `make ci` локально зелёный.
+- [ ] Открыть PR `Sprint 2.5-D.6: /admin_setup_totp — выдача TOTP-секрета super-admin-у` в `main`.
+- [ ] **После мерджа:** обновить `docs/history.md` + `current_tasks.md` (postmerge-PR), удалить feature-ветку.
 
 **Спринт 2.5 — что ещё осталось (детализация на референс):**
 
