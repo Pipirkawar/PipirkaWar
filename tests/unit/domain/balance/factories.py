@@ -62,6 +62,38 @@ def valid_balance_payload() -> dict[str, Any]:
                 "rarity_weights": {"common": 70, "rare": 25, "epic": 5},
             },
         },
+        "mountains": {
+            "outcomes": [
+                {"name": "scarce_gain", "weight": 30, "sign": "gain", "min": 1, "max": 10},
+                {"name": "normal_gain", "weight": 20, "sign": "gain", "min": 5, "max": 18},
+                {"name": "abundant_gain", "weight": 10, "sign": "gain", "min": 10, "max": 30},
+                {"name": "scarce_loss", "weight": 25, "sign": "loss", "min": 1, "max": 8},
+                {"name": "heavy_loss", "weight": 15, "sign": "loss", "min": 5, "max": 18},
+            ],
+            "cooldown_min_minutes": 20,
+            "cooldown_max_minutes": 40,
+            "drop": {
+                "probability_percent": 25,
+                "max_drops": 1,
+                "rarity_weights": {"common": 60, "rare": 30, "epic": 10},
+            },
+        },
+        "dungeon": {
+            "outcomes": [
+                {"name": "scarce_gain", "weight": 25, "sign": "gain", "min": 5, "max": 25},
+                {"name": "normal_gain", "weight": 20, "sign": "gain", "min": 15, "max": 45},
+                {"name": "abundant_gain", "weight": 10, "sign": "gain", "min": 30, "max": 80},
+                {"name": "scarce_loss", "weight": 25, "sign": "loss", "min": 3, "max": 18},
+                {"name": "heavy_loss", "weight": 20, "sign": "loss", "min": 10, "max": 35},
+            ],
+            "cooldown_min_minutes": 40,
+            "cooldown_max_minutes": 60,
+            "drop": {
+                "probability_percent": 50,
+                "max_drops": 3,
+                "rarity_weights": {"common": 50, "rare": 35, "epic": 15},
+            },
+        },
         "oracle": {
             "cooldown_tz": "Europe/Moscow",
             "bonus_min": 1,

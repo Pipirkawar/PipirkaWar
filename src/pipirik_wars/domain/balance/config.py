@@ -163,6 +163,124 @@ class ItemEntry(_Frozen):
     rarity: Rarity
 
 
+class PveSign(StrEnum):
+    """Знак исхода PvE-локации с ±-механикой (ГДД §8: горы / данжон).
+
+    В отличие от леса, где исход всегда положительный (`+Δ` длины),
+    горы и данжон имеют ветви и `gain` (награда), и `loss` (потеря).
+    Знак — отдельное поле ветки, чтобы баланс мог независимо тюнить
+    «как часто горы дают штраф» (вес `loss`-веток) и «насколько
+    больно» (диапазон `min..max` каждой ветки). Сами `min`/`max`
+    хранятся как **абсолютные неотрицательные** числа; знак к ним
+    применяется domain-сервисом `pick_pve_outcome`.
+    """
+
+    GAIN = "gain"
+    LOSS = "loss"
+
+
+class PveOutcomeConfig(_Frozen):
+    """Одна ветка исхода PvE-локации (горы / данжон) (ГДД §8).
+
+    Отличия от `ForestOutcome`:
+    - Дополнительное поле `sign: PveSign` (`gain` / `loss`).
+    - `min`/`max` остаются абсолютными значениями `≥ 0`; реальный
+      `Δ длины` = `±randint(min, max)` в зависимости от `sign`.
+
+    Имя ветки уникально внутри секции локации (валидируется
+    `_PveLocationConfig._validate_outcomes`).
+    """
+
+    name: str = Field(min_length=1, max_length=32)
+    weight: int = Field(gt=0)
+    sign: PveSign
+    min: int = Field(ge=0)
+    max: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _validate_min_max(self) -> PveOutcomeConfig:
+        if self.min > self.max:
+            raise ValueError(
+                f"pve outcome {self.name!r}: min ({self.min}) must be <= max ({self.max})"
+            )
+        return self
+
+
+class PveDropConfig(_Frozen):
+    """Параметры дропа за один поход PvE (горы / данжон) (ГДД §8.2 / §1.3.5).
+
+    Отличия от `ForestDropConfig`:
+    - **Нет** `name_share_percent` — имена дропаются только из леса
+      (ГДД §2.5).
+    - Добавлено `max_drops` — максимальное число предметов за поход
+      (горы: `1`, данжон: `3` по ГДД §8). Для каждого «слота дропа»
+      ролится отдельно (`probability_percent` per-slot Bernoulli),
+      что даёт распределение `Binomial(max_drops, p)` для итогового
+      числа предметов: `0..max_drops`. Семантика **«до N предметов»**
+      из ГДД §8 («0–1 шт» / «0–3 шт») реализуется именно так.
+    """
+
+    probability_percent: int = Field(ge=0, le=100)
+    max_drops: int = Field(ge=1, le=10)
+    rarity_weights: ForestRarityWeights
+
+
+class _PveLocationConfig(_Frozen):
+    """Базовая модель PvE-локации с ±-исходами (ГДД §8).
+
+    Конкретные подклассы (`MountainsConfig`, `DungeonConfig`) добавляют
+    только docstring — структура полей и инварианты у обоих локаций
+    идентичны. Балансовые числа разные (см. `config/balance.yaml`),
+    но схема общая, чтобы не дублировать валидаторы.
+    """
+
+    outcomes: tuple[PveOutcomeConfig, ...] = Field(min_length=2)
+    cooldown_min_minutes: int = Field(gt=0)
+    cooldown_max_minutes: int = Field(gt=0)
+    drop: PveDropConfig
+
+    @model_validator(mode="after")
+    def _validate(self) -> _PveLocationConfig:
+        if self.cooldown_min_minutes > self.cooldown_max_minutes:
+            raise ValueError(
+                f"pve.cooldown_min_minutes ({self.cooldown_min_minutes}) "
+                f"must be <= cooldown_max_minutes ({self.cooldown_max_minutes})"
+            )
+        names = [o.name for o in self.outcomes]
+        if len(set(names)) != len(names):
+            raise ValueError(f"pve.outcomes have duplicate names: {names}")
+        signs = {o.sign for o in self.outcomes}
+        if PveSign.GAIN not in signs:
+            raise ValueError(
+                "pve.outcomes must contain at least one outcome with sign=gain "
+                f"(got signs: {sorted(s.value for s in signs)})"
+            )
+        if PveSign.LOSS not in signs:
+            raise ValueError(
+                "pve.outcomes must contain at least one outcome with sign=loss "
+                f"(got signs: {sorted(s.value for s in signs)})"
+            )
+        return self
+
+
+class MountainsConfig(_PveLocationConfig):
+    """Конфиг похода в горы (ГДД §8, Спринт 3.1.1).
+
+    По ГДД §8: уровень `3+`, длина `≥ 20 см`, кулдаун `20–40 мин`,
+    `± длина`, дроп `0–1 шт`. Конкретные числа ставятся в
+    `config/balance.yaml` и могут крутиться без релиза кода.
+    """
+
+
+class DungeonConfig(_PveLocationConfig):
+    """Конфиг похода в данжон (ГДД §8, Спринт 3.1.2).
+
+    По ГДД §8: уровень `6+`, длина `≥ 20 см`, кулдаун `40–60 мин`,
+    `± длина`, дроп `0–3 шт`. Конкретные числа ставятся в
+    `config/balance.yaml` и могут крутиться без релиза кода.
+    """
+
+
 class OracleConfig(_Frozen):
     """Конфиг предсказателя `/oracle` (ГДД §11)."""
 
@@ -448,6 +566,8 @@ class BalanceConfig(_Frozen):
     version: int = Field(ge=1)
     display_names: tuple[DisplayNameRange, ...] = Field(min_length=1)
     forest: ForestConfig
+    mountains: MountainsConfig
+    dungeon: DungeonConfig
     oracle: OracleConfig
     referral: ReferralConfig
     thickness: ThicknessConfig
