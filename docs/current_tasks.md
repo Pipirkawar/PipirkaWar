@@ -15,17 +15,25 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный PR — **postmerge 2.5-D.12** ([PR #97](https://github.com/Pipirkawar/PipirkaWar/pull/97), коммит `f3c3a86`) — sync `history.md` (+1 запись `2026-05-07 — Спринт 2.5-D.12`) + `current_tasks.md` под `main = e6f7512`, **Спринт 2.5 закрыт полностью** (все 12 пунктов A/B/C/D.1–D.12). Перед ним: **2.5-D.12** (PR #96, `e6f7512`) — аудит/дедупликация `admin-*` локалей в `locales/{ru,en}.ftl` + lint-тест RU↔EN parity. Перед ним: postmerge 2.5-D.11 (PR #95, `61b33f1`); 2.5-D.11 (PR #94, `c434b3d`) — exhaustive RBAC-матрица в unit-тестах; postmerge 2.5-D.10 (PR #93, `3288fc6`); 2.5-D.10 (PR #92, `a8f26e5`) — новый файл `docs/admin_runbook.md`; postmerge 2.5-D.6 (PR #91, `cb40c2e`); 2.5-D.6 (PR #90, `4c2b100`); postmerge 2.5-D.4 (PR #89, `8df66e7`); 2.5-D.4 (PR #88, `774bd7c`). До этого: 2.5-A (PR #79), 2.5-B (PR #81), 2.5-C (PR #83), постмердж-доки (PR #84), 2.5-D часть 1 (PR #85), 2.5-D.7 (PR #86), postmerge 2.5-D.7 (PR #87).
+**На `main`:** последний смерженный PR — **3.1-A** ([PR #99](https://github.com/Pipirkawar/PipirkaWar/pull/99), коммит `7a37071`) — каркас доменов гор и данжона + общий picker `pick_pve_outcome` + **75 unit-тестов** в `tests/unit/domain/{pve,mountains,dungeon}/`. Перед ним: **docs-prep Спринта 3.1** (PR #98, `71a667e`) — декомпозиция Спринта 3.1 на 5 фичевых PR-ов (3.1-A…3.1-E) в `development_plan.md` §6.3.1+ + sync `current_tasks.md`. Перед ним: postmerge 2.5-D.12 (PR #97, `f3c3a86`) — закрытие Спринта 2.5; 2.5-D.12 (PR #96, `e6f7512`) — аудит/дедупликация `admin-*` локалей; postmerge 2.5-D.11 (PR #95, `61b33f1`); 2.5-D.11 (PR #94, `c434b3d`); postmerge 2.5-D.10 (PR #93, `3288fc6`); 2.5-D.10 (PR #92, `a8f26e5`); postmerge 2.5-D.6 (PR #91, `cb40c2e`); 2.5-D.6 (PR #90, `4c2b100`); postmerge 2.5-D.4 (PR #89, `8df66e7`); 2.5-D.4 (PR #88, `774bd7c`). До этого: 2.5-A (PR #79), 2.5-B (PR #81), 2.5-C (PR #83), постмердж-доки (PR #84), 2.5-D часть 1 (PR #85), 2.5-D.7 (PR #86), postmerge 2.5-D.7 (PR #87).
 
-**Активная feature-ветка:** `devin/1778169424-sprint-3-1-docs-prep` (текущий PR — **docs-prep Спринта 3.1**: расширение `docs/development_plan.md` §6.3 декомпозицией Спринта 3.1 на 5 фичевых PR-ов (3.1-A…3.1-E) + обновление `docs/current_tasks.md` под старт Спринта 3.1 (снимок / позиция / scope / чек-лист). Без изменений кода / тестов / локалей / миграций).
+**Активная feature-ветка:** `devin/1778173607-postmerge-3-1-A` (текущий PR — **postmerge 3.1-A**: sync `docs/history.md` (+2 записи: «Спринт 3.1 docs-prep» + «Спринт 3.1-A») + `docs/current_tasks.md` под `main = 7a37071`, фиксация что 3.1-A в main, чек-лист 3.1-A → `[x]`, активная позиция переключена на старт **3.1-B**. Без изменений кода / тестов / локалей / миграций).
 
-**Что уже есть в коде на старте Спринта 3.1 (`main = f3c3a86`):**
-- **§8 «Походы (PvE)» ГДД реализован частично — только лес.** `src/pipirik_wars/domain/forest/` (entities `ForestRun`, errors, repository-port, log-template service), `src/pipirik_wars/application/forest/` (use-cases `StartForestRun` / `FinishForestRun` / `ApplyNameDrop` + `notifier` + `log_templates`), `src/pipirik_wars/infrastructure/db/models/forest.py` + миграция `0004_forest_runs`, `bot/handlers/forest.py` (~275 строк), `bot/presenters/forest.py` (~474 строки), `bot/notifications/forest.py` (~228 строк), templates `config/templates/forest_logs_{ru,en}.json`. Балансовый конфиг `forest:` в `config/balance.yaml` (lines 64–77): 3 ветки исходов (`scarce`/`normal`/`abundant`, все +), cooldown 10–20 мин, drop probability + rarity weights.
+**Что уже есть в коде на старте 3.1-B (`main = 7a37071`, после мерджа 3.1-A):**
+- **§8 «Походы (PvE)» ГДД — domain-слой полностью готов для гор и данжона** (3.1-A):
+  - `src/pipirik_wars/domain/pve/` — общие VO + picker:
+    - `entities.py`: `PveLocationKind` (mountains/dungeon), `PveOutcomeBranch` (имя + `PveSign` + абсолютная `length_cm`), `PveItemDrop`, `PveRunOutcome` (branch + знаковая `length_delta_cm` + `tuple[PveItemDrop, ...]`) с invariant-проверкой `sign ↔ delta sign` и `|delta| == branch.length_cm`.
+    - `services.py::pick_pve_outcome(*, location, balance, random)` — единственный picker, общий для гор и данжона: `weighted_choice` веток + Bernoulli per-slot для дропов + `random.choice` items_catalog по rarity.
+  - `src/pipirik_wars/domain/mountains/`: `MountainRun` (frozen-dataclass с `.starting()`/`.mark_finished()` идемпотентен) + `MountainRunStatus` (IN_PROGRESS, FINISHED) + `IMountainRunRepository` ABC port (add/get_by_id/get_active_by_player/save) + ошибки (`AlreadyInMountainsError`, `MountainRunNotFoundError`, `MountainRunOwnershipError`, `MountainsRequirementError` с `requirement="thickness"|"length"`).
+  - `src/pipirik_wars/domain/dungeon/`: зеркало `domain/mountains/` для данжона (отличается только параметрами в `balance.yaml` — `max_drops=3`, больше разброс).
+- **§8 «Походы (PvE)» ГДД — лес (forest)** реализован полностью с предыдущих спринтов: `domain/forest/` + `application/forest/` + persistence (миграция `0004_forest_runs`) + `bot/handlers/forest.py` + `bot/presenters/forest.py` + `bot/notifications/forest.py` + templates `forest_logs_{ru,en}.json`.
+- **`config/balance.yaml`:** есть секции `forest:` (lines 64–77, 3 ветки исходов все +) **+ новые `mountains:` и `dungeon:`** (lines 93–136, по 5 веток исходов: 3 gain + 2 loss; кулдауны 20–40 мин / 40–60 мин; drop-конфиг с `max_drops=1` / `max_drops=3`). Pydantic-схемы (`MountainsConfig`/`DungeonConfig`/`PveSign` etc) — в `domain/balance/config.py`.
 - **`thickness.unlock_levels`** (`config/balance.yaml`): уже содержит `mountains: 3`, `dungeon: 6`, `caravan_raider: 5`, `caravan_create: 7`, `raid_summon: 9` — пороги уровней доступа известны и используются в проверках доступа уже сейчас.
 - **`items_catalog`** (`config/balance.yaml`): 6 слотов (`hat`/`body`/`legs`/`boots`/`ring`/`chain`), pydantic-валидатор: ≥30 предметов, уникальные `id`, ≥1 предмет на каждую редкость. **Слотов оружия (`right_hand`/`left_hand`) ещё нет** — расширение в 3.1-C.
-- **`src/pipirik_wars/domain/pve/`** и **`src/pipirik_wars/application/pve/`** — пустые `__init__.py` (зарезервированы для общего PvE-кода — горы/данжон/будущие локации; решение об унификации с `forest` принимается в 3.1-A).
-- **Anti-cheat hardcap** (ГДД §3.3): реализован — organic-источники проходят через `progression.add_length(...)` с rolling 24ч / 7д. Любые +-исходы гор/данжона **обязаны** идти через тот же канал (как `forest` сейчас).
-- **Тесты RBAC + lint-тест локалей** на месте (Спринт 2.5-D.11/D.12), не относятся к 3.1, но любые новые локали `mountains-*` / `dungeon-*` будут автоматически проверяться lint-тестом `tests/unit/locales/test_admin_keys_lint.py::TestLocaleParity::test_full_parity` на симметрию RU↔EN.
+- **`src/pipirik_wars/application/pve/`** + **`src/pipirik_wars/application/{mountains,dungeon}/`** — пустые / отсутствуют (зарезервированы под use-cases `Start*Run`/`Finish*Run` в 3.1-B).
+- **Persistence гор/данжона** — пока НЕТ: ни Alembic-миграции, ни SQLAlchemy-моделей, ни repo-impl. Это весь скоуп 3.1-B.
+- **Anti-cheat hardcap** (ГДД §3.3): реализован — organic-источники проходят через `progression.add_length(...)` с rolling 24ч / 7д. Любые +-исходы гор/данжона **обязаны** идти через тот же канал (как `forest` сейчас) — закладывается в use-case `Finish*Run` в 3.1-B.
+- **Тесты RBAC + lint-тест локалей** на месте (Спринт 2.5-D.11/D.12), не относятся к 3.1, но любые новые локали `mountains-*` / `dungeon-*` будут автоматически проверяться lint-тестом `tests/unit/locales/test_admin_keys_lint.py::TestLocaleParity::test_full_parity` на симметрию RU↔EN (актуально для 3.1-E).
 
 **Скоуп Спринта 3.1 (план PR-ов — детали в `docs/development_plan.md` §6.3.1+):**
 - **Цель спринта** (ГДД §8.1 / `development_plan.md` §6.3 Спринт 3.1, задачи 3.1.1–3.1.5): добавить две оставшиеся PvE-локации — `/mountains` (lvl 3+, ≥ 20 см, 20–40 мин, ±длина, 0–1 предмет) и `/dungeon` (lvl 6+, ≥ 20 см, 40–60 мин, ±длина, 0–3 предмета). Дроп оружия в обе локации. Дроп скроллов заточки (skeleton — дроп без use-механики, та переедет в Спринт 3.4). Балансировка через `balance.yaml` (без релиза кода).
@@ -48,13 +56,13 @@
 | Поле | Значение |
 |---|---|
 | **Активный спринт** | `3.1 — Горы и данжон` (см. `docs/development_plan.md` §6 / Спринт 3.1, задачи 3.1.1–3.1.5; ГДД §8 «Походы (PvE)») |
-| **Активный PR / шаг** | **docs-prep Спринта 3.1** — расширение `docs/development_plan.md` §6 / Спринт 3.1 под-секцией «6.3.1+ Декомпозиция Спринта 3.1 на PR-ы» (5 фичевых PR-ов 3.1-A…3.1-E + правила декомпозиции + точки риска) + обновление `docs/current_tasks.md` под старт Спринта 3.1. Без изменений кода / тестов / локалей / миграций. |
-| **Активная feature-ветка** | `devin/1778169424-sprint-3-1-docs-prep` (создана от `main = f3c3a86`) |
+| **Активный PR / шаг** | **postmerge 3.1-A** — sync `docs/history.md` (+2 записи: 3.1 docs-prep + 3.1-A) + `docs/current_tasks.md` под `main = 7a37071`. После мерджа этого PR-а — старт **3.1-B** (use-cases `Start*Run`/`Finish*Run` + persistence + Alembic-миграция) на новой feature-ветке. Без изменений кода / тестов / локалей / миграций. |
+| **Активная feature-ветка** | `devin/1778173607-postmerge-3-1-A` (создана от `main = 7a37071`) |
 | **Базовая ветка** | `main` |
-| **Последний коммит на main** | `f3c3a86` (мерж PR #97 «docs(postmerge 2.5-D.12): history.md +1 запись, current_tasks.md sync под D.12-в-main, Спринт 2.5 закрыт») |
+| **Последний коммит на main** | `7a37071` (мерж PR #99 «feat(pve): каркас доменов гор и данжона + общий picker [Спринт 3.1-A]») |
 | **Последний коммит на feature-ветке** | будет зафиксирован при первом push-е |
 | **PR (если открыт)** | будет открыт после локального зелёного `make ci` |
-| **CI статус** | на main зелёный: `make ci` — 3417 passed / 1 skipped, coverage 95.90% |
+| **CI статус** | на main зелёный: `make ci` — 3502 passed / 1 skipped, coverage 95.90% (после мерджа 3.1-A; +85 тестов от baseline 3417) |
 | **Связанная задача в `development_plan.md`** | §6 / Спринт 3.1 / задачи 3.1.1–3.1.5 (горы, данжон, дроп оружия и скроллов, балансировка). |
 | **Связанная спецификация в `game_design.md`** | §8 «Походы (PvE)» — таблица локаций (§8.1) и механика (§8.2); §2.6 «Экипировка» — слоты `right_hand`/`left_hand`; §2.8 «Заточка предметов» (§2.8.5 — источники скроллов: горы — обычный очень-очень-редко; данжон — обычный + blessed); §3.1 «Правило 20 см» — порог входа; §3.3 «Анти-чит хардкап» — канон через `progression.add_length(...)`. |
 | **`AGENT_HANDOFF.md` существует?** | нет |
@@ -65,22 +73,20 @@
 
 > Отмечай `[x]` по мере выполнения. **Перед каждым `git commit`** обнови этот чек-лист (даже если шаг ещё не закрыт — отметь, что начат). Это safety-net на случай, если агент прервётся в середине работы.
 
-**Текущий PR — docs-prep Спринта 3.1 (только доки, без изменений кода / тестов / локалей / миграций):**
+**Текущий PR — postmerge 3.1-A (только доки, без изменений кода / тестов / локалей / миграций):**
 
-- [x] Мердж PR #97 на `main` (коммит `f3c3a86`) — Спринт 2.5 закрыт полностью.
-- [x] `git fetch && git checkout main && git pull` — получить `main = f3c3a86`.
-- [x] Создать ветку `devin/1778169424-sprint-3-1-docs-prep` от `main`.
-- [x] Прочитать ГДД §8 (PvE), §2.6 (экипировка), §2.8 (заточка/скроллы), §3.1 (порог 20 см), §3.3 (хардкап) и `development_plan.md` §6 / Спринт 3.1 (задачи 3.1.1–3.1.5) — собран контекст для плана.
-- [x] Сверить с фактическим состоянием кода на `main = f3c3a86`: `domain/forest/` (есть), `domain/pve/` + `application/pve/` (пустые stubs), `thickness.unlock_levels.{mountains,dungeon}` (есть), `items_catalog` (6 слотов, без оружия), `forest`-balance секция (есть).
-- [x] Расширить `docs/development_plan.md` §6 / Спринт 3.1 — добавлена под-секция «6.3.1+ Декомпозиция Спринта 3.1 на PR-ы»: жёсткие правила декомпозиции (5 пунктов) + таблица 5 PR-ов (3.1-A…3.1-E) с темой / скоупом / списком файлов / покрываемыми задачами 3.1.1–3.1.5 + блок «Возможные точки риска / решения» (унификация vs раздельные модули, drop-engine рефакторинг, скроллы skeleton).
-- [x] Обновить `docs/current_tasks.md` под docs-prep Спринта 3.1: «Снимок состояния» (`main = f3c3a86`, что уже есть в коде, скоуп 3.1, план PR-ов), «Текущая позиция» (Sprint 3.1, активная ветка docs-prep), «Чек-лист текущего PR» (этот список + план фичевых PR-ов 3.1-A…3.1-E как референс), «Что ровно сейчас в работе».
-- [ ] **Перед PR:** `make ci` локально зелёный (docs-only — coverage не падает; ожидание: 3417 passed, 95.90%).
-- [ ] Открыть PR `docs(3.1-prep): декомпозиция Спринта 3.1 на 5 фичевых PR-ов (3.1-A…3.1-E) + sync current_tasks.md`.
-- [ ] **После мерджа:** дождаться согласования плана с пользователем, затем стартовать **3.1-A** (каркас доменов гор/данжона + балансовый конфиг) — на новой feature-ветке от свежего `main`.
+- [x] Мердж PR #99 на `main` (коммит `7a37071`) — Спринт 3.1-A закрыт.
+- [x] `git fetch && git checkout main && git pull` — получить `main = 7a37071`.
+- [x] Создать ветку `devin/1778173607-postmerge-3-1-A` от `main`.
+- [x] Обновить `docs/history.md` — добавлены 2 записи (`2026-05-07 — Спринт 3.1 docs-prep` для PR #98 и `2026-05-07 — Спринт 3.1-A` для PR #99) с подробным описанием скоупа, артефактов, архитектурных решений (отдельные модули `domain/{mountains,dungeon}/` vs унификация, общий picker в `domain/pve/`).
+- [x] Обновить `docs/current_tasks.md` — «Снимок состояния» (`main = 7a37071`, что есть в коде после 3.1-A), «Текущая позиция» (postmerge 3.1-A → старт 3.1-B), «Чек-лист текущего PR» (этот список), план 5 PR-ов 3.1-A → `[x]`.
+- [ ] **Перед PR:** `make ci` локально зелёный (docs-only — coverage не падает; ожидание: 3502 passed, 95.90%).
+- [ ] Открыть PR `docs(postmerge 3.1-A): history.md +2 записи (3.1-prep + 3.1-A), current_tasks.md sync под main = 7a37071`.
+- [ ] **После мерджа:** стартовать **3.1-B** (use-cases `Start*Run`/`Finish*Run` + persistence + Alembic-миграция) — на новой feature-ветке от свежего `main`.
 
 **Спринт 3.1 — план фичевых PR-ов (референс — детали в `docs/development_plan.md`, под-секция «6.3.1+ Декомпозиция Спринта 3.1 на PR-ы»):**
 
-- [ ] **3.1-A — Каркас доменов гор и данжона + балансовый конфиг.** Новые модули `domain/{mountains,dungeon}/` (или унификация под `domain/pve/{forest,mountains,dungeon}` — решается в самом PR-е), entities + errors + repository-ports, секции `mountains`/`dungeon` в `config/balance.yaml` с pydantic-схемами, picker `pick_pve_outcome`. Юнит-тесты + 1000+ rolls. Покрывает: 3.1.1 (домен), 3.1.2 (домен), 3.1.5 (схемы).
+- [x] **3.1-A — Каркас доменов гор и данжона + балансовый конфиг.** [PR #99, `7a37071`] Реализовано: `domain/pve/` (общие VO + picker `pick_pve_outcome`) + `domain/mountains/` + `domain/dungeon/` (отдельные модули, не унификация — обоснование в `history.md`). Секции `mountains:` / `dungeon:` в `balance.yaml`. **+75 unit-тестов** (1000-rolls stress-тесты на каждую локацию). Покрывает: 3.1.1 (домен), 3.1.2 (домен), 3.1.5 (схемы).
 - [ ] **3.1-B — Use-cases `Start*Run`/`Finish*Run` + persistence + миграция.** `application/{mountains,dungeon}/`, +-исходы через `progression.add_length(...)` (hardcap-канон), −-исходы — прямая запись + audit. Activity-lock + idempotency. Alembic-миграция `00XX_pve_runs_mountain_dungeon`. SQLAlchemy-модели + repo-impl. Integration-тесты round-trip. Покрывает: 3.1.1, 3.1.2 (use-case + persistence).
 - [ ] **3.1-C — Дроп оружия (`right_hand`/`left_hand`) — drop-engine + items_catalog.** +6 позиций оружия (по 3+ на слот, по редкостям) в `items_catalog`. Расширение pydantic-валидатора (8 слотов вместо 6). `slot_weights` per-location + множественный дроп `0..N`. Юнит-тесты 1000+ rolls. Покрывает: 3.1.4, 3.1.5 (items_catalog).
 - [ ] **3.1-D — Дроп скроллов заточки (skeleton, без use-механики).** Domain VO `Scroll(category, blessed)` (skeleton; полная impl механики применения скролла — Спринт 3.4). Drop-engine ветки `scroll_drop_regular`/`scroll_drop_blessed`. Конфиг `enchantment.scroll_drops_per_location` (mountains: regular only; dungeon: regular + blessed). Юнит-тесты 1000+ rolls. Покрывает: 3.1.3, 3.1.5 (enchantment skeleton).
@@ -94,20 +100,26 @@
 
 > Сюда пиши **дельту** к плану: что именно меняешь, какие use-cases / порты / handler-ы / тесты затронуты. Не дублируй ТЗ из `development_plan.md` — пиши только то, что важно для **текущего PR**.
 
-**Текущий PR (docs-prep Спринта 3.1) — только доки, без изменений кода / тестов / локалей / миграций:**
-- `docs/development_plan.md` — расширена секция §6 / Спринт 3.1: исходная таблица задач 3.1.1–3.1.5 (lines 600–608) сохраняется как канонический скоуп; ниже добавлена под-секция «6.3.1+ Декомпозиция Спринта 3.1 на PR-ы» (lines 610–636) с обоснованием разбиения, жёсткими правилами декомпозиции (5 пунктов), таблицей 5 фичевых PR-ов (3.1-A…3.1-E) с темой / скоупом / ориентировочным списком файлов / покрываемыми задачами, и блоком «Возможные точки риска / решения» (унификация `forest`/`mountains`/`dungeon` под `domain/pve/`, обобщение drop-engine, скоуп скроллов в 3.1-D как skeleton).
-- `docs/current_tasks.md` — обновлены 4 секции под старт Спринта 3.1: «Снимок состояния» (`main = f3c3a86`, Спринт 2.5 закрыт, Спринт 3.1 — активный, что уже есть в коде на старте, scope + план PR-ов), «Текущая позиция» (активная ветка `devin/1778169424-sprint-3-1-docs-prep`, связанные секции ГДД §8 / §2.6 / §2.8 / §3.1 / §3.3), «Чек-лист текущего PR» (docs-prep шаги + план фичевых PR-ов 3.1-A…3.1-E как референс), «Что ровно сейчас в работе» (этот блок).
-- **Без изменений кода / тестов / локалей / миграций.** `make ci` будет прогон перед открытием PR — ожидание: 3417 passed / 1 skipped, coverage **95.90%** (docs-only — идентично main = `f3c3a86`).
+**Текущий PR (postmerge 3.1-A) — только доки, без изменений кода / тестов / локалей / миграций:**
+- `docs/history.md` — **+2 записи** в начале (newest-first):
+  - `2026-05-07 — Спринт 3.1-A: каркас доменов гор и данжона + общий picker pick_pve_outcome` — описывает PR #99 (`7a37071`): новые модули `domain/{pve,mountains,dungeon}/`, общий picker, секции `mountains:`/`dungeon:` в `balance.yaml`, +75 unit-тестов (1000-rolls на локацию). Зафиксировано архитектурное решение «отдельные модули `domain/mountains/` + `domain/dungeon/`, общий picker в `domain/pve/`» (DRY на picker, отдельные модули на сущности — мотив: своя таблица + свой bot-handler у каждой локации в 3.1-B и 3.1-E).
+  - `2026-05-07 — Спринт 3.1 docs-prep: декомпозиция Спринта 3.1 на 5 фичевых PR-ов (3.1-A…3.1-E)` — описывает PR #98 (`71a667e`): расширение `development_plan.md` §6.3.1+ + sync `current_tasks.md`. Запись добавлена ретроактивно (предыдущий агент не успел сделать postmerge-doc PR для docs-prep до начала работы над 3.1-A).
+- `docs/current_tasks.md` — sync под `main = 7a37071`:
+  - «Снимок состояния» — `main`-цепочка обновлена (3.1-A на верху, 3.1-prep ниже), что есть в коде на старте 3.1-B (полный список domain/pve + domain/{mountains,dungeon} + balance-конфиг + что ещё нет — persistence/use-cases).
+  - «Текущая позиция» — Sprint 3.1 / postmerge 3.1-A / ветка `devin/1778173607-postmerge-3-1-A` / `main = 7a37071` / CI 3502 passed.
+  - «Чек-лист текущего PR» — постмердж-шаги (3 готовы — мердж/sync history/sync current_tasks; 3 в очереди — make ci / open PR / старт 3.1-B).
+  - План 5 PR-ов: `3.1-A → [x]` (с PR-ссылкой и кратким описанием реализации); 3.1-B/C/D/E остаются `[ ]`.
+- **Без изменений кода / тестов / локалей / миграций.** `make ci` будет прогон перед открытием PR — ожидание: 3502 passed / 1 skipped, coverage **95.90%** (docs-only — идентично main = `7a37071`).
 
-**Следующий PR (после мерджа этого) — 3.1-A:**
-- Каркас доменов гор и данжона + балансовый конфиг (см. `docs/development_plan.md`, под-секция «6.3.1+ Декомпозиция Спринта 3.1 на PR-ы», строка 3.1-A). На новой feature-ветке от свежего `main`. Только после согласования общего плана Спринта 3.1 пользователем.
+**Следующий PR (после мерджа этого) — 3.1-B:**
+- Use-cases `StartMountainRun` / `FinishMountainRun` / `StartDungeonRun` / `FinishDungeonRun` (по образцу `application/forest/`). +-исходы через `progression.add_length(...)` (anti-cheat hardcap), −-исходы — прямая запись + `audit_log`. Activity-lock + idempotency. Alembic-миграция `00XX_mountain_runs_dungeon_runs` + SQLAlchemy-модели + repo-impl. Integration-тесты round-trip (по аналогии с `tests/integration/db/test_forest_run_repository.py`). На новой feature-ветке от свежего `main`. См. `docs/development_plan.md`, под-секция «6.3.1+ Декомпозиция Спринта 3.1 на PR-ы», строка 3.1-B.
 
 ---
 
 ## 🛑 Известные блокеры / открытые вопросы PR-а
 
-- **Архитектурный вопрос (адресуется в 3.1-A, не блокирует docs-prep PR):** унифицировать ли `domain/forest/` + новые `domain/{mountains,dungeon}/` под общий `domain/pve/{forest,mountains,dungeon}/` (DRY-аргумент: всё это походы с общей механикой кулдауна / activity-lock / drop-engine), или оставить раздельно (YAGNI-аргумент: если в будущем появится локация с принципиально другой механикой — отдельный модуль будет проще). Решение принимает агент в PR-е 3.1-A на основании фактического сходства конструкторов `MountainRun` / `DungeonRun` с `ForestRun`. Влияет только на структуру каталогов, не на скоуп Спринта 3.1.
-- **Решение по скроллам в 3.1-D (адресуется в 3.1-D, не блокирует docs-prep PR):** Domain VO `Scroll` объявляется минимально (`category` + `blessed`); полная инвентарная сущность + use-case применения скролла переезжает в Спринт 3.4 («Заточка предметов»). До тех пор скроллы из дропа пишутся в `audit_log` как `scroll_dropped` (не копятся в инвентаре игрока — иначе придётся параллельно реализовывать инвентарь скроллов, что выходит за скоуп Спринта 3.1).
+- **Архитектурное решение из 3.1-A (закрыто):** в PR #99 принято — `domain/forest/` остаётся отдельным (уникальная семантика name-drop), для гор/данжона созданы зеркальные `domain/{mountains,dungeon}/`-модули + общий picker и VO в `domain/pve/`. Мотив: своя таблица в 3.1-B + свой bot-handler в 3.1-E. См. запись в `history.md` для полного обоснования.
+- **Решение по скроллам в 3.1-D (адресуется в 3.1-D, не блокирует postmerge 3.1-A):** Domain VO `Scroll` объявляется минимально (`category` + `blessed`); полная инвентарная сущность + use-case применения скролла переезжает в Спринт 3.4 («Заточка предметов»). До тех пор скроллы из дропа пишутся в `audit_log` как `scroll_dropped` (не копятся в инвентаре игрока — иначе придётся параллельно реализовывать инвентарь скроллов, что выходит за скоуп Спринта 3.1).
 
 ---
 
