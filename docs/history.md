@@ -23,6 +23,51 @@
 
 ---
 
+## 2026-05-08 — Спринт 3.2-A: каркас доменов «Караван» + балансовый конфиг (старт Спринта 3.2)
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 3.2 ([`current_tasks.md`](current_tasks.md) «Декомпозиция Спринта 3.2 на фичевые PR-ы»), ПД §6.3.2 «Спринт 3.2 — Караваны (полная механика)», ГДД §9 «Караваны». Первый PR Спринта 3.2 — закладывает доменный фундамент перед use-case-ами (3.2-B), боевой механикой (3.2-C) и bot UX (3.2-D).
+
+Что сделано:
+- **`domain/caravan/value_objects.py`** — `CaravanRole` enum (`LEADER`/`CARAVANEER`/`DEFENDER`/`RAIDER`), `CaravanStatus` enum (`LOBBY`/`IN_BATTLE`/`FINISHED`/`CANCELLED`), `CaravanContribution` VO (`cm: int > 0`, frozen+slots, runtime-проверки `isinstance(int)` против `bool`/`float`).
+- **`domain/caravan/entities.py`:**
+  - `Caravan` агрегат (frozen+slots): `id`/`sender_clan_id`/`receiver_clan_id`/`leader_player_id`/`status`/`started_at`/`lobby_ends_at`/`battle_ends_at`/`random_seed`/`finished_at`. Двухфазный лайфцикл — отличие от PvE: сначала **лобби 20 мин**, потом **бой 60 мин**, каждая фаза — свой APScheduler-job. `random_seed` сохраняется на старте для детерминистичного resolve-а боя в 3.2-C. Class-метод `Caravan.starting()` создаёт свежий караван (`id=None`, `status=LOBBY`, `finished_at=None`). Property-аксессоры `is_in_lobby` / `is_in_battle` / `is_terminal`. Мутаторы `mark_in_battle()` / `mark_finished(finished_at=…)` / `mark_cancelled(cancelled_at=…)` через `replace()` — иммутабельные, идемпотентные при повторном вызове, бросают `ValueError` при невалидных переходах.
+  - `CaravanParticipant` weak-агрегат: `caravan_id`/`player_id`/`role`/`is_leader`/`contribution`/`joined_at`. Class-методы `caravaneer()` / `defender()` / `raider()`. Инвариант 1: `is_leader=True` → `role` обязательно `CARAVANEER`. Инвариант 2: `contribution` есть **только** у `CARAVANEER`-ов (включая лидера); `DEFENDER`/`RAIDER` — `contribution=None`.
+- **`domain/caravan/errors.py`:** `CaravanError(DomainError)` + 7 подклассов с `__slots__`-полями и описательными сообщениями: `CaravanNotFoundError(caravan_id)`, `AlreadyInCaravanError(player_id)`, `CaravanCooldownError(clan_id, actual_remaining_seconds)`, `CaravanRoleConflictError(player_id, attempted_role, reason)`, `CaravanRequirementError(player_id, requirement, required, actual)`, `CaravanLobbyClosedError(caravan_id, status)`, `CaravanCapacityExceededError(caravan_id, role, limit)`.
+- **`domain/caravan/repositories.py`:** `ICaravanRepository` (5 async-абстрактных методов: `add` / `get_by_id` / `get_active_by_clan` / `get_last_finished_at_for_clan` / `save`) и `ICaravanParticipantRepository` (4 метода: `add` / `list_by_caravan` / `list_by_caravan_and_role` / `remove`). Реализации (SQLAlchemy) — Спринт 3.2-B.
+- **`domain/caravan/__init__.py`:** публичный API всех VO/entity/error/port.
+- **`domain/balance/config.py`:**
+  - `CaravanRewardMultipliers(_Frozen)` — все четыре множителя `≥ 0`.
+  - `CaravansConfig(_Frozen)` — все балансовые параметры караванов: `min_thickness_level_leader=7` (gt 1), `min_thickness_level_raider=5`, `min_length_cm=20` (gt 0), `min_length_after_contribution_cm=20`, `lobby_minutes=20`, `battle_minutes=60`, `clan_cooldown_hours=12` (≥ 0), `max_raiders_per_caravaneer=4`, `max_defenders_per_caravaneer=2`, `base_reward_cm=5`, `reward_multipliers`, `clan_bonus_cm=1`.
+  - `BalanceConfig.caravans: CaravansConfig` — обязательное поле (без него `model_validate` упадёт).
+- **`config/balance.yaml`:** новая секция `caravans:` с дефолтами по ГДД §9 (lvl 7+ leader, lvl 5+ raider, ≥ 20 см, лобби 20 / бой 60 мин, кулдаун 12 ч, capacity 4× / 2×, награды base=5 × multipliers 4/3/1/0, +1 см клану-получателю). Секция расположена сразу после `dungeon:` и перед `oracle:`.
+- **Тесты `tests/unit/domain/caravan/`:** 4 модуля, ~ 80 тестов:
+  - `test_value_objects.py` — enum smoke, `CaravanContribution` валидация (positive int, frozen, equality, runtime-rejection float и bool).
+  - `test_entities.py` — `Caravan.starting()` factory + 3 invariants (sender ≠ receiver, lobby_ends_at > started_at, battle_ends_at > lobby_ends_at). 9 тестов на transitions с idempotency и terminal-status guard. `CaravanParticipant` factories + 4 invariants.
+  - `test_errors.py` — hierarchy (`CaravanError` is `DomainError`, все 7 подклассов inherit) + payloads (`caravan_id`, `player_id`, `attempted_role`, `requirement`/`required`/`actual`, и т. п. в сообщениях).
+  - `test_repositories.py` — ABC smoke (cannot instantiate, all abstract method names match expected set, all methods are async-coroutine-functions).
+- **Тесты `tests/unit/domain/balance/test_caravans_config.py`:** ~ 20 тестов pydantic-валидации `CaravansConfig` + `CaravanRewardMultipliers` + `BalanceConfig` integration + smoke реального `config/balance.yaml`. Параметризованные проверки на positive/non-negative-fields.
+- **`tests/unit/domain/balance/factories.py`:** `valid_balance_payload()` дополнена `caravans`-блоком — без него `BalanceConfig.model_validate` упадёт после добавления обязательного поля. Все существующие тесты `test_config.py`/`test_picking.py`/`test_pvp_config.py` продолжают работать.
+- **Финальный коммит этого PR-а** (этот) — обновил `history.md` (запись 3.2-A) + переразметил `current_tasks.md` под старт **Спринта 3.2-B** (use-cases `CreateCaravan` / `JoinCaravanLobby` / `LeaveCaravanLobby` + persistence + миграция `0019_caravans` + APScheduler `caravan_lobby_close_factory`).
+
+Результат / артефакты:
+- 13 файлов изменено (excl. docs): 5 новых модулей `domain/caravan/`, 2 модификации (`domain/balance/config.py`, `config/balance.yaml`), 6 тестовых модулей.
+- `make ci` локально: ruff ✅, mypy --strict 764 файла 0 issues ✅, import-linter 3 contracts kept ✅, **pytest 3794 passed / 1 skipped, coverage 95.95%** (gate 80%).
+
+Заметки / решения:
+- **Двухфазный лайфцикл — два поля времени, не один.** `lobby_ends_at` + `battle_ends_at` — отдельные timestamp-ы, потому что у каравана две разные фазы с разными APScheduler-job-ами. Не объединял в `cooldown_min_minutes`/`cooldown_max_minutes` как у PvE — там это окно одной фазы, а здесь — две разные.
+- **`random_seed` сохраняется на старте, resolve боя — синхронный.** В Спринте 3.2-C `FinishCaravanBattle` use-case будет читать `random_seed` и детерминистично воспроизводить расчёт боя. Это даёт audit-trail и возможность переиграть бой при балансе. Без раунд-tick-ов APScheduler — всё разрешается в одном callback-е.
+- **Capacity без `caravaneers=0` особого случая.** Формула `max_raiders ≤ 4 × caravaneers` при `caravaneers=0` даёт `0` — то есть рейдеры не пускаются, пока нет караванщиков. Но лидер всегда есть и всегда `CARAVANEER` (инвариант entity), так что `caravaneers ≥ 1` всегда. Поэтому формула честная.
+- **Две роли «лидер vs караванщик» — `is_leader` flag, не enum-член.** В `CaravanRole` enum есть `LEADER`, но мы его **не используем** в БД — лидер хранится как `CARAVANEER` + `is_leader=True`. `LEADER` enum-член оставлен для будущей расширяемости (например, если появится «второй лидер» / «помощник лидера»). Это симметрично паттерну `ClanMemberRole` в `domain/clan/`.
+- **Кулдаун клана 12 ч — от `started_at`, не от `finished_at`.** Решение задокументировано в docstring-е `ICaravanRepository.get_last_finished_at_for_clan` (имя метода сохранено для символетрии с PvE; реализация в 3.2-B возьмёт `MAX(started_at)`). Альтернатива — кулдаун от завершения — давала бы простой эксплойт «бесконечно создавать караваны и сразу отменять».
+- **`AlreadyInCaravanError` vs `CaravanRoleConflictError` — разные пути.** `AlreadyInCaravanError` бросается activity-lock-ом при попытке войти в любой караван, если игрок уже в активной деятельности. `CaravanRoleConflictError` — конкретно правило ГДД §9.4 (роль не подходит по членству в кланах). В 3.2-A только определены классы; ловит/бросает их `JoinCaravanLobby` use-case в 3.2-B.
+- **`Title` enum (Атаман) — НЕ трогаем.** Расширение приходит в 3.2-C, когда появится `FinishCaravanBattle` use-case и понадобится выдавать титул. Сейчас (3.2-A) `domain/player/` не затронут.
+- **`CaravansConfig` экспортируется только из `domain.balance.config`**, не из `domain.balance.__init__.py`. Симметрично паттерну `MountainsConfig` / `DungeonConfig` (тоже не в `__init__`). Это сознательное решение — `__init__` экспортирует только базовые классы, не location-specific config-и.
+- **Новый канон без catch-up-постмердж-PR-а** — следую правилу 2026-05-08 (CONTRIBUTING.md «Перед мерджем PR-а»). Этот же 3.2-A PR одним последним коммитом обновил `history.md` + `current_tasks.md` перед мерджем.
+
+---
+
 ## 2026-05-08 — Спринт 3.1-E: bot-handlers `/mountains`, `/dungeon` + презентеры + локали + APScheduler factory-wiring (закрытие Спринта 3.1)
 
 **Автор:** Devin (агент)
