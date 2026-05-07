@@ -21,6 +21,7 @@ from pipirik_wars.infrastructure.admin.in_memory_confirm_store import (
     InMemoryAdminConfirmStore,
 )
 from tests.fakes.admin_audit import FakeAdminAuditLogger
+from tests.fakes.admin_authz import FakeAdminAuthzAllowAll
 from tests.fakes.admin_repo import FakeAdminRepository
 from tests.fakes.clock import FakeClock
 from tests.fakes.uow import FakeUnitOfWork
@@ -52,6 +53,7 @@ def _build_use_case(
         audit=audit,
         clock=clock,
         token_factory=lambda: token,
+        authz=FakeAdminAuthzAllowAll(),
         ttl=ttl,
     )
     return use_case, admins, store, audit, uow, clock

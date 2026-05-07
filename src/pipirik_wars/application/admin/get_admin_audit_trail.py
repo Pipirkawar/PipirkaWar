@@ -28,14 +28,17 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from pipirik_wars.application.admin._authorization import ensure_admin_authorized
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.domain.admin import (
     AdminAuditAction,
     AdminAuditEntry,
     AdminAuditRecord,
     AdminAuditSource,
+    AdminCommandKind,
     IAdminAuditLogger,
     IAdminAuditQuery,
+    IAdminAuthorizationPolicy,
     IAdminRepository,
 )
 from pipirik_wars.domain.shared.ports import IClock, IUnitOfWork
@@ -92,7 +95,7 @@ class GetAdminAuditTrailOutput:
 class GetAdminAuditTrail:
     """Use-case листинга админ-аудит-лога."""
 
-    __slots__ = ("_admins", "_audit", "_clock", "_query", "_uow")
+    __slots__ = ("_admins", "_audit", "_authz", "_clock", "_query", "_uow")
 
     def __init__(
         self,
@@ -102,12 +105,14 @@ class GetAdminAuditTrail:
         query: IAdminAuditQuery,
         audit: IAdminAuditLogger,
         clock: IClock,
+        authz: IAdminAuthorizationPolicy,
     ) -> None:
         self._uow = uow
         self._admins = admins
         self._query = query
         self._audit = audit
         self._clock = clock
+        self._authz = authz
 
     async def execute(self, inp: GetAdminAuditTrailInput) -> GetAdminAuditTrailOutput:
         admin = await self._admins.get_by_tg_id(inp.actor_tg_id)
@@ -123,6 +128,20 @@ class GetAdminAuditTrail:
         action = self._parse_action(inp.action_value)
         limit = self._clamp_limit(inp.limit)
         now = self._clock.now()
+
+        await ensure_admin_authorized(
+            admin=admin,
+            command_kind=AdminCommandKind.GET_ADMIN_AUDIT_TRAIL,
+            policy=self._authz,
+            audit=self._audit,
+            uow=self._uow,
+            target_kind="admin_audit_log",
+            target_id=(
+                str(inp.target_admin_tg_id) if inp.target_admin_tg_id is not None else "all"
+            ),
+            tg_chat_id=inp.tg_chat_id,
+            occurred_at=now,
+        )
 
         async with self._uow:
             target_admin_id: int | None = None

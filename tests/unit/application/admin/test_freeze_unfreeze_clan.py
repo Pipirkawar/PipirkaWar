@@ -25,6 +25,7 @@ from pipirik_wars.domain.clan import (
 )
 from pipirik_wars.domain.clan.value_objects import ClanTitle
 from tests.fakes.admin_audit import FakeAdminAuditLogger
+from tests.fakes.admin_authz import FakeAdminAuthzAllowAll
 from tests.fakes.admin_repo import FakeAdminRepository
 from tests.fakes.clan_repo import FakeClanRepository
 from tests.fakes.clock import FakeClock
@@ -50,6 +51,7 @@ def _build_freeze() -> tuple[
         clans=clans,
         audit=audit,
         clock=FakeClock(_FIXED_NOW),
+        authz=FakeAdminAuthzAllowAll(),
     )
     return use_case, admins, clans, audit, uow
 
@@ -71,6 +73,7 @@ def _build_unfreeze() -> tuple[
         clans=clans,
         audit=audit,
         clock=FakeClock(_FIXED_NOW),
+        authz=FakeAdminAuthzAllowAll(),
     )
     return use_case, admins, clans, audit, uow
 

@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime
 
+from pipirik_wars.application.admin._authorization import ensure_admin_authorized
 from pipirik_wars.application.admin.find_players import (
     PlayerSummary,
     player_to_summary,
@@ -32,7 +33,9 @@ from pipirik_wars.domain.admin import (
     AdminAuditAction,
     AdminAuditEntry,
     AdminAuditSource,
+    AdminCommandKind,
     IAdminAuditLogger,
+    IAdminAuthorizationPolicy,
     IAdminRepository,
 )
 from pipirik_wars.domain.clan import IClanRepository
@@ -78,6 +81,7 @@ class GetClanDailyHeadHistory:
     __slots__ = (
         "_admins",
         "_audit",
+        "_authz",
         "_clans",
         "_clock",
         "_daily_heads",
@@ -95,6 +99,7 @@ class GetClanDailyHeadHistory:
         daily_heads: IDailyHeadRepository,
         audit: IAdminAuditLogger,
         clock: IClock,
+        authz: IAdminAuthorizationPolicy,
     ) -> None:
         self._uow = uow
         self._admins = admins
@@ -103,6 +108,7 @@ class GetClanDailyHeadHistory:
         self._daily_heads = daily_heads
         self._audit = audit
         self._clock = clock
+        self._authz = authz
 
     async def execute(
         self,
@@ -122,6 +128,17 @@ class GetClanDailyHeadHistory:
         limit = max(1, min(MAX_LIMIT, inp.limit))
 
         now = self._clock.now()
+        await ensure_admin_authorized(
+            admin=admin,
+            command_kind=AdminCommandKind.GET_CLAN_DAILY_HEAD_HISTORY,
+            policy=self._authz,
+            audit=self._audit,
+            uow=self._uow,
+            target_kind="clan",
+            target_id=str(inp.query),
+            tg_chat_id=inp.tg_chat_id,
+            occurred_at=now,
+        )
         async with self._uow:
             clan = await self._clans.get_by_id(inp.query)
             if clan is None:

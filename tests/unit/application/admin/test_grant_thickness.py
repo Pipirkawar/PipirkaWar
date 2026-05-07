@@ -31,6 +31,7 @@ from pipirik_wars.domain.balance.config import BalanceConfig
 from pipirik_wars.domain.player import Player, PlayerStatus, Thickness, Username
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from tests.fakes.admin_audit import FakeAdminAuditLogger
+from tests.fakes.admin_authz import FakeAdminAuthzAllowAll
 from tests.fakes.admin_repo import FakeAdminRepository
 from tests.fakes.balance import FakeBalanceConfig
 from tests.fakes.clock import FakeClock
@@ -90,6 +91,7 @@ def _build() -> tuple[
             idempotency=idempotency,
             audit=audit,
             clock=FakeClock(_NOW),
+            authz=FakeAdminAuthzAllowAll(),
         ),
         admins,
         players,

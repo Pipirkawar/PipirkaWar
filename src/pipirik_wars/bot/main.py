@@ -133,9 +133,11 @@ from pipirik_wars.bot.notifications import (
 from pipirik_wars.domain.admin import (
     IAdminAuditLogger,
     IAdminAuditQuery,
+    IAdminAuthorizationPolicy,
     IAdminConfirmStore,
     IAdminRepository,
     ITotpVerifier,
+    RoleBasedAdminAuthorizationPolicy,
 )
 from pipirik_wars.domain.anticheat import IAnticheatAdminAlerter, IAnticheatRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
@@ -370,6 +372,7 @@ class Container:
     admin_audit_query: IAdminAuditQuery
     admin_confirm_store: IAdminConfirmStore
     totp_verifier: ITotpVerifier
+    admin_authz: IAdminAuthorizationPolicy
     find_players: FindPlayers
     get_player_card: GetPlayerCard
     freeze_player: FreezePlayer
@@ -903,12 +906,14 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     admin_audit_query = SqlAlchemyAdminAuditQuery(uow=uow)
     admin_confirm_store = InMemoryAdminConfirmStore()
     totp_verifier = PyOtpTotpVerifier()
+    admin_authz: IAdminAuthorizationPolicy = RoleBasedAdminAuthorizationPolicy()
     find_players = FindPlayers(
         uow=uow,
         admins=admins,
         players=players,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     get_player_card = GetPlayerCard(
         uow=uow,
@@ -919,6 +924,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         forest_runs=forest_runs,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     freeze_player = FreezePlayer(
         uow=uow,
@@ -926,6 +932,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         players=players,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     unfreeze_player = UnfreezePlayer(
         uow=uow,
@@ -933,6 +940,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         players=players,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     ban_player = BanPlayer(
         uow=uow,
@@ -940,6 +948,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         players=players,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     request_admin_confirm = RequestAdminConfirm(
         uow=uow,
@@ -948,6 +957,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=admin_audit,
         clock=clock,
         token_factory=_default_admin_token_factory,
+        authz=admin_authz,
     )
     verify_admin_confirm = VerifyAdminConfirm(
         uow=uow,
@@ -956,6 +966,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         totp=totp_verifier,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     grant_length = GrantLength(
         uow=uow,
@@ -964,6 +975,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         length_granter=add_length,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     grant_thickness = GrantThickness(
         uow=uow,
@@ -973,6 +985,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         idempotency=idempotency,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     get_balance_value = GetBalanceValue(
         uow=uow,
@@ -980,6 +993,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         balance=balance,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     balance_writer = YamlBalanceWriter(
         path=balance_yaml_path or _DEFAULT_BALANCE_YAML,
@@ -993,6 +1007,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         idempotency=idempotency,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     get_admin_audit_trail = GetAdminAuditTrail(
         uow=uow,
@@ -1000,6 +1015,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         query=admin_audit_query,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     get_clan_card = GetClanCard(
         uow=uow,
@@ -1009,6 +1025,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clan_members=clan_members,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     freeze_clan_admin = FreezeClanAdmin(
         uow=uow,
@@ -1016,6 +1033,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clans=clans,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     unfreeze_clan_admin = UnfreezeClanAdmin(
         uow=uow,
@@ -1023,6 +1041,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clans=clans,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     get_clan_daily_head_history = GetClanDailyHeadHistory(
         uow=uow,
@@ -1032,6 +1051,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         daily_heads=daily_heads,
         audit=admin_audit,
         clock=clock,
+        authz=admin_authz,
     )
     return Container(
         clock=clock,
@@ -1120,6 +1140,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         admin_audit_query=admin_audit_query,
         admin_confirm_store=admin_confirm_store,
         totp_verifier=totp_verifier,
+        admin_authz=admin_authz,
         find_players=find_players,
         get_player_card=get_player_card,
         freeze_player=freeze_player,

@@ -23,6 +23,7 @@ from pipirik_wars.domain.admin import (
 )
 from tests.fakes.admin_audit import FakeAdminAuditLogger
 from tests.fakes.admin_audit_query import FakeAdminAuditQuery
+from tests.fakes.admin_authz import FakeAdminAuthzAllowAll
 from tests.fakes.admin_repo import FakeAdminRepository
 from tests.fakes.clock import FakeClock
 from tests.fakes.uow import FakeUnitOfWork
@@ -47,6 +48,7 @@ def _build() -> tuple[
         query=query,
         audit=audit,
         clock=FakeClock(_NOW),
+        authz=FakeAdminAuthzAllowAll(),
     )
     return use_case, admins, query, audit, uow
 

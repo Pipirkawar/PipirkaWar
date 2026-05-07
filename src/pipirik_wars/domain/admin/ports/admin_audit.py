@@ -109,6 +109,16 @@ class AdminAuditAction(str, enum.Enum):
     # Write-side: ручная разморозка клана админом (`/unfreeze_clan`).
     ADMIN_CLAN_UNFROZEN = "admin_clan_unfrozen"
 
+    # ── Спринт 2.5-D.8 (RBAC) ──
+    # Admin вызвал команду, на которую ему не хватает роли. Пишется
+    # **до** того, как use-case бросит `AdminAuthorizationDeniedError`,
+    # чтобы super-admin в `/audit` видел попытки эскалации привилегий
+    # (типичный сигнал — кто-то с `support`-ролью пытается дёрнуть
+    # `/grant_length`). `target_kind`/`target_id` сохраняют контекст
+    # запрошенной команды; `after.command_kind` дублирует имя команды
+    # для удобства фильтра.
+    ADMIN_AUTHORIZATION_DENIED = "admin_authorization_denied"
+
 
 class AdminAuditSource(str, enum.Enum):
     """Источник админ-команды.

@@ -22,6 +22,7 @@ from pipirik_wars.domain.player import (
 )
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from tests.fakes.admin_audit import FakeAdminAuditLogger
+from tests.fakes.admin_authz import FakeAdminAuthzAllowAll
 from tests.fakes.admin_repo import FakeAdminRepository
 from tests.fakes.clock import FakeClock
 from tests.fakes.player_repo import FakePlayerRepository
@@ -61,6 +62,7 @@ def _build_freeze() -> tuple[
             players=players,
             audit=audit,
             clock=FakeClock(_NOW),
+            authz=FakeAdminAuthzAllowAll(),
         ),
         admins,
         players,
@@ -87,6 +89,7 @@ def _build_unfreeze() -> tuple[
             players=players,
             audit=audit,
             clock=FakeClock(_NOW),
+            authz=FakeAdminAuthzAllowAll(),
         ),
         admins,
         players,

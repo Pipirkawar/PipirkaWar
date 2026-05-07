@@ -38,12 +38,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pipirik_wars.application.admin._authorization import ensure_admin_authorized
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.domain.admin import (
     AdminAuditAction,
     AdminAuditEntry,
     AdminAuditSource,
+    AdminCommandKind,
     IAdminAuditLogger,
+    IAdminAuthorizationPolicy,
     IAdminRepository,
 )
 from pipirik_wars.domain.balance.ports import IBalanceConfig
@@ -108,6 +111,7 @@ class GrantThickness:
     __slots__ = (
         "_admins",
         "_audit",
+        "_authz",
         "_balance",
         "_clock",
         "_idempotency",
@@ -125,6 +129,7 @@ class GrantThickness:
         idempotency: IIdempotencyKey,
         audit: IAdminAuditLogger,
         clock: IClock,
+        authz: IAdminAuthorizationPolicy,
     ) -> None:
         self._uow = uow
         self._admins = admins
@@ -133,6 +138,7 @@ class GrantThickness:
         self._idempotency = idempotency
         self._audit = audit
         self._clock = clock
+        self._authz = authz
 
     async def execute(self, inp: GrantThicknessInput) -> GrantThicknessOutput:
         admin = await self._admins.get_by_tg_id(inp.actor_tg_id)
@@ -165,6 +171,17 @@ class GrantThickness:
             )
 
         now = self._clock.now()
+        await ensure_admin_authorized(
+            admin=admin,
+            command_kind=AdminCommandKind.GRANT_THICKNESS,
+            policy=self._authz,
+            audit=self._audit,
+            uow=self._uow,
+            target_kind="player",
+            target_id=str(inp.target_tg_id),
+            tg_chat_id=inp.tg_chat_id,
+            occurred_at=now,
+        )
         async with self._uow:
             if await self._idempotency.is_seen(inp.idempotency_key):
                 player = await self._players.get_by_tg_id(inp.target_tg_id)

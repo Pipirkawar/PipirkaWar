@@ -33,6 +33,7 @@ from pipirik_wars.domain.daily_head.entities import (
 )
 from pipirik_wars.domain.player import Player, Username
 from tests.fakes.admin_audit import FakeAdminAuditLogger
+from tests.fakes.admin_authz import FakeAdminAuthzAllowAll
 from tests.fakes.admin_repo import FakeAdminRepository
 from tests.fakes.clan_repo import FakeClanRepository
 from tests.fakes.clock import FakeClock
@@ -66,6 +67,7 @@ def _build() -> tuple[
         daily_heads=daily_heads,
         audit=audit,
         clock=FakeClock(_FIXED_NOW),
+        authz=FakeAdminAuthzAllowAll(),
     )
     return use_case, admins, clans, players, daily_heads, audit, uow
 

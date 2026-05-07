@@ -15,12 +15,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pipirik_wars.application.admin._authorization import ensure_admin_authorized
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.domain.admin import (
     AdminAuditAction,
     AdminAuditEntry,
     AdminAuditSource,
+    AdminCommandKind,
     IAdminAuditLogger,
+    IAdminAuthorizationPolicy,
     IAdminRepository,
 )
 from pipirik_wars.domain.clan import Clan, ClanStatus, IClanRepository
@@ -52,7 +55,7 @@ class UnfreezeClanAdminOutput:
 class UnfreezeClanAdmin:
     """Use-case ручной разморозки клана админом."""
 
-    __slots__ = ("_admins", "_audit", "_clans", "_clock", "_uow")
+    __slots__ = ("_admins", "_audit", "_authz", "_clans", "_clock", "_uow")
 
     def __init__(
         self,
@@ -62,12 +65,14 @@ class UnfreezeClanAdmin:
         clans: IClanRepository,
         audit: IAdminAuditLogger,
         clock: IClock,
+        authz: IAdminAuthorizationPolicy,
     ) -> None:
         self._uow = uow
         self._admins = admins
         self._clans = clans
         self._audit = audit
         self._clock = clock
+        self._authz = authz
 
     async def execute(self, inp: UnfreezeClanAdminInput) -> UnfreezeClanAdminOutput:
         admin = await self._admins.get_by_tg_id(inp.actor_tg_id)
@@ -81,6 +86,17 @@ class UnfreezeClanAdmin:
             raise RuntimeError("admin.id is None after get_by_tg_id")
 
         now = self._clock.now()
+        await ensure_admin_authorized(
+            admin=admin,
+            command_kind=AdminCommandKind.UNFREEZE_CLAN,
+            policy=self._authz,
+            audit=self._audit,
+            uow=self._uow,
+            target_kind="clan",
+            target_id=str(inp.query),
+            tg_chat_id=inp.tg_chat_id,
+            occurred_at=now,
+        )
         async with self._uow:
             clan = await self._clans.get_by_id(inp.query)
             if clan is None:
