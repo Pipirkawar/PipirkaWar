@@ -23,12 +23,19 @@ from pipirik_wars.shared.errors import IntegrityError
 
 
 class Slot(StrEnum):
-    """6 слотов экипировки (ГДД §2.6).
+    """8 слотов экипировки (ГДД §2.6).
 
-    Тип общий для каталога (`items_catalog`) и для рантайм-сущностей в
-    `domain/forest/` (потом — `domain/items/`, когда подключим горы /
-    данжон). Живёт здесь, чтобы pydantic-схема `BalanceConfig` могла
-    типизировать слот без обратного импорта в forest-пакет.
+    Слоты `right_hand` / `left_hand` (оружие) добавлены в Спринте 3.1-C
+    как отдельные слоты от 6 слотов «обвеса» (`hat`/`body`/`legs`/
+    `boots`/`ring`/`chain`). Веса дропа per-location задаются
+    отдельно — `BaseDropConfig.slot_weights` (см. ниже): `forest`
+    оружие не дропает (вес `right_hand`/`left_hand` = 0), а
+    `mountains`/`dungeon` дают оружие согласно ГДД §8.
+
+    Тип общий для каталога (`items_catalog`) и для рантайм-сущностей
+    в `domain/forest/` (потом — `domain/items/`, когда подключим
+    горы / данжон). Живёт здесь, чтобы pydantic-схема `BalanceConfig`
+    могла типизировать слот без обратного импорта в forest-пакет.
     """
 
     HAT = "hat"
@@ -37,6 +44,8 @@ class Slot(StrEnum):
     BOOTS = "boots"
     RING = "ring"
     CHAIN = "chain"
+    RIGHT_HAND = "right_hand"
+    LEFT_HAND = "left_hand"
 
 
 class Rarity(StrEnum):
@@ -113,6 +122,62 @@ class ForestRarityWeights(_Frozen):
     epic: int = Field(gt=0)
 
 
+class SlotWeights(_Frozen):
+    """Веса дропа предметов по слотам per-location (ГДД §2.6, Спринт 3.1-C).
+
+    Каждое поле — целое неотрицательное число; `weighted_choice` на этих
+    весах выбирает слот предмета при дропе. Сумма весов должна быть `> 0`,
+    иначе `weighted_choice` упадёт. Слоты с весом `0` дропать в этой
+    локации не будут (например, `right_hand`/`left_hand` для леса).
+
+    Кросс-валидируется в `BalanceConfig` на старте: для каждого слота
+    с положительным весом и каждой `rarity` из `rarity_weights` локации
+    в `items_catalog` обязан быть ≥ 1 предмет — иначе rarity-roll даст
+    непустой rarity-pool, но `slot+rarity`-фильтр окажется пустым.
+    """
+
+    hat: int = Field(ge=0)
+    body: int = Field(ge=0)
+    legs: int = Field(ge=0)
+    boots: int = Field(ge=0)
+    ring: int = Field(ge=0)
+    chain: int = Field(ge=0)
+    right_hand: int = Field(ge=0)
+    left_hand: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _validate_sum_positive(self) -> SlotWeights:
+        total = (
+            self.hat
+            + self.body
+            + self.legs
+            + self.boots
+            + self.ring
+            + self.chain
+            + self.right_hand
+            + self.left_hand
+        )
+        if total <= 0:
+            raise ValueError(
+                "slot_weights: at least one slot must have weight > 0 "
+                "(otherwise weighted_choice on slots is undefined)"
+            )
+        return self
+
+    def as_pairs(self) -> tuple[tuple[Slot, int], ...]:
+        """Список `(Slot, weight)` в стабильном порядке (для `weighted_choice`)."""
+        return (
+            (Slot.HAT, self.hat),
+            (Slot.BODY, self.body),
+            (Slot.LEGS, self.legs),
+            (Slot.BOOTS, self.boots),
+            (Slot.RING, self.ring),
+            (Slot.CHAIN, self.chain),
+            (Slot.RIGHT_HAND, self.right_hand),
+            (Slot.LEFT_HAND, self.left_hand),
+        )
+
+
 class ForestDropConfig(_Frozen):
     """Параметры дропа за поход в лес (ГДД §1.3.5).
 
@@ -121,11 +186,15 @@ class ForestDropConfig(_Frozen):
     `name_share_percent` — внутри дропов: доля «имя» vs «предмет
     экипировки» (имя — единственный путь его получить, ГДД §2.5).
     Оба значения — в `[0, 100]`.
+    `slot_weights` — распределение слотов внутри дропа предметов
+    (Спринт 3.1-C). Для леса `right_hand`/`left_hand` обычно `0`
+    (оружие в лесу не дропает, ГДД §8).
     """
 
     probability_percent: int = Field(ge=0, le=100)
     name_share_percent: int = Field(ge=0, le=100)
     rarity_weights: ForestRarityWeights
+    slot_weights: SlotWeights
 
 
 class ForestConfig(_Frozen):
@@ -218,11 +287,19 @@ class PveDropConfig(_Frozen):
       что даёт распределение `Binomial(max_drops, p)` для итогового
       числа предметов: `0..max_drops`. Семантика **«до N предметов»**
       из ГДД §8 («0–1 шт» / «0–3 шт») реализуется именно так.
+
+    `slot_weights` (Спринт 3.1-C) — распределение слотов внутри
+    каждого дропа: для каждого «слота дропа» сначала ролится слот
+    (`weighted_choice` на `slot_weights`), затем редкость, затем
+    конкретный предмет из `(slot, rarity)`-pool. Для гор/данжона
+    `right_hand`/`left_hand` имеют положительные веса (оружие
+    дропает); для леса — ноль (см. `ForestDropConfig`).
     """
 
     probability_percent: int = Field(ge=0, le=100)
     max_drops: int = Field(ge=1, le=10)
     rarity_weights: ForestRarityWeights
+    slot_weights: SlotWeights
 
 
 class _PveLocationConfig(_Frozen):
@@ -539,8 +616,14 @@ class ContentPolicy(_Frozen):
     clan_quotes: ContentPolicyClanQuotes
 
 
-_MIN_ITEMS_CATALOG_SIZE: int = 30
-"""Минимальный размер `items_catalog` (ГДД §1.3.5: «≥ 30 предметов на 6 слотов»)."""
+_MIN_ITEMS_CATALOG_SIZE: int = 40
+"""Минимальный размер `items_catalog` (ГДД §1.3.5).
+
+С Спринта 3.1-C — 8 слотов (добавлены `right_hand`/`left_hand`) ×
+5 предметов минимум на слот = 40. Порог `≥1 предмет на слот` —
+в `_validate_items_catalog`, чтобы `slot+rarity`-фильтр drop-engine'а
+никогда не выдавал пустой pool.
+Исторически до 3.1-C было 30 предметов на 6 слотов."""
 
 _MIN_NAMES_CATALOG_SIZE: int = 30
 """Минимальный размер `names_catalog` (ГДД §1.3.5: «≥ 30 имён в каталоге»)."""
@@ -616,6 +699,52 @@ class BalanceConfig(_Frozen):
                 "items_catalog must contain at least one item per rarity, "
                 f"missing: {sorted(r.value for r in missing)}"
             )
+        present_slots: set[Slot] = {Slot(e.slot) for e in self.items_catalog}
+        all_slots: set[Slot] = set(Slot)
+        missing_slots: set[Slot] = all_slots - present_slots
+        if missing_slots:
+            raise ValueError(
+                "items_catalog must contain at least one item per slot, "
+                f"missing: {sorted(s.value for s in missing_slots)}"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_drop_slot_rarity_coverage(self) -> BalanceConfig:
+        """Кросс-валидация drop-секций против `items_catalog` (Спринт 3.1-C).
+
+        Для каждой локации (`forest`, `mountains`, `dungeon`):
+        для каждого слота с `slot_weights[slot] > 0` — в каталоге
+        должен быть ≥ 1 предмет этого слота каждой редкости (`common`,
+        `rare`, `epic`). Иначе drop-engine может выкатить пустой
+        `(slot, rarity)`-pool и random.choice упадёт.
+
+        Редкость взята из `Rarity` целиком, тк `rarity_weights` в
+        реальной схеме всегда покрывает все 3 левела (поля
+        `common`/`rare`/`epic` обязательные).
+        """
+        all_rarities: tuple[Rarity, ...] = (Rarity.COMMON, Rarity.RARE, Rarity.EPIC)
+        catalog_index: dict[tuple[Slot, Rarity], int] = {}
+        for e in self.items_catalog:
+            key = (Slot(e.slot), Rarity(e.rarity))
+            catalog_index[key] = catalog_index.get(key, 0) + 1
+
+        location_to_drop: tuple[tuple[str, ForestDropConfig | PveDropConfig], ...] = (
+            ("forest", self.forest.drop),
+            ("mountains", self.mountains.drop),
+            ("dungeon", self.dungeon.drop),
+        )
+        for location_name, drop_cfg in location_to_drop:
+            for slot, weight in drop_cfg.slot_weights.as_pairs():
+                if weight <= 0:
+                    continue
+                for rarity in all_rarities:
+                    if catalog_index.get((slot, rarity), 0) <= 0:
+                        raise ValueError(
+                            f"items_catalog: location {location_name!r} has "
+                            f"slot_weights[{slot.value!r}] > 0 but no item with "
+                            f"slot={slot.value!r} and rarity={rarity.value!r}"
+                        )
         return self
 
     @model_validator(mode="after")

@@ -29,6 +29,16 @@ _VALID_DROP_PAYLOAD: dict[str, Any] = {
     "probability_percent": 50,
     "name_share_percent": 5,
     "rarity_weights": {"common": 70, "rare": 25, "epic": 5},
+    "slot_weights": {
+        "hat": 20,
+        "body": 20,
+        "legs": 20,
+        "boots": 15,
+        "ring": 12,
+        "chain": 13,
+        "right_hand": 0,
+        "left_hand": 0,
+    },
 }
 """Минимальный валидный `forest.drop` для подстановки в `forest`-патчи."""
 
@@ -55,7 +65,7 @@ class TestValidBalance:
         assert cfg.dau_gate.max_dau == 200
         assert cfg.daily_head.schedule_mode == "hybrid"
         assert cfg.content_policy.clan_quotes.mild_profanity is True
-        assert len(cfg.items_catalog) == 30
+        assert len(cfg.items_catalog) == 40
         assert len(cfg.names_catalog) == 30
 
     def test_real_balance_yaml_parses(self) -> None:
@@ -668,16 +678,16 @@ class TestItemEntry:
 
 
 class TestItemsCatalog:
-    def test_below_30_rejected(self) -> None:
-        # 29 валидных записей с покрытыми редкостями.
+    def test_below_min_size_rejected(self) -> None:
+        # 39 валидных записей — ниже нового минимума (Спринт 3.1-C: ≥ 40).
         items = [
             {
                 "id": f"item.hat.test_{i}",
                 "slot": "hat",
                 "display_name": f"X{i}",
-                "rarity": "common" if i < 27 else ("rare" if i < 29 else "epic"),
+                "rarity": "common" if i < 35 else ("rare" if i < 38 else "epic"),
             }
-            for i in range(29)
+            for i in range(39)
         ]
         payload = _payload_with(items_catalog=items)
         with pytest.raises(ValidationError):
@@ -691,7 +701,7 @@ class TestItemsCatalog:
             BalanceConfig.model_validate(base)
 
     def test_missing_rarity_rejected(self) -> None:
-        # Все 30 предметов — common; ни одного rare/epic не остаётся.
+        # Все 40 предметов — common; ни одного rare/epic не остаётся.
         items = [
             {
                 "id": f"item.hat.test_{i}",
@@ -699,10 +709,27 @@ class TestItemsCatalog:
                 "display_name": f"X{i}",
                 "rarity": "common",
             }
-            for i in range(30)
+            for i in range(40)
         ]
         payload = _payload_with(items_catalog=items)
         with pytest.raises(ValidationError, match="at least one item per rarity"):
+            BalanceConfig.model_validate(payload)
+
+    def test_missing_slot_rejected(self) -> None:
+        # 40 предметов, покрывают все 3 редкости, но все в одном слоте (`hat`):
+        # остальные 7 слотов пусты → валидатор должен отклонить.
+        rarities = ["common"] * 30 + ["rare"] * 7 + ["epic"] * 3
+        items = [
+            {
+                "id": f"item.hat.test_{i}",
+                "slot": "hat",
+                "display_name": f"X{i}",
+                "rarity": rarities[i],
+            }
+            for i in range(40)
+        ]
+        payload = _payload_with(items_catalog=items)
+        with pytest.raises(ValidationError, match="at least one item per slot"):
             BalanceConfig.model_validate(payload)
 
 

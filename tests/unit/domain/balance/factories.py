@@ -11,9 +11,10 @@ from typing import Any
 
 from pipirik_wars.domain.balance.config import BalanceConfig
 
-# Валидный каталог: ровно 30 предметов, по 5 на каждый из 6 слотов,
-# с покрытием всех 3 редкостей (12 common / 12 rare / 6 epic).
-_SLOTS = ("hat", "body", "legs", "boots", "ring", "chain")
+# Валидный каталог: ровно 40 предметов, по 5 на каждый из 8 слотов
+# (с Спринта 3.1-C — плюс `right_hand`/`left_hand`), с покрытием всех
+# 3 редкостей (16 common / 16 rare / 8 epic) и всех слотов.
+_SLOTS = ("hat", "body", "legs", "boots", "ring", "chain", "right_hand", "left_hand")
 _RARITY_PATTERN = ("common", "common", "rare", "rare", "epic")
 
 
@@ -60,6 +61,16 @@ def valid_balance_payload() -> dict[str, Any]:
                 "probability_percent": 50,
                 "name_share_percent": 5,
                 "rarity_weights": {"common": 70, "rare": 25, "epic": 5},
+                "slot_weights": {
+                    "hat": 20,
+                    "body": 20,
+                    "legs": 20,
+                    "boots": 15,
+                    "ring": 12,
+                    "chain": 13,
+                    "right_hand": 0,
+                    "left_hand": 0,
+                },
             },
         },
         "mountains": {
@@ -76,6 +87,16 @@ def valid_balance_payload() -> dict[str, Any]:
                 "probability_percent": 25,
                 "max_drops": 1,
                 "rarity_weights": {"common": 60, "rare": 30, "epic": 10},
+                "slot_weights": {
+                    "hat": 12,
+                    "body": 12,
+                    "legs": 12,
+                    "boots": 12,
+                    "ring": 12,
+                    "chain": 12,
+                    "right_hand": 14,
+                    "left_hand": 14,
+                },
             },
         },
         "dungeon": {
@@ -92,6 +113,16 @@ def valid_balance_payload() -> dict[str, Any]:
                 "probability_percent": 50,
                 "max_drops": 3,
                 "rarity_weights": {"common": 50, "rare": 35, "epic": 15},
+                "slot_weights": {
+                    "hat": 10,
+                    "body": 10,
+                    "legs": 10,
+                    "boots": 10,
+                    "ring": 10,
+                    "chain": 10,
+                    "right_hand": 20,
+                    "left_hand": 20,
+                },
             },
         },
         "oracle": {
