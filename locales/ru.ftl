@@ -757,3 +757,68 @@ admin-setup-totp-password-not-configured = ❌ <code>BOOTSTRAP_ADMIN_PASSWORD</c
 admin-setup-totp-password-invalid = ❌ Неверный bootstrap-пароль.
 admin-setup-totp-already-configured = ❌ TOTP уже настроен. Чтобы выдать новый секрет, потребуется ручной сброс через DBA (см. <code>docs/admin_runbook.md</code>).
 admin-setup-totp-success = ✅ TOTP настроен. Секрет и <code>otpauth://</code>-URI записаны в server-side-логи (event=<code>admin_totp_setup</code>) — открой их у инфры и импортируй в Authenticator/1Password. В чат секрет не попадает намеренно.
+
+# ============================================================================
+# /mountains, /dungeon (Спринт 3.1-E, ГДД §8). PvE-локации с ±-исходом.
+# Структура зеркальная forest-*; различие — два набора длина-строк
+# (`-gain` / `-loss` / `-zero`) и `requirement-*` для проверок «нужна
+# толщина N» / «нужно ≥ 20 см».
+# ============================================================================
+
+# --------------------------- /mountains -------------------------------------
+
+mountains-group = 🏔 Команда /mountains доступна только в личке бота. Открой приватный чат и повтори.
+mountains-other = 🏔 Команда /mountains доступна только в личке бота.
+mountains-not-registered = 🏔 Похоже, ты ещё не зарегистрирован. Нажми /start в этом чате — и тогда сможешь пойти в горы.
+mountains-already-in = 🏔 Ты уже в горах — дождись возвращения. Бот пришлёт сообщение, когда поход закончится.
+mountains-requirement-thickness = 🏔 В горы пускают с { NUMBER($required, useGrouping: 0) }-й толщины. У тебя сейчас { NUMBER($actual, useGrouping: 0) }-я. Прокачай /upgrade.
+mountains-requirement-length = 🏔 Чтобы идти в горы, нужно ≥ { NUMBER($required_cm, useGrouping: 0) } см. У тебя { NUMBER($actual_cm, useGrouping: 0) } см.
+mountains-started = 🏔 { $nick } ушёл в горы на { NUMBER($cooldown_minutes, useGrouping: 0) } минут...
+mountains-started-fallback = 🏔 Ты ушёл в горы на { NUMBER($cooldown_minutes, useGrouping: 0) } минут...
+
+mountains-finished-header = 🏔 { $nick } вернулся из гор!
+mountains-finished-length-gain =
+    📏 Длина: +{ NUMBER($length_delta_cm, useGrouping: 0) } см (было { NUMBER($length_before_cm, useGrouping: 0) }, стало { NUMBER($length_after_cm, useGrouping: 0) })
+mountains-finished-length-loss =
+    📏 Длина: −{ NUMBER($length_delta_abs_cm, useGrouping: 0) } см (было { NUMBER($length_before_cm, useGrouping: 0) }, стало { NUMBER($length_after_cm, useGrouping: 0) })
+mountains-finished-length-zero =
+    📏 Длина не изменилась ({ NUMBER($length_before_cm, useGrouping: 0) } см)
+mountains-finished-item-found = 🎩 Нашёл: { $item_name } [{ $rarity }]
+
+mountains-button-equip = Надеть
+mountains-button-drop-item = Выбросить
+
+mountains-toast-item-equipped-placeholder = Экипировка появится позже — предмет пока в инвентаре.
+mountains-toast-item-dropped = Предмет выброшен.
+mountains-toast-foreign-button = Эта кнопка не для тебя.
+mountains-toast-run-not-found = Этот поход уже неактивен.
+mountains-toast-drop-mismatch = Кнопка устарела.
+
+# --------------------------- /dungeon ---------------------------------------
+
+dungeon-group = 🏰 Команда /dungeon доступна только в личке бота. Открой приватный чат и повтори.
+dungeon-other = 🏰 Команда /dungeon доступна только в личке бота.
+dungeon-not-registered = 🏰 Похоже, ты ещё не зарегистрирован. Нажми /start в этом чате — и тогда сможешь пойти в данжон.
+dungeon-already-in = 🏰 Ты уже в данжоне — дождись возвращения. Бот пришлёт сообщение, когда поход закончится.
+dungeon-requirement-thickness = 🏰 В данжон пускают с { NUMBER($required, useGrouping: 0) }-й толщины. У тебя сейчас { NUMBER($actual, useGrouping: 0) }-я. Прокачай /upgrade.
+dungeon-requirement-length = 🏰 Чтобы идти в данжон, нужно ≥ { NUMBER($required_cm, useGrouping: 0) } см. У тебя { NUMBER($actual_cm, useGrouping: 0) } см.
+dungeon-started = 🏰 { $nick } ушёл в данжон на { NUMBER($cooldown_minutes, useGrouping: 0) } минут...
+dungeon-started-fallback = 🏰 Ты ушёл в данжон на { NUMBER($cooldown_minutes, useGrouping: 0) } минут...
+
+dungeon-finished-header = 🏰 { $nick } вернулся из данжона!
+dungeon-finished-length-gain =
+    📏 Длина: +{ NUMBER($length_delta_cm, useGrouping: 0) } см (было { NUMBER($length_before_cm, useGrouping: 0) }, стало { NUMBER($length_after_cm, useGrouping: 0) })
+dungeon-finished-length-loss =
+    📏 Длина: −{ NUMBER($length_delta_abs_cm, useGrouping: 0) } см (было { NUMBER($length_before_cm, useGrouping: 0) }, стало { NUMBER($length_after_cm, useGrouping: 0) })
+dungeon-finished-length-zero =
+    📏 Длина не изменилась ({ NUMBER($length_before_cm, useGrouping: 0) } см)
+dungeon-finished-item-found = 🎩 Нашёл: { $item_name } [{ $rarity }]
+
+dungeon-button-equip = Надеть
+dungeon-button-drop-item = Выбросить
+
+dungeon-toast-item-equipped-placeholder = Экипировка появится позже — предмет пока в инвентаре.
+dungeon-toast-item-dropped = Предмет выброшен.
+dungeon-toast-foreign-button = Эта кнопка не для тебя.
+dungeon-toast-run-not-found = Этот поход уже неактивен.
+dungeon-toast-drop-mismatch = Кнопка устарела.

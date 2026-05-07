@@ -31,16 +31,28 @@ from pipirik_wars.application.daily_head import (
 from pipirik_wars.application.dto.inputs import (
     EscalateChatToGlobalInput,
     ExpireLobbyEntryInput,
+    FinishDungeonRunInput,
     FinishForestRunInput,
+    FinishMountainRunInput,
     ForceResolveMassDuelInput,
     ResolveAfkRoundInput,
     RunDailyHeadCronInput,
     RunWeeklyClanReferralSummaryInput,
 )
+from pipirik_wars.application.dungeon import (
+    DungeonRunFinished,
+    FinishDungeonRun,
+    IDungeonFinishNotifier,
+)
 from pipirik_wars.application.forest import (
     FinishForestRun,
     ForestRunFinished,
     IForestFinishNotifier,
+)
+from pipirik_wars.application.mountains import (
+    FinishMountainRun,
+    IMountainFinishNotifier,
+    MountainRunFinished,
 )
 from pipirik_wars.application.pvp import (
     EscalateChatToGlobal,
@@ -53,7 +65,9 @@ from pipirik_wars.application.referral import (
     RunWeeklyClanReferralSummary,
 )
 from pipirik_wars.domain.clan import IClanRepository
+from pipirik_wars.domain.dungeon import DungeonRunNotFoundError
 from pipirik_wars.domain.forest import ForestRunNotFoundError
+from pipirik_wars.domain.mountains import MountainRunNotFoundError
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
 
@@ -155,11 +169,15 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         "_clans",
         "_daily_head_cron_factory",
         "_daily_reschedule_factory",
+        "_dungeon_finish_factory",
+        "_dungeon_notifier",
         "_escalate_factory",
         "_expire_factory",
         "_finish_factory",
         "_logger",
         "_mass_duel_afk_factory",
+        "_mountain_finish_factory",
+        "_mountain_notifier",
         "_notifier",
         "_scheduler",
         "_weekly_referral_summary_factory",
@@ -180,6 +198,10 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         daily_reschedule_factory: (Callable[[], ScheduleDailyHeadCronJobs] | None) = None,
         weekly_referral_summary_factory: (Callable[[], RunWeeklyClanReferralSummary] | None) = None,
         weekly_referral_summary_notifier: (IWeeklyClanReferralSummaryNotifier | None) = None,
+        mountain_finish_factory: Callable[[], FinishMountainRun] | None = None,
+        mountain_notifier: IMountainFinishNotifier | None = None,
+        dungeon_finish_factory: Callable[[], FinishDungeonRun] | None = None,
+        dungeon_notifier: IDungeonFinishNotifier | None = None,
         clans: IClanRepository | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
@@ -194,6 +216,10 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._daily_reschedule_factory = daily_reschedule_factory
         self._weekly_referral_summary_factory = weekly_referral_summary_factory
         self._weekly_referral_summary_notifier = weekly_referral_summary_notifier
+        self._mountain_finish_factory = mountain_finish_factory
+        self._mountain_notifier = mountain_notifier
+        self._dungeon_finish_factory = dungeon_finish_factory
+        self._dungeon_notifier = dungeon_notifier
         self._clans = clans
         self._logger = logger or logging.getLogger(__name__)
 
@@ -394,26 +420,84 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
             return
 
     async def _run_mountain_finish_job(self, run_id: int) -> None:
-        """Callback `FinishMountainRun`-job-а (Спринт 3.1-B).
+        """Callback `FinishMountainRun`-job-а (Спринт 3.1-E).
 
-        До wiring-а в 3.1-E фабрика `FinishMountainRun` не подвязана —
-        callback логирует «factory not wired» и тихо выходит.
+        Зеркалит `_run_finish_job` (лес). Если `mountain_finish_factory`
+        не подвязана (recovery / unit-тесты APScheduler-а отдельно) —
+        пишем warning и тихо выходим. Идемпотентность по
+        `was_already_finished` валидирует use-case сам;
+        notifier дополнительно фильтрует повторы.
         """
-        self._logger.warning(
-            "mountain_run_finish: factory not wired",
-            extra={"run_id": run_id},
-        )
+        if self._mountain_finish_factory is None:
+            self._logger.warning(
+                "mountain_run_finish: factory not wired",
+                extra={"run_id": run_id},
+            )
+            return
+        result: MountainRunFinished | None = None
+        try:
+            use_case = self._mountain_finish_factory()
+            result = await use_case.execute(FinishMountainRunInput(run_id=run_id))
+        except (MountainRunNotFoundError, PlayerNotFoundError) as exc:
+            self._logger.warning(
+                "mountain_run_finish: domain error",
+                extra={"run_id": run_id, "error": type(exc).__name__},
+            )
+            return
+        except Exception as exc:
+            self._logger.exception(
+                "mountain_run_finish: unexpected error",
+                extra={"run_id": run_id, "error": type(exc).__name__},
+            )
+            return
+
+        if self._mountain_notifier is None or result is None:
+            return
+        try:
+            await self._mountain_notifier.notify(result)
+        except Exception as exc:
+            self._logger.exception(
+                "mountain_run_finish: notifier failed",
+                extra={"run_id": run_id, "error": type(exc).__name__},
+            )
 
     async def _run_dungeon_finish_job(self, run_id: int) -> None:
-        """Callback `FinishDungeonRun`-job-а (Спринт 3.1-B).
+        """Callback `FinishDungeonRun`-job-а (Спринт 3.1-E).
 
-        До wiring-а в 3.1-E фабрика `FinishDungeonRun` не подвязана —
-        callback логирует «factory not wired» и тихо выходит.
+        Зеркалит `_run_mountain_finish_job`.
         """
-        self._logger.warning(
-            "dungeon_run_finish: factory not wired",
-            extra={"run_id": run_id},
-        )
+        if self._dungeon_finish_factory is None:
+            self._logger.warning(
+                "dungeon_run_finish: factory not wired",
+                extra={"run_id": run_id},
+            )
+            return
+        result: DungeonRunFinished | None = None
+        try:
+            use_case = self._dungeon_finish_factory()
+            result = await use_case.execute(FinishDungeonRunInput(run_id=run_id))
+        except (DungeonRunNotFoundError, PlayerNotFoundError) as exc:
+            self._logger.warning(
+                "dungeon_run_finish: domain error",
+                extra={"run_id": run_id, "error": type(exc).__name__},
+            )
+            return
+        except Exception as exc:
+            self._logger.exception(
+                "dungeon_run_finish: unexpected error",
+                extra={"run_id": run_id, "error": type(exc).__name__},
+            )
+            return
+
+        if self._dungeon_notifier is None or result is None:
+            return
+        try:
+            await self._dungeon_notifier.notify(result)
+        except Exception as exc:
+            self._logger.exception(
+                "dungeon_run_finish: notifier failed",
+                extra={"run_id": run_id, "error": type(exc).__name__},
+            )
 
     async def schedule_weekly_clan_referral_summary_cron(self) -> None:
         """Зарегистрировать глобальный cron weekly-сводки рефералов (Спринт 2.4.E).

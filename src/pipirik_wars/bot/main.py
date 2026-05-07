@@ -80,6 +80,7 @@ from pipirik_wars.application.dau import (
 )
 from pipirik_wars.application.dungeon import (
     FinishDungeonRun,
+    IDungeonFinishNotifier,
     StartDungeonRun,
 )
 from pipirik_wars.application.forest import (
@@ -91,6 +92,7 @@ from pipirik_wars.application.forest import (
 from pipirik_wars.application.i18n import IMessageBundle, IPlayerLocaleResolver
 from pipirik_wars.application.mountains import (
     FinishMountainRun,
+    IMountainFinishNotifier,
     StartMountainRun,
 )
 from pipirik_wars.application.oracle import (
@@ -140,7 +142,9 @@ from pipirik_wars.application.top import (
 from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import AdminGuard, register_middlewares
 from pipirik_wars.bot.notifications import (
+    TelegramDungeonFinishNotifier,
     TelegramForestFinishNotifier,
+    TelegramMountainFinishNotifier,
     TelegramWeeklyClanReferralSummaryNotifier,
 )
 from pipirik_wars.domain.admin import (
@@ -644,6 +648,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     )
     forest_notifier: IForestFinishNotifier | None = None
     weekly_referral_summary_notifier: IWeeklyClanReferralSummaryNotifier | None = None
+    mountain_notifier: IMountainFinishNotifier | None = None
+    dungeon_notifier: IDungeonFinishNotifier | None = None
     if bot is not None:
         forest_notifier = TelegramForestFinishNotifier(
             bot=bot,
@@ -659,6 +665,21 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
             bot=bot,
             bundle=bundle,
             balance=balance,
+        )
+        # Спринт 3.1-E: PvE-нотификаторы. Доставка best-effort,
+        # локаль из `users.locale_override` через `player_locale_resolver`,
+        # фолбэк на EN.
+        mountain_notifier = TelegramMountainFinishNotifier(
+            bot=bot,
+            balance=balance,
+            bundle=bundle,
+            locale_resolver=player_locale_resolver,
+        )
+        dungeon_notifier = TelegramDungeonFinishNotifier(
+            bot=bot,
+            balance=balance,
+            bundle=bundle,
+            locale_resolver=player_locale_resolver,
         )
     # Late-bound фабрики для PvP-lobby job-ов: scheduler нужен раньше,
     # чем `escalate_chat_to_global` / `expire_lobby_entry`, поэтому передаём
@@ -676,6 +697,13 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         daily_reschedule_factory=lambda: schedule_daily_head_cron_jobs,
         weekly_referral_summary_factory=lambda: run_weekly_clan_referral_summary,
         weekly_referral_summary_notifier=weekly_referral_summary_notifier,
+        # Спринт 3.1-E: late-bound фабрики finish-PvE-job-ов.
+        # Их создаём ниже (после этого вызова), поэтому лямбды
+        # резолвятся в момент срабатывания job-а.
+        mountain_finish_factory=lambda: finish_mountain_run,
+        mountain_notifier=mountain_notifier,
+        dungeon_finish_factory=lambda: finish_dungeon_run,
+        dungeon_notifier=dungeon_notifier,
         clans=clans,
     )
     start_forest_run = StartForestRun(

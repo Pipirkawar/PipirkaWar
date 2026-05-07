@@ -23,6 +23,76 @@
 
 ---
 
+## 2026-05-08 — Спринт 3.1-E: bot-handlers `/mountains`, `/dungeon` + презентеры + локали + APScheduler factory-wiring (закрытие Спринта 3.1)
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 3.1 ([`current_tasks.md`](current_tasks.md)), ПД §6.3 / задача 3.1.1 (UX), 3.1.2 (UX), §6.3.1+ строка 3.1-E «Bot-handlers + APScheduler factory-wiring + локали», ГДД §8 «Походы (PvE)»; первая фича по новому канону без catch-up-постмердж-PR-а — последний коммит этой же ветки одновременно обновляет `history.md` + `current_tasks.md` под старт **Спринта 3.2 (Караваны)**.
+
+Что сделано:
+
+- **E.1 — Notifier-порты в application-слое:**
+  - `src/pipirik_wars/application/mountains/notifier.py` — `IMountainFinishNotifier` (Protocol с одним методом `notify(MountainRunFinished) -> None`).
+  - `src/pipirik_wars/application/dungeon/notifier.py` — `IDungeonFinishNotifier` (зеркальный Protocol).
+  - Оба импортированы из `application/{mountains,dungeon}/__init__.py` (общественный API).
+
+- **E.2 — Bot-presenters mountains/dungeon + общий `_pve.py`:**
+  - `src/pipirik_wars/bot/presenters/_pve.py` — общий `PvePresenter` (391 строка) для обеих локаций. Все локализованные методы префиксуют ключи через `_kind_prefix` (`mountains-` / `dungeon-`): `started`/`started_fallback`/`group`/`other`/`not_registered`/`already_in`/`requirement_thickness`/`requirement_length`/`finished`/`finish_keyboard`/`toast_*`. Plus pure-функции callback_data: `pve_callback_data(*, kind, action, run_id, drop_idx) -> str`, `parse_pve_callback_data(data) -> PveCallbackData`, `is_pve_callback(data) -> bool`. Формат `<kind>:<action>:<run_id>:<drop_idx>` ≤ 64 байт даже для 19-значных run_id (Telegram callback_data hard-cap).
+  - `src/pipirik_wars/bot/presenters/mountains.py` — `MountainsPresenter` (тонкий wrapper над `PvePresenter` с `kind=PveLocationKind.MOUNTAINS`).
+  - `src/pipirik_wars/bot/presenters/dungeon.py` — `DungeonPresenter` (зеркальный с `kind=PveLocationKind.DUNGEON`).
+  - Оба экспортированы из `bot/presenters/__init__.py`.
+
+- **E.3 — Bot-handlers mountains/dungeon + регистрация роутеров:**
+  - `src/pipirik_wars/bot/handlers/mountains.py` — `/mountains` и mountains-callback handler-ы (193 строки):
+    - `/mountains` (private only, group → группа-сообщение, прочие → other-сообщение): `StartMountainRun.execute` → `GetProfile.execute` → presenter.started. На исключения: `PlayerNotFoundError` → `not_registered`, `AlreadyInMountainsError` → `already_in`, `MountainsRequirementError(requirement="thickness"|"length")` → соответствующее requirement-сообщение.
+    - mountains-callback (`F.data.startswith("mountains:")`): `parse_pve_callback_data` → проверка `kind is MOUNTAINS` (защита от промаха фильтра) → toast (equip/drop placeholder без мутации; реальный inventory — Спринт 3.4) + `_strip_keyboard` (best-effort `edit_reply_markup(None)`, ошибки поглощаются через `contextlib.suppress`).
+  - `src/pipirik_wars/bot/handlers/dungeon.py` — зеркальный handler (166 строк) для `/dungeon` и dungeon-callback.
+  - `src/pipirik_wars/bot/handlers/__init__.py` — добавлены `mountains_router`, `dungeon_router` в `register_routers`.
+
+- **E.4 — Telegram-нотификаторы PvE-finish-job-ов:**
+  - `src/pipirik_wars/bot/notifications/_pve.py` — общий базовый класс `_PveFinishNotifierBase[PveResultT]` (Generic). Делает: резолв локали через `IPlayerLocaleResolver` (с фолбэком на default при ошибке резолвера), рендер `display_name` через `IBalanceConfig.display_name_for(length_cm)`, отправку сообщения с `presenter.finished(...)` + `presenter.finish_keyboard(...)` через `aiogram.Bot.send_message`. Все ошибки доставки (`TelegramAPIError` — заблокировал/удалил чат; общий `Exception`) поглощаются через лог-уровни warning/exception (best-effort delivery). Идемпотентность по `was_already_finished` — **на стороне вызывающего** (APScheduler-callback в `aps.py`).
+  - `src/pipirik_wars/bot/notifications/mountains.py` — `TelegramMountainFinishNotifier(_PveFinishNotifierBase[MountainRunFinished])` + `IMountainFinishNotifier`-implements.
+  - `src/pipirik_wars/bot/notifications/dungeon.py` — `TelegramDungeonFinishNotifier` (зеркало).
+  - Оба экспортированы из `bot/notifications/__init__.py`.
+
+- **E.5 — Локали `mountains-*` / `dungeon-*` (RU+EN parity):**
+  - `locales/ru.ftl` +65 строк, `locales/en.ftl` +64 строки. Полное покрытие всех методов `PvePresenter`-а: `mountains-started` (с переменными `nick`/`title`/`length_cm`/`thickness_level`/`cooldown_minutes`), `mountains-started-fallback`, `mountains-group`, `mountains-other`, `mountains-not-registered`, `mountains-already-in`, `mountains-requirement-thickness` (`required`/`actual`), `mountains-requirement-length` (`required_cm`/`actual_cm`), `mountains-finished-header`, `mountains-finished-length-gain` (`delta_cm`), `mountains-finished-length-loss` (`delta_cm`), `mountains-finished-length-zero`, `mountains-finished-no-drops`, `mountains-finished-drop-line` (`item_name`/`rarity`), `mountains-finished-scroll-line` (нейтральный лог), `mountains-keyboard-equip` (`item_name`), `mountains-keyboard-drop`, `mountains-toast-item-equipped-placeholder`, `mountains-toast-item-equipped-already`, `mountains-toast-item-dropped`, `mountains-toast-drop-mismatch`, `mountains-toast-already-finished`. Аналогичный набор `dungeon-*` ключей (parity автомат через lint-тест локалей).
+
+- **E.6 — APScheduler factory-wiring (`infrastructure/scheduler/aps.py`):**
+  - `__init__` расширен 4 опциональными параметрами: `mountain_finish_factory: Callable[[], FinishMountainRun] | None`, `mountain_notifier: IMountainFinishNotifier | None`, `dungeon_finish_factory: Callable[[], FinishDungeonRun] | None`, `dungeon_notifier: IDungeonFinishNotifier | None`. По умолчанию None — т. е. в unit-тестах APScheduler-а не нужно мокать всю PvE-инфраструктуру.
+  - Реализованы реальные callback-и `_run_mountain_finish_job(run_id)` и `_run_dungeon_finish_job(run_id)` (зеркалят `_run_finish_job` для леса):
+    - Если factory не привязана (recovery / unit-тесты адаптера) → log warning + return.
+    - `factory()` создаёт fresh use-case, `await use_case.execute(FinishMountainRunInput(run_id=run_id))`. На `MountainRunNotFoundError` / `PlayerNotFoundError` (записи нет / удалена) → log warning + return. На любой другой `Exception` → log exception + return.
+    - Если notifier привязан и `result is not None` → `await notifier.notify(result)`. На любую ошибку нотификатора — log exception (но НЕ throw наверх, чтобы APScheduler-job не пометился failed и не делал retry из-за Telegram-ошибок).
+  - Идентичный паттерн для dungeon.
+
+- **E.7 — DI-wiring в `bot/main.py`:**
+  - Добавлены импорты `IMountainFinishNotifier`/`StartMountainRun`/`IDungeonFinishNotifier`/`StartDungeonRun` из application и `TelegramMountainFinishNotifier`/`TelegramDungeonFinishNotifier` из bot.notifications.
+  - В блоке `if bot is not None:` создаются `mountain_notifier`/`dungeon_notifier` (через PlayerLocaleResolver + IBalanceConfig + IMessageBundle).
+  - В `APSchedulerDelayedJobScheduler.__init__` передаются late-bound `mountain_finish_factory=lambda: finish_mountain_run` / `dungeon_finish_factory=lambda: finish_dungeon_run` (factory резолвится в момент срабатывания job-а — те же объекты, что Container уже создал ниже по коду).
+
+- **E.8 — Тесты unit (4 новых файла):**
+  - `tests/unit/bot/presenters/test_pve.py` (468 строк, 42 теста): callback_data round-trip (parametrize над `kind × action`), формат `<kind>:<action>:<run_id>:<drop_idx>`, ≤ 64 байт для 19-значных int, отбрасывание мусорных payload-ов, `is_pve_callback` фильтр, FakeMessageBundle ключи + FluentMessageBundle smoke RU+EN, gain/loss/zero ветки `finished`, `finish_keyboard` для 0/1/2 drops, все toast-методы.
+  - `tests/unit/bot/handlers/test_mountains.py` (320 строк, 14 тестов): `/mountains` private/group/supergroup/other, success → started, `PlayerNotFoundError` → not_registered, `AlreadyInMountainsError` → already_in, `MountainsRequirementError(requirement=)` × 2, profile_missing → started_fallback, mountains-callback (no_identity, equip_item, drop_item, invalid_callback_data, dungeon-mismatch).
+  - `tests/unit/bot/handlers/test_dungeon.py` (318 строк, 14 зеркальных тестов).
+  - `tests/unit/bot/notifications/test_pve.py` (304 строки, 9 тестов): MountainNotifier (sends_message, drops + keyboard, locale_resolver_used, locale_resolver_failure_falls_back_to_default, telegram_api_error_swallowed, balance_failure_short_circuits_delivery), DungeonNotifier (зеркало).
+  - `tests/unit/infrastructure/scheduler/test_aps.py` +235 строк, 12 тестов: callback_invokes_use_case, callback_calls_notifier, callback_swallows_run_not_found, callback_swallows_unexpected_error, callback_swallows_notifier_error, factory_not_wired_logs_warning — для mountain и dungeon.
+  - **Итого 91 новый unit-тест.**
+
+Результат / артефакты:
+- 24 файла изменено, +3055 / −14 строк.
+- Локально `make ci`: ruff ✅, mypy --strict 754 файла ✅, import-linter 3 contracts kept ✅, pytest **3707 passed / 1 skipped**, coverage **95.90%** (gate 80%).
+
+Заметки / решения:
+- **Общий `PvePresenter` + thin wrapper-ы.** Mountains и dungeon структурно идентичны (ГДД §8.2: одинаковые состояния, одинаковые типы дропов, разные пороги/cooldown-ы — но это уровень use-case-ов и balance.yaml). Поэтому презентер один; locale-ключи параметризуются `kind_prefix`. Если в Спринте 3.4+ горы получат уникальный flavour-текст вернёт-карточки (как лес имеет `ForestLogTemplate`), нужно будет либо расширить `PvePresenter` опциональным `flavour_provider: IPveFlavourProvider | None`, либо вытащить `MountainsPresenter` в полноценный класс.
+- **Скроллы в UI — нейтральный дисплей без кнопок применения.** В карточке возврата скроллы рендерятся ключом `*-finished-scroll-line` (один на скролл). Кнопок «применить» НЕТ — механика `EnchantItem` use-case + `scroll_inventory` таблица — Спринт 3.4. До 3.4 скроллы только логируются и **не persist-ятся** (см. 3.1-D).
+- **Идемпотентность finish-job-ов.** Use-case `Finish*Run.execute` сам через `was_already_finished` флаг сообщает, что это retry-вызов APScheduler-а. Notifier на стороне адаптера НЕ фильтрует повторы — это ответственность вызывающего кода (callback в `aps.py` мог бы решать «не отправлять, если was_already_finished=True», но в текущем дизайне notifier дёргается всегда; повторных уведомлений не должно быть, потому что APScheduler удаляет одноразовый job после первого успешного return-а из callback-а).
+- **Late-bound factory.** `mountain_finish_factory=lambda: finish_mountain_run` — `finish_mountain_run` объявлен ниже в `bot/main.py` (Container собирает use-case-ы в порядке зависимостей). Lambda резолвит имя в момент срабатывания job-а, когда Container уже полностью построен.
+- **`parse_pve_callback_data` — defensive coding.** Любой мусор в `callback_data` (включая dungeon-callback в горный handler из-за широкого префикс-фильтра) → toast-mismatch без мутации UI. Это защита от подмены payload-а злонамеренным игроком (хотя Telegram callback_data ≤ 64 байт, всё равно лучше валидировать).
+- **`if action_raw == "equip_item": ... elif action_raw == "drop_item": ...` вместо `in _VALID_ACTIONS` для mypy.** mypy --strict в полном прогоне сужает Literal через `in frozenset[Literal[...]]`, но pre-commit-mypy в режиме отдельного файла — нет (видимо, разные версии или конфиги). Явный if/elif устраняет необходимость в `# type: ignore` или `cast`.
+
+---
+
 ## 2026-05-08 — Спринт 3.1-D: дроп скроллов заточки — domain VO `Scroll(category, blessed)` + drop-engine + 10000+ rolls тесты (skeleton, без use-механики)
 
 **Автор:** Devin (агент)
