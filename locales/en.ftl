@@ -753,3 +753,67 @@ admin-setup-totp-password-not-configured = ❌ <code>BOOTSTRAP_ADMIN_PASSWORD</c
 admin-setup-totp-password-invalid = ❌ Invalid bootstrap password.
 admin-setup-totp-already-configured = ❌ TOTP is already configured. Issuing a new secret requires a manual DBA reset (see <code>docs/admin_runbook.md</code>).
 admin-setup-totp-success = ✅ TOTP is configured. The secret and the <code>otpauth://</code> URI are written to the server-side logs (event=<code>admin_totp_setup</code>) — open them in your infra and import into Authenticator/1Password. The secret intentionally never appears in the chat.
+
+# ============================================================================
+# /mountains, /dungeon (Sprint 3.1-E, GDD §8). PvE locations with ±-outcome.
+# Mirrors `forest-*`; differences: two length-line variants
+# (`-gain` / `-loss` / `-zero`) and `requirement-*` for entry checks.
+# ============================================================================
+
+# --------------------------- /mountains -------------------------------------
+
+mountains-group = 🏔 The /mountains command is only available in the bot's private chat. Open the DM and try again.
+mountains-other = 🏔 The /mountains command is only available in the bot's private chat.
+mountains-not-registered = 🏔 Looks like you're not registered yet. Tap /start in this chat — then you'll be able to go to the mountains.
+mountains-already-in = 🏔 You're already in the mountains — wait for your return. The bot will send a message when the trip ends.
+mountains-requirement-thickness = 🏔 The mountains need thickness ≥ { NUMBER($required, useGrouping: 0) }. You're at { NUMBER($actual, useGrouping: 0) }. Train via /upgrade.
+mountains-requirement-length = 🏔 Mountains require ≥ { NUMBER($required_cm, useGrouping: 0) } cm. You have { NUMBER($actual_cm, useGrouping: 0) } cm.
+mountains-started = 🏔 { $nick } went to the mountains for { NUMBER($cooldown_minutes, useGrouping: 0) } minutes...
+mountains-started-fallback = 🏔 You went to the mountains for { NUMBER($cooldown_minutes, useGrouping: 0) } minutes...
+
+mountains-finished-header = 🏔 { $nick } returned from the mountains!
+mountains-finished-length-gain =
+    📏 Length: +{ NUMBER($length_delta_cm, useGrouping: 0) } cm (was { NUMBER($length_before_cm, useGrouping: 0) }, now { NUMBER($length_after_cm, useGrouping: 0) })
+mountains-finished-length-loss =
+    📏 Length: −{ NUMBER($length_delta_abs_cm, useGrouping: 0) } cm (was { NUMBER($length_before_cm, useGrouping: 0) }, now { NUMBER($length_after_cm, useGrouping: 0) })
+mountains-finished-length-zero =
+    📏 Length unchanged ({ NUMBER($length_before_cm, useGrouping: 0) } cm)
+mountains-finished-item-found = 🎩 Found: { $item_name } [{ $rarity }]
+
+mountains-button-equip = Equip
+mountains-button-drop-item = Drop
+
+mountains-toast-item-equipped-placeholder = Equipment is coming later — the item is in your inventory for now.
+mountains-toast-item-dropped = Item dropped.
+mountains-toast-foreign-button = This button isn't for you.
+mountains-toast-run-not-found = This run is no longer active.
+mountains-toast-drop-mismatch = Button is outdated.
+
+# --------------------------- /dungeon ---------------------------------------
+
+dungeon-group = 🏰 The /dungeon command is only available in the bot's private chat. Open the DM and try again.
+dungeon-other = 🏰 The /dungeon command is only available in the bot's private chat.
+dungeon-not-registered = 🏰 Looks like you're not registered yet. Tap /start in this chat — then you'll be able to enter the dungeon.
+dungeon-already-in = 🏰 You're already in the dungeon — wait for your return. The bot will send a message when the trip ends.
+dungeon-requirement-thickness = 🏰 The dungeon needs thickness ≥ { NUMBER($required, useGrouping: 0) }. You're at { NUMBER($actual, useGrouping: 0) }. Train via /upgrade.
+dungeon-requirement-length = 🏰 Dungeon requires ≥ { NUMBER($required_cm, useGrouping: 0) } cm. You have { NUMBER($actual_cm, useGrouping: 0) } cm.
+dungeon-started = 🏰 { $nick } entered the dungeon for { NUMBER($cooldown_minutes, useGrouping: 0) } minutes...
+dungeon-started-fallback = 🏰 You entered the dungeon for { NUMBER($cooldown_minutes, useGrouping: 0) } minutes...
+
+dungeon-finished-header = 🏰 { $nick } returned from the dungeon!
+dungeon-finished-length-gain =
+    📏 Length: +{ NUMBER($length_delta_cm, useGrouping: 0) } cm (was { NUMBER($length_before_cm, useGrouping: 0) }, now { NUMBER($length_after_cm, useGrouping: 0) })
+dungeon-finished-length-loss =
+    📏 Length: −{ NUMBER($length_delta_abs_cm, useGrouping: 0) } cm (was { NUMBER($length_before_cm, useGrouping: 0) }, now { NUMBER($length_after_cm, useGrouping: 0) })
+dungeon-finished-length-zero =
+    📏 Length unchanged ({ NUMBER($length_before_cm, useGrouping: 0) } cm)
+dungeon-finished-item-found = 🎩 Found: { $item_name } [{ $rarity }]
+
+dungeon-button-equip = Equip
+dungeon-button-drop-item = Drop
+
+dungeon-toast-item-equipped-placeholder = Equipment is coming later — the item is in your inventory for now.
+dungeon-toast-item-dropped = Item dropped.
+dungeon-toast-foreign-button = This button isn't for you.
+dungeon-toast-run-not-found = This run is no longer active.
+dungeon-toast-drop-mismatch = Button is outdated.

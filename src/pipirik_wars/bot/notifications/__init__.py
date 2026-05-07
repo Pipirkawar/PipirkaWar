@@ -10,12 +10,16 @@
 Импорт-контракт `bot → application` соблюдается.
 """
 
+from pipirik_wars.bot.notifications.dungeon import TelegramDungeonFinishNotifier
 from pipirik_wars.bot.notifications.forest import TelegramForestFinishNotifier
+from pipirik_wars.bot.notifications.mountains import TelegramMountainFinishNotifier
 from pipirik_wars.bot.notifications.weekly_referral_summary import (
     TelegramWeeklyClanReferralSummaryNotifier,
 )
 
 __all__ = [
+    "TelegramDungeonFinishNotifier",
     "TelegramForestFinishNotifier",
+    "TelegramMountainFinishNotifier",
     "TelegramWeeklyClanReferralSummaryNotifier",
 ]

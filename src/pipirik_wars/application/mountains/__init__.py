@@ -4,6 +4,7 @@ from pipirik_wars.application.mountains.finish_run import (
     FinishMountainRun,
     MountainRunFinished,
 )
+from pipirik_wars.application.mountains.notifier import IMountainFinishNotifier
 from pipirik_wars.application.mountains.start_run import (
     MountainRunStarted,
     StartMountainRun,
@@ -11,6 +12,7 @@ from pipirik_wars.application.mountains.start_run import (
 
 __all__ = [
     "FinishMountainRun",
+    "IMountainFinishNotifier",
     "MountainRunFinished",
     "MountainRunStarted",
     "StartMountainRun",
