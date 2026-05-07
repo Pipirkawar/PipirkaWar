@@ -523,24 +523,6 @@ weekly-referral-summary-line = 🏆 { NUMBER($rank, useGrouping: 0) }. { $referr
 weekly-referral-summary-footer = Invite your friends — everyone grows together!
 
 
-## Admin — TOTP confirmation of dangerous commands (Sprint 2.5-A.3, GDD §18.6)
-# Used in Sprints 2.5-B/C/D by /ban, /grant_*, /balance_set, /announce handlers.
-# Flow: command emits `admin-confirm-prompt` (with token + TTL), admin sends
-# 6-digit code, bot responds with `admin-confirm-success` or one of the errors.
-# Parameters: $token — short id (so admin knows which of multiple pending
-#   confirms this code is for), $ttl_seconds — seconds to enter the code.
-admin-confirm-prompt = 🔐Dangerous command confirmation.
-
-    Enter the 6-digit code from your authenticator app within { NUMBER($ttl_seconds, useGrouping: 0) } seconds.
-    Operation id: <code>{ $token }</code>
-admin-confirm-success = ✅Command confirmed. Executing.
-admin-confirm-totp-not-configured = ⚠️You have not configured 2FA. Contact super-admin to set it up.
-admin-confirm-token-not-found = ⚠️Token not found. It may have already been used — repeat the command.
-admin-confirm-token-expired = ⏰Time to enter the code has run out. Repeat the command.
-admin-confirm-code-invalid = ❌Invalid code. For safety the token has been burned — repeat the command from scratch.
-admin-confirm-admin-mismatch = 🚫This token belongs to another admin. Each confirmation is bound to its initiator.
-
-
 ## Admin — support commands (Sprint 2.5-B, GDD §18.6.5)
 # Used by `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban` and the
 # shared `/confirm` handler.

@@ -525,26 +525,6 @@ weekly-referral-summary-line = 🏆 { NUMBER($rank, useGrouping: 0) }. { $referr
 weekly-referral-summary-footer = Зови друзей — все растут вместе!
 
 
-## Admin — TOTP-подтверждение опасных команд (Спринт 2.5-A.3, ГДД §18.6)
-# Эти строки используются в Спринтах 2.5-B/C/D handler-ами /ban, /grant_*,
-# /balance_set, /announce. Базовый поток: команда отдаёт `admin-confirm-prompt`
-# (с токеном и TTL), админ присылает 6-значный код, бот отвечает либо
-# `admin-confirm-success` либо одной из ошибок ниже.
-# Параметры: $token — короткий идентификатор (для подсказки админу, какому
-#   из активных подтверждений принадлежит код), $ttl_seconds — сколько секунд
-#   у админа на ввод.
-admin-confirm-prompt = 🔐Подтверждение опасной команды.
-
-    Введи 6-значный код из своего authenticator-приложения в течение { NUMBER($ttl_seconds, useGrouping: 0) } секунд.
-    Идентификатор операции: <code>{ $token }</code>
-admin-confirm-success = ✅Команда подтверждена. Выполняю.
-admin-confirm-totp-not-configured = ⚠️У тебя не настроено 2FA. Обратись к super-admin для подключения.
-admin-confirm-token-not-found = ⚠️Токен не найден. Возможно, он уже отработал — повтори команду.
-admin-confirm-token-expired = ⏰Время на ввод кода истекло. Повтори команду.
-admin-confirm-code-invalid = ❌Неверный код. Из соображений безопасности токен сожжён — повтори команду заново.
-admin-confirm-admin-mismatch = 🚫Этот токен подтверждает не ты. Каждое подтверждение принадлежит конкретному админу.
-
-
 ## Admin — команды поддержки (Спринт 2.5-B, ГДД §18.6.5)
 # Используются `/find_player`, `/player`, `/freeze`, `/unfreeze`, `/ban` и общим
 # `/confirm`-handler-ом. Тексты намеренно компактные — админ-чаты обычно
