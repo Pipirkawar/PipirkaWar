@@ -23,6 +23,40 @@
 
 ---
 
+## 2026-05-07 — Спринт 2.5-D.12: аудит/дедупликация `admin-*` локалей + lint-тест RU↔EN parity (закрытие Спринта 2.5)
+
+**Автор:** Devin (агент)
+**Тип:** fix + test
+**Связано:** Спринт 2.5 ([`current_tasks.md`](current_tasks.md)), ПД §5 / задача 2.5.10 (локали admin-команд), ГДД §0 (i18n-канон через Mozilla Fluent), §18.6 (двуязычный admin-интерфейс), [PR #96](https://github.com/Pipirkawar/PipirkaWar/pull/96) (мерж — `e6f7512`)
+
+Что сделано:
+- **Закрыт пробел «silent shadow в Fluent».** Mozilla Fluent при двух определениях одного Message-ID в файле молча оставляет первое и игнорирует второе **без warning-а** — ни на парсинг-time, ни на runtime. `pytest`-тесты не ловили этот класс багов потому, что `tests/conftest.py` подменяет реальный i18n на `_StubBundle`, который возвращает Message-ID как есть. До D.12 `locales/ru.ftl` и `locales/en.ftl` содержали секцию-наследие Спринта 2.5-A.3 (`## Admin — TOTP confirmation of dangerous commands`) с 7 ключами, **5 из которых** (`admin-confirm-token-not-found`, `admin-confirm-token-expired`, `admin-confirm-totp-not-configured`, `admin-confirm-admin-mismatch`, `admin-confirm-code-invalid`) дублировались позднее в секции `# /confirm (B.5)`. Из-за silent-shadow-а админам в production отдавались устаревшие лаконичные тексты от 2.5-A.3 («⚠️Токен не найден») вместо обновлённых из 2.5-B с `<code>{ $token }</code>` substitution-ом («❌ Токен `TOK-123` уже использован или не существует.»). Удалена секция 2.5-A.3 (-20 строк `ru.ftl`, -18 строк `en.ftl`); сохранены актуальные определения тех же 5 ключей из секции 2.5-B.
+- **Удалены 2 orphan-ключа** (`admin-confirm-prompt`, `admin-confirm-success`) — никогда не зацеплены из кода (`grep -E "admin-confirm-(prompt|success)\b" src/` → пусто). Они проектировались как generic confirm-flow в 2.5-A.3, но в 2.5-B флоу был раздроблен по командам (`admin-{cmd}-confirm-issued` для prompt + `admin-confirm-success-{cmd}` для success), и эти два ключа никогда не были зацеплены ни одним `MessageKey(...)` в `src/`.
+- **Новый lint-тест** `tests/unit/locales/test_admin_keys_lint.py` (11 параметризованных кейсов из 5 классов; ~210 строк) — гарантирует, что регрессия (новый ключ только в RU, или дубль, или мёртвый ключ) падает на CI:
+  - `TestNoDuplicateKeys[ru,en]` — `Counter` по Message-ID через `fluent.syntax.parse(text, with_spans=False)` → отказ при любом ID с count > 1. Это закрывает пробел «silent shadow» — Fluent сам не ругается, но тест ругается.
+  - `TestLocaleParity::test_full_parity` — `set(ids_ru) == set(ids_en)` без exception-ов; любой полу-локализованный ключ → провал.
+  - `TestLocaleParity::test_admin_keys_parity` — то же, но только для `admin-*`-подмножества (более понятный fail-message при админ-дрейфе).
+  - `TestAdminKeysCoverage[ru,en]::test_no_missing_admin_keys` — used-in-src ⊆ defined-in-locale. Сборка used-set: `ast.walk` по всем `.py`-файлам в `src/`, выбираем `ast.Constant` с `value.startswith("admin-")` и валидным Fluent-identifier-ом. Любой код, который зовёт ключ, отсутствующий в `.ftl`, → провал теста.
+  - `TestNoOrphanAdminKeys[ru,en]::test_no_orphan_admin_keys` — defined-in-locale ⊆ used-in-src. Любой `admin-*`-ключ в локали, не зацепленный из кода, → провал. Это и поймало 2 orphan-ключа выше.
+  - `TestSanityCounts` — guard `≥100 admin-ключей` в коде и в каждой локали (защита от случайного «успеха» при пустых множествах из-за поломанного AST-обхода / regex-а — без guard-а сломанный сборщик used-set вернул бы пустое множество, и проверки vacuously passed бы).
+- **Без изменений production-кода и миграций.** Изменены только `.ftl`-файлы (удаление obsolete) + новый тест-файл + sync доки. Поведение admin-команд для пользователя сохраняется идентичным — для админа меняются только тексты ошибок `/confirm`-handler-а (см. выше): теперь они богаче и содержат `<code>{ $token }</code>`-substitution. Это уже подразумевалось вторым определением в 2.5-B, но не доходило до пользователя из-за silent-shadow-а.
+
+Результат / артефакты:
+- Коммит на ветке `devin/1778167492-sprint-2-5-d.12-locales`: `c456dfa`. Merge-коммит: `e6f7512`.
+- Локальный `make ci`: зелёный — **3417 passed / 1 skipped** (+11 lint-кейсов vs `main = 61b33f1`), coverage **95.90%** (без падения относительно `main`), ruff / ruff-format / mypy / import-linter — clean.
+- CI на PR #96: 3 проверки зелёные (`lint + types + tests (py3.11)`, `lint + types + tests (py3.12)`, `pip-audit (security)`).
+- Затронутые файлы: `locales/ru.ftl` (−20 строк), `locales/en.ftl` (−18 строк), `tests/unit/locales/__init__.py` (новый, пустой), `tests/unit/locales/test_admin_keys_lint.py` (новый, 207 строк), `docs/current_tasks.md` (обновлены 4 секции под D.12).
+- **Спринт 2.5 закрыт полностью** — все 12 пунктов чек-листа (`A`, `B`, `C`, `D.1–D.12`) смержены в `main`.
+
+Заметки / решения:
+- **Принцип «двойная книга через AST-обход».** Сборка used-set делается через `ast.walk` по `src/`, выбирая `ast.Constant`-узлы с `value.startswith("admin-")`. Это ловит **только литералы** — если где-то в коде admin-ключ конструируется через f-string (`f"admin-{cmd}-confirm-issued"`) или конкатенацию, он не попадёт в used-set, и `TestNoOrphanAdminKeys` ложноположительно пометит существующий ключ как мёртвый. На момент D.12 проверено grep-ом `grep -rn 'f"admin-' src/` — динамической сборки admin-ключей нет, все идут через literal-strings в `MessageKey(...)`. Если в будущем понадобится динамическая сборка — придётся либо расширять AST-обход (распознавать `JoinedStr` с известными константами), либо добавлять explicit-комментарий-маркер для динамических ключей в `_KNOWN_DYNAMIC_KEYS = frozenset({...})` exclusion-set.
+- **Sanity-порог `≥100`.** Выбран по факту текущего состояния (~147 admin-ключей в коде на момент D.12). Если проект ужмёт admin-набор (например, при удалении устаревших команд) — этот guard нужно опустить, иначе `TestSanityCounts` начнёт падать как false-positive.
+- **Видимое поведенческое изменение для админов.** До D.12 админы видели лаконичные однострочные сообщения от 2.5-A.3 при ошибках `/confirm` (например, «⚠️Токен не найден»). После D.12 — богатые с substitution-ом (например, «❌ Токен `TOK-123` уже использован или не существует.»). Это и было задумано вторым определением в 2.5-B, но не доходило до пользователя из-за shadow-а. Изменение в плюс — админ теперь видит, какой именно токен не нашёлся.
+- **Почему dedup, а не remove + add.** Альтернатива «удалить блок 2.5-A.3 целиком + добавить актуальные ключи в 2.5-B» эквивалентна, но добавляет noise в diff. Реально вторые определения уже были в 2.5-B-секции с момента её создания (см. PR #81), просто Fluent игнорировал их из-за shadow-а. Удаление obsolete-секции — минимальный и правильный fix.
+- **Спринт 2.5 закрыт.** Все 12 D-задач + A/B/C закрыты. Следующая работа — Спринт 3 (см. `docs/development_plan.md`). Этот postmerge-PR — последний синк-док для 2.5.
+
+---
+
 ## 2026-05-07 — Спринт 2.5-D.11: exhaustive RBAC-матрица в тестах (22 × 4 = 88 кейсов) + helper coverage
 
 **Автор:** Devin (агент)
