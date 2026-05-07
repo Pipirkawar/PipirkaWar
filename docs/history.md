@@ -23,6 +23,64 @@
 
 ---
 
+## 2026-05-07 — Спринт 3.1-A: каркас доменов гор и данжона + общий picker `pick_pve_outcome`
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 3.1 ([`current_tasks.md`](current_tasks.md)), ПД §6.3 / задачи 3.1.1–3.1.5 (горы/данжон/дроп оружия и скроллов/балансировка), ГДД §8 «Походы (PvE)», [PR #99](https://github.com/Pipirkawar/PipirkaWar/pull/99) (мерж — `7a37071`)
+
+Что сделано:
+- **`domain/pve/`** — новый пакет с общими VO для PvE-локаций с ±-механикой (горы и данжон):
+  - `entities.py`: `PveLocationKind` (mountains/dungeon), `PveOutcomeBranch` (имя ветки + `PveSign` + **абсолютная** `length_cm`), `PveItemDrop` (re-uses `domain/forest/Item`), `PveRunOutcome` (branch + **знаковая** `length_delta_cm` + `tuple[PveItemDrop, ...]`). Invariant-проверка в `__post_init__`: `sign=GAIN ⇒ length_delta_cm ≥ 0`, `sign=LOSS ⇒ length_delta_cm ≤ 0`, `|length_delta_cm| == branch.length_cm`.
+  - `services.py::pick_pve_outcome(*, location, balance, random)` — единственный picker для гор и данжона. Розыгрывает: (1) ветку через `weighted_choice` на `cfg.outcomes`; (2) знаковую дельту длины (применяет `branch.sign` к `randint(min, max)`); (3) **независимо** для каждого слота дропа Bernoulli-ролл с `probability_percent` (распределение количества дропов = `Binomial(max_drops, p)`, что **не равно** «равномерно по 0..max_drops» — намеренно, ГДД §8 «0–1»/«0–3» = биномиальная лестница). Для каждого выпавшего дропа — `weighted_choice` rarity → `random.choice` из items_catalog. **Имена не дропаются** (ГДД §2.5 — только лес).
+- **`domain/mountains/`** — модуль гор по образцу `domain/forest/`:
+  - `entities.py`: `MountainRun` frozen-dataclass (id/player_id/status/started_at/ends_at/branch_name/length_delta_cm/drops/finished_at) + `MountainRunStatus` (IN_PROGRESS, FINISHED). Метод `.starting(*, player_id, outcome, started_at, ends_at)` создаёт IN_PROGRESS-запись (требует `ends_at > started_at`, иначе `ValueError`); `.mark_finished(*, finished_at)` идемпотентен (повторный финиш возвращает `self`).
+  - `errors.py`: `MountainError` (база), `AlreadyInMountainsError(player_id)`, `MountainRunNotFoundError(run_id)`, `MountainRunOwnershipError(run_id, run_player_id, actor_player_id)`, `MountainsRequirementError(player_id, requirement, required, actual)` — `requirement` = `"thickness"` (ГДД §8: `unlock_levels.mountains = 3`) или `"length"` (ГДД §3.1 «правило 20 см»).
+  - `repositories.py::IMountainRunRepository` — ABC port, методы `add` / `get_by_id` / `get_active_by_player` / `save`, все async и keyword-only.
+- **`domain/dungeon/`** — зеркало `domain/mountains` для данжона: `DungeonRun`, `DungeonRunStatus`, `IDungeonRunRepository`, `DungeonError` + 4 наследника (включая `DungeonRequirementError` с порогами `thickness=6` / `length=20`). Структурно идентичен горам, отличается только параметрами в `balance.yaml` (`max_drops=3`, больший разброс `min..max`, выше `probability_percent`).
+- **`config/balance.yaml`** + pydantic-схемы (`PveSign`/`PveOutcomeConfig`/`PveDropConfig`/`_PveLocationConfig`/`MountainsConfig`/`DungeonConfig` в `domain/balance/config.py`) — новые секции `mountains:` и `dungeon:` с 5 ветками каждая (3 gain + 2 loss), кулдауны (`20–40 мин` / `40–60 мин`), drop-конфиг (`max_drops=1` / `max_drops=3`). Эти изменения уже были в стартовом коммите ветки (`f9dd200`) от предыдущего агента, в PR попали как часть скоупа 3.1-A.
+- **75 unit-тестов**:
+  - `tests/unit/domain/pve/test_entities.py` (18 тестов) — конструкторы VO (валидные/невалидные), frozen-инвариант, sign↔delta-инварианты `PveRunOutcome`, граничные случаи (zero-length, multi-drop).
+  - `tests/unit/domain/pve/test_services.py` (12 тестов) — точные кейсы через `ScriptedRandom` (определённый branch_idx → ожидаемый sign/length, drop при `roll <= probability` / no-drop при `roll > probability`, multiple drops в данжоне) + **stress-тесты с 1000 rolls на каждую локацию** (`FakeRandom(seed=...)`, инварианты `−max_abs ≤ delta ≤ +max_abs`, `0 ≤ len(drops) ≤ max_drops`, валидные item-id, распределение gain/loss в ожидаемом диапазоне ±10% от веса).
+  - `tests/unit/domain/mountains/{test_entities, test_errors, test_repositories}.py` (22 теста) — `.starting`, `.mark_finished` idempotency, валидация `ends_at > started_at`, frozen, `branch_name` non-empty + иерархия ошибок + поля + ABC-протокол с `inspect.iscoroutinefunction` + `KEYWORD_ONLY`-аргументы.
+  - `tests/unit/domain/dungeon/{test_entities, test_errors, test_repositories}.py` (23 теста) — зеркало mountains для данжона + `drops_count=3` для проверки «0–3 предмета».
+
+Результат / артефакты:
+- **+10 файлов** в `src/pipirik_wars/domain/{pve,mountains,dungeon}/`, **+9 файлов** в `tests/unit/domain/{pve,mountains,dungeon}/`.
+- **CI**: `make ci` локально — **3502 passed / 1 skipped** (baseline `main` до PR = 3417 → +85 новых тестов), coverage **95.90%**, `ruff` / `mypy --strict` / `import-linter` (3 контракта KEPT) — clean. На PR #99 все 3 GitHub Actions checks passed: `lint + types + tests (py3.11)`, `lint + types + tests (py3.12)`, `pip-audit (security)`.
+- 6 коммитов: `f9dd200` (схемы + balance.yaml — был в ветке от предыдущего агента) → `56f4dec` (`domain/pve/`) → `5ea2d6f` (`domain/mountains/`) → `c82efac` (`domain/dungeon/`) → `66cfdb9` (фикс mypy --strict) → `4fa5848` (удаление вспомогательного `AGENT_HANDOFF.md`).
+
+Заметки / решения:
+- **`domain/mountains/` и `domain/dungeon/` — отдельные модули, не унификация под `domain/pve/run.py`.** План `development_plan.md` §6.3.1+ оставлял это на усмотрение реализующего; решение в пользу разделения мотивировано тем, что в 3.1-B каждой локации нужна **своя таблица** (`mountain_runs` / `dungeon_runs` — отдельная Alembic-миграция), а в 3.1-E каждой — **свой bot-handler** (`/mountains` / `/dungeon`). Иметь зеркальные `domain/{mountains,dungeon}/`-модули проще для ревью (один diff на одну локацию) и для будущих расширений (например, разная анти-чит-семантика на гор/данжон в Спринте 3.4).
+- **Общий picker `pick_pve_outcome` в `domain/pve/services.py`.** Обе локации структурно идентичны (валидаторы конфига уже общие через `_PveLocationConfig`), и Bernoulli-семантика per-slot одинакова — это DRY, плюс `pick_*_outcome`-копипаста удвоила бы поверхность для регрессий в 1000-rolls тестах.
+- **Лес остаётся в `domain/forest/`** без изменений — у него уникальная семантика (`name_share_percent` для дропа имён, всегда положительный исход). `compute_forest_outcome` не тронут, обратная совместимость гарантирована.
+- **`AGENT_HANDOFF.md` создавался** в середине работы (между коммитом #2 и коммитом #3) как страховка на случай обрыва токенов между push-ами; удалён в финальном `chore(3.1-A)` после успешного `make ci` и перед открытием PR. Это разовая практика, не канон.
+- **`docs/current_tasks.md` и эта запись** обновляются **отдельным postmerge-PR-ом** (по канону Спринта 2.5-D), как и для всех последующих PR-ов 3.1-B/C/D/E.
+
+---
+
+## 2026-05-07 — Спринт 3.1 docs-prep: декомпозиция Спринта 3.1 на 5 фичевых PR-ов (3.1-A…3.1-E) + sync `current_tasks.md`
+
+**Автор:** Devin (агент)
+**Тип:** doc + plan
+**Связано:** Спринт 3.1 ([`current_tasks.md`](current_tasks.md)), ПД §6.3 / задачи 3.1.1–3.1.5 (горы/данжон/дроп оружия и скроллов/балансировка), ГДД §8 «Походы (PvE)», [PR #98](https://github.com/Pipirkawar/PipirkaWar/pull/98) (мерж — `71a667e`)
+
+Что сделано:
+- **`docs/development_plan.md` §6.3.1+ «Декомпозиция Спринта 3.1 на PR-ы»** — новая под-секция с табличным планом (5 фичевых PR-ов: 3.1-A — каркас доменов + балансовый конфиг; 3.1-B — use-cases + persistence + миграция; 3.1-C — дроп оружия `right_hand`/`left_hand` + расширение items_catalog; 3.1-D — дроп скроллов заточки skeleton; 3.1-E — bot-handler-ы + локали). Каждая строка таблицы содержит скоуп, ориентировочные файлы, привязку к задачам 3.1.1–3.1.5 ГДД/ПД. Перед таблицей — обоснование разбиения (4 архитектурных слоя × shared-конфиг + локали = неревьюабельный «один PR на спринт» по канону Спринта 2.5).
+- **«Жёсткие правила декомпозиции»** (5 пунктов): production-код в рабочем состоянии после каждого PR, doменный слой не зависит от ещё не написанного infrastructure/bot-слоя (порты объявляются вместе с domain), unit-тесты в том же PR, локали добавляются вместе с handler-ом, postmerge-документационный PR после каждого фичевого.
+- **`docs/current_tasks.md`** — sync под старт Спринта 3.1: «Снимок состояния» обновлён под `main = f3c3a86` (после 2.5-D.12), активная feature-ветка docs-prep, скоуп Спринта 3.1 + план 5 PR-ов; «Текущая позиция» под `devin/1778169424-sprint-3-1-docs-prep`; чек-лист docs-only PR-а.
+
+Результат / артефакты:
+- **2 файла** изменены: `docs/development_plan.md` (+~40 строк секции 6.3.1+), `docs/current_tasks.md` (full snapshot/position rewrite под Спринт 3.1).
+- **CI**: `make ci` без изменений от предыдущего baseline — **3417 passed / 1 skipped, coverage 95.90%** (docs-only PR не трогает код/тесты).
+- 1 коммит: `79836cb` (docs-only).
+
+Заметки / решения:
+- **План декомпозиции на 5 PR-ов** написан **до** начала реализации, чтобы каждый последующий фичевый PR имел чёткие границы скоупа. Это снижает риск «один большой PR на спринт» по аналогии со Спринтом 2.5 (A→B→C→D.1–D.12 + postmerge у каждого).
+- **Решение об унификации `domain/{mountains,dungeon}/` vs отдельные модули** оставлено на усмотрение реализующего 3.1-A (см. запись выше о фактическом решении в пользу отдельных модулей).
+
+---
+
 ## 2026-05-07 — Спринт 2.5-D.12: аудит/дедупликация `admin-*` локалей + lint-тест RU↔EN parity (закрытие Спринта 2.5)
 
 **Автор:** Devin (агент)
