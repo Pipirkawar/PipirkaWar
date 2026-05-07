@@ -48,6 +48,7 @@ from tests.fakes.delayed_job_scheduler import (
 )
 from tests.fakes.duel_log_templates import FakeDuelLogTemplateProvider
 from tests.fakes.duel_repo import FakeDuelRepository
+from tests.fakes.dungeon_run_repo import FakeDungeonRunRepository
 from tests.fakes.forest_run_repo import FakeForestRunRepository
 from tests.fakes.global_lobby_repo import FakeGlobalLobbyRepository
 from tests.fakes.idempotency import FakeIdempotencyKey
@@ -98,6 +99,7 @@ __all__ = [
     "FakeDelayedJobScheduler",
     "FakeDuelLogTemplateProvider",
     "FakeDuelRepository",
+    "FakeDungeonRunRepository",
     "FakeForestRunRepository",
     "FakeGlobalLobbyRepository",
     "FakeIdempotencyKey",

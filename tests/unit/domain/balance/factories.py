@@ -114,6 +114,7 @@ def valid_balance_payload() -> dict[str, Any]:
                 "forest": 1,
                 "pvp_chat": 2,
                 "mountains": 3,
+                "dungeon": 6,
             },
         },
         "dau_gate": {"max_dau": 200, "alert_threshold": 0.8},
