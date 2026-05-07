@@ -23,6 +23,69 @@
 
 ---
 
+## 2026-05-08 — Спринт 3.1-D: дроп скроллов заточки — domain VO `Scroll(category, blessed)` + drop-engine + 10000+ rolls тесты (skeleton, без use-механики)
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 3.1 ([`current_tasks.md`](current_tasks.md)), ПД §6.3 / задача 3.1.3 (дроп скроллов заточки), §6.3.1+ строка 3.1-D «Дроп скроллов заточки — skeleton», ГДД §2.8 «Заточка экипировки» / §2.8.5 «Источники скроллов» (горы — regular very-very rare; данжон — regular rare + blessed very-very rare; лес — не дропает) / §3.4 «Применение скролла» (full impl откладывается на Спринт 3.4), [PR #105](https://github.com/Pipirkawar/PipirkaWar/pull/105); 4 чекпоинт-коммита на feature-ветке: `7567c10` (D.1), `732764d` (D.2), `b04994f` (D.3), `d47d23a` (D.4).
+
+Что сделано:
+
+- **D.1 — Domain VO `Scroll` skeleton (commit `7567c10`):**
+  - **Новый модуль `src/pipirik_wars/domain/enchantment/`** — отдельный поддомен под механику заточки.
+  - `entities.py::ScrollCategory(str, enum.Enum)`: `WEAPON="weapon_scroll"`, `ARMOR="armor_scroll"`, `JEWELRY="jewelry_scroll"`. **Машинные значения**, стабильные между релизами — используются в `audit_log` и JSON-сериализации (если в 3.4 захочется писать в БД, эти строки уже зафиксированы).
+  - `entities.py::Scroll` — `@dataclass(frozen=True, slots=True)`, поля `category: ScrollCategory`, `blessed: bool`. Hashable, equality-based, set-safe (готов к укладке в инвентарь скроллов в 3.4).
+  - 10 unit-тестов в `tests/unit/domain/enchantment/test_entities.py`: `ScrollCategory` value stability, `Scroll` frozen / hash / equality / set-membership / blessed-vs-category differentiation.
+
+- **D.2 — `ScrollDropConfig` + `scroll_drops` в `balance.yaml` для гор/данжона (commit `732764d`):**
+  - `domain/balance/config.py`:
+    - **Новая модель `ScrollCategoryWeights`** — `weapon`, `armor`, `jewelry: int ≥ 0` + `@model_validator _validate_sum_positive` (хотя бы одна категория с весом > 0). Используется через `weighted_choice` для выбора категории скролла на successful Bernoulli-попытке.
+    - **Новая модель `ScrollDropConfig`** — `regular_chance_percent: 0..100`, `blessed_chance_percent: 0..100`, `category_weights: ScrollCategoryWeights`. Две Bernoulli-попытки **независимы** между собой и от item-дропа: за один поход возможно получить и предмет, и regular-скролл, и blessed-скролл (с малой вероятностью).
+    - `PveDropConfig.scroll_drops: ScrollDropConfig` — **обязательное** поле для гор и данжона (mandatory, без дефолта).
+    - **`ForestDropConfig` намеренно НЕ имеет `scroll_drops`** — лес скроллы не дропает по дизайну ГДД §2.8.5; запрет enforced на уровне pydantic-схемы (а не через `regular_chance_percent: 0`), чтобы исключить случайное «подкрутить»-регрессию.
+    - Публичные экспорты `ScrollDropConfig`, `ScrollCategoryWeights` в `domain/balance/__init__.py`.
+  - `config/balance.yaml`:
+    - `mountains.drop.scroll_drops`: `{regular_chance_percent: 3, blessed_chance_percent: 0, category_weights: {weapon: 1, armor: 1, jewelry: 1}}` («очень-очень малый» дроп).
+    - `dungeon.drop.scroll_drops`: `{regular_chance_percent: 6, blessed_chance_percent: 1, category_weights: {weapon: 1, armor: 1, jewelry: 1}}` («очень малый» / «очень-очень малый»).
+  - `tests/unit/domain/balance/factories.py` — `valid_balance_payload()` синкнут под новое обязательное поле.
+
+- **D.3 — `pick_pve_outcome` катит `scroll_drops` (commit `b04994f`):**
+  - `domain/pve/entities.py`:
+    - **Новая VO `PveScrollDrop(scroll: Scroll)`** — параллельная `PveItemDrop`. Frozen + slots.
+    - `PveRunOutcome.scroll_drops: tuple[PveScrollDrop, ...] = field(default=())` — **отдельное поле** (не union с `drops`). См. «Архитектурные решения» ниже. Default `()` сохраняет backward-compat для существующих тестовых конструкторов `PveRunOutcome`.
+  - `domain/pve/services.py`:
+    - **Новая функция `_roll_scroll_drops(*, cfg: ScrollDropConfig, random: IRandom) -> list[PveScrollDrop]`** — две независимые Bernoulli-попытки: regular (`blessed=False`, шанс `cfg.regular_chance_percent`) и blessed (`blessed=True`, шанс `cfg.blessed_chance_percent`). Если попытка успешна — категория через `_pick_scroll_category(weights)`. Выходит 0..2 дропа за поход.
+    - **Новая функция `_pick_scroll_category(*, weights: ScrollCategoryWeights, random: IRandom) -> ScrollCategory`** — `weighted_choice` на (weapon, armor, jewelry) с фильтром на нулевые веса (`RealRandom.weighted_choice` требует `weight > 0`; pre-condition `sum > 0` гарантирована `_validate_sum_positive`).
+    - `pick_pve_outcome` — после `_roll_drops` (items) дополнительно роллит `_roll_scroll_drops(cfg=cfg.drop.scroll_drops, ...)`; конструирует `PveRunOutcome` со всеми полями.
+  - 8 ScriptedRandom-тестов в `tests/unit/domain/pve/test_services.py` обновлены: после item-randint-ов добавлены 2 `randint=100` (regular miss + blessed miss), чтобы no-scroll-drop сценарии не ломались на новом scroll-роллинге. Behavior существующих тестов **не изменился** — только дополнен скриптом.
+
+- **D.4 — 10000+ rolls тесты `scroll_drops` (commit `d47d23a`):**
+  - **Новый файл `tests/unit/domain/enchantment/test_scroll_drops.py`** — 22 теста:
+    - `TestMountainsScrollFrequencies` (3): regular частота в **3σ-bounds** (~[230, 370] для p=0.03, n=10000); blessed ровно 0 на 10000 rolls; PveScrollDrop instances + правильный category type.
+    - `TestDungeonScrollFrequencies` (3): regular+blessed частоты в 3σ-bounds; uniform category distribution (~233 каждой из 3 категорий); item+scroll independence (≥1 dungeon-run с item AND scroll).
+    - `TestRealBalanceScrollDrops` (5; 3 параметризованных smoke): design bounds на real `config/balance.yaml` — mountains regular ∈ (0, 5]%, blessed=0; dungeon regular ∈ (0, 10]%, blessed ∈ (0, 5]%, blessed < regular; 1000 rolls smoke на 3 seed-а × 2 локации.
+    - `TestForestNoScrolls` (1): 1000 forest-rolls — `outcome.scroll_drops` не существует (контр-проверка, защищающая инвариант «`ForestDropConfig` без `scroll_drops`»).
+  - **Tolerance:** `_bernoulli_bounds(p)` = `±max(3σ, 10)`, где `σ = √(n·p·(1-p))`. Покрывает 99.7% Bernoulli-флуктуаций и не флапает на маленьких p (p=0.01, n=10000 ⇒ σ≈10, bounds [70, 130]). Pinned seed (`FakeRandom(seed=12345)` и т.п.) гарантирует воспроизводимость; флапы возможны только при смене `IRandom`-impl.
+
+Результат / артефакты:
+
+- 4 коммита: D.1 `7567c10` → D.2 `732764d` → D.3 `b04994f` → D.4 `d47d23a`. Squash-мердж в `main = 2208ae6`.
+- 11 файлов изменено / +688 −15 строк. Новые файлы: `domain/enchantment/__init__.py`, `domain/enchantment/entities.py`, `tests/unit/domain/enchantment/__init__.py`, `tests/unit/domain/enchantment/test_entities.py`, `tests/unit/domain/enchantment/test_scroll_drops.py`. Изменены: `domain/balance/__init__.py`, `domain/balance/config.py`, `domain/pve/entities.py`, `domain/pve/services.py`, `config/balance.yaml`, `tests/unit/domain/balance/factories.py`, `tests/unit/domain/pve/test_services.py`.
+- Тестов добавлено: **+36** (10 entities + 22 scroll_drops + 4 минор-апдейтов в pve test_services). Всего: **3607 passed / 1 skipped**, coverage **95.88%** (без проседания), `make ci` локально и на CI зелёный.
+
+Архитектурные решения:
+
+- **`scroll_drops` отдельным полем (не union с `drops`)** — items идут в `inventory_equipment` (3.4), скроллы в `scroll_inventory` (3.4) — разные lifecycles и разные use-cases применения. JSON-колонка `mountain_runs.drops` остаётся неизменной — backward compat для уже сохранённых строк PR #101 (3.1-B). Тесты могут независимо проверять item-частоты и scroll-частоты.
+- **Скроллы в 3.1-D НЕ persist-ятся.** `MountainRun.starting(outcome=)` копирует только `outcome.drops`, но не `outcome.scroll_drops`. Это согласуется с `development_plan.md` §6.3.1+ строка 636: «до тех пор скроллы из дропа просто пишутся в `audit_log` как «дроп будущей механики»». Поле `PveRunOutcome.scroll_drops` существует исключительно ради покрытия частот в тестах picker-а и future-proofing-а API; в 3.4 use-cases начнут писать их в инвентарь скроллов.
+- **`ForestDropConfig` намеренно без `scroll_drops`** (вместо `scroll_drops: { regular: 0, blessed: 0 }`). Дизайн-инвариант «лес не дропает скроллов» enforced на уровне pydantic-схемы — нельзя случайно подкрутить. Контр-тест `TestForestNoScrolls` защищает от регрессий.
+- **3σ-tolerance вместо ±10%.** На 10000 rolls с p=0.01 ожидаемое — 100 успехов, σ ≈ 10. ±10% (=±10) даёт `~84%` покрытия (1σ); 3σ даёт 99.7% — практически нет шанса флапнуть на любом seed-е без смены RNG-impl. Floor `±10` от ожидаемого защищает от случая `n·p ≪ 1`.
+
+Заметки / решения:
+
+- **Catch-up docs-PR.** Этот entry в `history.md` + sync `current_tasks.md` ожидался последним коммитом **внутри** PR #105 (по новому канону, установленному в PR #104). Однако PR #105 был замержен раньше, чем последний docs-коммит успел попасть в ветку — поэтому docs-апдейт оформлен **разовым** catch-up-PR-ом сразу после мерджа #105. Это единичное исключение из-за расхождения времени мерджа и финального docs-коммита; начиная с 3.1-E канон возвращается к норме (docs внутри фичевого PR).
+
+---
+
 ## 2026-05-08 — Спринт 3.1-C: дроп оружия — `items_catalog` +10 позиций, `slot_weights` per-location, 0..N drops
 
 **Автор:** Devin (агент)
