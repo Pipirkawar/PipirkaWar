@@ -23,6 +23,69 @@
 
 ---
 
+## 2026-05-08 — Спринт 3.1-C: дроп оружия — `items_catalog` +10 позиций, `slot_weights` per-location, 0..N drops
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 3.1 ([`current_tasks.md`](current_tasks.md)), ПД §6.3 / задачи 3.1.4 (дроп оружия), 3.1.5 (расширение `items_catalog`), ГДД §2.6 «Экипировка» (слоты `right_hand`/`left_hand`), §8 «Походы (PvE)», [PR #103](https://github.com/Pipirkawar/Pipirkawar/pull/103); 3 чекпоинт-коммита на feature-ветке: `803ab4e` (C.1+C.2+C.3), `463b512` (C.4+C.5), `9255e08` (C.6).
+
+Что сделано:
+
+- **Схема балансировки расширена с 6 слотов до 8 (commit `803ab4e`):**
+  - `domain/balance/config.py::Slot` enum — добавлены `RIGHT_HAND`, `LEFT_HAND` (теперь 8 слотов всего).
+  - Новая модель `domain/balance/config.py::SlotWeights` — pydantic frozen с 8 неотрицательными `int`-полями, инвариант `sum > 0`, метод `as_pairs()` возвращает стабильный кортеж `((Slot, weight), …)` для использования в `weighted_choice`.
+  - `ForestDropConfig.slot_weights: SlotWeights` и `PveDropConfig.slot_weights: SlotWeights` — **обязательные** поля per-location (без дефолта; читаются из `balance.yaml`).
+  - `_MIN_ITEMS_CATALOG_SIZE` поднят с 30 до 40 (8 слотов × ≥5 предметов на каждый).
+  - `_validate_items_catalog` — добавлен инвариант «≥1 предмет на каждый из 8 слотов» (тест `tests/unit/domain/balance/test_config.py::TestForestConfig::test_missing_slot_rejected`).
+  - **Новый кросс-валидатор `BalanceConfig._validate_drop_slot_rarity_coverage`** — для каждой PvE-локации (forest / mountains / dungeon) × каждого активного слота (вес > 0) × каждой из 3 редкостей в каталоге должен быть ≥1 предмет. Гарантирует, что `random.choice(pool)` в picker-е никогда не упадёт на пустой pool.
+
+- **`config/balance.yaml` (commit `803ab4e`):**
+  - `items_catalog`: +10 предметов оружия (40 предметов всего на 8 слотов):
+    - `right_hand` × 5: «Кастет Старшего» (common), «Бита Гаражная» (common), «Нунчаки Палыча» (rare), «Тесак Мясника» (rare), «Катана из Ломбарда» (epic).
+    - `left_hand` × 5: «Крышка от Кастрюли» (common), «Заслонка от Печи» (common), «Щит-Заборник» (rare), «Копьё-Брют» (rare), «Зеркало Медузы» (epic).
+  - `forest.drop.slot_weights`: распределение для леса — по дизайну ГДД §2.6 оружие в лесу не дропает: `right_hand=0, left_hand=0`; обвес — равномерно (12-20 на слот).
+  - `mountains.drop.slot_weights`: горы — оружие активно (`right_hand=14, left_hand=14`); обвес — 12 на слот.
+  - `dungeon.drop.slot_weights`: данжон — оружие приоритетнее (`right_hand=20, left_hand=20`); обвес — 10 на слот.
+
+- **Drop-engine: общий picker-хелпер для леса и pve (commit `463b512`):**
+  - **Новый модуль `src/pipirik_wars/domain/balance/picking.py`** — `pick_drop_item_entry(*, balance, slot_weights, rarity_weights, random) -> ItemEntry`. 3 шага:
+    1. `weighted_choice` по `slot_weights` (предварительно фильтруются слоты с весом=0 — `RealRandom.weighted_choice` требует все веса > 0; для леса это исключает `right_hand`/`left_hand`, поэтому те никогда не попадают в выборку).
+    2. `weighted_choice` по `rarity_weights` (`common`/`rare`/`epic`).
+    3. `random.choice` из подмножества `items_catalog`, отфильтрованного по `(slot, rarity)`. Pool гарантированно непуст благодаря `_validate_drop_slot_rarity_coverage`.
+  - `domain/pve/services.py::_roll_item_drop` — переключён на `pick_drop_item_entry`. Передаёт `cfg.drop.slot_weights` из per-location `PveDropConfig`. Контракт `PveItemDrop` снаружи не изменился.
+  - `domain/forest/services.py::_roll_item_drop` — то же изменение (передаёт `balance.forest.drop.slot_weights`). Контракт `ItemDrop` неизменен.
+  - **Архитектурное решение:** общий picker, а не дублирование логики в forest и pve. Это устраняет копию-пасту и централизует pydantic-валидацию покрытия `(slot, rarity)`.
+
+- **Тесты (commits `803ab4e` + `463b512` + `9255e08`):**
+  - `tests/unit/domain/balance/factories.py` — фабрика `valid_balance_payload()` обновлена: 40 предметов в каталоге (по 5 на каждый из 8 слотов), все три редкости покрыты на каждом слоте; `slot_weights` добавлены во все три drop-конфига (forest: оружие=0; mountains/dungeon: оружие>0).
+  - `tests/unit/domain/balance/test_config.py` — `_VALID_DROP_PAYLOAD` обновлён, `test_below_30_rejected` → `test_below_min_size_rejected` (39 vs 40), новый `test_missing_slot_rejected` (каталог без `right_hand` отвергается).
+  - `tests/unit/domain/forest/test_services.py` — 3 ScriptedRandom-теста дополнены `weighted_index` для слота между branch и rarity (новый порядок вызовов: branch → slot → rarity).
+  - `tests/unit/domain/pve/test_services.py` — 4 ScriptedRandom-теста дополнены `weighted_index` для слота на каждый дроп.
+  - **Новый модуль `tests/unit/domain/balance/test_picking.py` — 10 тестов, 1000+ rolls per location:**
+    - `TestPickerScripted` (3): нулевые веса фильтруются; picker корректно выбирает оружие при активном `right_hand`; pool фильтруется по `(slot, rarity)`-паре.
+    - `TestSlotDistributionStress` (3): 5000 rolls на каждую из 3 локаций; для каждого активного слота `|actual − expected| ≤ 0.10`; в лесу `right_hand`/`left_hand` не выбираются ни разу; в горах/данжоне все 8 слотов встречаются ≥1 раз.
+    - `TestForestNoWeapons` (1): 5000 forest-runs → `weapon_drop_count == 0`.
+    - `TestPveWeaponsAndUniqueness` (3): в горах и данжоне за 2000 runs встречаются оба weapon-слота; в данжоне за 5000 runs покрываются все 6 (slot×rarity) комбинаций оружия.
+
+Результат / артефакты:
+
+- **Изменения**: 10 файлов, +688 строк / −52 строк (см. `git diff --stat 1f7fc1e..1ae81ab`).
+  - Новые: `src/pipirik_wars/domain/balance/picking.py` (77 строк), `tests/unit/domain/balance/test_picking.py` (306 строк).
+  - Изменённые: `domain/balance/config.py` (+145/−1), `config/balance.yaml` (+49), `tests/unit/domain/balance/factories.py` (+37/−1), `tests/unit/domain/balance/test_config.py` (+41/−1), `domain/{forest,pve}/services.py`, `tests/unit/domain/{forest,pve}/test_services.py`.
+- **CI на финальной ветке**: `make ci` — 3583 passed / 1 skipped, coverage 95.87% (baseline 95.88%, минус 0.01% — в пределах допуска); ruff / mypy --strict (735 файлов, 0 issues) / import-linter (3/3 contracts kept) — clean.
+- **PR**: [#103](https://github.com/Pipirkawar/Pipirkawar/pull/103) (squash-мерж).
+
+Заметки / решения:
+
+- **Унификация picker-а forest+pve** — решено в C.4+C.5 вынести логику в `domain/balance/picking.py` вместо дублирования в `domain/{forest,pve}/services.py`. Это соответствует паттерну «доменные хелперы в `domain/balance/`», уже использованному для `weighted_choice`-обвязки.
+- **Фильтрация нулевых весов** — `RealRandom.weighted_choice` контрактно требует weights > 0 (см. `domain/shared/ports/random.py`). Picker сам фильтрует `(slot, weight) where weight > 0` перед вызовом, т.к. `slot_weights` per-location может содержать нули (forest: оружие=0). Альтернативное решение «`weighted_choice` поддерживает 0-веса» отвергнуто — это бы маскировало баги конфига.
+- **Кросс-валидатор `_validate_drop_slot_rarity_coverage`** — гарантирует, что после загрузки `balance.yaml` нет ни одной комбинации (location, активный slot, rarity), на которую нет ≥1 предмета в каталоге. Это «fail-fast at startup» вместо «runtime IndexError на пустом pool в picker-е».
+- **Поведенческое изменение** — распределение слотов в дропе теперь функция от `slot_weights`, а не «равномерно среди слотов с предметами нужной редкости». В горах/данжоне игроки начнут видеть оружие; в лесу — НЕТ оружия (по дизайну).
+- **Последний postmerge-PR** — этот фичевый PR #103 ещё открывался по старому канону «postmerge отдельным PR-ом» (PR #102 закрыл 3.1-B). Начиная **со следующего фичевого PR (3.1-D)**, обновления `history.md` + `current_tasks.md` идут **внутри самого фичевого PR** последним коммитом перед мерджем — отдельный postmerge-PR упразднён (изменения в `CONTRIBUTING.md` сделаны в **этом** последнем postmerge-PR).
+- **Что НЕ делалось** в этом PR (по плану спринта): bot-handler-ы `/mountains`/`/dungeon` (это 3.1-E); APScheduler factory-wiring (это 3.1-E); миграции БД (items уже хранятся как JSON-tuple); domain `Scroll`/`enchantment` (это 3.1-D).
+
+---
+
 ## 2026-05-07 — Спринт 3.1-B: use-cases `Start/Finish{Mountain,Dungeon}Run` + persistence + миграция `0018_pve_runs` + DI
 
 **Автор:** Devin (агент)
