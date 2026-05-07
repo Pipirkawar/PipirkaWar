@@ -31,6 +31,8 @@ from pipirik_wars.domain.balance.config import (
     ReferralConfig,
     ReferralMilestone,
     ReferralOnSignup,
+    ScrollCategoryWeights,
+    ScrollDropConfig,
     ThicknessConfig,
 )
 from pipirik_wars.domain.balance.errors import BalanceKeyError
@@ -64,5 +66,7 @@ __all__ = [
     "ReferralConfig",
     "ReferralMilestone",
     "ReferralOnSignup",
+    "ScrollCategoryWeights",
+    "ScrollDropConfig",
     "ThicknessConfig",
 ]
