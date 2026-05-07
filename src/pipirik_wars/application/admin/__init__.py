@@ -12,10 +12,29 @@ Use-case-ы, общие для всех опасных команд:
 живут в `application/admin/<command>/` и появятся в Спринтах 2.5-B/C/D.
 """
 
+from pipirik_wars.application.admin._broadcast_ports import (
+    BroadcastSendResult,
+    IBroadcastSender,
+    IBroadcastTaskSpawner,
+)
 from pipirik_wars.application.admin.ban_player import (
     BanPlayer,
     BanPlayerInput,
     BanPlayerOutput,
+)
+from pipirik_wars.application.admin.broadcast_announcement import (
+    BROADCAST_MESSAGE_MAX_LEN,
+    BROADCAST_MESSAGE_MIN_LEN,
+    BroadcastAnnouncement,
+    BroadcastAnnouncementInput,
+    BroadcastAnnouncementOutput,
+    BroadcastLocaleFilter,
+    BroadcastLocaleFilterInvalidError,
+    BroadcastMessageEmptyError,
+    BroadcastMessageTooLongError,
+    BroadcastValidationError,
+    normalize_broadcast_message,
+    parse_locale_filter,
 )
 from pipirik_wars.application.admin.find_players import (
     DEFAULT_FIND_PLAYERS_LIMIT,
@@ -88,6 +107,15 @@ from pipirik_wars.application.admin.request_confirm import (
     RequestAdminConfirmOutput,
     TokenFactory,
 )
+from pipirik_wars.application.admin.run_broadcast_announcement import (
+    BROADCAST_AUDIT_MESSAGE_PREVIEW_LEN,
+    BROADCAST_BATCH_INTERVAL_SECONDS,
+    BROADCAST_BATCH_SIZE,
+    RunBroadcastAnnouncement,
+    RunBroadcastAnnouncementInput,
+    RunBroadcastAnnouncementOutput,
+    SleepFn,
+)
 from pipirik_wars.application.admin.set_balance_value import (
     SetBalanceValue,
     SetBalanceValueInput,
@@ -111,6 +139,11 @@ from pipirik_wars.application.admin.verify_confirm import (
 from pipirik_wars.domain.balance.errors import BalanceKeyError
 
 __all__ = [
+    "BROADCAST_AUDIT_MESSAGE_PREVIEW_LEN",
+    "BROADCAST_BATCH_INTERVAL_SECONDS",
+    "BROADCAST_BATCH_SIZE",
+    "BROADCAST_MESSAGE_MAX_LEN",
+    "BROADCAST_MESSAGE_MIN_LEN",
     "DEFAULT_AUDIT_LIMIT",
     "DEFAULT_FIND_PLAYERS_LIMIT",
     "MAX_AUDIT_LIMIT",
@@ -119,6 +152,15 @@ __all__ = [
     "BanPlayer",
     "BanPlayerInput",
     "BanPlayerOutput",
+    "BroadcastAnnouncement",
+    "BroadcastAnnouncementInput",
+    "BroadcastAnnouncementOutput",
+    "BroadcastLocaleFilter",
+    "BroadcastLocaleFilterInvalidError",
+    "BroadcastMessageEmptyError",
+    "BroadcastMessageTooLongError",
+    "BroadcastSendResult",
+    "BroadcastValidationError",
     "ClanCard",
     "ClanCardInfo",
     "ClanMemberCardInfo",
@@ -156,14 +198,20 @@ __all__ = [
     "GrantThicknessBlockedError",
     "GrantThicknessInput",
     "GrantThicknessOutput",
+    "IBroadcastSender",
+    "IBroadcastTaskSpawner",
     "PlayerCard",
     "PlayerSummary",
     "RequestAdminConfirm",
     "RequestAdminConfirmInput",
     "RequestAdminConfirmOutput",
+    "RunBroadcastAnnouncement",
+    "RunBroadcastAnnouncementInput",
+    "RunBroadcastAnnouncementOutput",
     "SetBalanceValue",
     "SetBalanceValueInput",
     "SetBalanceValueOutput",
+    "SleepFn",
     "ThicknessLevelInvalidError",
     "TokenFactory",
     "UnfreezeClanAdmin",
@@ -175,5 +223,7 @@ __all__ = [
     "VerifyAdminConfirm",
     "VerifyAdminConfirmInput",
     "VerifyAdminConfirmOutput",
+    "normalize_broadcast_message",
+    "parse_locale_filter",
     "player_to_summary",
 ]

@@ -37,6 +37,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from pipirik_wars.application.admin import (
     BanPlayer,
+    BroadcastAnnouncement,
     FindPlayers,
     FreezeClanAdmin,
     FreezePlayer,
@@ -47,7 +48,10 @@ from pipirik_wars.application.admin import (
     GetPlayerCard,
     GrantLength,
     GrantThickness,
+    IBroadcastSender,
+    IBroadcastTaskSpawner,
     RequestAdminConfirm,
+    RunBroadcastAnnouncement,
     SetBalanceValue,
     UnfreezeClanAdmin,
     UnfreezePlayer,
@@ -216,6 +220,11 @@ from pipirik_wars.infrastructure.rate_limit import (
 )
 from pipirik_wars.infrastructure.scheduler import APSchedulerDelayedJobScheduler
 from pipirik_wars.infrastructure.settings import Settings
+from pipirik_wars.infrastructure.telegram.broadcast import (
+    AiogramBroadcastSender,
+    AsyncIOBroadcastTaskSpawner,
+    NoopBroadcastSender,
+)
 from pipirik_wars.infrastructure.templates import (
     JsonClanQuoteTemplateProvider,
     JsonDuelLogTemplateProvider,
@@ -393,6 +402,11 @@ class Container:
     unfreeze_clan_admin: UnfreezeClanAdmin
     # Спринт 2.5-D.3: read-only история daily-head назначений клана.
     get_clan_daily_head_history: GetClanDailyHeadHistory
+    # Спринт 2.5-D.4: `/announce` — broadcast с TOTP-confirm.
+    broadcast_announcement: BroadcastAnnouncement
+    run_broadcast_announcement: RunBroadcastAnnouncement
+    broadcast_sender: IBroadcastSender
+    broadcast_task_spawner: IBroadcastTaskSpawner
 
 
 def build_container(  # noqa: PLR0915 — composition root, плоский DI-список оправдан
@@ -1067,6 +1081,28 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clock=clock,
         authz=admin_authz,
     )
+    # Спринт 2.5-D.4: `/announce` — broadcast с TOTP-confirm.
+    broadcast_announcement = BroadcastAnnouncement(
+        uow=uow,
+        admins=admins,
+        players=players,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    broadcast_sender: IBroadcastSender = (
+        AiogramBroadcastSender(bot=bot) if bot is not None else NoopBroadcastSender()
+    )
+    broadcast_task_spawner: IBroadcastTaskSpawner = AsyncIOBroadcastTaskSpawner()
+    run_broadcast_announcement = RunBroadcastAnnouncement(
+        uow=uow,
+        admins=admins,
+        players=players,
+        sender=broadcast_sender,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -1171,6 +1207,10 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         freeze_clan_admin=freeze_clan_admin,
         unfreeze_clan_admin=unfreeze_clan_admin,
         get_clan_daily_head_history=get_clan_daily_head_history,
+        broadcast_announcement=broadcast_announcement,
+        run_broadcast_announcement=run_broadcast_announcement,
+        broadcast_sender=broadcast_sender,
+        broadcast_task_spawner=broadcast_task_spawner,
     )
 
 
@@ -1282,6 +1322,10 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["unfreeze_clan_admin"] = container.unfreeze_clan_admin
     # Спринт 2.5-D.3 — `/clan_daily_head_history` (read-only).
     dispatcher["get_clan_daily_head_history"] = container.get_clan_daily_head_history
+    # Спринт 2.5-D.4 — `/announce` (broadcast с TOTP-confirm).
+    dispatcher["broadcast_announcement"] = container.broadcast_announcement
+    dispatcher["run_broadcast_announcement"] = container.run_broadcast_announcement
+    dispatcher["broadcast_task_spawner"] = container.broadcast_task_spawner
     return dispatcher
 
 

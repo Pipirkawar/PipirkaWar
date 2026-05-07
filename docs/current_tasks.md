@@ -17,7 +17,7 @@
 
 **На `main`:** последний смерженный спринт — **2.5-D.7** ([PR #86](https://github.com/Pipirkawar/PipirkaWar/pull/86), коммит `12f9ea0`) — миграция legacy `/balance_reload`/`/admin_stats`/`/set_max_dau`/`/anticheat_unban` с `Admin.can_*()`-API на единый RBAC-канал из D.8 (`ensure_admin_authorized` helper + `AdminCommandKind`). До этого были смержены 2.5-A (PR #79), 2.5-B (PR #81), 2.5-C (PR #83), постмердж-доки (PR #84), 2.5-D часть 1 (PR #85). Из Спринта 2.5 остаётся: **D.4** (`/announce`), **D.6** (`/admin_setup_totp`), **D.10** (`docs/admin_runbook.md`), **D.11** (доптесты RBAC), **D.12** (локали).
 
-**Активная feature-ветка:** `devin/<ts>-sprint-2-5-d.7-postmerge-docs` (текущий PR — постмердж 2.5-D.7: запись в `history.md` + sync «Снимок» / «Текущая позиция» под D.4 как следующий активный шаг). После мерджа этого PR-а будет открыта новая ветка `devin/<ts>-sprint-2-5-d.4-announce` под фичу `/announce`.
+**Активная feature-ветка:** `devin/1778146423-sprint-2-5-d.4-announce` (в работе — фича D.4 `/announce` broadcast с TOTP-confirm). Постмердж 2.5-D.7 (PR #87) уже смержен в main.
 
 **Что уже есть в коде после 2.5-D.7 (PR #86):**
 - `domain/admin/authorization.py` — `AdminCommandKind` (whitelist 27 команд, включая `BROADCAST_ANNOUNCEMENT`), `IAdminAuthorizationPolicy`, `RoleBasedAdminAuthorizationPolicy` (file-closed-матрица), `AdminAuthorizationDeniedError`.
@@ -48,8 +48,8 @@
 | Поле | Значение |
 |---|---|
 | **Активный спринт** | `2.5 — Расширенный админ-интерфейс в боте (финал)` |
-| **Активный PR / шаг** | **postmerge 2.5-D.7**: запись 2.5-D-часть-1 + 2.5-D.7 в `history.md`, sync «Снимок» / «Текущая позиция» / чек-лист в `current_tasks.md` под актуальное состояние main и переход к D.4 как следующей фиче. После мерджа — следующий PR `2.5-D.4` (`/announce`). |
-| **Активная feature-ветка** | `devin/<ts>-sprint-2-5-d.7-postmerge-docs` (создана от `main = 12f9ea0`) |
+| **Активный PR / шаг** | **2.5-D.4**: `/announce <ru\|en\|*> <message>` — broadcast с TOTP-confirm. Реализованы: domain-расширения (`AdminAuditAction.ADMIN_BROADCAST_SENT`, `BroadcastRecipient`, `IPlayerRepository.list_active_for_broadcast`), application use-case-ы (`BroadcastAnnouncement` Phase 1, `RunBroadcastAnnouncement` Phase 2 с throttle), порты broadcast (`IBroadcastSender`, `IBroadcastTaskSpawner`), test-fakes, 22 unit-теста (13 + 9), bot-handler `admin_communication.py` (handle/dispatch в `CONFIRM_DISPATCHERS`), presenter, локали ru/en, DI-провязка в `bot/main.py` + production `AiogramBroadcastSender`/`AsyncIOBroadcastTaskSpawner`. Осталось: тесты handler-а + integration throttle, `make ci`, PR. |
+| **Активная feature-ветка** | `devin/1778146423-sprint-2-5-d.4-announce` (создана от `main` после мерджа PR #87) |
 | **Базовая ветка** | `main` |
 | **Последний коммит на main** | `12f9ea0` (мерж PR #86 «Спринт 2.5-D.7») |
 | **Последний коммит на feature-ветке** | будет зафиксирован при push-е postmerge-коммита |

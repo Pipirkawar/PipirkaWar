@@ -9,6 +9,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 
 from pipirik_wars.domain.player import (
+    BroadcastRecipient,
     IPlayerRepository,
     Length,
     Player,
@@ -183,3 +184,43 @@ class SqlAlchemyPlayerRepository(IPlayerRepository):
         )
         result = await self._uow.session.execute(stmt)
         return tuple(_row_to_entity(row) for row in result.scalars().all())
+
+    async def list_active_for_broadcast(
+        self,
+        *,
+        locale_filter: str,
+    ) -> Sequence[BroadcastRecipient]:
+        # NOTE: контракт см. в `IPlayerRepository.list_active_for_broadcast`.
+        # `locale_filter` валидируется use-case-ом до вызова — здесь падаем
+        # на `ValueError` для защиты-в-глубину, чтобы случайная опечатка
+        # в DI / тестах не превратилась в «молча отдаём нулевой результат».
+        stmt = (
+            select(UserORM.tg_id, UserORM.locale_override)
+            .where(UserORM.status == PlayerStatus.ACTIVE.value)
+            .order_by(UserORM.id.asc())
+        )
+        if locale_filter == "ru":
+            stmt = stmt.where(UserORM.locale_override == "ru")
+        elif locale_filter == "en":
+            # `locale_override IS NULL` подпадает под `DEFAULT_LOCALE = "en"`
+            # (см. `application/i18n/locale.py`), поэтому EN-фильтр их включает.
+            stmt = stmt.where(
+                or_(
+                    UserORM.locale_override == "en",
+                    UserORM.locale_override.is_(None),
+                ),
+            )
+        elif locale_filter == "all":
+            pass  # без фильтра по локали
+        else:
+            raise ValueError(
+                f"unsupported locale_filter={locale_filter!r}; expected one of: ru, en, all",
+            )
+        result = await self._uow.session.execute(stmt)
+        return tuple(
+            BroadcastRecipient(
+                tg_id=row.tg_id,
+                effective_locale=row.locale_override or "en",
+            )
+            for row in result.all()
+        )

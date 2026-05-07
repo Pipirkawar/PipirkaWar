@@ -4,8 +4,30 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from pipirik_wars.domain.player.entities import Player
+
+
+@dataclass(frozen=True, slots=True)
+class BroadcastRecipient:
+    """Минимальная запись «кому отправлять» для broadcast (Спринт 2.5-D.4).
+
+    Намеренно меньше `Player`-сущности, потому что для рассылки не нужны
+    игровые поля (длина / толщина / клан) — нужны только адрес доставки
+    (`tg_id`) и фактическая локаль (для статистики `failed_count` по
+    локалям, если когда-нибудь понадобится). Чтобы не тащить весь
+    `Player` через границу use-case → notifier и не аллоцировать
+    объекты на десятки тысяч игроков (на масштабе MVP — единицы тысяч,
+    но всё равно лишний overhead).
+
+    `effective_locale` — это `locale_override or DEFAULT_LOCALE.code`
+    (см. `application/i18n/locale.py`). Резолвится **на стороне репо**,
+    чтобы use-case не дублировал fallback-логику.
+    """
+
+    tg_id: int
+    effective_locale: str
 
 
 class IPlayerRepository(abc.ABC):
@@ -83,4 +105,39 @@ class IPlayerRepository(abc.ABC):
         `limit` обязан быть положительным; адаптер не обязан вычислять
         отрицательные/нулевые лимиты — это контракт уровня use-case-а,
         где валидируется DTO.
+        """
+
+    @abc.abstractmethod
+    async def list_active_for_broadcast(
+        self,
+        *,
+        locale_filter: str,
+    ) -> Sequence[BroadcastRecipient]:
+        """Список адресатов broadcast-а `/announce` (Спринт 2.5-D.4, ГДД §18.6.5).
+
+        Возвращает только `ACTIVE`-игроков (замороженные / забаненные
+        не получают рассылок: первые временно отстранены от игры,
+        вторые — навсегда). Сортировка: `id ASC` — стабильный порядок,
+        чтобы повторный батч после рестарта (если когда-нибудь
+        добавим recovery) шёл в той же последовательности.
+
+        `locale_filter` — фильтр по локали игрока. Поддерживаемые
+        значения определены в `application/admin/broadcast_announcement.py`
+        (`BroadcastLocaleFilter`):
+
+        * `"ru"` — только игроки с `locale_override = "ru"`. Игроки без
+          явного выбора (NULL) **не** включаются: их фактический язык
+          резолвится из Telegram-`language_code` в момент сообщения,
+          и предсказать его статически нельзя.
+        * `"en"` — игроки с `locale_override = "en"` И с `locale_override IS NULL`
+          (последние подпадают под `DEFAULT_LOCALE = "en"` —
+          см. `application/i18n/locale.py`).
+        * `"all"` — все активные игроки, без фильтра по локали.
+
+        `effective_locale` в `BroadcastRecipient` для каждой записи —
+        это `locale_override or "en"`, чтобы потребитель не дублировал
+        fallback-логику. Возврат — `Sequence` (мы материализуем весь
+        список в памяти, потому что для MVP-масштаба `< 50k` игроков
+        это безопасно; если когда-нибудь упрёмся — добавим стриминговую
+        версию через `AsyncIterator` отдельным методом).
         """

@@ -31,8 +31,10 @@ from pipirik_wars.application.admin import (
     GrantThickness,
     GrantThicknessBlockedError,
     GrantThicknessOutput,
+    IBroadcastTaskSpawner,
     RequestAdminConfirm,
     RequestAdminConfirmOutput,
+    RunBroadcastAnnouncement,
     SetBalanceValue,
     SetBalanceValueOutput,
     ThicknessLevelInvalidError,
@@ -578,6 +580,17 @@ def _stub_ban_player() -> BanPlayer:
     return MagicMock(spec=BanPlayer)
 
 
+def _stub_run_broadcast() -> RunBroadcastAnnouncement:
+    fake = MagicMock(spec=RunBroadcastAnnouncement)
+    fake.execute = AsyncMock()
+    return cast(RunBroadcastAnnouncement, fake)
+
+
+def _stub_broadcast_task_spawner() -> IBroadcastTaskSpawner:
+    fake = MagicMock(spec=IBroadcastTaskSpawner)
+    return cast(IBroadcastTaskSpawner, fake)
+
+
 def _deps(
     *,
     grant_length: GrantLength | None = None,
@@ -590,6 +603,8 @@ def _deps(
         grant_thickness=grant_thickness or _stub_grant_thickness(),
         set_balance_value=set_balance or _stub_set_balance(),
         ban_player=ban_player or _stub_ban_player(),
+        run_broadcast_announcement=_stub_run_broadcast(),
+        broadcast_task_spawner=_stub_broadcast_task_spawner(),
         clock=_fixed_clock(),
     )
 

@@ -15,6 +15,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 
 from pipirik_wars.domain.player import (
+    BroadcastRecipient,
     IPlayerRepository,
     Player,
     PlayerAlreadyRegisteredError,
@@ -98,6 +99,34 @@ class FakePlayerRepository(IPlayerRepository):
         # (стабильный тай-брейкер, как в SqlAlchemy-репо).
         active.sort(key=lambda p: (-p.length.cm, p.id or 0))
         return tuple(active[:limit])
+
+    async def list_active_for_broadcast(
+        self,
+        *,
+        locale_filter: str,
+    ) -> Sequence[BroadcastRecipient]:
+        if locale_filter not in ("ru", "en", "all"):
+            raise ValueError(
+                f"unsupported locale_filter={locale_filter!r}; expected one of: ru, en, all",
+            )
+
+        def _matches(player: Player) -> bool:
+            if locale_filter == "all":
+                return True
+            if locale_filter == "ru":
+                return player.locale_override == "ru"
+            # locale_filter == "en"
+            return player.locale_override == "en" or player.locale_override is None
+
+        active = [p for p in self.rows if p.status == PlayerStatus.ACTIVE and _matches(p)]
+        active.sort(key=lambda p: p.id or 0)
+        return tuple(
+            BroadcastRecipient(
+                tg_id=p.tg_id,
+                effective_locale=p.locale_override or "en",
+            )
+            for p in active
+        )
 
 
 def _looks_like_int(value: str) -> bool:
