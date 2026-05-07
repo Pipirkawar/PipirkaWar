@@ -49,6 +49,11 @@ class AuditAction(str, enum.Enum):
     PLAYER_PROMOTED = "player_promoted"
     PLAYER_LOCALE_SET = "player_locale_set"
     FOREST_RUN_STARTED = "forest_run_started"
+    # ── Спринт 3.1-B (PvE: горы и данжон, ГДД §8) ──
+    MOUNTAIN_RUN_STARTED = "mountain_run_started"
+    MOUNTAIN_RUN_FINISHED = "mountain_run_finished"
+    DUNGEON_RUN_STARTED = "dungeon_run_started"
+    DUNGEON_RUN_FINISHED = "dungeon_run_finished"
     ADMIN_COMMAND = "admin_command"
     # ── Спринт 1.6 (anti-cheat hardcap, ГДД §3.3) ──
     ANTICHEAT_DAILY_CAP_EXCEEDED = "anticheat_daily_cap_exceeded"
@@ -89,6 +94,8 @@ class AuditSource(str, enum.Enum):
     """
 
     FOREST = "forest"
+    MOUNTAINS = "mountains"
+    DUNGEON = "dungeon"
     ORACLE = "oracle"
     REFERRAL_SIGNUP = "referral_signup"
     REFERRAL_THICKNESS = "referral_thickness"

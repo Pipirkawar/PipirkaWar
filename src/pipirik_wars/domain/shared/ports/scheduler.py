@@ -210,6 +210,42 @@ class IDelayedJobScheduler(abc.ABC):
         выполнения, чтобы не мешать перепланированию следующего дня.
         """
 
+    # ── Спринт 3.1-B: PvE-походы (горы и данжон, ГДД §8) ──
+
+    @abc.abstractmethod
+    async def schedule_finish_mountain_run(
+        self,
+        *,
+        run_id: int,
+        run_at: datetime,
+    ) -> None:
+        """Запланировать `FinishMountainRun(run_id=...)` на `run_at` (UTC).
+
+        Идемпотентно по `run_id`: повторный вызов перезаписывает job
+        (recovery-сценарий после рестарта воркера).
+        """
+
+    @abc.abstractmethod
+    async def cancel_finish_mountain_run(self, *, run_id: int) -> None:
+        """Снять запланированный mountain-finish-job (NO-OP, если его нет)."""
+
+    @abc.abstractmethod
+    async def schedule_finish_dungeon_run(
+        self,
+        *,
+        run_id: int,
+        run_at: datetime,
+    ) -> None:
+        """Запланировать `FinishDungeonRun(run_id=...)` на `run_at` (UTC).
+
+        Идемпотентно по `run_id` (тот же recovery-контракт, что у леса
+        и гор).
+        """
+
+    @abc.abstractmethod
+    async def cancel_finish_dungeon_run(self, *, run_id: int) -> None:
+        """Снять запланированный dungeon-finish-job (NO-OP, если его нет)."""
+
     # ── Спринт 2.4.E: еженедельная сводка рефералов клана ──
 
     @abc.abstractmethod

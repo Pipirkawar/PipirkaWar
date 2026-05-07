@@ -220,6 +220,8 @@ anticheat:
   soft_ban_duration_days: 14  # длительность бана при срабатывании trip-wire
   organic_sources:            # whitelist: эти источники попадают в агрегацию
     - forest
+    - mountains
+    - dungeon
     - oracle
     - referral_signup
     - referral_thickness

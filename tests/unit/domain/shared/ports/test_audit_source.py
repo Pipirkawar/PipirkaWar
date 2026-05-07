@@ -6,7 +6,7 @@
 
 Whitelist первоначально создан в миграции 0007 и расширяется
 последующими миграциями. Тест читает whitelist из **последней расширяющей
-миграции** — 0014 (`daily_head`, Спринт 2.3.C).
+миграции** — 0018 (`mountains`, `dungeon`, Спринт 3.1-B).
 """
 
 from __future__ import annotations
@@ -20,17 +20,17 @@ from pipirik_wars.domain.shared.ports.audit import AuditSource
 def _load_migration_whitelist() -> tuple[str, ...]:
     """Грузим whitelist прямо из файла последней расширяющей миграции.
 
-    Файл миграции назван с timestamp-префиксом (`20260506_0014_*.py`), что
+    Файл миграции назван с timestamp-префиксом (`20260507_0018_*.py`), что
     не валиден как Python-идентификатор; обычный `import` не работает.
     """
     repo_root = Path(__file__).resolve().parents[5]
     migration_path = (
         repo_root
         / "src/pipirik_wars/infrastructure/db/migrations/versions"
-        / "20260506_0014_audit_source_daily_head.py"
+        / "20260507_0018_pve_runs.py"
     )
     spec = importlib.util.spec_from_file_location(
-        "_migration_0014_audit_source_daily_head",
+        "_migration_0018_pve_runs",
         migration_path,
     )
     assert spec is not None and spec.loader is not None
