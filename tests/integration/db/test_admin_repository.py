@@ -124,3 +124,81 @@ class TestSqlAlchemyAdminRepository:
             found = await repo.get_by_tg_id(8888)
             assert found is not None
             assert found.totp_secret == "JBSWY3DPEHPK3PXP"
+
+    @pytest.mark.asyncio
+    async def test_set_totp_secret_persists_after_commit(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """`set_totp_secret(...)` атомарно пишет секрет; после коммита
+        отдельная транзакция видит его через `get_by_tg_id`."""
+        repo = SqlAlchemyAdminRepository(uow=uow)
+        async with uow:
+            admin = await repo.add(
+                tg_id=11111,
+                role=AdminRole.SUPER_ADMIN,
+                created_by_admin_id=None,
+                note=None,
+            )
+            assert admin.id is not None
+            assert admin.totp_secret is None
+            admin_id = admin.id
+
+        async with uow:
+            await repo.set_totp_secret(
+                admin_id=admin_id,
+                secret="JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+            )
+
+        # Отдельный with-блок — гарантирует, что значение пережило commit
+        # и не висит только в session-cache-е первой транзакции.
+        async with uow:
+            found = await repo.get_by_tg_id(11111)
+            assert found is not None
+            assert found.totp_secret == "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+            # Остальные поля не пострадали от UPDATE.
+            assert found.role is AdminRole.SUPER_ADMIN
+            assert found.is_active is True
+
+    @pytest.mark.asyncio
+    async def test_set_totp_secret_overwrites_existing_value(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """SQL-уровень не защищает от перезаписи (это ответственность use-case-а):
+        повторный `set_totp_secret(...)` переписывает значение без ошибок.
+        Гарантия «не переписывать» лежит в `SetupAdminTotp` (тест на это —
+        в unit-suite-е use-case-а)."""
+        repo = SqlAlchemyAdminRepository(uow=uow)
+        async with uow:
+            admin = await repo.add(
+                tg_id=22222,
+                role=AdminRole.SUPER_ADMIN,
+                created_by_admin_id=None,
+                note=None,
+            )
+            assert admin.id is not None
+            admin_id = admin.id
+
+        async with uow:
+            await repo.set_totp_secret(admin_id=admin_id, secret="OLDSECRET234567")
+
+        async with uow:
+            await repo.set_totp_secret(admin_id=admin_id, secret="NEWSECRET234567")
+
+        async with uow:
+            found = await repo.get_by_tg_id(22222)
+            assert found is not None
+            assert found.totp_secret == "NEWSECRET234567"
+
+    @pytest.mark.asyncio
+    async def test_set_totp_secret_unknown_admin_raises_concurrency_error(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """Если админ удалён/не существует — UPDATE даёт `rowcount=0`,
+        и репо поднимает `ConcurrencyError` (use-case откатывает свою UoW)."""
+        repo = SqlAlchemyAdminRepository(uow=uow)
+        with pytest.raises(ConcurrencyError, match="not found for set_totp_secret"):
+            async with uow:
+                await repo.set_totp_secret(admin_id=999_999, secret="ANYSECRET234567")
