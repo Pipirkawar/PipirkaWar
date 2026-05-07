@@ -23,6 +23,60 @@
 
 ---
 
+## 2026-05-07 — Спринт 2.5-D.7: миграция legacy admin-команд под `AdminGuard` + RBAC (`/balance_reload`, `/admin_stats`, `/set_max_dau`, `/anticheat_unban`)
+
+**Автор:** Devin (агент)
+**Тип:** refactor
+**Связано:** Спринт 2.5 ([`current_tasks.md`](current_tasks.md)), ПД §5 / задача 2.5.9 (миграция старых команд под единый канал admin-авторизации), ГДД §18.6 (RBAC + admin-audit), [PR #86](https://github.com/Pipirkawar/PipirkaWar/pull/86) (мерж — `12f9ea0`)
+
+Что сделано:
+- **Use-cases** (`application/balance/reload.py`, `application/dau/set_max.py`, `application/anticheat/lift_ban.py`) — приняты новые kwargs `admin_audit: IAdminAuditLogger` и `authz: IAdminAuthorizationPolicy`. В `execute(...)` после defense-in-depth-проверки на `is_active` зовут `ensure_admin_authorized(...)` с `AdminCommandKind.{RELOAD_BALANCE, SET_MAX_DAU, LIFT_ANTICHEAT_BAN}` **до** открытия основного UoW. При RBAC-отказе helper в отдельном коротком UoW пишет `ADMIN_AUTHORIZATION_DENIED` в admin-audit и поднимает `AdminAuthorizationDeniedError`. Inactive-admin → старый `AuthorizationError` без записи в admin-audit (приватное событие admin-management, не RBAC-эскалация). Старые `Admin.can_*()`-проверки удалены.
+- **Handlers** (`bot/handlers/admin.py`) — router отбрасывает не-админов тихо через `IsAdminFilter()` на `.message` и `.callback_query` (как `admin_support` / `admin_economy` / `admin_audit` / `admin_clan`). Все четыре handler-а ловят `(AuthorizationError, AdminAuthorizationDeniedError)` единым except-блоком и шлют friendly «недостаточно прав». `/anticheat_unban` использует `AnticheatUnbanPresenter` для локализованных ответов (включая `presenter.not_authorized()`).
+- **DI** (`bot/main.py::build_container`) — `admin_audit` + `admin_authz` создаются раньше, **до** `reload_balance` / `set_max_dau` / `lift_anticheat_ban` (раньше они определялись только в admin_economy-секции). Все три legacy use-case-а получают новые deps.
+- **Тесты:** `tests/unit/application/{balance,dau,anticheat}/...` — обновлены helper-builder-ы (новые kwargs), проверки RBAC-отказа теперь ожидают `AdminAuthorizationDeniedError` (не legacy `AuthorizationError`) и фиксируют запись в `FakeAdminAuditLogger`. `tests/unit/bot/test_composition_root.py` — `_container_with_fakes` пробрасывает `admin_audit`/`admin_authz` во все три use-case-а.
+
+Результат / артефакты:
+- Коммит на ветке: `18fd652`. Merge-коммит: `12f9ea0`.
+- Локальный `make ci`: зелёный — 3262 passed / 1 skipped, coverage 95.98% (без изменений по сравнению с `main`).
+- Все 27 admin-команд из `AdminCommandKind` теперь авторизуются единым каналом `IAdminAuthorizationPolicy` + `ensure_admin_authorized` helper. Дублирующая логика `Admin.can_*()` удалена — единственный источник истины — матрица RBAC из D.8.
+- Поведение пользователя не меняется (матрица ролей эквивалентна старому `Admin.can_*()`-API), но форма унифицирована со всеми остальными admin-командами 2.5-A/B/C/D-1.
+
+Заметки / решения:
+- `/balance_reload` сознательно остался **БЕЗ TOTP** — это вне скоупа D.7 (форма RBAC, не изменение требований). Если потребуется TOTP — отдельный sprint после 2.5-D-финала.
+- `CONFIRM_DISPATCHERS` registry не расширен — эти три команды пока не требуют TOTP-confirm flow.
+- PR изначально был **draft** под Спринт 2.5-D часть 2/2 (`/announce` + `/admin_setup_totp` + `admin_runbook.md` + допы тестов/локалей), но смерджен только D.7 (структурный refactor). Остаток Спринта 2.5-D (D.4/D.6/D.10/D.11/D.12) — отдельным PR-ом или PR-цепочкой.
+
+---
+
+## 2026-05-07 — Спринт 2.5-D часть 1/2: клановые admin-команды + `/audit` + RBAC + registry-pattern для `"ban"`
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 2.5 ([`current_tasks.md`](current_tasks.md)), ПД §5 / задачи 2.5.3 (клановые команды), 2.5.7 (`/audit`), 2.5.8 (RBAC + 2FA), 2.5.9 (registry-pattern для confirm-dispatcher), ГДД §10–11 (клановая механика), §18.6 (RBAC), §18.6.4 (`/audit`), [PR #85](https://github.com/Pipirkawar/PipirkaWar/pull/85) (мерж — `2b17c09`)
+
+Что сделано:
+- **2.5-D.1 — `/clan <id|chat_id>`** (`ce39097`). Read-only карточка клана: id, chat_id, chat_kind, title, status (active/frozen), member_count, active_member_count, total_length_cm, лидер каравана + список участников. Use-case `GetClanCard(actor_tg_id, query)` с двойным lookup-ом (сначала по внутреннему `Clan.id`, потом по Telegram `chat_id`). Без TOTP. Аудит: `ADMIN_CLAN_LOOKUP` (новое значение `AdminAuditAction`). Локаль `admin-clan-*` (RU + EN). Тесты: 9 unit (use-case), 8 unit (handler).
+- **2.5-D.2 — `/freeze_clan <id|chat_id> [reason]` / `/unfreeze_clan <id|chat_id>`** (`fb761e7`). Обратимая ручная заморозка/разморозка клана админом (без TOTP, как `/freeze`/`/unfreeze` для игроков). Use-cases `FreezeClanAdmin` / `UnfreezeClanAdmin`. Идемпотентны (no-op если уже frozen/active, audit не пишется). Аудит: `ADMIN_CLAN_FROZEN` / `ADMIN_CLAN_UNFROZEN`. Локали `admin-freeze-clan-*` / `admin-unfreeze-clan-*` (RU+EN). Тесты: 12 unit (use-cases), 17 unit (handlers).
+- **2.5-D.3 — `/clan_daily_head_history <id|chat_id> [N=10]`** (`176216c`). Read-only история последних N назначений «Главы клана дня» (дата, игрок, bonus_cm, источник). Use-case `GetClanDailyHeadHistory` через `IDailyHeadRepository.list_recent_for_clan(clan_id, limit)`. Без TOTP. Аудит: `ADMIN_CLAN_LOOKUP` (тот же ключ, что у `/clan`). Локали `admin-clan-daily-head-history-*` (RU+EN). Тесты: 10 unit (use-case), 11 unit (handler).
+- **2.5-D.5 — `/audit [target_tg_id|-] [action|-] [N]`** (`9634695`). Query последних N записей `admin_audit_log` с опциональными фильтрами по `admin_id` и `action`. Use-case `GetAdminAuditTrail(actor_tg_id, *, target_admin_tg_id?, action_value?, limit=20)` через новый read-port `IAdminAuditQuery.list_recent(...)` (отдельный от write-side `IAdminAuditLogger` по ISP). Read-only, без TOTP. Сам факт чтения логируется как `ADMIN_AUDIT_QUERIED`. Локаль `admin-audit-*` (RU + EN). Реализация — `SqlAlchemyAdminAuditQuery` (один SELECT + JOIN к `admins`, без N+1).
+- **2.5-D.8 — RBAC** (`c7d9c30`). Доменный whitelist-enum `AdminCommandKind` (27 команд) + порт `IAdminAuthorizationPolicy.is_authorized(admin, command_kind) -> bool` + дефолтная реализация `RoleBasedAdminAuthorizationPolicy` (файл-closed-матрица `(role × command_kind) → frozenset[AdminRole]`, неактивный админ всегда отказывает; команда без правила всегда отказывает). Иерархия (без «суперсетов» — каждая ячейка явная): `READ_ONLY` — все read-side; `SUPPORT` — `freeze_*`/`unfreeze_*`/`ban_player` + read-side; `ECONOMIST` — `grant_*`/`set_balance_value`/`reload_balance` + read-side; `SUPER_ADMIN` — всё, включая `lift_anticheat_ban`/`set_max_dau`/`broadcast_announcement`/`setup_totp`. Application-helper `ensure_admin_authorized(...)` в `application/admin/_authorization.py` — открывает **отдельный, короткоживущий** UoW и пишет `ADMIN_AUTHORIZATION_DENIED` до того, как поднять `AdminAuthorizationDeniedError`, чтобы попытка эскалации была зафиксирована независимо от основной транзакции use-case-а. Все 13 admin-use-case-ов на момент D.8 (`find_players`, `get_player_card`, `freeze_player`, `unfreeze_player`, `ban_player`, `request_admin_confirm`, `verify_admin_confirm`, `grant_length`, `grant_thickness`, `get_balance_value`, `set_balance_value`, `get_admin_audit_trail`, `get_clan_card`, `freeze_clan_admin`, `unfreeze_clan_admin`, `get_clan_daily_head_history`) принимают `authz: IAdminAuthorizationPolicy` и зовут helper до открытия основного UoW. Колонка `Admin.role` (enum) уже существовала с миграции `0001` — отдельная миграция под D.8 не нужна.
+- **2.5-D.9 — `command_kind="ban"` → `CONFIRM_DISPATCHERS` registry** (`3ef53b7`). `_dispatch_ban` добавлен в `bot/handlers/admin_economy.py`, зарегистрирован в `CONFIRM_DISPATCHERS`, inline-кейс из `bot/handlers/admin_support.py` удалён. Все 4 TOTP-обязательные команды (`grant_length`, `grant_thickness`, `set_balance_value`, `ban_player`) теперь идут через единый registry — добавление новой мутирующей команды это «добавить пару `(kind, fn)` в реестр», без изменений в `handle_confirm`.
+- **Доки** (`ba04dc5`, `0bc4000`) — sync `current_tasks.md` с актуальным состоянием feature-ветки в процессе работы.
+
+Результат / артефакты:
+- Коммиты: `ce39097` (D.1), `fb761e7` (D.2), `176216c` (D.3), `9634695` (D.5), `c7d9c30` (D.8), `3ef53b7` (D.9), `ba04dc5` + `0bc4000` (docs). Merge-коммит: `2b17c09`.
+- Локальный `make ci` на момент мерджа: зелёный — coverage ≥ 95%.
+- Новые/расширенные `AdminAuditAction`: `ADMIN_CLAN_LOOKUP`, `ADMIN_CLAN_FROZEN`, `ADMIN_CLAN_UNFROZEN`, `ADMIN_AUDIT_QUERIED`, `ADMIN_AUTHORIZATION_DENIED`.
+- Новые порты: `IAdminAuthorizationPolicy` (domain), `IAdminAuditQuery` (read-side, отдельный от write-side `IAdminAuditLogger`).
+- `AdminCommandKind` enum (27 команд) — единый whitelist для RBAC.
+
+Заметки / решения:
+- `Admin.role` колонка существовала с миграции `0001`, но до D.8 RBAC опирался на `Admin.can_*()`-API. D.8 формализовал матрицу как доменный объект, но **D.7 ещё не был сделан** (legacy команды `/balance_reload`, `/admin_stats`, `/set_max_dau`, `/anticheat_unban` оставались на старой `Admin.can_*()`). Это закрывает PR #86 (см. запись 2.5-D.7 выше).
+- `IAdminAuditQuery` сделан отдельным от `IAdminAuditLogger` по ISP — read-side и write-side имеют разные потребители, не должны смешиваться.
+- Postmerge-PR (history.md + sync `current_tasks.md`) для PR #85 не был создан отдельно — D.7 был открыт сразу следующим. Эта запись закрывает технический долг — добавлена в одном PR с записью 2.5-D.7.
+
+---
+
 ## 2026-05-08 — Спринт 2.5-C: команды экономики в боте (`/grant_length`, `/grant_thickness`, `/balance_get`, `/balance_set`)
 
 **Автор:** Devin (агент)
