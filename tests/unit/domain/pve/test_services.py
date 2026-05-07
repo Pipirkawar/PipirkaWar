@@ -127,17 +127,19 @@ class TestMountainsScripted:
     def test_drop_taken_at_threshold(self) -> None:
         cfg = _balance()
         # mountains: probability_percent=25, max_drops=1. Roll 25 → дроп.
-        # rarity_weights idx 0 = common; choice(0) — первый предмет каталога.
+        # Спринт 3.1-C: перед rarity катится слот через `slot_weights`.
+        # Для гор все 8 весов > 0; индекс 0 = HAT.
         scripted = ScriptedRandom(
             weighted_indexes=[
                 0,  # branch=scarce_gain
+                0,  # slot=HAT
                 0,  # rarity=common
             ],
             randints=[
                 cfg.mountains.outcomes[0].min,  # length
                 25,  # drop slot 0: 25 <= 25 → дроп
             ],
-            choices=[0],  # первый предмет в pool common
+            choices=[0],  # первый предмет в pool (HAT, COMMON)
         )
         outcome = pick_pve_outcome(
             location=PveLocationKind.MOUNTAINS,
@@ -151,7 +153,7 @@ class TestMountainsScripted:
         # mountains.drop.max_drops=1 → даже если probability=100%, не более 1 дропа.
         cfg = _balance()
         scripted = ScriptedRandom(
-            weighted_indexes=[0, 0],
+            weighted_indexes=[0, 0, 0],  # branch, slot=HAT, rarity=common
             randints=[cfg.mountains.outcomes[0].min, 1],  # 1 ≤ 25 → дроп
             choices=[0],
         )
@@ -206,12 +208,17 @@ class TestDungeonScripted:
     def test_three_drops_when_all_slots_hit(self) -> None:
         cfg = _balance()
         # dungeon.drop.max_drops=3, probability_percent=50. Все 3 ролла = 1 → 3 дропа.
+        # Спринт 3.1-C: на каждый из 3 дропов добавлен weighted_choice на
+        # слот перед weighted_choice на rarity.
         scripted = ScriptedRandom(
             weighted_indexes=[
                 0,  # branch=scarce_gain
                 0,
+                0,  # drop1: slot=HAT, rarity=common
                 0,
-                0,  # rarity для каждого из 3 дропов = common
+                0,  # drop2: slot=HAT, rarity=common
+                0,
+                0,  # drop3: slot=HAT, rarity=common
             ],
             randints=[
                 cfg.dungeon.outcomes[0].min,  # length
@@ -219,7 +226,7 @@ class TestDungeonScripted:
                 1,
                 1,  # 3 drop rolls, all <= 50 → 3 дропа
             ],
-            choices=[0, 0, 0],  # 3 предмета из common pool
+            choices=[0, 0, 0],  # 3 предмета из (HAT, COMMON) pool
         )
         outcome = pick_pve_outcome(
             location=PveLocationKind.DUNGEON,
@@ -232,7 +239,8 @@ class TestDungeonScripted:
         # dungeon: probability=50. 1 ≤ 50 → дроп; 100 > 50 → нет; 1 ≤ 50 → дроп.
         cfg = _balance()
         scripted = ScriptedRandom(
-            weighted_indexes=[0, 0, 0],  # branch + 2 rarities (для 2 дропов)
+            # branch + 2 × (slot, rarity) для 2 реальных дропов.
+            weighted_indexes=[0, 0, 0, 0, 0],
             randints=[
                 cfg.dungeon.outcomes[0].min,
                 1,  # slot 0: drop

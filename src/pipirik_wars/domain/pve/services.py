@@ -9,9 +9,11 @@
    branch.max)`. Знак применяется по `branch.sign`.
 3. Дроп — независимо для каждого из `drop.max_drops` слотов
    (Bernoulli per slot с `p = drop.probability_percent / 100`).
-   Если выпал дроп в слоте — разыгрывается редкость через
-   `random.weighted_choice` на `drop.rarity_weights`, затем
-   `random.choice` среди предметов нужной редкости из `items_catalog`.
+   Если выпал дроп — передаём в `pick_drop_item_entry` (общий хелпер
+   с forest, `domain/balance/picking.py`): слот через `weighted_choice`
+   на `drop.slot_weights` → редкость через `weighted_choice` на
+   `drop.rarity_weights` → `random.choice` из `items_catalog`,
+   отфильтрованного по `(slot, rarity)`.
 
 Семантика «0..max_drops предметов за поход» (ГДД §8: «горы 0–1»,
 «данжон 0–3») реализуется именно так: распределение числа дропов —
@@ -21,8 +23,9 @@
 для 0/1/2/3 дропов — приемлемая «лестница».
 
 Никаких side-эффектов. Имена не дропаются (ГДД §2.5 — только лес).
-Оружие (`right_hand`/`left_hand`) автоматически начнёт дропать, как
-только эти слоты появятся в `items_catalog` (Спринт 3.1-C).
+Оружие (`right_hand`/`left_hand`) дропает в горах/данжоне согласно
+весам `slot_weights` per-location (Спринт 3.1-C); в лесу веса этих
+слотов = 0.
 
 Параметры передаются явно — функция тривиально тестируется на
 `FakeRandom(seed=...)` + валидном `BalanceConfig` (см. `factories.py`).
@@ -35,6 +38,7 @@ from pipirik_wars.domain.balance.config import (
     PveSign,
     _PveLocationConfig,
 )
+from pipirik_wars.domain.balance.picking import pick_drop_item_entry
 from pipirik_wars.domain.forest.entities import Item, Rarity, Slot
 from pipirik_wars.domain.pve.entities import (
     PveItemDrop,
@@ -114,14 +118,12 @@ def _roll_item_drop(
     balance: BalanceConfig,
     random: IRandom,
 ) -> PveItemDrop:
-    rarity_cfg = cfg.drop.rarity_weights
-    rarities: list[Rarity] = [Rarity.COMMON, Rarity.RARE, Rarity.EPIC]
-    weights = [rarity_cfg.common, rarity_cfg.rare, rarity_cfg.epic]
-    rarity = random.weighted_choice(rarities, weights)
-
-    pool = [e for e in balance.items_catalog if e.rarity is rarity]
-    # Pre-условие, гарантированное pydantic-валидатором: pool непуст.
-    entry = random.choice(pool)
+    entry = pick_drop_item_entry(
+        balance=balance,
+        slot_weights=cfg.drop.slot_weights,
+        rarity_weights=cfg.drop.rarity_weights,
+        random=random,
+    )
     item = Item(
         id=entry.id,
         slot=Slot(entry.slot),
