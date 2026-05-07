@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 import pytest
@@ -54,6 +54,15 @@ class FakeAdminRepo(IAdminRepository):
         )
         self.rows.append(admin)
         return admin
+
+    async def set_totp_secret(self, *, admin_id: int, secret: str) -> None:
+        # Не используется в bootstrap-сценарии, но реализация порта обязана
+        # покрывать всю абстракцию (см. `IAdminRepository`).
+        for i, a in enumerate(self.rows):
+            if a.id == admin_id:
+                self.rows[i] = replace(a, totp_secret=secret)
+                return
+        raise ConcurrencyError(f"admin id={admin_id} not found")
 
 
 class TestBootstrapSuperAdmin:

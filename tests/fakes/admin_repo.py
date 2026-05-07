@@ -83,3 +83,10 @@ class FakeAdminRepository(IAdminRepository):
             if a.tg_id == tg_id:
                 self.rows[i] = replace(a, is_active=False)
                 return
+
+    async def set_totp_secret(self, *, admin_id: int, secret: str) -> None:
+        for i, a in enumerate(self.rows):
+            if a.id == admin_id:
+                self.rows[i] = replace(a, totp_secret=secret)
+                return
+        raise ConcurrencyError(f"admin id={admin_id} not found")

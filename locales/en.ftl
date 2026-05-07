@@ -756,3 +756,18 @@ admin-announce-confirm-issued = 🛡 Ready to broadcast to <b>{ $recipient_count
 admin-announce-progress-start = 📤 Starting broadcast: { $recipient_count } recipients (filter: { $locale_filter }). I'll report back when done.
 admin-announce-progress-final = ✅ Broadcast complete. Recipients: { $recipient_count }, delivered: { $sent_count }, failed: { $failed_count }, blocked: { $blocked_count }.
 admin-announce-progress-failed = ⚠ Background broadcast failed. Details in bot logs and admin audit.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sprint 2.5-D.6 — `/admin_setup_totp` (self-service TOTP secret bootstrap)
+# ─────────────────────────────────────────────────────────────────────────────
+# The `secret` + `otpauth://` URI never reaches the chat — the handler logs
+# them only via `structlog` on the server (event=admin_totp_setup). The
+# Telegram chat sees only a short "configured, check logs" acknowledgement.
+
+admin-setup-totp-usage = ⚠ Usage: <code>/admin_setup_totp &lt;bootstrap-password&gt;</code>. Available only in DM with the bot.
+admin-setup-totp-non-private = 🍆 Admin commands are available only in DM with the bot.
+admin-setup-totp-not-authorized = ❌ Only active super-admins can bootstrap a TOTP secret.
+admin-setup-totp-password-not-configured = ❌ <code>BOOTSTRAP_ADMIN_PASSWORD</code> is not set in the bot environment. The command refuses (fail-closed): self-service issuance of a new TOTP secret without a second factor is not allowed.
+admin-setup-totp-password-invalid = ❌ Invalid bootstrap password.
+admin-setup-totp-already-configured = ❌ TOTP is already configured. Issuing a new secret requires a manual DBA reset (see <code>docs/admin_runbook.md</code>).
+admin-setup-totp-success = ✅ TOTP is configured. The secret and the <code>otpauth://</code> URI are written to the server-side logs (event=<code>admin_totp_setup</code>) — open them in your infra and import into Authenticator/1Password. The secret intentionally never appears in the chat.

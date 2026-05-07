@@ -31,6 +31,7 @@ from pipirik_wars.application.admin import (
     RequestAdminConfirm,
     RunBroadcastAnnouncement,
     SetBalanceValue,
+    SetupAdminTotp,
     UnfreezeClanAdmin,
     UnfreezePlayer,
     VerifyAdminConfirm,
@@ -105,6 +106,7 @@ from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
 from pipirik_wars.infrastructure.admin import (
     InMemoryAdminConfirmStore,
+    PyOtpTotpSecretGenerator,
     PyOtpTotpVerifier,
 )
 from pipirik_wars.infrastructure.anticheat import StructlogAnticheatAdminAlerter
@@ -627,6 +629,16 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         clock=clock,
         authz=admin_authz,
     )
+    totp_secret_generator = PyOtpTotpSecretGenerator()
+    setup_admin_totp_uc = SetupAdminTotp(
+        uow=uow,
+        admins=admins,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+        secret_generator=totp_secret_generator,
+        bootstrap_password=None,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -860,6 +872,8 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         run_broadcast_announcement=run_broadcast_announcement_uc,
         broadcast_sender=broadcast_sender,
         broadcast_task_spawner=broadcast_task_spawner,
+        totp_secret_generator=totp_secret_generator,
+        setup_admin_totp=setup_admin_totp_uc,
     )
 
 

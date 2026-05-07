@@ -762,3 +762,18 @@ admin-announce-confirm-issued = 🛡 Готов разослать <b>{ $recipie
 admin-announce-progress-start = 📤 Запускаю рассылку: { $recipient_count } получателей (фильтр: { $locale_filter }). По окончании пришлю отчёт.
 admin-announce-progress-final = ✅ Рассылка завершена. Получателей: { $recipient_count }, доставлено: { $sent_count }, ошибок: { $failed_count }, забанили бота: { $blocked_count }.
 admin-announce-progress-failed = ⚠ Фоновая рассылка завершилась с ошибкой. Подробности — в логах бота и admin-аудите.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Спринт 2.5-D.6 — `/admin_setup_totp` (self-service выдача TOTP-секрета)
+# ─────────────────────────────────────────────────────────────────────────────
+# Сама пара «секрет + otpauth://-URI» в чат не уходит — handler пишет её
+# только в `structlog`-лог сервера (event=admin_totp_setup). В Telegram-чате
+# лежит только короткое подтверждение «настроено, см. логи».
+
+admin-setup-totp-usage = ⚠ Использование: <code>/admin_setup_totp &lt;bootstrap-пароль&gt;</code>. Команда доступна только в ЛС бота.
+admin-setup-totp-non-private = 🍆 Админ-команды доступны только в ЛС бота.
+admin-setup-totp-not-authorized = ❌ Только активные super-admin-ы могут настраивать TOTP-секрет.
+admin-setup-totp-password-not-configured = ❌ <code>BOOTSTRAP_ADMIN_PASSWORD</code> не задан в окружении бота. Команда отказывает (fail-closed): self-service-выдача нового TOTP-секрета без второго фактора недопустима.
+admin-setup-totp-password-invalid = ❌ Неверный bootstrap-пароль.
+admin-setup-totp-already-configured = ❌ TOTP уже настроен. Чтобы выдать новый секрет, потребуется ручной сброс через DBA (см. <code>docs/admin_runbook.md</code>).
+admin-setup-totp-success = ✅ TOTP настроен. Секрет и <code>otpauth://</code>-URI записаны в server-side-логи (event=<code>admin_totp_setup</code>) — открой их у инфры и импортируй в Authenticator/1Password. В чат секрет не попадает намеренно.

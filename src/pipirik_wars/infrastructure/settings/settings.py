@@ -95,6 +95,15 @@ class BootstrapSettings(BaseSettings):
     один раз при пустой таблице `admins` (см. `BootstrapSuperAdmin`
     use-case). Хранится в Devin Secrets `PIPIRIK_BOOTSTRAP_ADMIN_TG_ID`,
     в код/git/логи никогда не попадает.
+
+    `admin_password` (Спринт 2.5-D.6, ГДД §18.6.5) — out-of-band
+    bootstrap-пароль для команды `/admin_setup_totp`: super-admin
+    использует его, чтобы инициализировать свой TOTP-секрет. Хранится
+    в Devin Secrets `PIPIRIK_BOOTSTRAP_ADMIN_PASSWORD` (`save_scope: org`),
+    в код/git/логи никогда не попадает (`SecretStr` маскирует значение).
+    Если переменная не задана — команда `/admin_setup_totp` отказывается
+    работать (fail-closed): self-service-выдача нового TOTP-секрета без
+    второго фактора недопустима.
     """
 
     model_config = SettingsConfigDict(
@@ -107,6 +116,13 @@ class BootstrapSettings(BaseSettings):
     admin_ids: tuple[int, ...] = Field(
         default=(),
         description="Список tg_id через запятую — первые super_admin-ы",
+    )
+    admin_password: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Out-of-band bootstrap-пароль для `/admin_setup_totp` "
+            "(Спринт 2.5-D.6). `None` ⇒ команда отказывает (fail-closed)."
+        ),
     )
 
     @field_validator("admin_ids", mode="before")
