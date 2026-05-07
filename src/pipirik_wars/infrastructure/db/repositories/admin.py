@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import CursorResult, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from pipirik_wars.domain.admin import Admin, AdminRole, IAdminRepository
@@ -65,3 +65,19 @@ class SqlAlchemyAdminRepository(IAdminRepository):
         except IntegrityError as exc:
             raise ConcurrencyError(f"admin tg_id={tg_id} already exists") from exc
         return _row_to_entity(row)
+
+    async def set_totp_secret(self, *, admin_id: int, secret: str) -> None:
+        # Один атомарный UPDATE — без предварительного SELECT-а: проверка
+        # `admin.totp_secret is None` уже сделана на слое use-case-а
+        # (`SetupAdminTotp` бросит `TotpAlreadyConfiguredError` до сюда),
+        # а здесь нам нужно только записать. Если конкурентно админ был
+        # удалён/переместился — `rowcount == 0`, поднимаем `ConcurrencyError`.
+        result = await self._uow.session.execute(
+            update(AdminORM).where(AdminORM.id == admin_id).values(totp_secret=secret),
+        )
+        # UPDATE возвращает CursorResult; защищаемся от изменений API
+        # (та же страховка, что в `SqlAlchemyClanMembershipRepository.remove`).
+        if not isinstance(result, CursorResult):  # pragma: no cover
+            raise RuntimeError("UPDATE must return CursorResult")
+        if not (result.rowcount and result.rowcount > 0):
+            raise ConcurrencyError(f"admin id={admin_id} not found for set_totp_secret")
