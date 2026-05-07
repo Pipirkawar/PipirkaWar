@@ -19,12 +19,17 @@ import pytest
 
 from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.auth.decorators import AuthorizationError
-from pipirik_wars.domain.admin import AdminRole
+from pipirik_wars.domain.admin import (
+    AdminAuthorizationDeniedError,
+    AdminRole,
+    RoleBasedAdminAuthorizationPolicy,
+)
 from pipirik_wars.domain.player import Player, PlayerStatus
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from pipirik_wars.domain.player.value_objects import Length, Thickness, Username
 from pipirik_wars.domain.shared.ports import AuditAction
 from tests.fakes import (
+    FakeAdminAuditLogger,
     FakeAdminRepository,
     FakeAuditLogger,
     FakeClock,
@@ -63,7 +68,13 @@ def _build_use_case(
     actor_active: bool = True,
     target_player: Player | None = None,
     actor_tg_id: int = 555,
-) -> tuple[LiftAnticheatBan, FakePlayerRepository, FakeAuditLogger, FakeAdminRepository]:
+) -> tuple[
+    LiftAnticheatBan,
+    FakePlayerRepository,
+    FakeAuditLogger,
+    FakeAdminRepository,
+    FakeAdminAuditLogger,
+]:
     uow = FakeUnitOfWork()
     clock = FakeClock(_NOW)
     admins = FakeAdminRepository()
@@ -72,14 +83,17 @@ def _build_use_case(
     if target_player is not None:
         players.rows.append(target_player)
     audit = FakeAuditLogger()
+    admin_audit = FakeAdminAuditLogger()
     use_case = LiftAnticheatBan(
         uow=uow,
         admins=admins,
         players=players,
         audit=audit,
+        admin_audit=admin_audit,
+        authz=RoleBasedAdminAuthorizationPolicy(),
         clock=clock,
     )
-    return use_case, players, audit, admins
+    return use_case, players, audit, admins, admin_audit
 
 
 # ───────────────────────────── happy path ─────────────────────────────
@@ -88,7 +102,7 @@ def _build_use_case(
 @pytest.mark.asyncio
 async def test_super_admin_lifts_active_ban() -> None:
     target = _make_player(anticheat_ban_until=_FUTURE)
-    use_case, players, audit, admins = _build_use_case(target_player=target)
+    use_case, players, audit, admins, _ = _build_use_case(target_player=target)
 
     result = await use_case.execute(
         actor_tg_id=555,
@@ -121,7 +135,7 @@ async def test_super_admin_lifts_active_ban() -> None:
 @pytest.mark.asyncio
 async def test_no_active_ban_is_idempotent_noop() -> None:
     target = _make_player(anticheat_ban_until=None)
-    use_case, players, audit, _ = _build_use_case(target_player=target)
+    use_case, players, audit, _, _ = _build_use_case(target_player=target)
 
     result = await use_case.execute(
         actor_tg_id=555,
@@ -141,7 +155,7 @@ async def test_no_active_ban_is_idempotent_noop() -> None:
 async def test_expired_ban_is_idempotent_noop() -> None:
     expired = _NOW - timedelta(seconds=1)
     target = _make_player(anticheat_ban_until=expired)
-    use_case, _, audit, _ = _build_use_case(target_player=target)
+    use_case, _, audit, _, _ = _build_use_case(target_player=target)
 
     result = await use_case.execute(
         actor_tg_id=555,
@@ -163,30 +177,34 @@ async def test_expired_ban_is_idempotent_noop() -> None:
 )
 @pytest.mark.asyncio
 async def test_non_super_admin_is_forbidden(role: AdminRole) -> None:
+    # Спринт 2.5-D.7: RBAC-отказ фиксируется в admin_audit.
     target = _make_player(anticheat_ban_until=_FUTURE)
-    use_case, players, audit, _ = _build_use_case(
+    use_case, players, audit, _, admin_audit = _build_use_case(
         actor_role=role,
         target_player=target,
     )
 
-    with pytest.raises(AuthorizationError):
+    with pytest.raises(AdminAuthorizationDeniedError):
         await use_case.execute(
             actor_tg_id=555,
             target_tg_id=target.tg_id,
             reason="x",
         )
 
-    # Бан не снят, audit пуст.
+    # Бан не снят, audit пуст — но admin_audit имеет отпечаток попытки.
     saved = await players.get_by_tg_id(target.tg_id)
     assert saved is not None
     assert saved.anticheat_ban_until == _FUTURE
     assert audit.entries == []
+    assert len(admin_audit.entries) == 1
 
 
 @pytest.mark.asyncio
 async def test_inactive_super_admin_is_forbidden() -> None:
+    # Inactive-admin отбивается defense-in-depth-проверкой до RBAC —
+    # admin_audit пуст (это приватное событие admin-management).
     target = _make_player(anticheat_ban_until=_FUTURE)
-    use_case, players, audit, _ = _build_use_case(
+    use_case, players, audit, _, admin_audit = _build_use_case(
         actor_active=False,
         target_player=target,
     )
@@ -201,12 +219,13 @@ async def test_inactive_super_admin_is_forbidden() -> None:
     assert saved is not None
     assert saved.anticheat_ban_until == _FUTURE
     assert audit.entries == []
+    assert admin_audit.entries == []
 
 
 @pytest.mark.asyncio
 async def test_unknown_actor_is_forbidden() -> None:
     target = _make_player(anticheat_ban_until=_FUTURE)
-    use_case, _, audit, _ = _build_use_case(target_player=target)
+    use_case, _, audit, _, _ = _build_use_case(target_player=target)
 
     with pytest.raises(AuthorizationError):
         await use_case.execute(
@@ -222,7 +241,7 @@ async def test_unknown_actor_is_forbidden() -> None:
 
 @pytest.mark.asyncio
 async def test_player_not_found_raises() -> None:
-    use_case, _, audit, _ = _build_use_case(target_player=None)
+    use_case, _, audit, _, _ = _build_use_case(target_player=None)
 
     with pytest.raises(PlayerNotFoundError):
         await use_case.execute(
@@ -240,7 +259,7 @@ async def test_player_not_found_raises() -> None:
 @pytest.mark.asyncio
 async def test_empty_reason_raises_value_error(bad_reason: str) -> None:
     target = _make_player(anticheat_ban_until=_FUTURE)
-    use_case, _, audit, _ = _build_use_case(target_player=target)
+    use_case, _, audit, _, _ = _build_use_case(target_player=target)
 
     with pytest.raises(ValueError, match="reason must be non-empty"):
         await use_case.execute(
@@ -254,7 +273,7 @@ async def test_empty_reason_raises_value_error(bad_reason: str) -> None:
 @pytest.mark.asyncio
 async def test_reason_is_trimmed_in_audit() -> None:
     target = _make_player(anticheat_ban_until=_FUTURE)
-    use_case, _, audit, _ = _build_use_case(target_player=target)
+    use_case, _, audit, _, _ = _build_use_case(target_player=target)
 
     result = await use_case.execute(
         actor_tg_id=555,

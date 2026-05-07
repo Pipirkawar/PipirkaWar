@@ -8,10 +8,21 @@ import pytest
 
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.dau import SetMaxDau, SetMaxDauResult
-from pipirik_wars.domain.admin import Admin, AdminRole
+from pipirik_wars.domain.admin import (
+    Admin,
+    AdminAuthorizationDeniedError,
+    AdminRole,
+    RoleBasedAdminAuthorizationPolicy,
+)
 from pipirik_wars.domain.shared.ports import AuditAction
 from pipirik_wars.infrastructure.dau import InMemoryDauLimit
-from tests.fakes import FakeAdminRepository, FakeAuditLogger, FakeClock, FakeUnitOfWork
+from tests.fakes import (
+    FakeAdminAuditLogger,
+    FakeAdminRepository,
+    FakeAuditLogger,
+    FakeClock,
+    FakeUnitOfWork,
+)
 
 
 def _build_use_case(
@@ -19,6 +30,7 @@ def _build_use_case(
     admins: FakeAdminRepository,
     audit: FakeAuditLogger,
     initial_max_dau: int = 200,
+    admin_audit: FakeAdminAuditLogger | None = None,
 ) -> tuple[SetMaxDau, InMemoryDauLimit, FakeClock, FakeUnitOfWork]:
     uow = FakeUnitOfWork()
     clock = FakeClock(datetime(2026, 5, 4, 12, 0, tzinfo=UTC))
@@ -28,6 +40,8 @@ def _build_use_case(
         admins=admins,
         limit=limit,
         audit=audit,
+        admin_audit=admin_audit if admin_audit is not None else FakeAdminAuditLogger(),
+        authz=RoleBasedAdminAuthorizationPolicy(),
         clock=clock,
     )
     return use_case, limit, clock, uow
@@ -67,26 +81,38 @@ class TestAuthorization:
     @pytest.mark.asyncio
     async def test_economist_cannot_set_max_dau(self) -> None:
         # Экономист правит баланс, но не runtime-конфиг.
+        # Спринт 2.5-D.7: попытка фиксируется в admin_audit.
         admins = FakeAdminRepository()
         _seed_admin(admins, tg_id=456, role=AdminRole.ECONOMIST)
         audit = FakeAuditLogger()
+        admin_audit = FakeAdminAuditLogger()
 
-        use_case, limit, _clock, _uow = _build_use_case(admins=admins, audit=audit)
-        with pytest.raises(AuthorizationError) as exc:
+        use_case, limit, _clock, _uow = _build_use_case(
+            admins=admins,
+            audit=audit,
+            admin_audit=admin_audit,
+        )
+        with pytest.raises(AdminAuthorizationDeniedError):
             await use_case.execute(actor_tg_id=456, new_max_dau=1000)
-        assert exc.value.requirement == "admin_runtime_config"
         assert await limit.get() == 200  # лимит не изменился
+        assert len(admin_audit.entries) == 1
 
     @pytest.mark.asyncio
     async def test_support_cannot_set_max_dau(self) -> None:
         admins = FakeAdminRepository()
         _seed_admin(admins, tg_id=789, role=AdminRole.SUPPORT)
         audit = FakeAuditLogger()
+        admin_audit = FakeAdminAuditLogger()
 
-        use_case, limit, _clock, _uow = _build_use_case(admins=admins, audit=audit)
-        with pytest.raises(AuthorizationError):
+        use_case, limit, _clock, _uow = _build_use_case(
+            admins=admins,
+            audit=audit,
+            admin_audit=admin_audit,
+        )
+        with pytest.raises(AdminAuthorizationDeniedError):
             await use_case.execute(actor_tg_id=789, new_max_dau=1000)
         assert await limit.get() == 200
+        assert len(admin_audit.entries) == 1
 
     @pytest.mark.asyncio
     async def test_read_only_cannot_set_max_dau(self) -> None:
@@ -95,7 +121,7 @@ class TestAuthorization:
         audit = FakeAuditLogger()
 
         use_case, limit, _clock, _uow = _build_use_case(admins=admins, audit=audit)
-        with pytest.raises(AuthorizationError):
+        with pytest.raises(AdminAuthorizationDeniedError):
             await use_case.execute(actor_tg_id=101, new_max_dau=1000)
         assert await limit.get() == 200
 
@@ -111,6 +137,7 @@ class TestAuthorization:
 
     @pytest.mark.asyncio
     async def test_deactivated_super_admin_cannot_set_max_dau(self) -> None:
+        # Inactive-admin снова бьётся defense-in-depth-проверкой до RBAC.
         admins = FakeAdminRepository()
         _seed_admin(admins, tg_id=123, role=AdminRole.SUPER_ADMIN, is_active=False)
         audit = FakeAuditLogger()
@@ -195,13 +222,16 @@ class TestAudit:
         assert audit.entries[0].after == {"max_dau": 200}
 
     @pytest.mark.asyncio
-    async def test_unauthorized_does_not_write_audit(self) -> None:
+    async def test_unauthorized_does_not_write_system_audit(self) -> None:
+        # Спринт 2.5-D.7: системный `DAU_LIMIT_CHANGE`-audit не пишется при отказе.
+        # Запись `ADMIN_AUTHORIZATION_DENIED` идёт в admin-audit (RBAC-канал) —
+        # покрыто отдельными тестами TestAuthorization выше.
         admins = FakeAdminRepository()
         _seed_admin(admins, tg_id=456, role=AdminRole.SUPPORT)
         audit = FakeAuditLogger()
 
         use_case, _limit, _clock, _uow = _build_use_case(admins=admins, audit=audit)
-        with pytest.raises(AuthorizationError):
+        with pytest.raises(AdminAuthorizationDeniedError):
             await use_case.execute(actor_tg_id=456, new_max_dau=1000)
         assert audit.entries == []
 
