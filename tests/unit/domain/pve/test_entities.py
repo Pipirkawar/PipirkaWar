@@ -29,9 +29,10 @@ class TestPveLocationKind:
         assert PveLocationKind.DUNGEON.value == "dungeon"
 
     def test_str_inheritance(self) -> None:
-        # str-enum: можно сравнивать со строкой и сериализовать в JSON.
-        assert PveLocationKind.MOUNTAINS == "mountains"
-        assert PveLocationKind.DUNGEON == "dungeon"
+        # str-enum: значение совместимо со строкой (для сериализации/JSON).
+        assert isinstance(PveLocationKind.MOUNTAINS.value, str)
+        assert str(PveLocationKind.MOUNTAINS.value) == "mountains"
+        assert str(PveLocationKind.DUNGEON.value) == "dungeon"
 
 
 class TestPveOutcomeBranch:
@@ -63,7 +64,7 @@ class TestPveOutcomeBranch:
     def test_frozen(self) -> None:
         branch = PveOutcomeBranch(name="x", sign=PveSign.GAIN, length_cm=5)
         with pytest.raises(AttributeError):
-            branch.length_cm = 99  # type: ignore[misc]
+            branch.length_cm = 99
 
 
 class TestPveItemDrop:
@@ -74,7 +75,7 @@ class TestPveItemDrop:
     def test_frozen(self) -> None:
         drop = PveItemDrop(item=_item())
         with pytest.raises(AttributeError):
-            drop.item = _item()  # type: ignore[misc]
+            drop.item = _item()
 
 
 class TestPveRunOutcome:
@@ -122,4 +123,4 @@ class TestPveRunOutcome:
         branch = PveOutcomeBranch(name="normal_gain", sign=PveSign.GAIN, length_cm=10)
         outcome = PveRunOutcome(branch=branch, length_delta_cm=10, drops=())
         with pytest.raises(AttributeError):
-            outcome.length_delta_cm = 99  # type: ignore[misc]
+            outcome.length_delta_cm = 99

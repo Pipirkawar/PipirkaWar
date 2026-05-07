@@ -140,7 +140,7 @@ class TestMountainRunImmutability:
             ends_at=started + timedelta(minutes=30),
         )
         with pytest.raises(AttributeError):
-            run.player_id = 999  # type: ignore[misc]
+            run.player_id = 999
 
     def test_drops_is_tuple(self) -> None:
         started = _now()
