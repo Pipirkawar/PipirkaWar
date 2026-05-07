@@ -28,6 +28,9 @@ from pipirik_wars.domain.admin.ports.admin_confirm import (
     IAdminConfirmStore,
     ITotpVerifier,
 )
+from pipirik_wars.domain.admin.ports.totp_secret_generator import (
+    ITotpSecretGenerator,
+)
 
 __all__ = [
     "AdminAuditAction",
@@ -37,5 +40,6 @@ __all__ = [
     "IAdminAuditLogger",
     "IAdminAuditQuery",
     "IAdminConfirmStore",
+    "ITotpSecretGenerator",
     "ITotpVerifier",
 ]

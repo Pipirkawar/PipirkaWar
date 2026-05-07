@@ -132,6 +132,23 @@ class AdminAuditAction(str, enum.Enum):
     # `/confirm`-токена: повторный TOTP уже не сработает.
     ADMIN_BROADCAST_SENT = "admin_broadcast_sent"
 
+    # ── Спринт 2.5-D.6 (`/admin_setup_totp`) ──
+    # Write-side: super-admin самостоятельно настроил себе TOTP-секрет
+    # через `/admin_setup_totp <bootstrap_password>`. Команда защищена
+    # одноразовым `bootstrap_admin_password` (constant-time check), и
+    # повторная настройка для того же админа отбивается на уровне
+    # use-case-а (`TotpAlreadyConfiguredError` — без перезаписи), —
+    # это дополнительная защита: если злоумышленник перехватил
+    # bootstrap-пароль, то перезаписать чужой `totp_secret` он не
+    # сможет, не сбросив поле руками в БД. `target_kind="admin"` /
+    # `target_id=<self admin_id>` — `actor` и `target` совпадают по
+    # дизайну (super-admin настраивает себе). `after`/`before` —
+    # `None`: сам секрет в audit-лог не пишется, чтобы из аудита его
+    # нельзя было извлечь; `reason` хранит «self setup via
+    # /admin_setup_totp». `idempotency_key` — `None`: повторный вызов
+    # уже отбивается use-case-ом.
+    ADMIN_TOTP_SETUP = "admin_totp_setup"
+
 
 class AdminAuditSource(str, enum.Enum):
     """Источник админ-команды.

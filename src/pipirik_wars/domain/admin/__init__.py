@@ -40,9 +40,15 @@ from pipirik_wars.domain.admin.ports import (
     IAdminAuditLogger,
     IAdminAuditQuery,
     IAdminConfirmStore,
+    ITotpSecretGenerator,
     ITotpVerifier,
 )
 from pipirik_wars.domain.admin.repositories import IAdminRepository
+from pipirik_wars.domain.admin.setup_totp_errors import (
+    BootstrapPasswordInvalidError,
+    BootstrapPasswordNotConfiguredError,
+    TotpAlreadyConfiguredError,
+)
 
 __all__ = [
     "Admin",
@@ -56,6 +62,8 @@ __all__ = [
     "AdminConfirmError",
     "AdminConfirmRequest",
     "AdminRole",
+    "BootstrapPasswordInvalidError",
+    "BootstrapPasswordNotConfiguredError",
     "ConfirmAdminMismatchError",
     "ConfirmCodeInvalidError",
     "ConfirmTokenExpiredError",
@@ -65,7 +73,9 @@ __all__ = [
     "IAdminAuthorizationPolicy",
     "IAdminConfirmStore",
     "IAdminRepository",
+    "ITotpSecretGenerator",
     "ITotpVerifier",
     "RoleBasedAdminAuthorizationPolicy",
+    "TotpAlreadyConfiguredError",
     "TotpNotConfiguredError",
 ]
