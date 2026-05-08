@@ -65,6 +65,8 @@ from pipirik_wars.application.caravans import (
     CloseCaravanLobby,
     CreateCaravan,
     FinishCaravanBattle,
+    ICaravanBattleFinishNotifier,
+    ICaravanLobbyCloseNotifier,
     JoinCaravanLobby,
     LeaveCaravanLobby,
 )
@@ -150,6 +152,8 @@ from pipirik_wars.application.top import (
 from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import AdminGuard, register_middlewares
 from pipirik_wars.bot.notifications import (
+    TelegramCaravanBattleFinishNotifier,
+    TelegramCaravanLobbyCloseNotifier,
     TelegramDungeonFinishNotifier,
     TelegramForestFinishNotifier,
     TelegramMountainFinishNotifier,
@@ -679,6 +683,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     weekly_referral_summary_notifier: IWeeklyClanReferralSummaryNotifier | None = None
     mountain_notifier: IMountainFinishNotifier | None = None
     dungeon_notifier: IDungeonFinishNotifier | None = None
+    caravan_lobby_close_notifier: ICaravanLobbyCloseNotifier | None = None
+    caravan_battle_finish_notifier: ICaravanBattleFinishNotifier | None = None
     if bot is not None:
         forest_notifier = TelegramForestFinishNotifier(
             bot=bot,
@@ -710,6 +716,29 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
             bundle=bundle,
             locale_resolver=player_locale_resolver,
         )
+        # Спринт 3.2-D D.6: caravan-нотификаторы старта/финиша боя.
+        # Шлют посты в чаты `sender_clan.chat_id` / `receiver_clan.chat_id`
+        # после `LOBBY → IN_BATTLE` (lobby_close) и `IN_BATTLE → FINISHED`
+        # (battle_finish). Доставка best-effort, локаль лидера резолвится
+        # через `player_locale_resolver` с фолбэком на EN.
+        caravan_lobby_close_notifier = TelegramCaravanLobbyCloseNotifier(
+            bot=bot,
+            bundle=bundle,
+            balance=balance,
+            clans=clans,
+            players=players,
+            participants=caravan_participants,
+            locale_resolver=player_locale_resolver,
+        )
+        caravan_battle_finish_notifier = TelegramCaravanBattleFinishNotifier(
+            bot=bot,
+            bundle=bundle,
+            balance=balance,
+            clans=clans,
+            players=players,
+            participants=caravan_participants,
+            locale_resolver=player_locale_resolver,
+        )
     # Late-bound фабрики для PvP-lobby job-ов: scheduler нужен раньше,
     # чем `escalate_chat_to_global` / `expire_lobby_entry`, поэтому передаём
     # лямбды-замыкания, которые резолвятся при срабатывании job-а — после
@@ -739,6 +768,10 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         # Спринт 3.2-C: late-bound фабрика `caravan_battle_finish`.
         # `finish_caravan_battle` создаётся ниже (после delayed_jobs).
         caravan_battle_finish_factory=lambda: finish_caravan_battle,
+        # Спринт 3.2-D D.6: caravan-нотификаторы (best-effort, могут быть
+        # `None` в unit-тестах APScheduler-а или когда `bot is None`).
+        caravan_lobby_close_notifier=caravan_lobby_close_notifier,
+        caravan_battle_finish_notifier=caravan_battle_finish_notifier,
         clans=clans,
     )
     start_forest_run = StartForestRun(
