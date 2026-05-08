@@ -24,6 +24,10 @@ from typing import Final
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from pipirik_wars.application.bosses import (
+    BossLobbyClosed,
+    CloseBossLobby,
+)
 from pipirik_wars.application.caravans import (
     CaravanBattleFinished,
     CloseCaravanLobby,
@@ -37,6 +41,7 @@ from pipirik_wars.application.daily_head import (
     ScheduleDailyHeadCronJobs,
 )
 from pipirik_wars.application.dto.inputs import (
+    CloseBossLobbyInput,
     CloseCaravanLobbyInput,
     EscalateChatToGlobalInput,
     ExpireLobbyEntryInput,
@@ -205,6 +210,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
 
     __slots__ = (
         "_afk_resolution_factory",
+        "_boss_lobby_close_factory",
         "_caravan_battle_finish_factory",
         "_caravan_battle_finish_notifier",
         "_caravan_lobby_close_factory",
@@ -249,6 +255,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         caravan_battle_finish_factory: Callable[[], FinishCaravanBattle] | None = None,
         caravan_lobby_close_notifier: ICaravanLobbyCloseNotifier | None = None,
         caravan_battle_finish_notifier: ICaravanBattleFinishNotifier | None = None,
+        boss_lobby_close_factory: Callable[[], CloseBossLobby] | None = None,
         clans: IClanRepository | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
@@ -271,6 +278,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._caravan_battle_finish_factory = caravan_battle_finish_factory
         self._caravan_lobby_close_notifier = caravan_lobby_close_notifier
         self._caravan_battle_finish_notifier = caravan_battle_finish_notifier
+        self._boss_lobby_close_factory = boss_lobby_close_factory
         self._clans = clans
         self._logger = logger or logging.getLogger(__name__)
 
@@ -719,16 +727,43 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
             return
 
     async def _run_boss_lobby_close_job(self, boss_fight_id: int) -> None:
-        """Callback `CloseBossLobby`-job-а (Спринт 3.3-B B.3, factory — B.11).
+        """Callback `CloseBossLobby`-job-а (Спринт 3.3-B B.11).
 
-        В B.3 фабрика ещё не подвязана: пишем warning и тихо выходим.
-        Полный wiring (`boss_lobby_close_factory` / `notifier`) приходит
-        в B.11 / 3.3-D bot-handler-ах. Реализация callback-а будет
-        переписана в B.11 по образцу `_run_caravan_lobby_close_job`.
+        Срабатывает в `boss_fight.lobby_ends_at` и переводит рейд-бой
+        `LOBBY → IN_BATTLE`. Если фабрика не подвязана (recovery /
+        тесты APScheduler-а самого по себе) — пишем warning и тихо
+        выходим. Use-case сам идемпотентен: повторный вызов на
+        уже не-`LOBBY` рейд-бое вернёт `was_already_closed=True`.
+
+        Notifier пока не предусмотрен (3.3-D добавит уведомление в
+        чат саммонера / рейдеров о старте боя).
         """
-        self._logger.warning(
-            "boss_lobby_close: factory not wired",
-            extra={"boss_fight_id": boss_fight_id},
+        if self._boss_lobby_close_factory is None:
+            self._logger.warning(
+                "boss_lobby_close: factory not wired",
+                extra={"boss_fight_id": boss_fight_id},
+            )
+            return
+        result: BossLobbyClosed | None = None
+        try:
+            use_case = self._boss_lobby_close_factory()
+            result = await use_case.execute(CloseBossLobbyInput(boss_fight_id=boss_fight_id))
+        except Exception as exc:
+            self._logger.exception(
+                "boss_lobby_close: unexpected error",
+                extra={"boss_fight_id": boss_fight_id, "error": type(exc).__name__},
+            )
+            return
+
+        # 3.3-D добавит notifier; пока просто логируем результат на info-уровне.
+        if result is None:
+            return
+        self._logger.info(
+            "boss_lobby_close: done",
+            extra={
+                "boss_fight_id": boss_fight_id,
+                "was_already_closed": result.was_already_closed,
+            },
         )
 
     async def _run_boss_round_tick_job(self, boss_fight_id: int) -> None:

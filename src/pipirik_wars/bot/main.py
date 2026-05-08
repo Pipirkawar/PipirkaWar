@@ -60,6 +60,12 @@ from pipirik_wars.application.admin import (
 )
 from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.balance import ReloadBalance
+from pipirik_wars.application.bosses import (
+    CloseBossLobby,
+    JoinBossLobby,
+    LeaveBossLobby,
+    SummonBoss,
+)
 from pipirik_wars.application.caravans import (
     CancelCaravan,
     CloseCaravanLobby,
@@ -171,6 +177,10 @@ from pipirik_wars.domain.admin import (
 )
 from pipirik_wars.domain.anticheat import IAnticheatAdminAlerter, IAnticheatRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
+from pipirik_wars.domain.bosses import (
+    IBossFightRepository,
+    IBossParticipantRepository,
+)
 from pipirik_wars.domain.caravan import (
     ICaravanParticipantRepository,
     ICaravanRepository,
@@ -221,6 +231,8 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyActivityLockRepository,
     SqlAlchemyAdminRepository,
     SqlAlchemyAnticheatRepository,
+    SqlAlchemyBossFightRepository,
+    SqlAlchemyBossParticipantRepository,
     SqlAlchemyCaravanParticipantRepository,
     SqlAlchemyCaravanRepository,
     SqlAlchemyClanMassDuelHistoryQuery,
@@ -381,6 +393,16 @@ class Container:
     leave_caravan_lobby: LeaveCaravanLobby
     cancel_caravan: CancelCaravan
     close_caravan_lobby: CloseCaravanLobby
+    # Рейд-боссы (Спринт 3.3, ГДД §10). 3.3-B — use-case-ы + persistence;
+    # bot-handler `/boss` — 3.3-D. До тех пор use-case-ы доступны через
+    # Container, но в dispatcher не пробрасываются. Боевая механика
+    # (`RunBossRound` / `FinishBossFight` + scroll-drops) — 3.3-C.
+    boss_fights: IBossFightRepository
+    boss_participants: IBossParticipantRepository
+    summon_boss: SummonBoss
+    join_boss_lobby: JoinBossLobby
+    leave_boss_lobby: LeaveBossLobby
+    close_boss_lobby: CloseBossLobby
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
@@ -528,6 +550,11 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     # `caravan_lobby_close` ходит через `close_caravan_lobby_factory`.
     caravans = SqlAlchemyCaravanRepository(uow=uow)
     caravan_participants = SqlAlchemyCaravanParticipantRepository(uow=uow)
+    # Спринт 3.3-B: рейд-боссы (ГДД §10). Bot-handler `/boss` — 3.3-D.
+    # До тех пор use-case-ы доступны через Container; APScheduler-job
+    # `boss_lobby_close` ходит через `boss_lobby_close_factory`.
+    boss_fights = SqlAlchemyBossFightRepository(uow=uow)
+    boss_participants = SqlAlchemyBossParticipantRepository(uow=uow)
     oracle_history = SqlAlchemyOracleHistoryRepository(uow=uow)
     duels = SqlAlchemyDuelRepository(uow=uow)
     mass_duels = SqlAlchemyMassDuelRepository(uow=uow)
@@ -772,6 +799,11 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         # `None` в unit-тестах APScheduler-а или когда `bot is None`).
         caravan_lobby_close_notifier=caravan_lobby_close_notifier,
         caravan_battle_finish_notifier=caravan_battle_finish_notifier,
+        # Спринт 3.3-B: late-bound фабрика `boss_lobby_close`.
+        # `close_boss_lobby` создаётся ниже (после delayed_jobs).
+        # `RunBossRound` / `FinishBossFight`-фабрики появятся в 3.3-C
+        # (вместе с notifier-ами в 3.3-D).
+        boss_lobby_close_factory=lambda: close_boss_lobby,
         clans=clans,
     )
     start_forest_run = StartForestRun(
@@ -910,6 +942,48 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clock=clock,
         balance=balance.get().caravans,
         random_factory=SeededRandom,
+    )
+    # Спринт 3.3-B: рейд-босс use-case-ы (ГДД §10). `close_boss_lobby`
+    # вызывается двумя путями: APScheduler-job-ом из `delayed_jobs`
+    # (через `boss_lobby_close_factory`-замыкание выше) и саммонером
+    # вручную через `/boss_start` (3.3-D). Use-case идемпотентен —
+    # оба пути безопасны при race-condition (`was_already_closed=True`).
+    summon_boss = SummonBoss(
+        uow=uow,
+        players=players,
+        boss_fights=boss_fights,
+        boss_participants=boss_participants,
+        locks=activity_lock_service,
+        balance=balance,
+        random=RealRandom(),
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
+    )
+    join_boss_lobby = JoinBossLobby(
+        uow=uow,
+        players=players,
+        boss_fights=boss_fights,
+        boss_participants=boss_participants,
+        locks=activity_lock_service,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    leave_boss_lobby = LeaveBossLobby(
+        uow=uow,
+        players=players,
+        boss_fights=boss_fights,
+        boss_participants=boss_participants,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+    )
+    close_boss_lobby = CloseBossLobby(
+        uow=uow,
+        boss_fights=boss_fights,
+        audit=audit,
+        clock=clock,
     )
     upgrade_thickness = UpgradeThickness(
         uow=uow,
@@ -1428,6 +1502,12 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         leave_caravan_lobby=leave_caravan_lobby,
         cancel_caravan=cancel_caravan,
         close_caravan_lobby=close_caravan_lobby,
+        boss_fights=boss_fights,
+        boss_participants=boss_participants,
+        summon_boss=summon_boss,
+        join_boss_lobby=join_boss_lobby,
+        leave_boss_lobby=leave_boss_lobby,
+        close_boss_lobby=close_boss_lobby,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,
