@@ -883,6 +883,37 @@ caravans-button-join-defender = Вступить как защитник
 caravans-button-join-raider = Вступить как рейдер
 caravans-button-leave = Покинуть
 
+# --- Старт боя / финиш боя (Спринт 3.2-D, D.4–D.6) ---
+# Публикуются APScheduler-callback-ами в чат-отправитель и чат-получатель
+# каравана сразу после успешных `LOBBY → IN_BATTLE` и `IN_BATTLE → FINISHED`.
+
+caravans-battle-started =
+    🐪 Караван от <b>{ $sender_clan_name }</b> к <b>{ $receiver_clan_name }</b> отправился в путь!
+
+    Лидер: <b>{ $leader_nick }</b>
+    Караванщики: { NUMBER($caravaneers_count, useGrouping: 0) }
+    Защитники: { NUMBER($defenders_count, useGrouping: 0) }
+    Рейдеры: { NUMBER($raiders_count, useGrouping: 0) }
+    Груз: { NUMBER($total_cargo_cm, useGrouping: 0) } см
+
+    ⚔️ Бой завершится примерно через { NUMBER($battle_minutes, useGrouping: 0) } мин.
+caravans-battle-finished-delivered =
+    ✅ Караван от <b>{ $sender_clan_name }</b> доставлен в <b>{ $receiver_clan_name }</b>!
+
+    Лидер: <b>{ $leader_nick }</b>
+    Караванщики выжили: { NUMBER($caravaneers_alive, useGrouping: 0) } / { NUMBER($caravaneers_total, useGrouping: 0) }
+    Защитники выжили: { NUMBER($defenders_alive, useGrouping: 0) } / { NUMBER($defenders_total, useGrouping: 0) }
+
+    🎁 Каждый член клана-отправителя получил +{ NUMBER($clan_bonus_sender_cm, useGrouping: 0) } см.
+    🎁 Каждый член клана-получателя получил +{ NUMBER($clan_bonus_receiver_cm, useGrouping: 0) } см.
+caravans-battle-finished-raided =
+    ☠️ Караван от <b>{ $sender_clan_name }</b> к <b>{ $receiver_clan_name }</b> разграблен!
+
+    Лидер: <b>{ $leader_nick }</b>
+    Атаман-победитель: <b>{ $ataman_nick }</b>
+
+    Груз ({ NUMBER($total_cargo_cm, useGrouping: 0) } см) поделён между { NUMBER($raiders_count, useGrouping: 0) } рейдерами.
+
 # --- Callback `caravan:cancel:<id>` (Спринт 3.2-D, D.3) ---
 
 caravans-cancel-message = 🐪 Караван отменён лидером.

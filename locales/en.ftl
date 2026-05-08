@@ -879,6 +879,37 @@ caravans-button-join-defender = Join as defender
 caravans-button-join-raider = Join as raider
 caravans-button-leave = Leave
 
+# --- Battle started / battle finished (Sprint 3.2-D, D.4–D.6) ---
+# Published by APScheduler callbacks to the sender and receiver clan chats
+# right after the successful `LOBBY → IN_BATTLE` and `IN_BATTLE → FINISHED`.
+
+caravans-battle-started =
+    🐪 Caravan from <b>{ $sender_clan_name }</b> to <b>{ $receiver_clan_name }</b> set off!
+
+    Leader: <b>{ $leader_nick }</b>
+    Caravaneers: { NUMBER($caravaneers_count, useGrouping: 0) }
+    Defenders: { NUMBER($defenders_count, useGrouping: 0) }
+    Raiders: { NUMBER($raiders_count, useGrouping: 0) }
+    Cargo: { NUMBER($total_cargo_cm, useGrouping: 0) } cm
+
+    ⚔️ Battle will end in roughly { NUMBER($battle_minutes, useGrouping: 0) } min.
+caravans-battle-finished-delivered =
+    ✅ Caravan from <b>{ $sender_clan_name }</b> delivered to <b>{ $receiver_clan_name }</b>!
+
+    Leader: <b>{ $leader_nick }</b>
+    Caravaneers survived: { NUMBER($caravaneers_alive, useGrouping: 0) } / { NUMBER($caravaneers_total, useGrouping: 0) }
+    Defenders survived: { NUMBER($defenders_alive, useGrouping: 0) } / { NUMBER($defenders_total, useGrouping: 0) }
+
+    🎁 Every member of the sender clan got +{ NUMBER($clan_bonus_sender_cm, useGrouping: 0) } cm.
+    🎁 Every member of the receiver clan got +{ NUMBER($clan_bonus_receiver_cm, useGrouping: 0) } cm.
+caravans-battle-finished-raided =
+    ☠️ Caravan from <b>{ $sender_clan_name }</b> to <b>{ $receiver_clan_name }</b> was raided!
+
+    Leader: <b>{ $leader_nick }</b>
+    Winning ataman: <b>{ $ataman_nick }</b>
+
+    Cargo ({ NUMBER($total_cargo_cm, useGrouping: 0) } cm) split between { NUMBER($raiders_count, useGrouping: 0) } raiders.
+
 # --- Callback `caravan:cancel:<id>` (Sprint 3.2-D, D.3) ---
 
 caravans-cancel-message = 🐪 Caravan cancelled by the leader.

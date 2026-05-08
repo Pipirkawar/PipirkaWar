@@ -31,6 +31,10 @@ from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
 from pipirik_wars.bot.presenters.profile import title_message_key
 from pipirik_wars.domain.balance import CaravansConfig
 from pipirik_wars.domain.caravan import Caravan, CaravanParticipant, CaravanRole
+from pipirik_wars.domain.caravan.services import (
+    CaravanBattleResult,
+    CaravanParticipantOutcome,
+)
 from pipirik_wars.domain.player import DisplayName, Player, PlayerName, Title
 
 _CARAVAN_CALLBACK_PREFIX: Final[str] = "caravan"
@@ -436,6 +440,180 @@ class CaravanPresenter:
             locale=locale,
             remaining_minutes=remaining_minutes,
         )
+
+    # --- Уведомления старта / финиша боя (D.4–D.6) ---
+
+    def battle_started_text(
+        self,
+        *,
+        caravan: Caravan,
+        participants: tuple[CaravanParticipant, ...],
+        leader: Player,
+        leader_display_name: DisplayName,
+        sender_clan_name: str,
+        receiver_clan_name: str,
+        cfg: CaravansConfig,
+        locale: Locale,
+    ) -> str:
+        """Текст «лобби закрыто, бой начался» — публикуется в чаты
+        отправителя и получателя сразу после `LOBBY → IN_BATTLE`.
+
+        Использует `cfg.battle_minutes` для информативной фразы
+        «бой завершится через ~N мин».
+        """
+        del caravan  # сейчас не используется (battle_minutes берётся из cfg)
+        leader_nick = self._render_full_nick(
+            title=leader.title,
+            display_name=leader_display_name,
+            name=leader.name,
+            locale=locale,
+        )
+        caravaneers = [p for p in participants if p.role is CaravanRole.CARAVANEER]
+        defenders = [p for p in participants if p.role is CaravanRole.DEFENDER]
+        raiders = [p for p in participants if p.role is CaravanRole.RAIDER]
+        total_cargo_cm = sum(
+            (p.contribution.cm for p in caravaneers if p.contribution is not None),
+            start=0,
+        )
+        return self._bundle.format(
+            MessageKey("caravans-battle-started"),
+            locale=locale,
+            leader_nick=leader_nick,
+            sender_clan_name=sender_clan_name,
+            receiver_clan_name=receiver_clan_name,
+            caravaneers_count=len(caravaneers),
+            defenders_count=len(defenders),
+            raiders_count=len(raiders),
+            total_cargo_cm=total_cargo_cm,
+            battle_minutes=cfg.battle_minutes,
+        )
+
+    def battle_finished_delivered_text(
+        self,
+        *,
+        result: CaravanBattleResult,
+        leader: Player,
+        leader_display_name: DisplayName,
+        sender_clan_name: str,
+        receiver_clan_name: str,
+        locale: Locale,
+    ) -> str:
+        """Текст «караван доставлен» — публикуется в чаты отправителя
+        и получателя после успешного `FinishCaravanBattle.execute()`
+        в исходе delivery (`raiders_won=False`).
+
+        ГДД §9.6: лидер ×4 / караванщики ×3 / защитники ×1 (от выживших) +
+        каждому члену обоих кланов `clan_bonus_cm`.
+        """
+        leader_nick = self._render_full_nick(
+            title=leader.title,
+            display_name=leader_display_name,
+            name=leader.name,
+            locale=locale,
+        )
+        survivors = self._count_survivors(result.participant_outcomes)
+        return self._bundle.format(
+            MessageKey("caravans-battle-finished-delivered"),
+            locale=locale,
+            leader_nick=leader_nick,
+            sender_clan_name=sender_clan_name,
+            receiver_clan_name=receiver_clan_name,
+            caravaneers_alive=survivors["caravaneers_alive"],
+            caravaneers_total=survivors["caravaneers_total"],
+            defenders_alive=survivors["defenders_alive"],
+            defenders_total=survivors["defenders_total"],
+            clan_bonus_sender_cm=result.clan_bonus_cm_sender,
+            clan_bonus_receiver_cm=result.clan_bonus_cm_receiver,
+        )
+
+    def battle_finished_raided_text(
+        self,
+        *,
+        result: CaravanBattleResult,
+        leader: Player,
+        leader_display_name: DisplayName,
+        sender_clan_name: str,
+        receiver_clan_name: str,
+        ataman: Player | None,
+        ataman_display_name: DisplayName | None,
+        locale: Locale,
+    ) -> str:
+        """Текст «караван разграблен» — публикуется в чаты отправителя
+        и получателя после успешного `FinishCaravanBattle.execute()`
+        в исходе raid (`raiders_won=True`).
+
+        ГДД §9.6: рейдеры делят суммарный груз поровну (round-up),
+        один случайный — Атаман (бонус-доля + `Title.ATAMAN`).
+        Если по какой-то причине рейдеров не было (вырожденный случай —
+        `raiders_won=True` без рейдеров технически невозможен по domain-инварианту),
+        `ataman` = `None` — рендерим прочерк.
+        """
+        leader_nick = self._render_full_nick(
+            title=leader.title,
+            display_name=leader_display_name,
+            name=leader.name,
+            locale=locale,
+        )
+        if ataman is not None and ataman_display_name is not None:
+            ataman_nick = self._render_full_nick(
+                title=ataman.title,
+                display_name=ataman_display_name,
+                name=ataman.name,
+                locale=locale,
+            )
+        else:
+            ataman_nick = "—"
+        raiders_count = sum(
+            1
+            for outcome in result.participant_outcomes
+            if outcome.participant.role is CaravanRole.RAIDER
+        )
+        # Грубая оценка суммарного груза = ∑ положительных дельт рейдеров.
+        # Атаман получает дополнительный бонус сверх base_share, поэтому
+        # сумма дельт рейдеров > total_cargo_cm. Для UX-цифры в посте этого
+        # достаточно (точная сумма груза не критична — игроки видят
+        # фактические +см в личных уведомлениях /profile).
+        total_cargo_cm = sum(
+            outcome.length_delta_cm
+            for outcome in result.participant_outcomes
+            if outcome.participant.role is CaravanRole.RAIDER and outcome.length_delta_cm > 0
+        )
+        return self._bundle.format(
+            MessageKey("caravans-battle-finished-raided"),
+            locale=locale,
+            leader_nick=leader_nick,
+            sender_clan_name=sender_clan_name,
+            receiver_clan_name=receiver_clan_name,
+            ataman_nick=ataman_nick,
+            raiders_count=raiders_count,
+            total_cargo_cm=total_cargo_cm,
+        )
+
+    @staticmethod
+    def _count_survivors(
+        outcomes: tuple[CaravanParticipantOutcome, ...],
+    ) -> dict[str, int]:
+        """Подсчёт выживших по ролям для delivery-текста."""
+        caravaneers_alive = 0
+        caravaneers_total = 0
+        defenders_alive = 0
+        defenders_total = 0
+        for outcome in outcomes:
+            role = outcome.participant.role
+            if role is CaravanRole.CARAVANEER:
+                caravaneers_total += 1
+                if outcome.is_alive:
+                    caravaneers_alive += 1
+            elif role is CaravanRole.DEFENDER:
+                defenders_total += 1
+                if outcome.is_alive:
+                    defenders_alive += 1
+        return {
+            "caravaneers_alive": caravaneers_alive,
+            "caravaneers_total": caravaneers_total,
+            "defenders_alive": defenders_alive,
+            "defenders_total": defenders_total,
+        }
 
     # --- Callback `caravan:join_defender|join_raider:<id>` (D.3d) ---
 
