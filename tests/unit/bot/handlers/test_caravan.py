@@ -26,6 +26,8 @@ from pipirik_wars.application.caravans import (
     CaravanCancelled,
     CaravanCreated,
     CreateCaravan,
+    JoinCaravanLobby,
+    JoinedCaravanLobby,
 )
 from pipirik_wars.application.i18n import IMessageBundle, Locale
 from pipirik_wars.application.player import GetProfile, ProfileView
@@ -38,8 +40,10 @@ from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.caravan import (
     AlreadyInCaravanError,
     Caravan,
+    CaravanCapacityExceededError,
     CaravanContribution,
     CaravanCooldownError,
+    CaravanLobbyClosedError,
     CaravanNotFoundError,
     CaravanParticipant,
     CaravanRequirementError,
@@ -790,6 +794,44 @@ def _stub_cancel_caravan(
     return use_case
 
 
+def _stub_join_caravan_lobby(
+    *,
+    error: BaseException | None = None,
+) -> MagicMock:
+    """`JoinCaravanLobby`-stub. На `error` — `side_effect`, иначе success.
+
+    Возвращаемое значение в success-ветке handler-у не нужно (он только
+    проверяет, что use-case не упал), но возвращаем валидный
+    `JoinedCaravanLobby` — это и контракт документирует, и mypy
+    spec-инициализацию не сломает.
+    """
+    use_case = MagicMock(spec=JoinCaravanLobby)
+    if error is not None:
+        use_case.execute = AsyncMock(side_effect=error)
+        return use_case
+    caravan = Caravan(
+        id=_CARAVAN_ID,
+        sender_clan_id=1,
+        receiver_clan_id=2,
+        leader_player_id=1,
+        status=CaravanStatus.LOBBY,
+        started_at=_NOW,
+        lobby_ends_at=_NOW + timedelta(minutes=20),
+        battle_ends_at=_NOW + timedelta(minutes=80),
+        random_seed=12345,
+        finished_at=None,
+    )
+    participant = CaravanParticipant.defender(
+        caravan_id=_CARAVAN_ID,
+        player_id=2,
+        joined_at=_NOW,
+    )
+    use_case.execute = AsyncMock(
+        return_value=JoinedCaravanLobby(caravan=caravan, participant=participant),
+    )
+    return use_case
+
+
 def _callback(
     *,
     data: str = f"caravan:cancel:{_CARAVAN_ID}",
@@ -819,6 +861,7 @@ async def _invoke_callback(
     *,
     identity: TgIdentity | None | object = _UNSET,
     cancel_caravan: MagicMock | None = None,
+    join_caravan_lobby: MagicMock | None = None,
     caravans: ICaravanRepository | None = None,
     caravan_participants: ICaravanParticipantRepository | None = None,
     clans: IClanRepository | None = None,
@@ -835,11 +878,13 @@ async def _invoke_callback(
     они до них не доходят (cancel идёт через use-case).
     """
     cancel_uc = cancel_caravan or _stub_cancel_caravan()
+    join_uc = join_caravan_lobby or _stub_join_caravan_lobby()
     effective_identity = _identity() if identity is _UNSET else cast(TgIdentity | None, identity)
     await handle_caravan_callback(
         cast(CallbackQuery, callback),
         effective_identity,
         cast(CancelCaravan, cancel_uc),
+        cast(JoinCaravanLobby, join_uc),
         caravans or FakeCaravanRepository(),
         caravan_participants or FakeCaravanParticipantRepository(),
         clans or FakeClanRepository(),
@@ -871,10 +916,9 @@ class TestCancelCallback:
         assert "caravans-callback-toast-generic-error" in toast_text
 
     async def test_unsupported_action_acked_silently(self) -> None:
-        # `join_defender` / `join_raider` / `leave` пока не реализованы
-        # (D.3d/e) — handler должен ack-нуть без мутации, чтобы кнопка
-        # не «висела» с loading-индикатором.
-        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
+        # `leave` пока не реализован (D.3e) — handler должен ack-нуть
+        # без мутации, чтобы кнопка не «висела» с loading-индикатором.
+        callback = _callback(data=f"caravan:leave:{_CARAVAN_ID}")
         cancel_uc = await _invoke_callback(callback)
         cancel_uc.execute.assert_not_called()
         callback.answer.assert_awaited_once()
@@ -1232,3 +1276,239 @@ class TestShowLobbyCallback:
             players=players,
         )
         callback.answer.assert_awaited_once()
+
+
+# ──────────── callback `caravan:join_defender|join_raider:<id>` (D.3d) ────────────
+
+
+@pytest.mark.asyncio
+class TestJoinCallback:
+    """`caravan:join_defender:<id>` / `caravan:join_raider:<id>` (Спринт 3.2-D, D.3d).
+
+    Use-case-уровень покрыт юнит-тестами `JoinCaravanLobby` (Спринт 3.2-B);
+    здесь — только маппинг доменных ошибок в локализованные toast-ы и
+    happy-path с refresh-ем lobby-сообщения.
+    """
+
+    async def test_no_identity_returns_silently(self) -> None:
+        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby()
+        await _invoke_callback(callback, identity=None, join_caravan_lobby=join_uc)
+        callback.answer.assert_not_called()
+        join_uc.execute.assert_not_called()
+
+    async def test_caravan_not_found_emits_toast_no_edit(self) -> None:
+        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby(
+            error=CaravanNotFoundError(caravan_id=_CARAVAN_ID),
+        )
+        await _invoke_callback(callback, join_caravan_lobby=join_uc)
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-caravan-not-found" in toast_text
+        callback.message.edit_text.assert_not_called()
+
+    async def test_lobby_closed_emits_toast(self) -> None:
+        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby(
+            error=CaravanLobbyClosedError(caravan_id=_CARAVAN_ID, status="in_battle"),
+        )
+        await _invoke_callback(callback, join_caravan_lobby=join_uc)
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-lobby-closed" in toast_text
+        callback.message.edit_text.assert_not_called()
+
+    async def test_player_not_found_emits_toast(self) -> None:
+        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby(
+            error=PlayerNotFoundError(tg_id=_LEADER_TG_ID),
+        )
+        await _invoke_callback(callback, join_caravan_lobby=join_uc)
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-player-not-found" in toast_text
+
+    async def test_player_frozen_emits_toast(self) -> None:
+        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby(
+            error=PlayerFrozenError(tg_id=_LEADER_TG_ID),
+        )
+        await _invoke_callback(callback, join_caravan_lobby=join_uc)
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-player-frozen" in toast_text
+
+    async def test_already_in_caravan_emits_toast(self) -> None:
+        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby(
+            error=AlreadyInCaravanError(player_id=2),
+        )
+        await _invoke_callback(callback, join_caravan_lobby=join_uc)
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-already-in-caravan" in toast_text
+
+    async def test_role_conflict_defender_specific_toast(self) -> None:
+        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby(
+            error=CaravanRoleConflictError(
+                player_id=2,
+                attempted_role="defender",
+                reason="not in receiver clan",
+            ),
+        )
+        await _invoke_callback(callback, join_caravan_lobby=join_uc)
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-role-conflict-defender" in toast_text
+
+    async def test_role_conflict_raider_specific_toast(self) -> None:
+        callback = _callback(data=f"caravan:join_raider:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby(
+            error=CaravanRoleConflictError(
+                player_id=2,
+                attempted_role="raider",
+                reason="member of caravan clan",
+            ),
+        )
+        await _invoke_callback(callback, join_caravan_lobby=join_uc)
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-role-conflict-raider" in toast_text
+
+    async def test_capacity_exceeded_defender_passes_limit(self) -> None:
+        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby(
+            error=CaravanCapacityExceededError(
+                caravan_id=_CARAVAN_ID,
+                role="defender",
+                limit=2,
+            ),
+        )
+        await _invoke_callback(callback, join_caravan_lobby=join_uc)
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-capacity-defender" in toast_text
+        assert "limit=2" in toast_text
+
+    async def test_capacity_exceeded_raider_passes_limit(self) -> None:
+        callback = _callback(data=f"caravan:join_raider:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby(
+            error=CaravanCapacityExceededError(
+                caravan_id=_CARAVAN_ID,
+                role="raider",
+                limit=4,
+            ),
+        )
+        await _invoke_callback(callback, join_caravan_lobby=join_uc)
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-capacity-raider" in toast_text
+        assert "limit=4" in toast_text
+
+    async def test_requirement_thickness_passes_required_actual(self) -> None:
+        callback = _callback(data=f"caravan:join_raider:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby(
+            error=CaravanRequirementError(
+                player_id=2,
+                requirement="thickness",
+                required=5,
+                actual=3,
+            ),
+        )
+        await _invoke_callback(callback, join_caravan_lobby=join_uc)
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-requirement-thickness" in toast_text
+        assert "required=5" in toast_text
+        assert "actual=3" in toast_text
+
+    async def test_requirement_length_passes_required_actual(self) -> None:
+        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby(
+            error=CaravanRequirementError(
+                player_id=2,
+                requirement="length_total",
+                required=20,
+                actual=15,
+            ),
+        )
+        await _invoke_callback(callback, join_caravan_lobby=join_uc)
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-requirement-length" in toast_text
+        assert "required_cm=20" in toast_text
+        assert "actual_cm=15" in toast_text
+
+    async def test_happy_path_defender_emits_success_toast_and_refreshes_lobby(
+        self,
+    ) -> None:
+        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby()  # success
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby()
+        await _invoke_callback(
+            callback,
+            join_caravan_lobby=join_uc,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+        )
+        # Toast: успех «ты в лобби как защитник»
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-join-toast-success-defender" in toast_text
+        # Lobby перерисован после join-а
+        callback.message.edit_text.assert_awaited_once()
+        edit_kwargs = callback.message.edit_text.await_args.kwargs
+        assert "caravans-lobby-state" in edit_kwargs["text"]
+        assert isinstance(edit_kwargs["reply_markup"], InlineKeyboardMarkup)
+
+    async def test_happy_path_raider_emits_success_toast(self) -> None:
+        callback = _callback(data=f"caravan:join_raider:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby()  # success
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby()
+        await _invoke_callback(
+            callback,
+            join_caravan_lobby=join_uc,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+        )
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-join-toast-success-raider" in toast_text
+
+    async def test_happy_path_use_case_input_carries_role_and_caravan_id(self) -> None:
+        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby()
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby()
+        await _invoke_callback(
+            callback,
+            join_caravan_lobby=join_uc,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+        )
+        join_uc.execute.assert_awaited_once()
+        input_dto = join_uc.execute.await_args.args[0]
+        assert input_dto.caravan_id == _CARAVAN_ID
+        assert input_dto.tg_id == _LEADER_TG_ID
+        assert input_dto.role == "defender"
+        # `defender`/`raider` через callback всегда без contribution.
+        assert input_dto.contribution_cm is None
+
+    async def test_refresh_skipped_when_caravan_no_longer_in_lobby(self) -> None:
+        """Refresh — best-effort: если караван успел стать `IN_BATTLE`
+        между join-ом и refresh-ем, edit-message не делается, но toast
+        об успехе уже ушёл.
+        """
+        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
+        join_uc = _stub_join_caravan_lobby()
+        # Подменяем караван на «уже не в лобби» к моменту refresh-а.
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby(
+            caravan=_lobby_caravan(status=CaravanStatus.IN_BATTLE),
+        )
+        await _invoke_callback(
+            callback,
+            join_caravan_lobby=join_uc,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+        )
+        callback.answer.assert_awaited_once()
+        callback.message.edit_text.assert_not_called()

@@ -896,3 +896,17 @@ caravans-callback-toast-invalid-state = Караван больше не в ло
 caravans-callback-toast-not-a-leader = Только лидер может отменить караван
 caravans-callback-toast-player-not-found = Сначала нажми /start в личке бота
 caravans-callback-toast-generic-error = Что-то пошло не так. Попробуй ещё раз.
+
+# --- Callback `caravan:join_defender|join_raider:<id>` (Спринт 3.2-D, D.3d) ---
+
+caravans-join-toast-success-defender = Ты в лобби как защитник
+caravans-join-toast-success-raider = Ты в лобби как рейдер
+caravans-callback-toast-lobby-closed = Лобби каравана уже закрыто
+caravans-callback-toast-player-frozen = Твой профиль заморожен
+caravans-callback-toast-already-in-caravan = Ты уже участвуешь в активном караване
+caravans-callback-toast-role-conflict-defender = Защитник должен состоять в клане-получателе
+caravans-callback-toast-role-conflict-raider = Рейдер не должен состоять ни в одном из кланов каравана
+caravans-callback-toast-capacity-defender = Лимит защитников: { NUMBER($limit, useGrouping: 0) }. Слотов больше нет.
+caravans-callback-toast-capacity-raider = Лимит рейдеров: { NUMBER($limit, useGrouping: 0) }. Слотов больше нет.
+caravans-callback-toast-requirement-thickness = Нужна толщина ≥ { NUMBER($required, useGrouping: 0) }. У тебя { NUMBER($actual, useGrouping: 0) }.
+caravans-callback-toast-requirement-length = Нужна длина ≥ { NUMBER($required_cm, useGrouping: 0) } см. У тебя { NUMBER($actual_cm, useGrouping: 0) } см.

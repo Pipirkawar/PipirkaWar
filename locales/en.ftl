@@ -892,3 +892,17 @@ caravans-callback-toast-invalid-state = Caravan is no longer in the lobby
 caravans-callback-toast-not-a-leader = Only the leader can cancel the caravan
 caravans-callback-toast-player-not-found = Press /start in the bot's private chat first
 caravans-callback-toast-generic-error = Something went wrong. Please try again.
+
+# --- Callback `caravan:join_defender|join_raider:<id>` (Sprint 3.2-D, D.3d) ---
+
+caravans-join-toast-success-defender = You're in the lobby as a defender
+caravans-join-toast-success-raider = You're in the lobby as a raider
+caravans-callback-toast-lobby-closed = The caravan lobby is already closed
+caravans-callback-toast-player-frozen = Your profile is frozen
+caravans-callback-toast-already-in-caravan = You're already in an active caravan
+caravans-callback-toast-role-conflict-defender = Defenders must be members of the receiver clan
+caravans-callback-toast-role-conflict-raider = Raiders must not be members of either caravan clan
+caravans-callback-toast-capacity-defender = Defenders cap reached: { NUMBER($limit, useGrouping: 0) }. No slots left.
+caravans-callback-toast-capacity-raider = Raiders cap reached: { NUMBER($limit, useGrouping: 0) }. No slots left.
+caravans-callback-toast-requirement-thickness = Requires thickness ≥ { NUMBER($required, useGrouping: 0) }. You're at { NUMBER($actual, useGrouping: 0) }.
+caravans-callback-toast-requirement-length = Requires length ≥ { NUMBER($required_cm, useGrouping: 0) } cm. You have { NUMBER($actual_cm, useGrouping: 0) } cm.

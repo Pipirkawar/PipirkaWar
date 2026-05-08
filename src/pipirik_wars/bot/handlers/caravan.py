@@ -24,17 +24,22 @@ from __future__ import annotations
 import contextlib
 import logging
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, Literal
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 
-from pipirik_wars.application.caravans import CancelCaravan, CreateCaravan
+from pipirik_wars.application.caravans import (
+    CancelCaravan,
+    CreateCaravan,
+    JoinCaravanLobby,
+)
 from pipirik_wars.application.dto.inputs import (
     CancelCaravanInput,
     CreateCaravanInput,
+    JoinCaravanLobbyInput,
 )
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.application.player import GetProfile
@@ -44,7 +49,9 @@ from pipirik_wars.bot.presenters.caravans import parse_caravan_callback_data
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.caravan import (
     AlreadyInCaravanError,
+    CaravanCapacityExceededError,
     CaravanCooldownError,
+    CaravanLobbyClosedError,
     CaravanNotFoundError,
     CaravanRequirementError,
     CaravanRoleConflictError,
@@ -386,6 +393,7 @@ async def handle_caravan_callback(
     callback: CallbackQuery,
     tg_identity: TgIdentity | None,
     cancel_caravan: CancelCaravan,
+    join_caravan_lobby: JoinCaravanLobby,
     caravans: ICaravanRepository,
     caravan_participants: ICaravanParticipantRepository,
     clans: IClanRepository,
@@ -403,10 +411,13 @@ async def handle_caravan_callback(
     - `cancel` — отменить караван (только лидер, D.3a/b).
     - `show_lobby` — обновить сообщение лобби (актуальное состояние
       + клавиатура с join/leave/cancel; D.3c).
+    - `join_defender` / `join_raider` — вступить в лобби как защитник
+      / рейдер (D.3d). На успех — refresh lobby UI (re-render
+      `lobby_state_text` + клавиатура).
 
-    Остальные (`join_defender` / `join_raider` / `leave`) добавляются
-    в следующих под-коммитах D.3 — пока для них защитный ack без
-    мутации, чтобы кнопка не «висела» с loading-индикатором.
+    Остальные (`leave`) добавляются в следующих под-коммитах D.3 —
+    пока для них защитный ack без мутации, чтобы кнопка не «висела»
+    с loading-индикатором.
     """
     if tg_identity is None or callback.data is None or callback.message is None:
         return
@@ -454,9 +465,30 @@ async def handle_caravan_callback(
         )
         return
 
-    # join_defender / join_raider / leave — реализация в следующих
-    # под-коммитах D.3. Защитный ack, чтобы UI у клиента не «висел»
-    # loading-индикатором на нажатой кнопке.
+    if parsed.action in ("join_defender", "join_raider"):
+        role: Literal["defender", "raider"] = (
+            "defender" if parsed.action == "join_defender" else "raider"
+        )
+        await _handle_join_callback(
+            callback=callback,
+            tg_identity=tg_identity,
+            caravan_id=parsed.caravan_id,
+            role=role,
+            join_caravan_lobby=join_caravan_lobby,
+            caravans=caravans,
+            caravan_participants=caravan_participants,
+            clans=clans,
+            players=players,
+            get_profile=get_profile,
+            balance=balance,
+            clock=clock,
+            presenter=presenter,
+            locale=effective_locale,
+        )
+        return
+
+    # leave — реализация в следующем под-коммите D.3e. Защитный ack,
+    # чтобы UI у клиента не «висел» loading-индикатором на нажатой кнопке.
     await callback.answer()
 
 
@@ -613,6 +645,185 @@ async def _handle_show_lobby_callback(
     keyboard = presenter.lobby_keyboard(caravan_id=caravan_id, locale=locale)
 
     await callback.answer()
+    msg = callback.message
+    if msg is None:
+        return
+    with contextlib.suppress(Exception):
+        await msg.edit_text(text=text, reply_markup=keyboard)  # type: ignore[union-attr]
+
+
+async def _handle_join_callback(  # noqa: PLR0911, PLR0912 — единая точка маппинга доменных ошибок use-case в локали
+    *,
+    callback: CallbackQuery,
+    tg_identity: TgIdentity,
+    caravan_id: int,
+    role: Literal["defender", "raider"],
+    join_caravan_lobby: JoinCaravanLobby,
+    caravans: ICaravanRepository,
+    caravan_participants: ICaravanParticipantRepository,
+    clans: IClanRepository,
+    players: IPlayerRepository,
+    get_profile: GetProfile,
+    balance: IBalanceConfig,
+    clock: IClock,
+    presenter: CaravanPresenter,
+    locale: Locale,
+) -> None:
+    """Логика callback-а «Вступить как защитник/рейдер»
+    (`caravan:join_defender:<id>` / `caravan:join_raider:<id>`, D.3d).
+
+    Зовёт `JoinCaravanLobby` use-case (он сам проверит лобби-статус,
+    роль, толщину/длину и capacity). На каждый доменный отказ —
+    локализованный toast. На успех — toast + refresh lobby UI
+    (`lobby_state_text` + `lobby_keyboard`).
+    """
+    try:
+        await join_caravan_lobby.execute(
+            JoinCaravanLobbyInput(
+                tg_id=tg_identity.tg_user_id,
+                caravan_id=caravan_id,
+                role=role,
+                contribution_cm=None,
+            ),
+        )
+    except CaravanNotFoundError:
+        await callback.answer(
+            presenter.callback_toast_caravan_not_found(locale=locale),
+            show_alert=False,
+        )
+        return
+    except CaravanLobbyClosedError:
+        await callback.answer(
+            presenter.callback_toast_lobby_closed(locale=locale),
+            show_alert=False,
+        )
+        return
+    except PlayerNotFoundError:
+        await callback.answer(
+            presenter.callback_toast_player_not_found(locale=locale),
+            show_alert=False,
+        )
+        return
+    except PlayerFrozenError:
+        await callback.answer(
+            presenter.callback_toast_player_frozen(locale=locale),
+            show_alert=False,
+        )
+        return
+    except AlreadyInCaravanError:
+        await callback.answer(
+            presenter.callback_toast_already_in_caravan(locale=locale),
+            show_alert=False,
+        )
+        return
+    except CaravanRoleConflictError:
+        if role == "defender":
+            text = presenter.callback_toast_role_conflict_defender(locale=locale)
+        else:
+            text = presenter.callback_toast_role_conflict_raider(locale=locale)
+        await callback.answer(text, show_alert=False)
+        return
+    except CaravanRequirementError as exc:
+        if exc.requirement == "thickness":
+            text = presenter.callback_toast_requirement_thickness(
+                required=exc.required,
+                actual=exc.actual,
+                locale=locale,
+            )
+        else:
+            # `length_total` (DEFENDER/RAIDER) — единственная ветка длины,
+            # доступная join-callback-у; `length_after_contribution` зашит
+            # только в CARAVANEER-пути (он идёт через /caravan_join, D.3f).
+            text = presenter.callback_toast_requirement_length(
+                required_cm=exc.required,
+                actual_cm=exc.actual,
+                locale=locale,
+            )
+        await callback.answer(text, show_alert=False)
+        return
+    except CaravanCapacityExceededError as exc:
+        if role == "defender":
+            text = presenter.callback_toast_capacity_defender(
+                limit=exc.limit,
+                locale=locale,
+            )
+        else:
+            text = presenter.callback_toast_capacity_raider(
+                limit=exc.limit,
+                locale=locale,
+            )
+        await callback.answer(text, show_alert=False)
+        return
+
+    await callback.answer(
+        presenter.join_toast_success(role=role, locale=locale),
+        show_alert=False,
+    )
+    await _refresh_lobby_message(
+        callback=callback,
+        caravan_id=caravan_id,
+        caravans=caravans,
+        caravan_participants=caravan_participants,
+        clans=clans,
+        players=players,
+        get_profile=get_profile,
+        balance=balance,
+        clock=clock,
+        presenter=presenter,
+        locale=locale,
+    )
+
+
+async def _refresh_lobby_message(
+    *,
+    callback: CallbackQuery,
+    caravan_id: int,
+    caravans: ICaravanRepository,
+    caravan_participants: ICaravanParticipantRepository,
+    clans: IClanRepository,
+    players: IPlayerRepository,
+    get_profile: GetProfile,
+    balance: IBalanceConfig,
+    clock: IClock,
+    presenter: CaravanPresenter,
+    locale: Locale,
+) -> None:
+    """Перерендерить lobby-сообщение после mut-callback-а (join/leave).
+
+    Best-effort: если что-то пошло не так на read-side (битая FK,
+    караван внезапно закрылся между join-ом и refresh-ем) — молчим,
+    use-case уже отработал, toast пользователю отдан.
+    """
+    caravan = await caravans.get_by_id(caravan_id=caravan_id)
+    if caravan is None or not caravan.is_in_lobby:
+        return
+
+    leader = await players.get_by_id(player_id=caravan.leader_player_id)
+    if leader is None:  # pragma: no cover — битая FK
+        return
+    leader_view = await get_profile.execute(tg_id=leader.tg_id)
+    if leader_view is None:  # pragma: no cover — лидер только что был в БД
+        return
+
+    receiver_clan = await clans.get_by_id(caravan.receiver_clan_id)
+    if receiver_clan is None:  # pragma: no cover — битая FK
+        return
+
+    participants = await caravan_participants.list_by_caravan(caravan_id=caravan_id)
+    cfg = balance.get().caravans
+    now = clock.now()
+
+    text = presenter.lobby_state_text(
+        caravan=caravan,
+        participants=participants,
+        leader=leader_view.player,
+        leader_display_name=leader_view.display_name,
+        receiver_clan_name=receiver_clan.title.value,
+        cfg=cfg,
+        now=now,
+        locale=locale,
+    )
+    keyboard = presenter.lobby_keyboard(caravan_id=caravan_id, locale=locale)
     msg = callback.message
     if msg is None:
         return

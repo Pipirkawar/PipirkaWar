@@ -437,6 +437,106 @@ class CaravanPresenter:
             remaining_minutes=remaining_minutes,
         )
 
+    # --- Callback `caravan:join_defender|join_raider:<id>` (D.3d) ---
+
+    def join_toast_success(
+        self,
+        *,
+        role: Literal["defender", "raider"],
+        locale: Locale,
+    ) -> str:
+        """Toast: успешное вступление в лобби каравана как defender/raider.
+
+        Отдельный ключ на каждую роль — текст в локалях разный («ты
+        теперь защитник» / «ты теперь рейдер»).
+        """
+        if role == "defender":
+            key = MessageKey("caravans-join-toast-success-defender")
+        else:
+            key = MessageKey("caravans-join-toast-success-raider")
+        return self._bundle.format(key, locale=locale)
+
+    def callback_toast_lobby_closed(self, *, locale: Locale) -> str:
+        """Toast: лобби каравана уже закрылось (бой/финал/отменён)."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-lobby-closed"),
+            locale=locale,
+        )
+
+    def callback_toast_player_frozen(self, *, locale: Locale) -> str:
+        """Toast: игрок `FROZEN`/`BANNED` (DAU-gate / админ-заморозка)."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-player-frozen"),
+            locale=locale,
+        )
+
+    def callback_toast_already_in_caravan(self, *, locale: Locale) -> str:
+        """Toast: игрок уже участвует в этом или другом активном караване."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-already-in-caravan"),
+            locale=locale,
+        )
+
+    def callback_toast_role_conflict_defender(self, *, locale: Locale) -> str:
+        """Toast: чтобы быть защитником, надо состоять в клане-получателе."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-role-conflict-defender"),
+            locale=locale,
+        )
+
+    def callback_toast_role_conflict_raider(self, *, locale: Locale) -> str:
+        """Toast: рейдер не должен состоять ни в клане-отправителе, ни в получателе."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-role-conflict-raider"),
+            locale=locale,
+        )
+
+    def callback_toast_capacity_defender(self, *, limit: int, locale: Locale) -> str:
+        """Toast: достигнут лимит защитников (`max_defenders × CARAVANEER count`)."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-capacity-defender"),
+            locale=locale,
+            limit=limit,
+        )
+
+    def callback_toast_capacity_raider(self, *, limit: int, locale: Locale) -> str:
+        """Toast: достигнут лимит рейдеров (`max_raiders × CARAVANEER count`)."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-capacity-raider"),
+            locale=locale,
+            limit=limit,
+        )
+
+    def callback_toast_requirement_thickness(
+        self,
+        *,
+        required: int,
+        actual: int,
+        locale: Locale,
+    ) -> str:
+        """Toast: толщина < `min_thickness_level_raider` (ГДД §9.5 = 5)."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-requirement-thickness"),
+            locale=locale,
+            required=required,
+            actual=actual,
+        )
+
+    def callback_toast_requirement_length(
+        self,
+        *,
+        required_cm: int,
+        actual_cm: int,
+        locale: Locale,
+    ) -> str:
+        """Toast: длина < общего минимума (`min_length_cm`, ГДД §9.2 = 20 см)."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-requirement-length"),
+            locale=locale,
+            required_cm=required_cm,
+            actual_cm=actual_cm,
+        )
+
     # --- Callback `caravan:cancel:<id>` (D.3) ---
 
     def cancel_message_text(self, *, locale: Locale) -> str:
