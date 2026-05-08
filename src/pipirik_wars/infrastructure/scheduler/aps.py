@@ -24,7 +24,7 @@ from typing import Final
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from pipirik_wars.application.caravans import CloseCaravanLobby
+from pipirik_wars.application.caravans import CloseCaravanLobby, FinishCaravanBattle
 from pipirik_wars.application.daily_head import (
     RunDailyHeadCron,
     ScheduleDailyHeadCronJobs,
@@ -33,6 +33,7 @@ from pipirik_wars.application.dto.inputs import (
     CloseCaravanLobbyInput,
     EscalateChatToGlobalInput,
     ExpireLobbyEntryInput,
+    FinishCaravanBattleInput,
     FinishDungeonRunInput,
     FinishForestRunInput,
     FinishMountainRunInput,
@@ -180,6 +181,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
 
     __slots__ = (
         "_afk_resolution_factory",
+        "_caravan_battle_finish_factory",
         "_caravan_lobby_close_factory",
         "_clans",
         "_daily_head_cron_factory",
@@ -218,6 +220,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         dungeon_finish_factory: Callable[[], FinishDungeonRun] | None = None,
         dungeon_notifier: IDungeonFinishNotifier | None = None,
         caravan_lobby_close_factory: Callable[[], CloseCaravanLobby] | None = None,
+        caravan_battle_finish_factory: Callable[[], FinishCaravanBattle] | None = None,
         clans: IClanRepository | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
@@ -237,6 +240,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._dungeon_finish_factory = dungeon_finish_factory
         self._dungeon_notifier = dungeon_notifier
         self._caravan_lobby_close_factory = caravan_lobby_close_factory
+        self._caravan_battle_finish_factory = caravan_battle_finish_factory
         self._clans = clans
         self._logger = logger or logging.getLogger(__name__)
 
@@ -554,19 +558,28 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
     async def _run_caravan_battle_finish_job(self, caravan_id: int) -> None:
         """Callback `FinishCaravanBattle`-job-а (Спринт 3.2-C).
 
-        Срабатывает в `caravan.battle_ends_at` и резолвит бой
+        Срабатывает в `caravan.battle_ends_at`, резолвит бой
         (детерминистично от `random_seed`), выдаёт награды,
-        начисляет Атаман-роль лидеру при победе. Полный wiring
-        `caravan_battle_finish_factory` придёт вместе с use-case-ом
-        `FinishCaravanBattle` (шаг C.7); до этого callback логирует
-        warning «factory not wired» и тихо выходит. Use-case будет
+        начисляет Атаман-роль рейдеру-победителю. Use-case
         идемпотентен: повторный вызов на `FINISHED`-каравану вернёт
-        `was_already_finished=True`.
+        `was_already_finished=True`. Если фабрика не подвязана
+        (recovery / тесты APScheduler-а самого по себе) — лог + skip.
         """
-        self._logger.warning(
-            "caravan_battle_finish: factory not wired",
-            extra={"caravan_id": caravan_id},
-        )
+        if self._caravan_battle_finish_factory is None:
+            self._logger.warning(
+                "caravan_battle_finish: factory not wired",
+                extra={"caravan_id": caravan_id},
+            )
+            return
+        try:
+            use_case = self._caravan_battle_finish_factory()
+            await use_case.execute(FinishCaravanBattleInput(caravan_id=caravan_id))
+        except Exception as exc:
+            self._logger.exception(
+                "caravan_battle_finish: unexpected error",
+                extra={"caravan_id": caravan_id, "error": type(exc).__name__},
+            )
+            return
 
     async def _run_dungeon_finish_job(self, run_id: int) -> None:
         """Callback `FinishDungeonRun`-job-а (Спринт 3.1-E).
