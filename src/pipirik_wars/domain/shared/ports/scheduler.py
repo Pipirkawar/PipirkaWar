@@ -246,6 +246,35 @@ class IDelayedJobScheduler(abc.ABC):
     async def cancel_finish_dungeon_run(self, *, run_id: int) -> None:
         """Снять запланированный dungeon-finish-job (NO-OP, если его нет)."""
 
+    # ── Спринт 3.2-B: караваны (lobby-close, ГДД §9) ──
+
+    @abc.abstractmethod
+    async def schedule_caravan_lobby_close(
+        self,
+        *,
+        caravan_id: int,
+        run_at: datetime,
+    ) -> None:
+        """Запланировать `CloseCaravanLobby(caravan_id=...)` на `run_at` (UTC).
+
+        Срабатывает через `caravans.lobby_minutes` после создания
+        каравана и переводит его из `LOBBY → IN_BATTLE`. Идемпотентно
+        по `caravan_id`: повторный вызов перезаписывает job
+        (recovery-сценарий после рестарта воркера).
+
+        Сам resolve боя и `caravan_battle_finish`-job ставятся в 3.2-C
+        внутри `CloseCaravanLobby` use-case-а.
+        """
+
+    @abc.abstractmethod
+    async def cancel_caravan_lobby_close(self, *, caravan_id: int) -> None:
+        """Снять lobby-close-job каравана (NO-OP, если его нет).
+
+        Вызывается, когда лобби закрывается раньше срока (ручная отмена
+        каравана лидером в 3.2-C) или из самого callback-а после
+        успешного перевода в `IN_BATTLE` (best-effort cleanup).
+        """
+
     # ── Спринт 2.4.E: еженедельная сводка рефералов клана ──
 
     @abc.abstractmethod

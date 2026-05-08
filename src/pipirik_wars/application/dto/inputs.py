@@ -626,3 +626,149 @@ class RunWeeklyClanReferralSummaryInput(_StrictBase):
     """
 
     clan_id: int = Field(gt=0, description="Внутренний clans.id")
+
+
+# ── Спринт 3.2-B (караваны, ГДД §9) ──
+
+
+class CreateCaravanInput(_StrictBase):
+    """Создание каравана из чата клана-отправителя (Спринт 3.2-B, ГДД §9.2).
+
+    Игрок-инициатор зовёт `/caravan_create <receiver_chat_id> <contribution>`
+    из чата своего клана. Use-case `CreateCaravan` резолвит оба клана
+    по `chat_id`, валидирует условия (ГДД §9.1/§9.2):
+
+    - Игрок состоит в клане-отправителе и его роль = leader (создавать
+      может только лидер клана) — на уровне use-case проверяется через
+      `IClanMembershipRepository.get_by_player`.
+    - `thickness.level >= caravans.min_thickness_level_leader` (по ГДД =7).
+    - `length.cm - contribution_cm >= caravans.min_length_after_contribution_cm`
+      (по ГДД =20: «правило 20 см после взноса»).
+    - Кулдаун клана-отправителя: с момента старта последнего каравана
+      прошло `>= caravans.clan_cooldown_hours` часов (ГДД §9.3 = 12 ч).
+    - У игрока нет другого активного `activity_lock` (правило одной
+      активности).
+
+    `sender_chat_id` — `chat_id` клана-отправителя (тот чат, где игрок
+    нажал кнопку / ввёл команду). `receiver_chat_id` — чат клана-получателя
+    (передан явно, валидатор не пускает совпадение).
+    """
+
+    initiator_tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id игрока, создающего караван (лидер клана)",
+    )
+    sender_chat_id: int = Field(
+        description="Telegram chat_id клана-отправителя (чат, из которого зовут)",
+    )
+    receiver_chat_id: int = Field(
+        description="Telegram chat_id клана-получателя",
+    )
+    contribution_cm: int = Field(
+        gt=0,
+        description="Вклад лидера в караван в см (целое > 0)",
+    )
+
+    @model_validator(mode="after")
+    def _validate_clans_differ(self) -> Self:
+        if self.sender_chat_id == self.receiver_chat_id:
+            raise ValueError(
+                "sender_chat_id and receiver_chat_id must differ",
+            )
+        return self
+
+
+class JoinCaravanLobbyInput(_StrictBase):
+    """Вступление игрока в лобби каравана (Спринт 3.2-B, ГДД §9.4).
+
+    Игрок жмёт кнопку «Вступить как <role>» под объявлением каравана.
+    Use-case `JoinCaravanLobby`:
+
+    - Резолвит караван по `caravan_id`, проверяет `status == LOBBY`.
+    - Резолвит игрока по `tg_id`.
+    - Валидирует роль (ГДД §9.4) — таблица 5 кейсов двойного членства
+      (см. `CaravanRoleConflictError`):
+        * `CARAVANEER` — игрок должен быть в `sender_clan` (двойной
+          член обоих кланов **может** выбрать `CARAVANEER`);
+        * `DEFENDER` — игрок должен быть в `receiver_clan` (двойной
+          член тоже может выбрать `DEFENDER`);
+        * `RAIDER` — игрок не должен быть **ни в одном** из двух кланов.
+    - Длинные требования (ГДД §9.2):
+        * у `CARAVANEER` `length - contribution_cm >= 20 см`;
+        * у `DEFENDER`/`RAIDER` `length >= 20 см`;
+    - Capacity (ГДД §9.5):
+        * `RAIDER` ≤ ×4 от количества `CARAVANEER` (вкл. лидера);
+        * `DEFENDER` ≤ ×2 от количества `CARAVANEER` (вкл. лидера).
+    - Берёт `activity_lock(player, CARAVAN, ttl=lobby+battle минут)`.
+    - Сохраняет `CaravanParticipant` (UNIQUE (caravan_id, player_id)).
+
+    `contribution_cm` обязателен только для `CARAVANEER`-роли;
+    для `DEFENDER`/`RAIDER` он должен быть `None`.
+    """
+
+    tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id вступающего игрока",
+    )
+    caravan_id: int = Field(gt=0, description="caravans.id")
+    role: Literal["caravaneer", "defender", "raider"] = Field(
+        description="Запрошенная роль (см. ГДД §9.4)",
+    )
+    contribution_cm: int | None = Field(
+        default=None,
+        gt=0,
+        description="Вклад в см (только для caravaneer; иначе None)",
+    )
+
+    @model_validator(mode="after")
+    def _validate_contribution_role_consistency(self) -> Self:
+        if self.role == "caravaneer" and self.contribution_cm is None:
+            raise ValueError(
+                "contribution_cm is required for role='caravaneer'",
+            )
+        if self.role != "caravaneer" and self.contribution_cm is not None:
+            raise ValueError(
+                f"contribution_cm must be None for role={self.role!r}",
+            )
+        return self
+
+
+class LeaveCaravanLobbyInput(_StrictBase):
+    """Выход игрока из лобби каравана (Спринт 3.2-B, ГДД §9.3).
+
+    Игрок жмёт «Выйти» в лобби. Use-case `LeaveCaravanLobby`:
+
+    - Резолвит караван (`status == LOBBY`).
+    - Удаляет `CaravanParticipant(caravan_id, player_id)`.
+    - Снимает `activity_lock(player, CARAVAN)`.
+    - НЕ возвращает `contribution_cm` обратно в длину игрока: длина
+      и так не списывалась на этапе вступления (списание в момент
+      `LOBBY → IN_BATTLE` в Спринте 3.2-C).
+    - Лидер выйти не может — на это есть отдельный use-case
+      `CancelCaravanLobby` в 3.2-C (отменяет весь караван).
+    """
+
+    tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id выходящего игрока",
+    )
+    caravan_id: int = Field(gt=0, description="caravans.id")
+
+
+class CloseCaravanLobbyInput(_StrictBase):
+    """Закрытие лобби каравана по таймеру (Спринт 3.2-B, ГДД §9.3).
+
+    Вызывается APScheduler-job-ом `caravan_lobby_close` через
+    `caravans.lobby_minutes` (=20) после `CreateCaravan`. Use-case
+    переводит караван `LOBBY → IN_BATTLE` идемпотентно
+    (повторный вызов на уже-`IN_BATTLE`/`FINISHED`/`CANCELLED` —
+    no-op с `was_already_closed=True`).
+
+    Сам resolve боя (применение исходов, награды) — отдельный
+    use-case `FinishCaravanBattle` в Спринте 3.2-C; здесь только
+    переход статуса + audit `CARAVAN_LOBBY_CLOSED`. Постановку
+    `caravan_battle_finish`-job-а на `battle_ends_at` оставляем
+    тоже на 3.2-C.
+    """
+
+    caravan_id: int = Field(gt=0, description="caravans.id")

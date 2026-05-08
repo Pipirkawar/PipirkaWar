@@ -49,6 +49,14 @@ class ScheduledDailyHeadCronJob:
     run_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class ScheduledCaravanLobbyCloseJob:
+    """Запись «что и на когда» для lobby-close-job каравана (Спринт 3.2-B)."""
+
+    caravan_id: int
+    run_at: datetime
+
+
 @dataclass
 class FakeDelayedJobScheduler(IDelayedJobScheduler):
     """Фиксирует все вызовы `schedule_*` / `cancel_*`."""
@@ -80,6 +88,12 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
     cancelled_mountain_finish: list[int] = field(default_factory=list)
     scheduled_dungeon_finish: dict[int, ScheduledFinish] = field(default_factory=dict)
     cancelled_dungeon_finish: list[int] = field(default_factory=list)
+    # 3.2-B: per-caravan_id lobby-close-job. Идемпотентно по
+    # `caravan_id`; cancel — NO-OP если job-а нет.
+    scheduled_caravan_lobby_close: dict[int, ScheduledCaravanLobbyCloseJob] = field(
+        default_factory=dict,
+    )
+    cancelled_caravan_lobby_close: list[int] = field(default_factory=list)
 
     async def schedule_finish_forest_run(
         self,
@@ -196,6 +210,21 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
     async def cancel_finish_dungeon_run(self, *, run_id: int) -> None:
         self.cancelled_dungeon_finish.append(run_id)
         self.scheduled_dungeon_finish.pop(run_id, None)
+
+    async def schedule_caravan_lobby_close(
+        self,
+        *,
+        caravan_id: int,
+        run_at: datetime,
+    ) -> None:
+        self.scheduled_caravan_lobby_close[caravan_id] = ScheduledCaravanLobbyCloseJob(
+            caravan_id=caravan_id,
+            run_at=run_at,
+        )
+
+    async def cancel_caravan_lobby_close(self, *, caravan_id: int) -> None:
+        self.cancelled_caravan_lobby_close.append(caravan_id)
+        self.scheduled_caravan_lobby_close.pop(caravan_id, None)
 
     async def schedule_weekly_clan_referral_summary_cron(self) -> None:
         self.scheduled_weekly_clan_referral_summary_cron = True
