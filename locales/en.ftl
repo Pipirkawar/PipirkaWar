@@ -906,3 +906,10 @@ caravans-callback-toast-capacity-defender = Defenders cap reached: { NUMBER($lim
 caravans-callback-toast-capacity-raider = Raiders cap reached: { NUMBER($limit, useGrouping: 0) }. No slots left.
 caravans-callback-toast-requirement-thickness = Requires thickness ≥ { NUMBER($required, useGrouping: 0) }. You're at { NUMBER($actual, useGrouping: 0) }.
 caravans-callback-toast-requirement-length = Requires length ≥ { NUMBER($required_cm, useGrouping: 0) } cm. You have { NUMBER($actual_cm, useGrouping: 0) } cm.
+
+# --- Callback `caravan:leave:<id>` (Sprint 3.2-D, D.3e) ---
+
+caravans-leave-toast-success = You left the caravan lobby
+caravans-leave-toast-success-with-contribution = You left the lobby. Returned: { NUMBER($contribution_cm, useGrouping: 0) } cm
+caravans-leave-toast-leader-cannot-leave = The leader cannot leave. To disband the caravan, press "Cancel".
+caravans-leave-toast-not-a-participant = You are not a participant of this caravan

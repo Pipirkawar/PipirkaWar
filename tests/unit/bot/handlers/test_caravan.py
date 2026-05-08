@@ -28,6 +28,8 @@ from pipirik_wars.application.caravans import (
     CreateCaravan,
     JoinCaravanLobby,
     JoinedCaravanLobby,
+    LeaveCaravanLobby,
+    LeftCaravanLobby,
 )
 from pipirik_wars.application.i18n import IMessageBundle, Locale
 from pipirik_wars.application.player import GetProfile, ProfileView
@@ -832,6 +834,47 @@ def _stub_join_caravan_lobby(
     return use_case
 
 
+def _stub_leave_caravan_lobby(
+    *,
+    error: BaseException | None = None,
+    returned_contribution_cm: int = 0,
+) -> MagicMock:
+    """`LeaveCaravanLobby`-stub. На `error` — `side_effect`, иначе success.
+
+    `returned_contribution_cm` — сколько «возвращённой» длины в success-
+    ветке (для CARAVANEER → > 0, для DEFENDER/RAIDER → 0).
+    """
+    use_case = MagicMock(spec=LeaveCaravanLobby)
+    if error is not None:
+        use_case.execute = AsyncMock(side_effect=error)
+        return use_case
+    caravan = Caravan(
+        id=_CARAVAN_ID,
+        sender_clan_id=1,
+        receiver_clan_id=2,
+        leader_player_id=1,
+        status=CaravanStatus.LOBBY,
+        started_at=_NOW,
+        lobby_ends_at=_NOW + timedelta(minutes=20),
+        battle_ends_at=_NOW + timedelta(minutes=80),
+        random_seed=12345,
+        finished_at=None,
+    )
+    participant = CaravanParticipant.defender(
+        caravan_id=_CARAVAN_ID,
+        player_id=2,
+        joined_at=_NOW,
+    )
+    use_case.execute = AsyncMock(
+        return_value=LeftCaravanLobby(
+            caravan=caravan,
+            removed_participant=participant,
+            returned_contribution_cm=returned_contribution_cm,
+        ),
+    )
+    return use_case
+
+
 def _callback(
     *,
     data: str = f"caravan:cancel:{_CARAVAN_ID}",
@@ -862,6 +905,7 @@ async def _invoke_callback(
     identity: TgIdentity | None | object = _UNSET,
     cancel_caravan: MagicMock | None = None,
     join_caravan_lobby: MagicMock | None = None,
+    leave_caravan_lobby: MagicMock | None = None,
     caravans: ICaravanRepository | None = None,
     caravan_participants: ICaravanParticipantRepository | None = None,
     clans: IClanRepository | None = None,
@@ -874,17 +918,19 @@ async def _invoke_callback(
 
     Read-only-зависимости (`caravans` / `caravan_participants` / `clans` /
     `players` / `get_profile` / `balance` / `clock`) нужны для веток
-    `show_lobby`-callback-а; для cancel-веток подаются пустые фейки —
-    они до них не доходят (cancel идёт через use-case).
+    `show_lobby`/`join_*`/`leave`-callback-ов; для cancel-веток подаются
+    пустые фейки — они до них не доходят (cancel идёт через use-case).
     """
     cancel_uc = cancel_caravan or _stub_cancel_caravan()
     join_uc = join_caravan_lobby or _stub_join_caravan_lobby()
+    leave_uc = leave_caravan_lobby or _stub_leave_caravan_lobby()
     effective_identity = _identity() if identity is _UNSET else cast(TgIdentity | None, identity)
     await handle_caravan_callback(
         cast(CallbackQuery, callback),
         effective_identity,
         cast(CancelCaravan, cancel_uc),
         cast(JoinCaravanLobby, join_uc),
+        cast(LeaveCaravanLobby, leave_uc),
         caravans or FakeCaravanRepository(),
         caravan_participants or FakeCaravanParticipantRepository(),
         clans or FakeClanRepository(),
@@ -914,17 +960,6 @@ class TestCancelCallback:
         callback.answer.assert_awaited_once()
         toast_text = callback.answer.await_args.args[0]
         assert "caravans-callback-toast-generic-error" in toast_text
-
-    async def test_unsupported_action_acked_silently(self) -> None:
-        # `leave` пока не реализован (D.3e) — handler должен ack-нуть
-        # без мутации, чтобы кнопка не «висела» с loading-индикатором.
-        callback = _callback(data=f"caravan:leave:{_CARAVAN_ID}")
-        cancel_uc = await _invoke_callback(callback)
-        cancel_uc.execute.assert_not_called()
-        callback.answer.assert_awaited_once()
-        # Защитный ack без аргументов (без локализованного текста).
-        assert callback.answer.await_args.args == ()
-        assert callback.answer.await_args.kwargs == {}
 
     async def test_caravan_not_found_emits_toast_no_edit(self) -> None:
         callback = _callback()
@@ -1512,3 +1547,178 @@ class TestJoinCallback:
         )
         callback.answer.assert_awaited_once()
         callback.message.edit_text.assert_not_called()
+
+
+# ──────────────────── callback `caravan:leave:<id>` (D.3e) ────────────────────
+
+
+@pytest.mark.asyncio
+class TestLeaveCallback:
+    """`caravan:leave:<id>` (Спринт 3.2-D, D.3e).
+
+    Use-case-уровень покрыт юнит-тестами `LeaveCaravanLobby` (Спринт 3.2-B);
+    здесь — только маппинг доменных ошибок в локализованные toast-ы и
+    happy-path с refresh-ем lobby-сообщения.
+    """
+
+    async def test_no_identity_returns_silently(self) -> None:
+        callback = _callback(data=f"caravan:leave:{_CARAVAN_ID}")
+        leave_uc = _stub_leave_caravan_lobby()
+        await _invoke_callback(callback, identity=None, leave_caravan_lobby=leave_uc)
+        callback.answer.assert_not_called()
+        leave_uc.execute.assert_not_called()
+
+    async def test_caravan_not_found_emits_toast_no_edit(self) -> None:
+        callback = _callback(data=f"caravan:leave:{_CARAVAN_ID}")
+        leave_uc = _stub_leave_caravan_lobby(
+            error=CaravanNotFoundError(caravan_id=_CARAVAN_ID),
+        )
+        await _invoke_callback(callback, leave_caravan_lobby=leave_uc)
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-caravan-not-found" in toast_text
+        callback.message.edit_text.assert_not_called()
+
+    async def test_lobby_closed_emits_toast(self) -> None:
+        callback = _callback(data=f"caravan:leave:{_CARAVAN_ID}")
+        leave_uc = _stub_leave_caravan_lobby(
+            error=CaravanLobbyClosedError(caravan_id=_CARAVAN_ID, status="in_battle"),
+        )
+        await _invoke_callback(callback, leave_caravan_lobby=leave_uc)
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-lobby-closed" in toast_text
+        callback.message.edit_text.assert_not_called()
+
+    async def test_player_not_found_emits_toast(self) -> None:
+        callback = _callback(data=f"caravan:leave:{_CARAVAN_ID}")
+        leave_uc = _stub_leave_caravan_lobby(
+            error=PlayerNotFoundError(tg_id=_LEADER_TG_ID),
+        )
+        await _invoke_callback(callback, leave_caravan_lobby=leave_uc)
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-player-not-found" in toast_text
+
+    async def test_leader_cannot_leave_specific_toast(self) -> None:
+        # Use-case бросает `CaravanRoleConflictError` с reason, начинающимся
+        # на «leader cannot leave». Handler-маппинг должен дать специальный
+        # toast про «лидер не может выйти».
+        callback = _callback(data=f"caravan:leave:{_CARAVAN_ID}")
+        leave_uc = _stub_leave_caravan_lobby(
+            error=CaravanRoleConflictError(
+                player_id=1,
+                attempted_role="leave",
+                reason="leader cannot leave the lobby; cancel the caravan instead",
+            ),
+        )
+        await _invoke_callback(callback, leave_caravan_lobby=leave_uc)
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-leave-toast-leader-cannot-leave" in toast_text
+        callback.message.edit_text.assert_not_called()
+
+    async def test_not_a_participant_specific_toast(self) -> None:
+        # Use-case бросает `CaravanRoleConflictError` с reason «player is not
+        # a participant ...» — handler даёт отдельный toast «не участник».
+        callback = _callback(data=f"caravan:leave:{_CARAVAN_ID}")
+        leave_uc = _stub_leave_caravan_lobby(
+            error=CaravanRoleConflictError(
+                player_id=99,
+                attempted_role="leave",
+                reason=f"player is not a participant of caravan_id={_CARAVAN_ID}",
+            ),
+        )
+        await _invoke_callback(callback, leave_caravan_lobby=leave_uc)
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-leave-toast-not-a-participant" in toast_text
+        callback.message.edit_text.assert_not_called()
+
+    async def test_happy_path_emits_success_toast_and_refreshes_lobby(
+        self,
+    ) -> None:
+        callback = _callback(data=f"caravan:leave:{_CARAVAN_ID}")
+        # DEFENDER/RAIDER → returned_contribution_cm == 0.
+        leave_uc = _stub_leave_caravan_lobby(returned_contribution_cm=0)
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby()
+        await _invoke_callback(
+            callback,
+            leave_caravan_lobby=leave_uc,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+        )
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-leave-toast-success" in toast_text
+        # Без `with-contribution`-варианта — короткий success-key.
+        assert "caravans-leave-toast-success-with-contribution" not in toast_text
+        # Lobby перерисован после leave-а.
+        callback.message.edit_text.assert_awaited_once()
+        edit_kwargs = callback.message.edit_text.await_args.kwargs
+        assert "caravans-lobby-state" in edit_kwargs["text"]
+        assert isinstance(edit_kwargs["reply_markup"], InlineKeyboardMarkup)
+
+    async def test_happy_path_with_contribution_passes_amount(self) -> None:
+        callback = _callback(data=f"caravan:leave:{_CARAVAN_ID}")
+        # CARAVANEER → returned_contribution_cm > 0; toast с суммой возврата.
+        leave_uc = _stub_leave_caravan_lobby(returned_contribution_cm=15)
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby()
+        await _invoke_callback(
+            callback,
+            leave_caravan_lobby=leave_uc,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+        )
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-leave-toast-success-with-contribution" in toast_text
+        assert "contribution_cm=15" in toast_text
+
+    async def test_use_case_input_dto_carries_caravan_id_and_tg_id(self) -> None:
+        callback = _callback(data=f"caravan:leave:{_CARAVAN_ID}")
+        leave_uc = _stub_leave_caravan_lobby()
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby()
+        await _invoke_callback(
+            callback,
+            leave_caravan_lobby=leave_uc,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+        )
+        leave_uc.execute.assert_awaited_once()
+        input_dto = leave_uc.execute.await_args.args[0]
+        assert input_dto.caravan_id == _CARAVAN_ID
+        assert input_dto.tg_id == _LEADER_TG_ID
+
+    async def test_refresh_skipped_when_caravan_no_longer_in_lobby(self) -> None:
+        """Refresh — best-effort: если караван успел стать `IN_BATTLE`
+        между leave-ом и refresh-ем, edit-message не делается, но toast
+        об успехе уже ушёл.
+        """
+        callback = _callback(data=f"caravan:leave:{_CARAVAN_ID}")
+        leave_uc = _stub_leave_caravan_lobby()
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby(
+            caravan=_lobby_caravan(status=CaravanStatus.IN_BATTLE),
+        )
+        await _invoke_callback(
+            callback,
+            leave_caravan_lobby=leave_uc,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+        )
+        callback.answer.assert_awaited_once()
+        callback.message.edit_text.assert_not_called()
+
+    async def test_invalid_callback_data_emits_generic_toast(self) -> None:
+        # Битый `caravan_id` — handler ловит на парсинге `data`,
+        # use-case даже не зовётся.
+        callback = _callback(data="caravan:leave:not-an-int")
+        leave_uc = _stub_leave_caravan_lobby()
+        await _invoke_callback(callback, leave_caravan_lobby=leave_uc)
+        leave_uc.execute.assert_not_called()
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-generic-error" in toast_text

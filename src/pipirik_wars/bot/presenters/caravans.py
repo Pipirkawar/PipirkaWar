@@ -537,6 +537,43 @@ class CaravanPresenter:
             actual_cm=actual_cm,
         )
 
+    # --- Callback `caravan:leave:<id>` (D.3e) ---
+
+    def leave_toast_success(self, *, returned_contribution_cm: int, locale: Locale) -> str:
+        """Toast: успешный выход из лобби каравана.
+
+        Если у игрока был ненулевой `contribution` (т.е. он входил
+        как `CARAVANEER`, см. `LeftCaravanLobby.returned_contribution_cm`)
+        — отдаём отдельный ключ с суммой возврата; иначе короткий toast.
+        Длина игрока на лобби-стадии и так не списана (списание — в
+        момент `LOBBY → IN_BATTLE`, ГДД §9.3), поэтому «возврат» здесь
+        — это потенциальный взнос, который игрок «забрал обратно».
+        """
+        if returned_contribution_cm > 0:
+            return self._bundle.format(
+                MessageKey("caravans-leave-toast-success-with-contribution"),
+                locale=locale,
+                contribution_cm=returned_contribution_cm,
+            )
+        return self._bundle.format(
+            MessageKey("caravans-leave-toast-success"),
+            locale=locale,
+        )
+
+    def leave_toast_leader_cannot_leave(self, *, locale: Locale) -> str:
+        """Toast: лидер не может «выйти» — для этого есть «Отменить караван»."""
+        return self._bundle.format(
+            MessageKey("caravans-leave-toast-leader-cannot-leave"),
+            locale=locale,
+        )
+
+    def leave_toast_not_a_participant(self, *, locale: Locale) -> str:
+        """Toast: игрок не участник этого каравана (нечего покидать)."""
+        return self._bundle.format(
+            MessageKey("caravans-leave-toast-not-a-participant"),
+            locale=locale,
+        )
+
     # --- Callback `caravan:cancel:<id>` (D.3) ---
 
     def cancel_message_text(self, *, locale: Locale) -> str:

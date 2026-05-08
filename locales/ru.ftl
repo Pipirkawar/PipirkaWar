@@ -910,3 +910,10 @@ caravans-callback-toast-capacity-defender = Лимит защитников: { N
 caravans-callback-toast-capacity-raider = Лимит рейдеров: { NUMBER($limit, useGrouping: 0) }. Слотов больше нет.
 caravans-callback-toast-requirement-thickness = Нужна толщина ≥ { NUMBER($required, useGrouping: 0) }. У тебя { NUMBER($actual, useGrouping: 0) }.
 caravans-callback-toast-requirement-length = Нужна длина ≥ { NUMBER($required_cm, useGrouping: 0) } см. У тебя { NUMBER($actual_cm, useGrouping: 0) } см.
+
+# --- Callback `caravan:leave:<id>` (Спринт 3.2-D, D.3e) ---
+
+caravans-leave-toast-success = Ты вышел из лобби каравана
+caravans-leave-toast-success-with-contribution = Ты вышел из лобби. Возвращено: { NUMBER($contribution_cm, useGrouping: 0) } см
+caravans-leave-toast-leader-cannot-leave = Лидер не может выйти. Чтобы распустить караван, нажми «Отменить».
+caravans-leave-toast-not-a-participant = Ты не участник этого каравана

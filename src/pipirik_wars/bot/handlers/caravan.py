@@ -35,11 +35,13 @@ from pipirik_wars.application.caravans import (
     CancelCaravan,
     CreateCaravan,
     JoinCaravanLobby,
+    LeaveCaravanLobby,
 )
 from pipirik_wars.application.dto.inputs import (
     CancelCaravanInput,
     CreateCaravanInput,
     JoinCaravanLobbyInput,
+    LeaveCaravanLobbyInput,
 )
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.application.player import GetProfile
@@ -394,6 +396,7 @@ async def handle_caravan_callback(
     tg_identity: TgIdentity | None,
     cancel_caravan: CancelCaravan,
     join_caravan_lobby: JoinCaravanLobby,
+    leave_caravan_lobby: LeaveCaravanLobby,
     caravans: ICaravanRepository,
     caravan_participants: ICaravanParticipantRepository,
     clans: IClanRepository,
@@ -414,10 +417,8 @@ async def handle_caravan_callback(
     - `join_defender` / `join_raider` — вступить в лобби как защитник
       / рейдер (D.3d). На успех — refresh lobby UI (re-render
       `lobby_state_text` + клавиатура).
-
-    Остальные (`leave`) добавляются в следующих под-коммитах D.3 —
-    пока для них защитный ack без мутации, чтобы кнопка не «висела»
-    с loading-индикатором.
+    - `leave` — выйти из лобби каравана (для не-лидеров, D.3e). На
+      успех — toast + refresh lobby UI.
     """
     if tg_identity is None or callback.data is None or callback.message is None:
         return
@@ -487,9 +488,29 @@ async def handle_caravan_callback(
         )
         return
 
-    # leave — реализация в следующем под-коммите D.3e. Защитный ack,
-    # чтобы UI у клиента не «висел» loading-индикатором на нажатой кнопке.
-    await callback.answer()
+    if parsed.action == "leave":
+        await _handle_leave_callback(
+            callback=callback,
+            tg_identity=tg_identity,
+            caravan_id=parsed.caravan_id,
+            leave_caravan_lobby=leave_caravan_lobby,
+            caravans=caravans,
+            caravan_participants=caravan_participants,
+            clans=clans,
+            players=players,
+            get_profile=get_profile,
+            balance=balance,
+            clock=clock,
+            presenter=presenter,
+            locale=effective_locale,
+        )
+        return
+
+    # На текущей итерации все действия (cancel/show_lobby/join_*/leave)
+    # уже обработаны выше. Этот защитный ack — на случай рассинхронизации
+    # `_VALID_ACTIONS` в presenter и dispatch-цепочки (catch-all для
+    # «канонических» actions, которые мы пропустили в роутере).
+    await callback.answer()  # pragma: no cover — все ветки покрыты выше
 
 
 async def _handle_cancel_callback(
@@ -757,6 +778,100 @@ async def _handle_join_callback(  # noqa: PLR0911, PLR0912 — единая то
 
     await callback.answer(
         presenter.join_toast_success(role=role, locale=locale),
+        show_alert=False,
+    )
+    await _refresh_lobby_message(
+        callback=callback,
+        caravan_id=caravan_id,
+        caravans=caravans,
+        caravan_participants=caravan_participants,
+        clans=clans,
+        players=players,
+        get_profile=get_profile,
+        balance=balance,
+        clock=clock,
+        presenter=presenter,
+        locale=locale,
+    )
+
+
+_LEAVE_LEADER_REASON_PREFIX: Final[str] = "leader cannot leave"
+
+
+async def _handle_leave_callback(
+    *,
+    callback: CallbackQuery,
+    tg_identity: TgIdentity,
+    caravan_id: int,
+    leave_caravan_lobby: LeaveCaravanLobby,
+    caravans: ICaravanRepository,
+    caravan_participants: ICaravanParticipantRepository,
+    clans: IClanRepository,
+    players: IPlayerRepository,
+    get_profile: GetProfile,
+    balance: IBalanceConfig,
+    clock: IClock,
+    presenter: CaravanPresenter,
+    locale: Locale,
+) -> None:
+    """Логика callback-а «Покинуть» (`caravan:leave:<id>`, D.3e).
+
+    Зовёт `LeaveCaravanLobby` use-case (он сам проверит `status==LOBBY`,
+    участие игрока, не-лидерство). Маппинг доменных ошибок:
+
+    - `CaravanNotFoundError` → toast «караван не найден».
+    - `CaravanLobbyClosedError` → toast «лобби закрыто».
+    - `PlayerNotFoundError` → toast «нажми /start».
+    - `CaravanRoleConflictError(reason="leader cannot leave...")` →
+      toast «лидер не может выйти, нажми Отменить».
+    - `CaravanRoleConflictError(reason="player is not a participant...")` →
+      toast «ты не участник этого каравана».
+
+    На успех — toast (с возвратом взноса для CARAVANEER-а или короткий
+    для DEFENDER/RAIDER) + refresh lobby UI (re-render `lobby_state_text`
+    + клавиатура).
+    """
+    try:
+        result = await leave_caravan_lobby.execute(
+            LeaveCaravanLobbyInput(
+                tg_id=tg_identity.tg_user_id,
+                caravan_id=caravan_id,
+            ),
+        )
+    except CaravanNotFoundError:
+        await callback.answer(
+            presenter.callback_toast_caravan_not_found(locale=locale),
+            show_alert=False,
+        )
+        return
+    except CaravanLobbyClosedError:
+        await callback.answer(
+            presenter.callback_toast_lobby_closed(locale=locale),
+            show_alert=False,
+        )
+        return
+    except PlayerNotFoundError:
+        await callback.answer(
+            presenter.callback_toast_player_not_found(locale=locale),
+            show_alert=False,
+        )
+        return
+    except CaravanRoleConflictError as exc:
+        # `LeaveCaravanLobby` бросает `CaravanRoleConflictError` в двух
+        # сценариях: лидер пытается выйти и игрок не участник. Различаем
+        # по `reason`, чтобы дать точечный toast.
+        if exc.reason.startswith(_LEAVE_LEADER_REASON_PREFIX):
+            text = presenter.leave_toast_leader_cannot_leave(locale=locale)
+        else:
+            text = presenter.leave_toast_not_a_participant(locale=locale)
+        await callback.answer(text, show_alert=False)
+        return
+
+    await callback.answer(
+        presenter.leave_toast_success(
+            returned_contribution_cm=result.returned_contribution_cm,
+            locale=locale,
+        ),
         show_alert=False,
     )
     await _refresh_lobby_message(
