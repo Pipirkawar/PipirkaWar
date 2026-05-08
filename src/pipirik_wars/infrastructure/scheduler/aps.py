@@ -25,8 +25,15 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from pipirik_wars.application.bosses import (
+    BossFightFinished,
     BossLobbyClosed,
+    BossRoundResolved,
     CloseBossLobby,
+    FinishBossFight,
+    IBossFightFinishNotifier,
+    IBossLobbyCloseNotifier,
+    IBossRoundTickNotifier,
+    RunBossRound,
 )
 from pipirik_wars.application.caravans import (
     CaravanBattleFinished,
@@ -45,12 +52,14 @@ from pipirik_wars.application.dto.inputs import (
     CloseCaravanLobbyInput,
     EscalateChatToGlobalInput,
     ExpireLobbyEntryInput,
+    FinishBossFightInput,
     FinishCaravanBattleInput,
     FinishDungeonRunInput,
     FinishForestRunInput,
     FinishMountainRunInput,
     ForceResolveMassDuelInput,
     ResolveAfkRoundInput,
+    RunBossRoundInput,
     RunDailyHeadCronInput,
     RunWeeklyClanReferralSummaryInput,
 )
@@ -210,7 +219,12 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
 
     __slots__ = (
         "_afk_resolution_factory",
+        "_boss_fight_finish_factory",
+        "_boss_fight_finish_notifier",
         "_boss_lobby_close_factory",
+        "_boss_lobby_close_notifier",
+        "_boss_round_tick_factory",
+        "_boss_round_tick_notifier",
         "_caravan_battle_finish_factory",
         "_caravan_battle_finish_notifier",
         "_caravan_lobby_close_factory",
@@ -256,6 +270,11 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         caravan_lobby_close_notifier: ICaravanLobbyCloseNotifier | None = None,
         caravan_battle_finish_notifier: ICaravanBattleFinishNotifier | None = None,
         boss_lobby_close_factory: Callable[[], CloseBossLobby] | None = None,
+        boss_round_tick_factory: Callable[[], RunBossRound] | None = None,
+        boss_fight_finish_factory: Callable[[], FinishBossFight] | None = None,
+        boss_lobby_close_notifier: IBossLobbyCloseNotifier | None = None,
+        boss_round_tick_notifier: IBossRoundTickNotifier | None = None,
+        boss_fight_finish_notifier: IBossFightFinishNotifier | None = None,
         clans: IClanRepository | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
@@ -279,6 +298,11 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._caravan_lobby_close_notifier = caravan_lobby_close_notifier
         self._caravan_battle_finish_notifier = caravan_battle_finish_notifier
         self._boss_lobby_close_factory = boss_lobby_close_factory
+        self._boss_round_tick_factory = boss_round_tick_factory
+        self._boss_fight_finish_factory = boss_fight_finish_factory
+        self._boss_lobby_close_notifier = boss_lobby_close_notifier
+        self._boss_round_tick_notifier = boss_round_tick_notifier
+        self._boss_fight_finish_notifier = boss_fight_finish_notifier
         self._clans = clans
         self._logger = logger or logging.getLogger(__name__)
 
@@ -727,7 +751,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
             return
 
     async def _run_boss_lobby_close_job(self, boss_fight_id: int) -> None:
-        """Callback `CloseBossLobby`-job-а (Спринт 3.3-B B.11).
+        """Callback `CloseBossLobby`-job-а (Спринт 3.3-B B.11 + 3.3-D D.3 / D.7).
 
         Срабатывает в `boss_fight.lobby_ends_at` и переводит рейд-бой
         `LOBBY → IN_BATTLE`. Если фабрика не подвязана (recovery /
@@ -735,8 +759,9 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         выходим. Use-case сам идемпотентен: повторный вызов на
         уже не-`LOBBY` рейд-бое вернёт `was_already_closed=True`.
 
-        Notifier пока не предусмотрен (3.3-D добавит уведомление в
-        чат саммонера / рейдеров о старте боя).
+        После успешного `execute(...)` — best-effort
+        `notifier.notify(result)`, который шлёт сообщение «лобби
+        закрыто, бой начался» (ГДД §10.3, Спринт 3.3-D D.7).
         """
         if self._boss_lobby_close_factory is None:
             self._logger.warning(
@@ -755,47 +780,111 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
             )
             return
 
-        # 3.3-D добавит notifier; пока просто логируем результат на info-уровне.
-        if result is None:
+        if self._boss_lobby_close_notifier is None or result is None:
             return
-        self._logger.info(
-            "boss_lobby_close: done",
-            extra={
-                "boss_fight_id": boss_fight_id,
-                "was_already_closed": result.was_already_closed,
-            },
-        )
+        try:
+            await self._boss_lobby_close_notifier.notify(result)
+        except Exception as exc:
+            self._logger.exception(
+                "boss_lobby_close: notifier failed",
+                extra={"boss_fight_id": boss_fight_id, "error": type(exc).__name__},
+            )
 
     async def _run_boss_round_tick_job(self, boss_fight_id: int) -> None:
-        """Callback `RunBossRound`-job-а (Спринт 3.3-B B.3, full impl — 3.3-C).
+        """Callback `RunBossRound`-job-а (Спринт 3.3-B B.3 stub →
+        3.3-D D.3 / D.7 full impl).
 
-        `RunBossRound`-use-case появляется в Спринте 3.3-C (боевая
-        механика); в B.3 callback — заглушка, которая логирует и
-        тихо выходит. Регистрация job-а уже работает: это нужно,
-        чтобы `CloseBossLobby` (B.7) мог планировать первый раунд-tick
-        через `schedule_boss_round_tick(...)`. В 3.3-C callback
-        переписывается на полную реализацию по образцу
-        `_run_caravan_battle_finish_job`.
+        Срабатывает каждые `bosses.round_max_seconds` после `LOBBY →
+        IN_BATTLE`. Резолвит один раунд боя, применяет урон боссу и
+        выбытия рейдеров (детерминистично от `random_seed * 1_000_003 +
+        current_round`). Если рейдеры победили или все выбыли —
+        `is_finished=True`, бой переводится в FINISHED. Сама раздача
+        наград идёт отдельным `boss_fight_finish` job-ом
+        (`_run_boss_fight_finish_job`), который use-case `RunBossRound`
+        НЕ шедулит — это контракт на 3.3-D D.3 (или, на recovery, на
+        safety-net job-е, который ставит `CloseBossLobby`).
+
+        Use-case сам идемпотентен: повторный вызов на уже терминальном
+        бое вернёт `was_already_finished=True`. Если фабрика не
+        подвязана (тесты APScheduler-а самого по себе) — лог + skip.
+
+        После успешного `execute(...)` — best-effort
+        `notifier.notify(result)`, который шлёт карточку раунда
+        участникам (ГДД §10.4, Спринт 3.3-D D.7).
         """
-        self._logger.warning(
-            "boss_round_tick: factory not wired",
-            extra={"boss_fight_id": boss_fight_id},
-        )
+        if self._boss_round_tick_factory is None:
+            self._logger.warning(
+                "boss_round_tick: factory not wired",
+                extra={"boss_fight_id": boss_fight_id},
+            )
+            return
+        result: BossRoundResolved | None = None
+        try:
+            use_case = self._boss_round_tick_factory()
+            result = await use_case.execute(RunBossRoundInput(boss_fight_id=boss_fight_id))
+        except Exception as exc:
+            self._logger.exception(
+                "boss_round_tick: unexpected error",
+                extra={"boss_fight_id": boss_fight_id, "error": type(exc).__name__},
+            )
+            return
+
+        if self._boss_round_tick_notifier is None or result is None:
+            return
+        try:
+            await self._boss_round_tick_notifier.notify(result)
+        except Exception as exc:
+            self._logger.exception(
+                "boss_round_tick: notifier failed",
+                extra={"boss_fight_id": boss_fight_id, "error": type(exc).__name__},
+            )
 
     async def _run_boss_fight_finish_job(self, boss_fight_id: int) -> None:
-        """Callback `FinishBossFight`-safety-net-job-а (Спринт 3.3-B B.3,
-        full impl — 3.3-C).
+        """Callback `FinishBossFight`-job-а (Спринт 3.3-B B.3 stub →
+        3.3-D D.3 / D.7 full impl).
 
-        `FinishBossFight`-use-case появляется в Спринте 3.3-C; в B.3
-        callback — заглушка. Регистрация job-а уже работает: это
-        нужно, чтобы `CloseBossLobby` (B.7) мог планировать
-        safety-net через `schedule_boss_fight_finish(...)`. В 3.3-C
-        callback переписывается на полную реализацию.
+        Срабатывает либо как safety-net (поставлен `CloseBossLobby`-job-ом
+        на `lobby_ends_at + max_battle_duration`), либо как немедленный
+        finish (поставленный bot-handler-ом / `RunBossRound`-use-case-ом
+        в момент `is_finished=True`, чтобы карточки наград улетели до
+        окончания текущего event-loop-а). Use-case сам идемпотентен:
+        повторный вызов на FINISHED/CANCELLED — `was_already_finished=True`.
+
+        Раздаёт длины и свитки рейдерам (победа), либо `+sum(length_at_join)`
+        боссу + `Δ`-deduction рейдерам (поражение). Подробности —
+        `application.bosses.finish_boss_fight.FinishBossFight` (3.3-C / 3.3-D D.2).
+
+        Если фабрика не подвязана (тесты APScheduler-а самого по себе) —
+        лог + skip. После успешного `execute(...)` — best-effort
+        `notifier.notify(result)`, который шлёт карточку «бой завершён»
+        участникам (ГДД §10.5, Спринт 3.3-D D.7).
         """
-        self._logger.warning(
-            "boss_fight_finish: factory not wired",
-            extra={"boss_fight_id": boss_fight_id},
-        )
+        if self._boss_fight_finish_factory is None:
+            self._logger.warning(
+                "boss_fight_finish: factory not wired",
+                extra={"boss_fight_id": boss_fight_id},
+            )
+            return
+        result: BossFightFinished | None = None
+        try:
+            use_case = self._boss_fight_finish_factory()
+            result = await use_case.execute(FinishBossFightInput(boss_fight_id=boss_fight_id))
+        except Exception as exc:
+            self._logger.exception(
+                "boss_fight_finish: unexpected error",
+                extra={"boss_fight_id": boss_fight_id, "error": type(exc).__name__},
+            )
+            return
+
+        if self._boss_fight_finish_notifier is None or result is None:
+            return
+        try:
+            await self._boss_fight_finish_notifier.notify(result)
+        except Exception as exc:
+            self._logger.exception(
+                "boss_fight_finish: notifier failed",
+                extra={"boss_fight_id": boss_fight_id, "error": type(exc).__name__},
+            )
 
     async def _run_dungeon_finish_job(self, run_id: int) -> None:
         """Callback `FinishDungeonRun`-job-а (Спринт 3.1-E).

@@ -803,11 +803,16 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         # `None` в unit-тестах APScheduler-а или когда `bot is None`).
         caravan_lobby_close_notifier=caravan_lobby_close_notifier,
         caravan_battle_finish_notifier=caravan_battle_finish_notifier,
-        # Спринт 3.3-B: late-bound фабрика `boss_lobby_close`.
-        # `close_boss_lobby` создаётся ниже (после delayed_jobs).
-        # `RunBossRound` / `FinishBossFight`-фабрики появятся в 3.3-C
-        # (вместе с notifier-ами в 3.3-D).
+        # Спринт 3.3-B / 3.3-C / 3.3-D: late-bound фабрики boss-job-ов.
+        # `close_boss_lobby` (3.3-B), `run_boss_round` / `finish_boss_fight`
+        # (3.3-C) создаются ниже (после delayed_jobs); лямбды резолвятся
+        # в момент срабатывания job-а — после того как Container собран.
         boss_lobby_close_factory=lambda: close_boss_lobby,
+        boss_round_tick_factory=lambda: run_boss_round,
+        boss_fight_finish_factory=lambda: finish_boss_fight,
+        # Спринт 3.3-D D.7: boss-нотификаторы (best-effort, могут быть
+        # `None` в unit-тестах APScheduler-а или когда `bot is None`).
+        # Реальные `Telegram*Notifier`-имплементации создаются ниже.
         clans=clans,
     )
     start_forest_run = StartForestRun(

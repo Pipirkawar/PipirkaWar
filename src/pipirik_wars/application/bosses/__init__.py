@@ -39,6 +39,11 @@ from pipirik_wars.application.bosses.leave_boss_lobby import (
     BossLobbyLeft,
     LeaveBossLobby,
 )
+from pipirik_wars.application.bosses.notifier import (
+    IBossFightFinishNotifier,
+    IBossLobbyCloseNotifier,
+    IBossRoundTickNotifier,
+)
 from pipirik_wars.application.bosses.run_boss_round import (
     BossRoundResolved,
     RunBossRound,
@@ -60,6 +65,9 @@ __all__ = [
     "CancelBossFight",
     "CloseBossLobby",
     "FinishBossFight",
+    "IBossFightFinishNotifier",
+    "IBossLobbyCloseNotifier",
+    "IBossRoundTickNotifier",
     "JoinBossLobby",
     "LeaveBossLobby",
     "RunBossRound",
