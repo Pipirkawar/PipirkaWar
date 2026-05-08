@@ -85,6 +85,16 @@ class AuditAction(str, enum.Enum):
     CARAVAN_BATTLE_FINISHED = "caravan_battle_finished"
     CARAVAN_REWARDS_GRANTED = "caravan_rewards_granted"
     CARAVAN_CANCELLED = "caravan_cancelled"
+    # ── Спринт 3.3-B (рейд-боссы: лобби, ГДД §10.1–§10.3) ──
+    BOSS_FIGHT_SUMMONED = "boss_fight_summoned"
+    BOSS_RAIDER_JOINED = "boss_raider_joined"
+    BOSS_RAIDER_LEFT = "boss_raider_left"
+    BOSS_FIGHT_STARTED = "boss_fight_started"
+    # ── Спринт 3.3-C (рейд-боссы: бой + награды + отмена, ГДД §10.4–§10.6) ──
+    BOSS_FIGHT_ROUND_RESOLVED = "boss_fight_round_resolved"
+    BOSS_FIGHT_FINISHED = "boss_fight_finished"
+    BOSS_REWARDS_GRANTED = "boss_rewards_granted"
+    BOSS_FIGHT_CANCELLED = "boss_fight_cancelled"
 
 
 class AuditSource(str, enum.Enum):
