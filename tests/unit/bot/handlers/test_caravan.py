@@ -36,6 +36,7 @@ from pipirik_wars.application.player import GetProfile, ProfileView
 from pipirik_wars.bot.handlers.caravan import (
     handle_caravan,
     handle_caravan_callback,
+    handle_caravan_join,
 )
 from pipirik_wars.bot.middlewares.auth import TgIdentity
 from pipirik_wars.domain.balance.ports import IBalanceConfig
@@ -760,6 +761,254 @@ class TestHappyPath:
         )
         # Личное подтверждение всё равно ушло.
         msg.answer.assert_awaited_once()
+
+
+# ──────────────────── команда `/caravan_join` (D.3f) ────────────────────
+
+
+def _join_msg(
+    *,
+    text: str = f"/caravan_join {_CARAVAN_ID} 30",
+    chat_type: str = "private",
+    chat_id: int = _LEADER_TG_ID,
+) -> MagicMock:
+    """Аналог `_msg`, но с дефолтом `/caravan_join` вместо `/caravan`."""
+    msg = MagicMock(spec=Message)
+    msg.text = text
+    msg.chat = Chat(id=chat_id, type=chat_type)
+    msg.answer = AsyncMock()
+    return msg
+
+
+async def _invoke_join(
+    msg: MagicMock,
+    *,
+    identity: TgIdentity | None,
+    join_caravan_lobby: MagicMock | None = None,
+) -> MagicMock:
+    """Запустить `handle_caravan_join` с дефолтами; возвращает stub use-case-а.
+
+    Использует тот же `_stub_join_caravan_lobby`, что и callback-тесты:
+    спецификация use-case-а одна (`JoinCaravanLobby`), различается только
+    `role` в DTO.
+    """
+    join_uc = join_caravan_lobby or _stub_join_caravan_lobby()
+    await handle_caravan_join(
+        cast(Message, msg),
+        identity,
+        cast(JoinCaravanLobby, join_uc),
+        _bundle(),
+        _RU,
+    )
+    return join_uc
+
+
+@pytest.mark.asyncio
+class TestJoinCommandChatKindGate:
+    async def test_group_chat_uses_group_key(self) -> None:
+        msg = _join_msg(chat_type="group")
+        await _invoke_join(msg, identity=_identity(chat_kind="group"))
+        msg.answer.assert_awaited_once_with("ru:caravans-group")
+
+    async def test_supergroup_chat_uses_group_key(self) -> None:
+        msg = _join_msg(chat_type="supergroup")
+        await _invoke_join(msg, identity=_identity(chat_kind="supergroup"))
+        msg.answer.assert_awaited_once_with("ru:caravans-group")
+
+    async def test_no_identity_uses_other_key(self) -> None:
+        msg = _join_msg(chat_type="private")
+        await _invoke_join(msg, identity=None)
+        msg.answer.assert_awaited_once_with("ru:caravans-other")
+
+    async def test_channel_chat_uses_other_key(self) -> None:
+        msg = _join_msg(chat_type="channel")
+        identity = _identity(chat_kind="channel")
+        await _invoke_join(msg, identity=identity)
+        msg.answer.assert_awaited_once_with("ru:caravans-other")
+
+
+@pytest.mark.asyncio
+class TestJoinCommandArgumentParsing:
+    async def test_no_args_returns_usage(self) -> None:
+        msg = _join_msg(text="/caravan_join")
+        join_uc = await _invoke_join(msg, identity=_identity())
+        msg.answer.assert_awaited_once_with("ru:caravans-join-usage")
+        join_uc.execute.assert_not_called()
+
+    async def test_one_arg_returns_usage(self) -> None:
+        msg = _join_msg(text=f"/caravan_join {_CARAVAN_ID}")
+        await _invoke_join(msg, identity=_identity())
+        msg.answer.assert_awaited_once_with("ru:caravans-join-usage")
+
+    async def test_three_args_returns_usage(self) -> None:
+        msg = _join_msg(text=f"/caravan_join {_CARAVAN_ID} 30 extra")
+        await _invoke_join(msg, identity=_identity())
+        msg.answer.assert_awaited_once_with("ru:caravans-join-usage")
+
+    async def test_caravan_id_not_int_returns_invalid(self) -> None:
+        msg = _join_msg(text="/caravan_join abc 30")
+        join_uc = await _invoke_join(msg, identity=_identity())
+        sent = msg.answer.await_args.args[0]
+        assert "caravans-join-caravan-id-invalid" in sent
+        assert "value=abc" in sent
+        join_uc.execute.assert_not_called()
+
+    async def test_caravan_id_zero_returns_invalid(self) -> None:
+        msg = _join_msg(text="/caravan_join 0 30")
+        await _invoke_join(msg, identity=_identity())
+        sent = msg.answer.await_args.args[0]
+        assert "caravans-join-caravan-id-invalid" in sent
+        assert "value=0" in sent
+
+    async def test_caravan_id_negative_returns_invalid(self) -> None:
+        msg = _join_msg(text="/caravan_join -1 30")
+        await _invoke_join(msg, identity=_identity())
+        sent = msg.answer.await_args.args[0]
+        assert "caravans-join-caravan-id-invalid" in sent
+        assert "value=-1" in sent
+
+    async def test_contribution_not_int_returns_invalid(self) -> None:
+        msg = _join_msg(text=f"/caravan_join {_CARAVAN_ID} thirty")
+        await _invoke_join(msg, identity=_identity())
+        sent = msg.answer.await_args.args[0]
+        assert "caravans-contribution-invalid" in sent
+        assert "value=thirty" in sent
+
+    async def test_contribution_zero_returns_invalid(self) -> None:
+        msg = _join_msg(text=f"/caravan_join {_CARAVAN_ID} 0")
+        await _invoke_join(msg, identity=_identity())
+        sent = msg.answer.await_args.args[0]
+        assert "caravans-contribution-invalid" in sent
+        assert "value=0" in sent
+
+    async def test_contribution_negative_returns_invalid(self) -> None:
+        msg = _join_msg(text=f"/caravan_join {_CARAVAN_ID} -5")
+        await _invoke_join(msg, identity=_identity())
+        sent = msg.answer.await_args.args[0]
+        assert "caravans-contribution-invalid" in sent
+        assert "value=-5" in sent
+
+    async def test_message_text_none_returns_usage(self) -> None:
+        msg = _join_msg()
+        msg.text = None
+        await _invoke_join(msg, identity=_identity())
+        msg.answer.assert_awaited_once_with("ru:caravans-join-usage")
+
+
+@pytest.mark.asyncio
+class TestJoinCommandDomainErrorMapping:
+    """Маппинг доменных ошибок `JoinCaravanLobby` (роль `caravaneer`) в локали."""
+
+    async def test_player_not_found_maps_to_not_registered(self) -> None:
+        msg = _join_msg()
+        join_uc = _stub_join_caravan_lobby(
+            error=PlayerNotFoundError(tg_id=_LEADER_TG_ID),
+        )
+        await _invoke_join(msg, identity=_identity(), join_caravan_lobby=join_uc)
+        msg.answer.assert_awaited_once_with("ru:caravans-not-registered")
+
+    async def test_player_frozen(self) -> None:
+        msg = _join_msg()
+        join_uc = _stub_join_caravan_lobby(
+            error=PlayerFrozenError(tg_id=_LEADER_TG_ID),
+        )
+        await _invoke_join(msg, identity=_identity(), join_caravan_lobby=join_uc)
+        msg.answer.assert_awaited_once_with("ru:caravans-player-frozen")
+
+    async def test_caravan_not_found(self) -> None:
+        msg = _join_msg()
+        join_uc = _stub_join_caravan_lobby(
+            error=CaravanNotFoundError(caravan_id=_CARAVAN_ID),
+        )
+        await _invoke_join(msg, identity=_identity(), join_caravan_lobby=join_uc)
+        msg.answer.assert_awaited_once_with("ru:caravans-callback-toast-caravan-not-found")
+
+    async def test_lobby_closed(self) -> None:
+        msg = _join_msg()
+        join_uc = _stub_join_caravan_lobby(
+            error=CaravanLobbyClosedError(caravan_id=_CARAVAN_ID, status="in_battle"),
+        )
+        await _invoke_join(msg, identity=_identity(), join_caravan_lobby=join_uc)
+        msg.answer.assert_awaited_once_with("ru:caravans-callback-toast-lobby-closed")
+
+    async def test_already_in_caravan(self) -> None:
+        msg = _join_msg()
+        join_uc = _stub_join_caravan_lobby(
+            error=AlreadyInCaravanError(player_id=1),
+        )
+        await _invoke_join(msg, identity=_identity(), join_caravan_lobby=join_uc)
+        msg.answer.assert_awaited_once_with("ru:caravans-callback-toast-already-in-caravan")
+
+    async def test_role_conflict_caravaneer_specific_locale(self) -> None:
+        # Для `/caravan_join` единственная причина `CaravanRoleConflictError`
+        # — игрок не в клане-отправителе. Маппим в специфичный ключ.
+        msg = _join_msg()
+        join_uc = _stub_join_caravan_lobby(
+            error=CaravanRoleConflictError(
+                player_id=1,
+                attempted_role="caravaneer",
+                reason="player must be a member of the sender clan to join as caravaneer",
+            ),
+        )
+        await _invoke_join(msg, identity=_identity(), join_caravan_lobby=join_uc)
+        msg.answer.assert_awaited_once_with("ru:caravans-join-role-conflict-caravaneer")
+
+    async def test_requirement_thickness_passes_required_actual(self) -> None:
+        msg = _join_msg()
+        join_uc = _stub_join_caravan_lobby(
+            error=CaravanRequirementError(
+                player_id=1,
+                requirement="thickness",
+                required=7,
+                actual=5,
+            ),
+        )
+        await _invoke_join(msg, identity=_identity(), join_caravan_lobby=join_uc)
+        sent = msg.answer.await_args.args[0]
+        assert "caravans-requirement-thickness" in sent
+        assert "required=7" in sent
+        assert "actual=5" in sent
+
+    async def test_requirement_length_after_contribution(self) -> None:
+        msg = _join_msg()
+        join_uc = _stub_join_caravan_lobby(
+            error=CaravanRequirementError(
+                player_id=1,
+                requirement="length_after_contribution",
+                required=20,
+                actual=18,
+            ),
+        )
+        await _invoke_join(msg, identity=_identity(), join_caravan_lobby=join_uc)
+        sent = msg.answer.await_args.args[0]
+        assert "caravans-requirement-length" in sent
+        assert "required_cm=20" in sent
+        assert "actual_cm=18" in sent
+
+
+@pytest.mark.asyncio
+class TestJoinCommandHappyPath:
+    async def test_success_sends_private_confirmation_with_contribution(self) -> None:
+        msg = _join_msg(text=f"/caravan_join {_CARAVAN_ID} 30")
+        join_uc = _stub_join_caravan_lobby()  # success
+        await _invoke_join(msg, identity=_identity(), join_caravan_lobby=join_uc)
+        msg.answer.assert_awaited_once()
+        sent = msg.answer.await_args.args[0]
+        assert "caravans-join-success-caravaneer" in sent
+        assert "contribution_cm=30" in sent
+
+    async def test_use_case_input_dto_carries_role_caravan_id_and_contribution(
+        self,
+    ) -> None:
+        msg = _join_msg(text=f"/caravan_join {_CARAVAN_ID} 25")
+        join_uc = _stub_join_caravan_lobby()  # success
+        await _invoke_join(msg, identity=_identity(), join_caravan_lobby=join_uc)
+        join_uc.execute.assert_awaited_once()
+        ((dto,), _kwargs) = join_uc.execute.await_args
+        assert dto.tg_id == _LEADER_TG_ID
+        assert dto.caravan_id == _CARAVAN_ID
+        assert dto.role == "caravaneer"
+        assert dto.contribution_cm == 25
 
 
 # ──────────────────── callback `caravan:cancel:<id>` (D.3) ────────────────────

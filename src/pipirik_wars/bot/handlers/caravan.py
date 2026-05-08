@@ -88,6 +88,12 @@ class _ParsedArgs:
     contribution_cm: int
 
 
+@dataclass(frozen=True, slots=True)
+class _ParsedJoinArgs:
+    caravan_id: int
+    contribution_cm: int
+
+
 @router.message(Command("caravan"))
 async def handle_caravan(  # noqa: PLR0911 — каждый return = отдельный UX-отказ
     message: Message,
@@ -222,6 +228,74 @@ async def handle_caravan(  # noqa: PLR0911 — каждый return = отдел�
                 "error": str(exc),
             },
         )
+
+
+@router.message(Command("caravan_join"))
+async def handle_caravan_join(
+    message: Message,
+    tg_identity: TgIdentity | None,
+    join_caravan_lobby: JoinCaravanLobby,
+    bundle: IMessageBundle,
+    locale: Locale | None = None,
+) -> None:
+    """Команда `/caravan_join <caravan_id> <contribution_cm>` — вступить как
+    `CARAVANEER` со взносом.
+
+    Личка-only (как `/caravan`). Для `DEFENDER`/`RAIDER`-роли инлайн-кнопки
+    в lobby-сообщении достаточно (без `contribution`); для `CARAVANEER`
+    нужна явная сумма взноса, поэтому отдельная команда.
+    """
+    presenter = CaravanPresenter(bundle=bundle)
+    effective_locale = locale or DEFAULT_LOCALE
+    chat_kind = tg_identity.chat_kind if tg_identity is not None else message.chat.type
+
+    if chat_kind in ("group", "supergroup"):
+        await message.answer(presenter.group(locale=effective_locale))
+        return
+    if chat_kind != "private" or tg_identity is None:
+        await message.answer(presenter.other(locale=effective_locale))
+        return
+
+    args = await _parse_and_validate_join_args(
+        message=message,
+        presenter=presenter,
+        locale=effective_locale,
+    )
+    if args is None:
+        return
+
+    try:
+        await join_caravan_lobby.execute(
+            JoinCaravanLobbyInput(
+                tg_id=tg_identity.tg_user_id,
+                caravan_id=args.caravan_id,
+                role="caravaneer",
+                contribution_cm=args.contribution_cm,
+            ),
+        )
+    except (
+        PlayerNotFoundError,
+        PlayerFrozenError,
+        CaravanNotFoundError,
+        CaravanLobbyClosedError,
+        AlreadyInCaravanError,
+        CaravanRoleConflictError,
+        CaravanRequirementError,
+    ) as exc:
+        await _answer_join_caravaneer_error(
+            message=message,
+            exc=exc,
+            presenter=presenter,
+            locale=effective_locale,
+        )
+        return
+
+    await message.answer(
+        presenter.join_success_caravaneer(
+            contribution_cm=args.contribution_cm,
+            locale=effective_locale,
+        ),
+    )
 
 
 async def _parse_and_validate_args(
@@ -388,6 +462,105 @@ def _split_args(text: str | None) -> tuple[str, str] | None:
     if len(parts) != _EXPECTED_ARG_COUNT + 1:
         return None
     return parts[1], parts[2]
+
+
+async def _parse_and_validate_join_args(
+    *,
+    message: Message,
+    presenter: CaravanPresenter,
+    locale: Locale,
+) -> _ParsedJoinArgs | None:
+    """Распарсить и провалидировать аргументы `/caravan_join`.
+
+    Отвечает игроку локализованной ошибкой и возвращает None, если
+    аргументов не два / любой из них не int / любой ≤ 0. Используем
+    тот же `_split_args` (он не привязан к конкретной команде —
+    проверяет только число позиционных аргументов).
+    """
+    parsed = _split_args(message.text)
+    if parsed is None:
+        await message.answer(presenter.join_usage(locale=locale))
+        return None
+    caravan_id_raw, contribution_raw = parsed
+
+    try:
+        caravan_id = int(caravan_id_raw)
+    except ValueError:
+        await message.answer(
+            presenter.join_caravan_id_invalid(value=caravan_id_raw, locale=locale),
+        )
+        return None
+    if caravan_id <= 0:
+        await message.answer(
+            presenter.join_caravan_id_invalid(value=caravan_id_raw, locale=locale),
+        )
+        return None
+
+    try:
+        contribution_cm = int(contribution_raw)
+    except ValueError:
+        await message.answer(
+            presenter.contribution_invalid(value=contribution_raw, locale=locale),
+        )
+        return None
+    if contribution_cm <= 0:
+        await message.answer(
+            presenter.contribution_invalid(value=contribution_raw, locale=locale),
+        )
+        return None
+    return _ParsedJoinArgs(caravan_id=caravan_id, contribution_cm=contribution_cm)
+
+
+async def _answer_join_caravaneer_error(  # noqa: PLR0911 — единая точка маппинга доменных ошибок use-case в локали
+    *,
+    message: Message,
+    exc: Exception,
+    presenter: CaravanPresenter,
+    locale: Locale,
+) -> None:
+    """Маппинг доменных ошибок `JoinCaravanLobby` (роль `caravaneer`) в
+    локализованные ответы для команды `/caravan_join`.
+    """
+    if isinstance(exc, PlayerNotFoundError):
+        await message.answer(presenter.not_registered(locale=locale))
+        return
+    if isinstance(exc, PlayerFrozenError):
+        await message.answer(presenter.player_frozen(locale=locale))
+        return
+    if isinstance(exc, CaravanNotFoundError):
+        await message.answer(presenter.callback_toast_caravan_not_found(locale=locale))
+        return
+    if isinstance(exc, CaravanLobbyClosedError):
+        await message.answer(presenter.callback_toast_lobby_closed(locale=locale))
+        return
+    if isinstance(exc, AlreadyInCaravanError):
+        await message.answer(presenter.callback_toast_already_in_caravan(locale=locale))
+        return
+    if isinstance(exc, CaravanRoleConflictError):
+        # Для `/caravan_join` единственная возможная причина — игрок
+        # не в клане-отправителе (use-case проверяет это первым,
+        # см. `_ensure_role_allowed`).
+        await message.answer(presenter.join_role_conflict_caravaneer(locale=locale))
+        return
+    if isinstance(exc, CaravanRequirementError):
+        if exc.requirement == "thickness":
+            await message.answer(
+                presenter.requirement_thickness(
+                    required=exc.required,
+                    actual=exc.actual,
+                    locale=locale,
+                ),
+            )
+            return
+        await message.answer(
+            presenter.requirement_length(
+                required_cm=exc.required,
+                actual_cm=exc.actual,
+                locale=locale,
+            ),
+        )
+        return
+    raise exc  # pragma: no cover — все ветки покрыты except-блоком в handler-е
 
 
 @router.callback_query(F.data.startswith("caravan:"))

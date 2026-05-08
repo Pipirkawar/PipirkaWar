@@ -574,6 +574,37 @@ class CaravanPresenter:
             locale=locale,
         )
 
+    # --- Команда `/caravan_join` (D.3f) ---
+
+    def join_usage(self, *, locale: Locale) -> str:
+        """Игрок вызвал `/caravan_join` без двух аргументов или с не-парой."""
+        return self._bundle.format(MessageKey("caravans-join-usage"), locale=locale)
+
+    def join_caravan_id_invalid(self, *, value: str, locale: Locale) -> str:
+        """Первый аргумент `/caravan_join` не парсится в положительный `int`."""
+        return self._bundle.format(
+            MessageKey("caravans-join-caravan-id-invalid"),
+            locale=locale,
+            value=value,
+        )
+
+    def join_success_caravaneer(self, *, contribution_cm: int, locale: Locale) -> str:
+        """Подтверждение в личке: ты вступил как CARAVANEER со взносом X см."""
+        return self._bundle.format(
+            MessageKey("caravans-join-success-caravaneer"),
+            locale=locale,
+            contribution_cm=contribution_cm,
+        )
+
+    def join_role_conflict_caravaneer(self, *, locale: Locale) -> str:
+        """`CaravanRoleConflictError` для роли `caravaneer` — игрок не в
+        клане-отправителе.
+        """
+        return self._bundle.format(
+            MessageKey("caravans-join-role-conflict-caravaneer"),
+            locale=locale,
+        )
+
     # --- Callback `caravan:cancel:<id>` (D.3) ---
 
     def cancel_message_text(self, *, locale: Locale) -> str:

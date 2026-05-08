@@ -913,3 +913,19 @@ caravans-leave-toast-success = You left the caravan lobby
 caravans-leave-toast-success-with-contribution = You left the lobby. Returned: { NUMBER($contribution_cm, useGrouping: 0) } cm
 caravans-leave-toast-leader-cannot-leave = The leader cannot leave. To disband the caravan, press "Cancel".
 caravans-leave-toast-not-a-participant = You are not a participant of this caravan
+
+# --- Command `/caravan_join` (Sprint 3.2-D, D.3f) ---
+# This command runs only in the bot's private chat: a player passes the
+# caravan_id and a contribution in cm to join the lobby as a CARAVANEER
+# (DEFENDER/RAIDER use lobby inline buttons — they don't need a contribution).
+
+caravans-join-usage =
+    🐪 To join a caravan as a caravaneer, pass the caravan_id (visible in the lobby) and a contribution in cm:
+    <code>/caravan_join &lt;caravan_id&gt; &lt;contribution_cm&gt;</code>
+
+    Example: <code>/caravan_join 42 30</code>
+caravans-join-caravan-id-invalid = 🐪 caravan_id must be a positive integer, got: <code>{ $value }</code>.
+caravans-join-success-caravaneer =
+    🐪 You joined the caravan as a caravaneer!
+    Contribution: { NUMBER($contribution_cm, useGrouping: 0) } cm
+caravans-join-role-conflict-caravaneer = 🐪 Only members of the sender clan can join as a caravaneer.

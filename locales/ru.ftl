@@ -917,3 +917,19 @@ caravans-leave-toast-success = Ты вышел из лобби каравана
 caravans-leave-toast-success-with-contribution = Ты вышел из лобби. Возвращено: { NUMBER($contribution_cm, useGrouping: 0) } см
 caravans-leave-toast-leader-cannot-leave = Лидер не может выйти. Чтобы распустить караван, нажми «Отменить».
 caravans-leave-toast-not-a-participant = Ты не участник этого каравана
+
+# --- Команда `/caravan_join` (Спринт 3.2-D, D.3f) ---
+# Команда работает только в личке: игрок указывает caravan_id и взнос в см,
+# чтобы вступить в лобби как CARAVANEER (для DEFENDER/RAIDER — инлайн-кнопки
+# в lobby-сообщении, контрибьюция там не требуется).
+
+caravans-join-usage =
+    🐪 Чтобы вступить в караван как караванщик, укажи caravan_id (виден в лобби) и взнос в см:
+    <code>/caravan_join &lt;caravan_id&gt; &lt;взнос_см&gt;</code>
+
+    Пример: <code>/caravan_join 42 30</code>
+caravans-join-caravan-id-invalid = 🐪 caravan_id должен быть положительным целым числом, передано: <code>{ $value }</code>.
+caravans-join-success-caravaneer =
+    🐪 Ты вступил в караван как караванщик!
+    Взнос: { NUMBER($contribution_cm, useGrouping: 0) } см
+caravans-join-role-conflict-caravaneer = 🐪 Караванщиком может стать только член клана-отправителя.
