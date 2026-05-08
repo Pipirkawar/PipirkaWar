@@ -41,6 +41,10 @@ from pipirik_wars.application.caravans.leave_caravan_lobby import (
     LeaveCaravanLobby,
     LeftCaravanLobby,
 )
+from pipirik_wars.application.caravans.notifier import (
+    ICaravanBattleFinishNotifier,
+    ICaravanLobbyCloseNotifier,
+)
 
 __all__ = [
     "CancelCaravan",
@@ -51,6 +55,8 @@ __all__ = [
     "ClosedCaravanLobby",
     "CreateCaravan",
     "FinishCaravanBattle",
+    "ICaravanBattleFinishNotifier",
+    "ICaravanLobbyCloseNotifier",
     "JoinCaravanLobby",
     "JoinedCaravanLobby",
     "LeaveCaravanLobby",
