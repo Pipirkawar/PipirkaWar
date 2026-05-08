@@ -14,6 +14,8 @@ from pipirik_wars.infrastructure.db.models import (  # noqa: F401  (важно: 
     ActivityLockORM,
     AdminORM,
     AuditLogORM,
+    CaravanORM,
+    CaravanParticipantORM,
     ClanMemberORM,
     ClanORM,
     IdempotencyKeyORM,

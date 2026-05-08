@@ -43,6 +43,10 @@ PvP массовый клан×клан (Спринт 2.2.D):
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
 from pipirik_wars.infrastructure.db.models.admin_audit import AdminAuditLogORM
+from pipirik_wars.infrastructure.db.models.caravan import (
+    CaravanORM,
+    CaravanParticipantORM,
+)
 from pipirik_wars.infrastructure.db.models.clan import ClanMemberORM, ClanORM
 from pipirik_wars.infrastructure.db.models.daily_active import DailyActiveORM
 from pipirik_wars.infrastructure.db.models.daily_head import DailyHeadAssignmentORM
@@ -74,6 +78,8 @@ __all__ = [
     "AdminAuditLogORM",
     "AdminORM",
     "AuditLogORM",
+    "CaravanORM",
+    "CaravanParticipantORM",
     "ClanMemberORM",
     "ClanORM",
     "DailyActiveORM",
