@@ -84,6 +84,8 @@ _MOUNTAIN_FINISH_JOB_PREFIX: Final[str] = "mountain_run_finish:"
 _DUNGEON_FINISH_JOB_PREFIX: Final[str] = "dungeon_run_finish:"
 # 3.2-B (Караваны, ГДД §9). Lobby-close-job переводит караван LOBBY → IN_BATTLE.
 _CARAVAN_LOBBY_CLOSE_JOB_PREFIX: Final[str] = "caravan_lobby_close:"
+# 3.2-C (Караваны, ГДД §9.5–§9.6). Battle-finish-job резолвит бой и выдаёт награды.
+_CARAVAN_BATTLE_FINISH_JOB_PREFIX: Final[str] = "caravan_battle_finish:"
 _DAILY_HEAD_RESCHEDULE_JOB_ID: Final[str] = "daily_head_reschedule_cron"
 _WEEKLY_REFERRAL_SUMMARY_JOB_ID: Final[str] = "weekly_clan_referral_summary_cron"
 #: Расписание weekly-сводки рефералов клана: вс. 18:00 UTC (ГДД §13.3).
@@ -127,6 +129,10 @@ def _dungeon_finish_job_id(run_id: int) -> str:
 
 def _caravan_lobby_close_job_id(caravan_id: int) -> str:
     return f"{_CARAVAN_LOBBY_CLOSE_JOB_PREFIX}{caravan_id}"
+
+
+def _caravan_battle_finish_job_id(caravan_id: int) -> str:
+    return f"{_CARAVAN_BATTLE_FINISH_JOB_PREFIX}{caravan_id}"
 
 
 class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
@@ -520,6 +526,47 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
                 extra={"caravan_id": caravan_id, "error": type(exc).__name__},
             )
             return
+
+    # ── Спринт 3.2-C: караван (battle-finish, ГДД §9.5–§9.6) ──
+
+    async def schedule_caravan_battle_finish(
+        self,
+        *,
+        caravan_id: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_caravan_battle_finish_job,
+            trigger="date",
+            run_date=run_at,
+            args=(caravan_id,),
+            id=_caravan_battle_finish_job_id(caravan_id),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_caravan_battle_finish(self, *, caravan_id: int) -> None:
+        try:
+            self._scheduler.remove_job(_caravan_battle_finish_job_id(caravan_id))
+        except Exception:
+            return
+
+    async def _run_caravan_battle_finish_job(self, caravan_id: int) -> None:
+        """Callback `FinishCaravanBattle`-job-а (Спринт 3.2-C).
+
+        Срабатывает в `caravan.battle_ends_at` и резолвит бой
+        (детерминистично от `random_seed`), выдаёт награды,
+        начисляет Атаман-роль лидеру при победе. Полный wiring
+        `caravan_battle_finish_factory` придёт вместе с use-case-ом
+        `FinishCaravanBattle` (шаг C.7); до этого callback логирует
+        warning «factory not wired» и тихо выходит. Use-case будет
+        идемпотентен: повторный вызов на `FINISHED`-каравану вернёт
+        `was_already_finished=True`.
+        """
+        self._logger.warning(
+            "caravan_battle_finish: factory not wired",
+            extra={"caravan_id": caravan_id},
+        )
 
     async def _run_dungeon_finish_job(self, run_id: int) -> None:
         """Callback `FinishDungeonRun`-job-а (Спринт 3.1-E).
