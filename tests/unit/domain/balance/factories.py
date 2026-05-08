@@ -157,6 +157,23 @@ def valid_balance_payload() -> dict[str, Any]:
             "unblocked_strike_damage_cm": 1,
             "blocked_strike_damage_cm": 1,
         },
+        "bosses": {
+            "min_thickness_level_summoner": 9,
+            "min_thickness_level_raider": 4,
+            "min_length_cm": 20,
+            "lobby_minutes": 20,
+            "summon_cooldown_hours": 4,
+            "top_n_pool": 30,
+            "victory_threshold_cm": 10,
+            "round_min_seconds": 20,
+            "round_max_seconds": 60,
+            "base_damage_cm": 5,
+            "bot_play_chance": 1.0,
+            "scroll_drop": {
+                "regular": 0.05,
+                "blessed": 0.005,
+            },
+        },
         "oracle": {
             "cooldown_tz": "Europe/Moscow",
             "bonus_min": 1,

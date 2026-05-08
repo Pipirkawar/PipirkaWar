@@ -23,6 +23,44 @@
 
 ---
 
+## 2026-05-08 — Спринт 3.3-A: каркас доменов «Рейд-босс» (entities + errors + ports + config + unit-tests)
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 3.3 ([`current_tasks.md`](current_tasks.md) «Декомпозиция Спринта 3.3 на фичевые PR-ы»), ПД §6.3.3 «Спринт 3.3 — Рейд-боссы», ГДД §10 «Рейд-боссы». **Первый PR Спринта 3.3** — приземляет доменный слой `domain/bosses/` + расширяет `config/balance.yaml` + `domain/balance/config.py` под `bosses:`. Use-case-ы / persistence / миграция / bot-handlers / UI — следующие PR-ы (3.3-B/C/D).
+
+Что сделано:
+
+- **6 балансовых решений зафиксированы с `cyan91`** (через chat перед стартом ветки): (1) топ-30 *игроков* по `length_cm` (не кланов); (2) глобальный кулдаун `1 призыв в 4 часа на сервер` (не per-player / per-clan; распределённый lock через `boss_fights.started_at`-MAX в 3.3-B); (3) inline-кнопки 3 атак в личке у саммонера; AFK → бот ролит атаку через `IRandom`; (4) `round_min_seconds=20`, `round_max_seconds=60` — длина раунда (timer); бой идёт **до победы/поражения**, без фиксированного N; (5) `scroll_drop.regular=0.05`, `scroll_drop.blessed=0.005` — стартовые числа, уточнятся по альфа-метрикам; (6) `base_damage_cm=5` — фиксированное число, не процент и не от уровня.
+- **A.1 — Domain entities** (`domain/bosses/entities.py`): `BossFight` (агрегат, lifecycle `LOBBY → IN_BATTLE → FINISHED|CANCELLED`, методы `mark_in_battle`/`mark_finished`/`mark_cancelled`, идемпотентны, `current_boss_length_cm` / `random_seed` / `lobby_ends_at` / `battle_ends_at` / `finished_at`); `BossParticipant` (weak aggregate raider↔boss_fight, `is_alive`, `damage_dealt_cm`).
+- **A.2 — Domain enums + VO** (`domain/bosses/value_objects.py`): `BossKind` (`RAID` — пока единственный тип; задел под будущие типы боссов в Phase 5+); `BossFightStatus` (`LOBBY` / `IN_BATTLE` / `FINISHED` / `CANCELLED`); `BossDamage` VO (frozen, slots, валидация `cm > 0` и type-check).
+- **A.3 — Domain errors** (`domain/bosses/errors.py`): `BossError` базовый + 8 subclasses — `BossFightNotFoundError`, `BossFightAlreadyStartedError`, `BossSummonOnCooldownError` (с payload `next_available_at` / `last_summoned_at`), `BossSummonerThicknessTooLowError` (с payload `current_thickness` / `required_thickness`), `BossRaiderThicknessTooLowError`, `BossLengthTooSmallError` (с payload `current_length_cm` / `required_length_cm`), `BossFightFullError`, `BossParticipantAlreadyJoinedError`. Pattern скопирован 1-в-1 с `domain/caravan/errors.py`.
+- **A.4 — Domain ports** (`domain/bosses/repositories.py`): `IBossFightRepository` (методы `add` / `get_by_id` / `get_active_by_summoner_clan` / `get_last_summoned_at_for_server` / `save`); `IBossParticipantRepository` (методы `add` / `list_by_boss_fight` / `remove`). Async, abstract, with docstrings. `get_last_summoned_at_for_server` — серверный кулдаун-чекер (используется в `SummonBoss` use-case в 3.3-B для проверки 1/4ч).
+- **A.7 — Balance config** (`domain/balance/config.py`): pydantic `BossesConfig` (12 полей: `min_thickness_level_summoner=9` / `min_thickness_level_raider=4` / `min_length_cm=20` / `lobby_minutes=20` / `summon_cooldown_hours=4` / `top_n_pool=30` / `victory_threshold_cm=10` / `round_min_seconds=20` / `round_max_seconds=60` / `base_damage_cm=5` / `bot_play_chance=1.0` / `scroll_drop`); `BossScrollDropConfig` (`regular: float[0..1]` / `blessed: float[0..1]`). Cross-field validators: `round_min_seconds <= round_max_seconds`, `min_thickness_level_summoner >= min_thickness_level_raider`. `BalanceConfig.bosses: BossesConfig` (required). `extra="forbid"` (через `_Frozen` base class).
+- **A.8 — Balance YAML** (`config/balance.yaml`): секция `bosses:` со стартовыми дефолтами (по решениям с `cyan91`) + развёрнутый комментарий-блок (ГДД §10.1–§10.5: гейты входа, лобби, бой, награды).
+- **A.9 — Юнит-тесты:**
+  - `tests/unit/domain/bosses/test_value_objects.py` — enums (str-inheritance, размер, значения), `BossDamage` (positive int, zero/negative reject, type-check, frozen, equality).
+  - `tests/unit/domain/bosses/test_entities.py` — factory-методы `BossFight.summon` / `BossParticipant.join`, lifecycle-переходы, идемпотентность `mark_*`, error-cases (нельзя cancel-нуть FINISHED, нельзя finish-нуть LOBBY и т.п.), HP/round-tracking, инварианты.
+  - `tests/unit/domain/bosses/test_errors.py` — иерархия наследования от `BossError`, payload-атрибуты для каждого error-типа.
+  - `tests/unit/domain/bosses/test_repositories.py` — smoke на abstract-порты (нельзя инстанциировать, методы async, все методы abstract).
+  - `tests/unit/domain/balance/test_bosses_config.py` — pydantic-валидаторы (gt/ge/le, cross-field), `extra="forbid"`, factory `valid_balance_payload` теперь содержит `bosses:`, smoke-тест на загрузку реального `config/balance.yaml`.
+  - `tests/unit/domain/balance/factories.py::valid_balance_payload` — добавлена дефолтная секция `bosses:` (12 полей).
+
+Результат / артефакты:
+- 14 файлов изменено: 5 новых (`domain/bosses/{__init__,value_objects,entities,errors,repositories}.py`), 1 модификация (`domain/balance/config.py` +`BossesConfig` / `BossScrollDropConfig` / `BalanceConfig.bosses`), 1 модификация (`config/balance.yaml` + `bosses:` секция), 6 новых тестовых файлов (`tests/unit/domain/bosses/{__init__,test_value_objects,test_entities,test_errors,test_repositories}.py` + `tests/unit/domain/balance/test_bosses_config.py`), 1 модификация (`tests/unit/domain/balance/factories.py`).
+- `make ci` локально: ruff ✅, mypy --strict 0 issues ✅, import-linter 3 contracts kept ✅, **pytest 4162 passed / 1 skipped, coverage 95.66%** (gate 80%).
+
+Заметки / решения:
+- **Pattern скопирован с `domain/caravan/`.** Caravan-домен — template для boss-домена: frozen dataclasses + `slots=True`, async repository ports, error-hierarchy с базовым классом + payload-атрибутами, pydantic-config с `_Frozen` base + cross-field-validators. Это сокращает review-time и упрощает дальнейший maintenance (один и тот же mental model).
+- **`BossKind=RAID` — single value пока.** В ГДД §10 пока один тип босса (`RAID`). Enum заведён задел под будущие типы (e.g. `WORLD_BOSS` / `EVENT_BOSS` в Phase 5+). При single-value enum в Python (`StrEnum`) тестируется отдельно — иначе coverage гадает.
+- **`BossDamage` VO — пока используется только в test-fixtures.** В 3.3-A нет use-case-ов, поэтому VO заземлён ровно в одном месте — `tests/unit/domain/bosses/test_value_objects.py`. В 3.3-C он будет применяться в `boss_round_resolution`-сервисе как чёткий type-tag для урона (вместо raw `int`). Заведён сейчас — чтобы не двигать domain-структуру в 3.3-C.
+- **Распределённый lock — задел в репозитории.** `IBossFightRepository.get_last_summoned_at_for_server() -> datetime | None` — это подготовка под глобальный кулдаун (1/4 ч на сервер). В 3.3-B `SummonBoss` будет: `last = repo.get_last_summoned_at_for_server(); if last and now - last < cooldown: raise BossSummonOnCooldownError(...)`. Это idempotent / horizontally-scalable (БД-MAX вместо in-memory-lock), лучше Redis-lock-а в нашем contexte.
+- **`top_n_pool=30` — конфигурируется через balance.yaml.** В 3.3-B `SummonBoss` будет: `pool = clan_query.top_n_players_by_length(top_n_pool); boss = random.choice(pool)`. Решение `cyan91` зафиксировало топ-30 **игроков**, не кланов — это влияет на сигнатуру `IClanQuery.top_n_players_by_length` (vs `top_n_clans_by_length`).
+- **`round_min_seconds=20` / `round_max_seconds=60` — это длина одного раунда (timer).** Внутри раунда собираются ходы (атаки босса + блоки рейдеров), потом `boss_round_resolution`-сервис резолвит. Кол-во раундов в бою — до победы (`current_boss_length_cm < victory_threshold_cm`) или поражения (все рейдеры выбыли). Без фиксированного N.
+- **Audit-actions / Scheduler ports / `IClanQuery.top_n_players` — вынесены в 3.3-B.** В 3.3-A нет use-case-ов, поэтому новые `AuditAction.BOSS_*`, `IDelayedJobScheduler.schedule_boss_*` и `IClanQuery.top_n_players_by_length` — задел под 3.3-B. Это уменьшает scope первого PR-а Спринта 3.3 и держит его в чисто-доменном слое.
+
+---
+
 ## 2026-05-08 — Спринт 3.2-D: bot-handlers `/caravan` + лобби UI + презентеры + локали + APScheduler factory-wiring (закрытие Спринта 3.2)
 
 **Автор:** Devin (агент)
