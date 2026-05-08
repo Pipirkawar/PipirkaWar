@@ -17,13 +17,13 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный PR — **3.2-B** (PR #109, `e27968b`) — use-case-ы `CreateCaravan` / `JoinCaravanLobby` / `LeaveCaravanLobby` / `CloseCaravanLobby` (`application/caravans/`), миграция `0019_caravans` + ORM + SQLAlchemy-репо (`infrastructure/db/models/caravan.py`, `infrastructure/db/repositories/{caravan,caravan_participant}.py`), APScheduler `schedule_caravan_lobby_close` / `cancel_caravan_lobby_close` (`infrastructure/scheduler/aps.py` + `tests/fakes/delayed_job_scheduler.py`), 4 новых `AuditAction.CARAVAN_*` (`domain/shared/ports/audit.py`), 4 новых input-DTO (`application/dto/inputs.py`), DI-wiring в `bot/main.py`. Полное unit + integration-покрытие (28 integration + ~ 67 unit-тестов, 95.93% coverage).
+**На `main`:** последний смерженный PR — **3.2-C** (этот PR; `<коммит_слияния_3.2-C>`) — боевая механика каравана: доменный сервис `caravan_battle_resolution` (`domain/caravan/services.py`, чистая функция, детерминистично от `random_seed` через `IRandom`), use-case `FinishCaravanBattle` (`application/caravans/finish_caravan_battle.py`), `Title.ATAMAN` (`domain/player/value_objects.py`), 3 новых `AuditAction.CARAVAN_*` (`CARAVAN_BATTLE_FINISHED`/`REWARDS_GRANTED`/`CANCELLED`), `IDelayedJobScheduler.{schedule,cancel}_caravan_battle_finish` (`domain/shared/ports/scheduler.py`) + `APSchedulerDelayedJobScheduler`-callback `_run_caravan_battle_finish_job`, `SeededRandom` (`infrastructure/random/seeded_random.py`), `CloseCaravanLobby` теперь шедулит финиш-job при LOBBY → IN_BATTLE (был TODO в 3.2-B), `InvalidCaravanStateError`. Полное unit + integration-покрытие (1 integration + ~ 30 unit-тестов, 3927 passed / 1 skipped, 95.68% coverage).
 
-Перед ним: **3.2-A** (PR #108, `fe959c6`) — каркас доменов «Караван». Перед ним: **3.1-E** (PR #107, `5c1b26f`) — bot-handlers `/mountains` + `/dungeon` (закрытие Спринта 3.1). Перед ним: **catch-up docs 3.1-D** (PR #106, `76af44a`). Перед ним: **3.1-D** (PR #105, `2208ae6`). Перед ним: **3.1-C** (PR #103). Перед ним: **3.1-B** (PR #101). Перед ним: **3.1-A** (PR #99). Перед ним: PR-ы Спринта 2.5 (#79–#97).
+Перед ним: **3.2-B** (PR #109, `e27968b`) — use-case-ы `CreateCaravan` / `JoinCaravanLobby` / `LeaveCaravanLobby` / `CloseCaravanLobby`, миграция `0019_caravans`, APScheduler-job на закрытие лобби. Перед ним: **3.2-A** (PR #108, `fe959c6`) — каркас доменов «Караван». Перед ним: **3.1-E** (PR #107, `5c1b26f`) — bot-handlers `/mountains` + `/dungeon` (закрытие Спринта 3.1). Перед ним: **catch-up docs 3.1-D** (PR #106, `76af44a`). Перед ним: **3.1-D** (PR #105, `2208ae6`). Перед ним: **3.1-C** (PR #103). Перед ним: **3.1-B** (PR #101). Перед ним: **3.1-A** (PR #99). Перед ним: PR-ы Спринта 2.5 (#79–#97).
 
-**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов: 3.1-A → 3.1-E + catch-up #106). Идёт **Спринт 3.2 «Караваны (полная механика)»** — каркас доменов закрыт в 3.2-A, use-cases + persistence + миграция + APScheduler-job на закрытие лобби — в 3.2-B (PR #109, мердж). Боевая механика + награды + Атаман-роль — в **этом 3.2-C PR-е**, bot-handlers + локали + UI — в **3.2-D**.
+**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов: 3.1-A → 3.1-E + catch-up #106). Идёт **Спринт 3.2 «Караваны (полная механика)»** — каркас доменов закрыт в 3.2-A, use-cases + persistence + миграция + APScheduler-job на закрытие лобби — в 3.2-B (PR #109, мердж), боевая механика + награды + Атаман-роль — в 3.2-C (этот PR; мердж). Bot-handlers + локали + UI — в следующем **3.2-D**.
 
-**Активная feature-ветка:** `devin/1778223350-sprint-3-2-C-caravan-battle-resolution` — стартовала от `main = e27968b` (мердж 3.2-B).
+**Активная feature-ветка:** ещё не создана. После мерджа этого 3.2-C PR-а в `main` следующий агент создаёт `devin/<unix_ts>-sprint-3-2-D-caravan-bot-handlers` от свежего `main` и стартует **Спринт 3.2-D** (bot-handler-ы `/caravan` в личке, lobby-UI с inline-кнопками 3 ролей, `CaravanPresenter`, локали `caravans-*` RU+EN, `CancelCaravan` use-case + `/caravan_cancel`, manual smoke-тест).
 
 ---
 
@@ -60,31 +60,30 @@
 4. **Атаман — расширение `Title` enum** в `domain/player/`. Не отдельный VO, не поле в кланах.
 5. **Capacity-предели:** `max_raiders ≤ 4 × caravaneers`, `max_defenders ≤ 2 × caravaneers` (ГДД §9.5). При `caravaneers=0` (только лидер) — `raiders ≤ 4`, `defenders ≤ 2`.
 
-**Финальный коммит этого 3.2-C PR-а** (внутри ветки, последним перед мерджем) — обновить `history.md` (запись «Спринт 3.2-C: боевая механика + награды + Атаман»), пересобрать «Снимок состояния» в `current_tasks.md` под `main = <коммит-слияния-3.2-C>`, расписать чек-лист 3.2-D.
+**Финальный коммит этого 3.2-D PR-а** (внутри ветки, последним перед мерджем) — обновить `history.md` (запись «Спринт 3.2-D: bot-handlers + локали + UI»), пересобрать «Снимок состояния» в `current_tasks.md` под `main = <коммит-слияния-3.2-D>`, закрыть Спринт 3.2 и расписать чек-лист **первого PR-а Спринта 3.3** (по [`development_plan.md`](development_plan.md) §6.3.3).
 
 ---
 
-## 📝 Чек-лист следующего PR (Спринт 3.2-C)
+## 📝 Чек-лист следующего PR (Спринт 3.2-D)
 
-> Этот PR закрывает боевую механику каравана: resolve битвы по `random_seed`, начисление наград (lengths + clan +1 см), Атаман-роль, идемпотентность через `IIdempotencyService`. Bot-handlers и UI — в 3.2-D.
+> Этот PR закрывает Спринт 3.2 — добавляет bot-handler `/caravan` в личке, lobby-UI с inline-кнопками 3 ролей, `CaravanPresenter`, локали `caravans-*` (RU+EN parity), `CancelCaravan` use-case + `/caravan_cancel`, manual smoke-тест. Боевая механика и persistence уже есть из 3.2-A/B/C — здесь только UI-слой.
 
-- [x] Дождаться мерджа `main = e27968b` (3.2-B, PR #109).
-- [x] `git fetch && git checkout main && git pull`.
-- [x] `make ci` локально на свежем `main`: ✅ зелёный (3889 passed / 1 skipped, coverage 95.93%).
-- [x] Создать ветку `devin/1778223350-sprint-3-2-C-caravan-battle-resolution` от `main`.
-- [x] **C.0 — Обновить `current_tasks.md`** под старт Спринта 3.2-C (этот коммит).
-- [ ] **C.1 — Расширить `domain/shared/ports/audit.py`:** добавить `AuditAction.CARAVAN_BATTLE_FINISHED`, `CARAVAN_REWARDS_GRANTED`, `CARAVAN_CANCELLED` (если cancel-flow появится в этом же PR).
-- [ ] **C.2 — Расширить `domain/shared/ports/scheduler.py`:** `schedule_caravan_battle_finish(caravan_id, run_at)` + `cancel_caravan_battle_finish(caravan_id)`.
-- [ ] **C.3 — Расширить `Title` enum** (`domain/player/value_objects.py`): добавить значение `ATAMAN` («Атаман»). Обновить миграцию или CHECK-constraint на `users.title` если есть.
-- [ ] **C.4 — Доменный сервис `caravan_battle_resolution`** (`domain/caravan/services.py` или `domain/caravan/battle.py`): чистая функция `resolve(caravan, participants, random_seed) -> CaravanBattleResult` (победа/проигрыш + per-player damage + per-player reward delta + clan_bonus). Логика по ГДД §9.5: каждый рейдер — 1 удар, караванщики — 2 блока, защитники — 1 блок. Детерминистично от `random_seed`. Результат содержит side-effects-плеценхолдеры — НЕ применяет их.
-- [ ] **C.5 — Use-case `FinishCaravanBattle`** (`application/caravans/finish_caravan_battle.py`): принимает `caravan_id`; идемпотентен (через `IIdempotencyService`-ключ `caravan_battle_finished:{caravan_id}` или повторный вызов на `FINISHED` — no-op с `was_already_finished=True`); вызывается из APScheduler-job-а через `caravan_battle_finish_factory`. Загружает `caravan` (status=`IN_BATTLE`), участников; вызывает `caravan_battle_resolution`; применяет результат — обновляет `Length` каждого участника, `Clan` +1 см если победа, выдаёт `Title.ATAMAN` лидеру если победа; снимает activity-lock-и всех участников; `Caravan.mark_finished(finished_at)`; audit `CARAVAN_BATTLE_FINISHED` + `CARAVAN_REWARDS_GRANTED`.
-- [ ] **C.6 — Use-case `CancelCaravan`** (опционально, если решим включать в 3.2-C): только лидер может отменить из `LOBBY`; возврат всех контрибьюций, снятие всех activity-lock-ов, `cancel_caravan_lobby_close` job-а, `Caravan.mark_cancelled`; audit `CARAVAN_CANCELLED`.
-- [ ] **C.7 — APScheduler:** `infrastructure/scheduler/aps.py` — расширить `IDelayedJobScheduler` адаптер: `schedule_caravan_battle_finish` / `cancel_caravan_battle_finish` + callback `_run_caravan_battle_finish_job` (через `caravan_battle_finish_factory`); расширить `CloseCaravanLobby` use-case в `application/caravans/close_caravan_lobby.py` так, чтобы при переходе LOBBY → IN_BATTLE он шедулил `caravan_battle_finish` job на `caravan.battle_ends_at` (сейчас не шедулит — это TODO для 3.2-C).
-- [ ] **C.8 — DI:** в `bot/main.py` подключить `FinishCaravanBattle` (+ `CancelCaravan` если включаем) через `Container`. APScheduler — `caravan_battle_finish_factory=None` до 3.2-D.
-- [ ] **C.9 — Юнит-тесты:** `tests/unit/domain/caravan/test_battle_resolution.py` (детерминистичность по seed-у; 100-симуляций распределение в норме — критерий 3.2.5; capacity-edge-cases — 0 рейдеров, 0 защитников, минимум 1 караванщик); `tests/unit/application/caravans/test_finish_caravan_battle.py` (happy-path победа/проигрыш + Атаман выдан/не выдан + clan_bonus применён/не применён; идемпотентность повторного вызова; activity-lock-и сняты; audit-записи; error-cases — caravan не найден / не в IN_BATTLE).
-- [ ] **C.10 — Integration-тест:** `tests/integration/db/test_caravan_battle_finish.py` (e2e через UoW: создать караван в IN_BATTLE-статусе с участниками → вызвать `FinishCaravanBattle` → проверить итоговые `Length` + `Clan.length` + `Title.ATAMAN` через настоящие SQL-репо).
-- [ ] `make ci` локально: ruff / mypy --strict / import-linter / pytest / coverage gate.
-- [ ] **C.11 — Финальный док-коммит:** `history.md` +запись 3.2-C, `current_tasks.md` пересборка под старт Спринта 3.2-D.
+- [ ] Дождаться мерджа `main = <коммит-слияния-3.2-C>` (этот PR).
+- [ ] `git fetch && git checkout main && git pull`.
+- [ ] `make ci` локально на свежем `main`: ✅ зелёный.
+- [ ] Создать ветку `devin/<unix_ts>-sprint-3-2-D-caravan-bot-handlers` от `main`.
+- [ ] **D.0 — Обновить `current_tasks.md`** под старт Спринта 3.2-D (первый коммит): ткнуть `[x]` на этой строке, вписать актуальный `<коммит-слияния-3.2-C>` в Снимок и в этот чек-лист.
+- [ ] **D.1 — Use-case `CancelCaravan`** (`application/caravans/cancel_caravan.py`): только лидер может отменить из `LOBBY`; возврат всех контрибьюций (лидер + caravaneers), снятие всех activity-lock-ов, `cancel_caravan_lobby_close` + `cancel_caravan_battle_finish` job-ов, `Caravan.mark_cancelled(cancelled_at)`; audit `CARAVAN_CANCELLED` с idempotency-key. Использует уже существующий `AuditAction.CARAVAN_CANCELLED` (зарезервирован в 3.2-C).
+- [ ] **D.2 — Bot-handler `/caravan`** (`bot/handlers/caravan.py`): личка-only (как `/forest`/`/mountains`/`/dungeon`), gate lvl ≥ 7 + ≥ 20 см total, выбор target-клана (через inline-кнопки списком кланов с тематической attestation, или через `chat_id` вводом — решить по UX), ввод contribution_cm. По успеху — пост в чат-отправитель с кнопкой «Показать лобби».
+- [ ] **D.3 — Lobby-UI** (inline-кнопки в чате-отправителе и/или в личке): три кнопки «Вступить как X» × 3 ролей; разные кнопки активны/disabled в зависимости от двойного членства (5 кейсов §9.4); кнопка «Покинуть» для своих участников; кнопка «Отменить» для лидера. Live-обновление через `edit_message_text` при `JoinedCaravanLobby` / `LeftCaravanLobby`.
+- [ ] **D.4 — `CaravanPresenter`** (`bot/presenters/caravan.py`): рендер lobby-state (роли, capacity, контрибьюции, оставшееся время) + battle-state (стартовало в HH:MM:SS, оставшееся время) + finished-state (победа/доставка, рассечатано наград). Локализация через Fluent (`bot/i18n.py`).
+- [ ] **D.5 — Локали** (`locales/{ru,en}.ftl`): `caravan-*` сообщения (приглашение, lobby-status, join-button-ы по ролям, leave-button, cancel-button, battle-started, battle-finished-delivered, battle-finished-raided, ошибки). RU+EN parity (тест `test_locales_parity.py`).
+- [ ] **D.6 — APScheduler factory-wiring:** в `bot/main.py` `caravan_lobby_close_factory` и `caravan_battle_finish_factory` теперь wired (фабрики уже подключены в 3.2-B/C — здесь только проверить, что callback-и публикуют события в чат через `aiogram` Bot).
+- [ ] **D.7 — DI:** в `bot/main.py` подключить `CancelCaravan` через `Container`.
+- [ ] **D.8 — Юнит-тесты:** `tests/unit/application/caravans/test_cancel_caravan.py` (happy-path лидер отменяет; идемпотентность повторного вызова на `CANCELLED`; error-cases — не лидер, не в `LOBBY`, караван не найден); `tests/unit/bot/test_caravan_handler.py` (gate lvl ≥ 7, gate ≥ 20 см, личка-only, успешный флоу через FakeBot).
+- [ ] **D.9 — Integration / smoke-тест:** manual smoke с временным локальным TG-инстансом — пройти полный цикл «создать → 2 кана-участника + 1 защитник + 1 рейдер → закрыть лобби → ждать battle finish (или мокнуть time.now) → проверить нагрузки».
+- [ ] `make ci` локально: ruff / mypy --strict / import-linter / pytest / coverage gate (≥ 80%).
+- [ ] **D.10 — Финальный док-коммит:** `history.md` +запись 3.2-D (закрытие Спринта 3.2), `current_tasks.md` пересборка под старт **первого PR-а Спринта 3.3** (по [`development_plan.md`](development_plan.md) §6.3.3 «Спринт 3.3 — …»).
 - [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md`.
 - [ ] Дождаться зелёного GitHub CI.
 
@@ -94,19 +93,20 @@
 
 > Сюда пиши **дельту** к плану: что именно меняешь, какие use-cases / порты / handler-ы / тесты затронуты.
 
-**Закрытый PR — 3.2-B (use-cases + persistence + миграция):**
-- ~ 20 файлов изменено (excl. docs).
-- **Domain-слой:** `domain/shared/ports/audit.py` — 4 новых `AuditAction.CARAVAN_*`; `domain/shared/ports/scheduler.py` — `schedule_caravan_lobby_close` / `cancel_caravan_lobby_close`.
-- **Application-слой:** `application/dto/inputs.py` +4 input-DTO; новый пакет `application/caravans/` с 4 use-case-ами (`CreateCaravan`, `JoinCaravanLobby` с резолвом 5 кейсов §9.4, `LeaveCaravanLobby` с возвратом контрибьюции, `CloseCaravanLobby` идемпотентный LOBBY → IN_BATTLE).
-- **Infrastructure-слой:** миграция `0019_caravans` + ORM `CaravanORM`/`CaravanParticipantORM` + репо `SqlAlchemyCaravanRepository` / `SqlAlchemyCaravanParticipantRepository` (с конверсией БД-`IntegrityError` в доменный); APScheduler-адаптер `_run_caravan_lobby_close_job` через `caravan_lobby_close_factory`. БД-инварианты: `uq_caravans_one_active_per_sender` (partial-unique) + composite-PK `(caravan_id, player_id)` + `uq_caravan_participants_one_leader_per_caravan` (partial-unique) + ON DELETE CASCADE.
-- **DI:** `bot/main.py` подключил репо + 4 use-case в `Container`.
-- **Тесты:** `tests/fakes/caravan_repo.py` (in-memory `FakeCaravanRepository` + `FakeCaravanParticipantRepository`), 4 unit-модуля в `tests/unit/application/caravans/` (~ 67 тестов: happy-path/audit/idempotency/errors), integration-тест `tests/integration/db/test_caravan_repository.py` (~ 28 тестов: CRUD + UNIQUE-инварианты + CHECK + ON DELETE CASCADE).
-- **Бизнес-логика боя отсутствует.** Resolve каравана и `FinishCaravanBattle` — Спринт 3.2-C; bot-handlers и UI — 3.2-D.
+**Закрытый PR — 3.2-C (боевая механика + награды + Атаман):**
+- 28 файлов изменено (excl. docs).
+- **Domain-слой:** `domain/shared/ports/audit.py` — 3 новых `AuditAction.CARAVAN_*` (`BATTLE_FINISHED`/`REWARDS_GRANTED`/`CANCELLED`); `domain/shared/ports/scheduler.py` — `schedule_caravan_battle_finish` / `cancel_caravan_battle_finish`; `domain/player/value_objects.py` — `Title.ATAMAN`; `domain/caravan/services.py` — `resolve_caravan_battle()` чистая функция; `domain/caravan/errors.py` — `InvalidCaravanStateError`.
+- **Application-слой:** `application/dto/inputs.py` +1 input-DTO (`FinishCaravanBattleInput`); `application/caravans/finish_caravan_battle.py` — use-case (loads caravan/participants → resolve → applies length deltas via `ILengthGranter` for positive + `Player.with_length()` for negative; clan bonus +1 cm to each member of both clans via `IClanMembershipRepository.list_by_clan`; `Title.ATAMAN` to one random raider on raid victory; releases activity locks; mark_finished + audit); `application/caravans/close_caravan_lobby.py` теперь шедулит battle-finish job при LOBBY → IN_BATTLE.
+- **Infrastructure-слой:** `infrastructure/scheduler/aps.py` — caravan-battle-finish-методы + callback; `infrastructure/random/seeded_random.py` — детерминистичный `IRandom` от int-seed-а.
+- **DI:** `bot/main.py` подключил `FinishCaravanBattle` через `Container`; `caravan_battle_finish_factory` wired.
+- **Тесты:** `tests/fakes/delayed_job_scheduler.py` дополнен; 3 unit-модуля (`test_battle_resolution.py` 488 lines + `test_finish_caravan_battle.py` 879 lines + 2 modified) + 1 integration-модуль (`test_caravan_battle_finish.py` 519 lines, 3 теста — delivery / idempotency / invalid LOBBY-state); архитектурный гард `test_length_grant_guard.py` whitelist-нул `application/caravans/finish_caravan_battle.py` для отрицательных-дельт `.with_length()`.
+- **`CARAVAN_CANCELLED` зарезервирован в audit-whitelist-е, но `CancelCaravan` use-case не реализован** — отложен на 3.2-D, где появится bot-handler `/caravan_cancel`.
+- **Bot-handlers и UI отсутствуют.** `/caravan`, lobby-UI, `CaravanPresenter`, локали — Спринт 3.2-D.
 
 ---
 
 ## 🛑 Известные блокеры / открытые вопросы PR-а
 
-- **Атаман-титул** — расширение `Title` enum приходит в 3.2-C (когда появится `FinishCaravanBattle` use-case). В 3.2-B `domain/player/` не трогаем.
-- **`CloseCaravanLobby` не шедулит `caravan_battle_finish` job.** В 3.2-B use-case делает только переход LOBBY → IN_BATTLE — TODO для 3.2-C: после mark_in_battle вызывать `IDelayedJobScheduler.schedule_caravan_battle_finish(caravan_id, caravan.battle_ends_at)`. Сейчас APScheduler-job на финиш битвы вообще не создаётся, поэтому в 3.2-C нужен миграционный backfill для уже стартовавших боёв (хотя на момент 3.2-B ни одного такого нет в проде).
-- **`get_active_by_clan` ищет только по `sender_clan_id`.** Это сознательный выбор: `caravans` таблица имеет partial-unique только на `sender_clan_id`, поэтому «активный караван клана» = «который клан отправил». Для клана-получателя «активный караван» — это тот, в котором его игроки могут защищаться, и таких может быть несколько одновременно (если 3+ кланов отправили караваны в один). В 3.2-D handler `/caravan` для DEFENDER-роли будет искать караваны по `receiver_clan_id` отдельным методом — добавим в репо при необходимости.
+- **`CancelCaravan` не реализован** — отложен на 3.2-D. В 3.2-C добавлены только `AuditAction.CARAVAN_CANCELLED` (audit-whitelist) и сценарий «сценарий уже `CANCELLED`» обрабатывается в `FinishCaravanBattle` как no-op (`was_already_finished=True`). Это сознательный скоуп-trim — в 3.2-C нет вызывающей стороны (нет UI), поэтому use-case без consumer-а — лишний код.
+- **APScheduler не публикует пост в чат при finish-battle.** `_run_caravan_battle_finish_job` в 3.2-C просто вызывает `FinishCaravanBattle.execute()` — не пишет ничего в Telegram. Публикация в чат-отправитель и чат-получатель «караван доставлен» / «караван разграблен» (плюс награды) — задача 3.2-D, где появится TG-сторона. До 3.2-D финиш каравана видим только в логах + audit-table + БД.
+- **Use-case-ы караванов работают через 3 разных audit-source-а: `CARAVAN_BATTLE` (для длины-deductions от ударов рейдеров) и `CARAVAN_REWARD` (для всех positive-grants — leader/caravaneer/defender + clan-bonus).** Это даёт чистое разделение «что списали в бою» vs «что выдали в награду» в `audit_log` — удобно для аналитики и debug-а. `CARAVAN_REWARD` используется во всех 6× `LENGTH_GRANT`-ах в integration-тесте.
