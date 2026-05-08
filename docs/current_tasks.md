@@ -17,13 +17,13 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный PR — **3.2-C** (этот PR; `<коммит_слияния_3.2-C>`) — боевая механика каравана: доменный сервис `caravan_battle_resolution` (`domain/caravan/services.py`, чистая функция, детерминистично от `random_seed` через `IRandom`), use-case `FinishCaravanBattle` (`application/caravans/finish_caravan_battle.py`), `Title.ATAMAN` (`domain/player/value_objects.py`), 3 новых `AuditAction.CARAVAN_*` (`CARAVAN_BATTLE_FINISHED`/`REWARDS_GRANTED`/`CANCELLED`), `IDelayedJobScheduler.{schedule,cancel}_caravan_battle_finish` (`domain/shared/ports/scheduler.py`) + `APSchedulerDelayedJobScheduler`-callback `_run_caravan_battle_finish_job`, `SeededRandom` (`infrastructure/random/seeded_random.py`), `CloseCaravanLobby` теперь шедулит финиш-job при LOBBY → IN_BATTLE (был TODO в 3.2-B), `InvalidCaravanStateError`. Полное unit + integration-покрытие (1 integration + ~ 30 unit-тестов, 3927 passed / 1 skipped, 95.68% coverage).
+**На `main`:** последний смерженный PR — **3.2-C** (PR #110, `2333297`) — боевая механика каравана: доменный сервис `caravan_battle_resolution` (`domain/caravan/services.py`, чистая функция, детерминистично от `random_seed` через `IRandom`), use-case `FinishCaravanBattle` (`application/caravans/finish_caravan_battle.py`), `Title.ATAMAN` (`domain/player/value_objects.py`), 3 новых `AuditAction.CARAVAN_*` (`CARAVAN_BATTLE_FINISHED`/`REWARDS_GRANTED`/`CANCELLED`), `IDelayedJobScheduler.{schedule,cancel}_caravan_battle_finish` (`domain/shared/ports/scheduler.py`) + `APSchedulerDelayedJobScheduler`-callback `_run_caravan_battle_finish_job`, `SeededRandom` (`infrastructure/random/seeded_random.py`), `CloseCaravanLobby` теперь шедулит финиш-job при LOBBY → IN_BATTLE (был TODO в 3.2-B), `InvalidCaravanStateError`. Полное unit + integration-покрытие (1 integration + ~ 30 unit-тестов, 3927 passed / 1 skipped, 95.68% coverage).
 
 Перед ним: **3.2-B** (PR #109, `e27968b`) — use-case-ы `CreateCaravan` / `JoinCaravanLobby` / `LeaveCaravanLobby` / `CloseCaravanLobby`, миграция `0019_caravans`, APScheduler-job на закрытие лобби. Перед ним: **3.2-A** (PR #108, `fe959c6`) — каркас доменов «Караван». Перед ним: **3.1-E** (PR #107, `5c1b26f`) — bot-handlers `/mountains` + `/dungeon` (закрытие Спринта 3.1). Перед ним: **catch-up docs 3.1-D** (PR #106, `76af44a`). Перед ним: **3.1-D** (PR #105, `2208ae6`). Перед ним: **3.1-C** (PR #103). Перед ним: **3.1-B** (PR #101). Перед ним: **3.1-A** (PR #99). Перед ним: PR-ы Спринта 2.5 (#79–#97).
 
 **Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов: 3.1-A → 3.1-E + catch-up #106). Идёт **Спринт 3.2 «Караваны (полная механика)»** — каркас доменов закрыт в 3.2-A, use-cases + persistence + миграция + APScheduler-job на закрытие лобби — в 3.2-B (PR #109, мердж), боевая механика + награды + Атаман-роль — в 3.2-C (этот PR; мердж). Bot-handlers + локали + UI — в следующем **3.2-D**.
 
-**Активная feature-ветка:** ещё не создана. После мерджа этого 3.2-C PR-а в `main` следующий агент создаёт `devin/<unix_ts>-sprint-3-2-D-caravan-bot-handlers` от свежего `main` и стартует **Спринт 3.2-D** (bot-handler-ы `/caravan` в личке, lobby-UI с inline-кнопками 3 ролей, `CaravanPresenter`, локали `caravans-*` RU+EN, `CancelCaravan` use-case + `/caravan_cancel`, manual smoke-тест).
+**Активная feature-ветка:** `devin/1778231804-sprint-3-2-D-caravan-bot-handlers` — стартовала от `main = 2333297` (мердж 3.2-C). Идёт **Спринт 3.2-D** (bot-handler-ы `/caravan` в личке, lobby-UI с inline-кнопками 3 ролей, `CaravanPresenter`, локали `caravans-*` RU+EN, `CancelCaravan` use-case + `/caravan_cancel`, manual smoke-тест).
 
 ---
 
@@ -60,7 +60,7 @@
 4. **Атаман — расширение `Title` enum** в `domain/player/`. Не отдельный VO, не поле в кланах.
 5. **Capacity-предели:** `max_raiders ≤ 4 × caravaneers`, `max_defenders ≤ 2 × caravaneers` (ГДД §9.5). При `caravaneers=0` (только лидер) — `raiders ≤ 4`, `defenders ≤ 2`.
 
-**Финальный коммит этого 3.2-D PR-а** (внутри ветки, последним перед мерджем) — обновить `history.md` (запись «Спринт 3.2-D: bot-handlers + локали + UI»), пересобрать «Снимок состояния» в `current_tasks.md` под `main = <коммит-слияния-3.2-D>`, закрыть Спринт 3.2 и расписать чек-лист **первого PR-а Спринта 3.3** (по [`development_plan.md`](development_plan.md) §6.3.3).
+**Финальный коммит этого 3.2-D PR-а** (внутри ветки, последним перед мерджем) — обновить `history.md` (запись «Спринт 3.2-D: bot-handlers + локали + UI»), пересобрать «Снимок состояния» в `current_tasks.md` под `main = <коммит_слияния_3.2-D>`, закрыть Спринт 3.2 и расписать чек-лист **первого PR-а Спринта 3.3** (по [`development_plan.md`](development_plan.md) §6.3.3).
 
 ---
 
@@ -68,11 +68,11 @@
 
 > Этот PR закрывает Спринт 3.2 — добавляет bot-handler `/caravan` в личке, lobby-UI с inline-кнопками 3 ролей, `CaravanPresenter`, локали `caravans-*` (RU+EN parity), `CancelCaravan` use-case + `/caravan_cancel`, manual smoke-тест. Боевая механика и persistence уже есть из 3.2-A/B/C — здесь только UI-слой.
 
-- [ ] Дождаться мерджа `main = <коммит-слияния-3.2-C>` (этот PR).
-- [ ] `git fetch && git checkout main && git pull`.
-- [ ] `make ci` локально на свежем `main`: ✅ зелёный.
-- [ ] Создать ветку `devin/<unix_ts>-sprint-3-2-D-caravan-bot-handlers` от `main`.
-- [ ] **D.0 — Обновить `current_tasks.md`** под старт Спринта 3.2-D (первый коммит): ткнуть `[x]` на этой строке, вписать актуальный `<коммит-слияния-3.2-C>` в Снимок и в этот чек-лист.
+- [x] Дождаться мерджа `main = 2333297` (3.2-C, PR #110).
+- [x] `git fetch && git checkout main && git pull`.
+- [x] `make ci` локально на свежем `main`: ✅ зелёный (3927 passed / 1 skipped, coverage 95.68%).
+- [x] Создать ветку `devin/1778231804-sprint-3-2-D-caravan-bot-handlers` от `main`.
+- [x] **D.0 — Обновить `current_tasks.md`** под старт Спринта 3.2-D (этот коммит).
 - [ ] **D.1 — Use-case `CancelCaravan`** (`application/caravans/cancel_caravan.py`): только лидер может отменить из `LOBBY`; возврат всех контрибьюций (лидер + caravaneers), снятие всех activity-lock-ов, `cancel_caravan_lobby_close` + `cancel_caravan_battle_finish` job-ов, `Caravan.mark_cancelled(cancelled_at)`; audit `CARAVAN_CANCELLED` с idempotency-key. Использует уже существующий `AuditAction.CARAVAN_CANCELLED` (зарезервирован в 3.2-C).
 - [ ] **D.2 — Bot-handler `/caravan`** (`bot/handlers/caravan.py`): личка-only (как `/forest`/`/mountains`/`/dungeon`), gate lvl ≥ 7 + ≥ 20 см total, выбор target-клана (через inline-кнопки списком кланов с тематической attestation, или через `chat_id` вводом — решить по UX), ввод contribution_cm. По успеху — пост в чат-отправитель с кнопкой «Показать лобби».
 - [ ] **D.3 — Lobby-UI** (inline-кнопки в чате-отправителе и/или в личке): три кнопки «Вступить как X» × 3 ролей; разные кнопки активны/disabled в зависимости от двойного членства (5 кейсов §9.4); кнопка «Покинуть» для своих участников; кнопка «Отменить» для лидера. Live-обновление через `edit_message_text` при `JoinedCaravanLobby` / `LeftCaravanLobby`.
@@ -83,7 +83,7 @@
 - [ ] **D.8 — Юнит-тесты:** `tests/unit/application/caravans/test_cancel_caravan.py` (happy-path лидер отменяет; идемпотентность повторного вызова на `CANCELLED`; error-cases — не лидер, не в `LOBBY`, караван не найден); `tests/unit/bot/test_caravan_handler.py` (gate lvl ≥ 7, gate ≥ 20 см, личка-only, успешный флоу через FakeBot).
 - [ ] **D.9 — Integration / smoke-тест:** manual smoke с временным локальным TG-инстансом — пройти полный цикл «создать → 2 кана-участника + 1 защитник + 1 рейдер → закрыть лобби → ждать battle finish (или мокнуть time.now) → проверить нагрузки».
 - [ ] `make ci` локально: ruff / mypy --strict / import-linter / pytest / coverage gate (≥ 80%).
-- [ ] **D.10 — Финальный док-коммит:** `history.md` +запись 3.2-D (закрытие Спринта 3.2), `current_tasks.md` пересборка под старт **первого PR-а Спринта 3.3** (по [`development_plan.md`](development_plan.md) §6.3.3 «Спринт 3.3 — …»).
+- [ ] **D.10 — Финальный док-коммит:** `history.md` +запись 3.2-D (закрытие Спринта 3.2), `current_tasks.md` пересборка под старт **первого PR-а Спринта 3.3** (по [`development_plan.md`](development_plan.md) §6.3.3 «Спринт 3.3 — Дуэли II + рейтинг»).
 - [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md`.
 - [ ] Дождаться зелёного GitHub CI.
 
