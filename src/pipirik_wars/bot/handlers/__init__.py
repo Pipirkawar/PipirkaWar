@@ -23,6 +23,7 @@ from pipirik_wars.bot.handlers.admin_communication import (
 from pipirik_wars.bot.handlers.admin_economy import router as admin_economy_router
 from pipirik_wars.bot.handlers.admin_setup_totp import router as admin_setup_totp_router
 from pipirik_wars.bot.handlers.admin_support import router as admin_support_router
+from pipirik_wars.bot.handlers.caravan import router as caravan_router
 from pipirik_wars.bot.handlers.clan_head import router as clan_head_router
 from pipirik_wars.bot.handlers.clan_history import router as clan_history_router
 from pipirik_wars.bot.handlers.clantop import router as clantop_router
@@ -52,6 +53,9 @@ def register_routers(dispatcher: Dispatcher) -> None:
     # `dungeon:`) — пересечения с `forest:` нет.
     dispatcher.include_router(mountains_router)
     dispatcher.include_router(dungeon_router)
+    # Спринт 3.2-D: `/caravan` (личка-only) + объявление-в-чат-клана с
+    # inline-кнопками лобби. Префикс callback_data — `caravan:`.
+    dispatcher.include_router(caravan_router)
     dispatcher.include_router(upgrade_router)
     dispatcher.include_router(duel_router)
     dispatcher.include_router(mass_duel_router)

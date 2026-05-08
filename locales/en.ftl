@@ -818,3 +818,46 @@ dungeon-toast-item-dropped = Item dropped.
 dungeon-toast-foreign-button = This button isn't for you.
 dungeon-toast-run-not-found = This run is no longer active.
 dungeon-toast-drop-mismatch = Button is outdated.
+
+# ============================================================================
+# /caravan (Sprint 3.2-D, GDD §9). Clan caravans: a leader assembles
+# a group, marches to another clan's chat, and weathers a raider ambush.
+# The command runs only in the bot's private chat: the leader passes
+# the receiver clan's chat_id and a contribution amount in cm. The
+# lobby announcement with a "Show lobby" button is posted into the
+# sender clan's chat.
+# ============================================================================
+
+caravans-group = 🐪 The /caravan command is only available in the bot's private chat. Open the DM and try again.
+caravans-other = 🐪 The /caravan command is only available in the bot's private chat.
+caravans-not-registered = 🐪 Looks like you're not registered yet. Tap /start in this chat — then you'll be able to assemble a caravan.
+caravans-usage =
+    🐪 To assemble a caravan, pass the receiver clan's chat_id and your contribution in cm:
+    <code>/caravan &lt;receiver_chat_id&gt; &lt;contribution_cm&gt;</code>
+
+    Example: <code>/caravan -1001234567890 30</code>
+caravans-receiver-invalid = 🐪 That doesn't look like a Telegram chat_id: <code>{ $value }</code>. Pass the numeric chat_id of the receiver clan (group chat ids are negative).
+caravans-contribution-invalid = 🐪 Contribution must be a positive integer, got: <code>{ $value }</code>.
+caravans-no-clan = 🐪 You have no clan. Only a clan leader can assemble a caravan.
+caravans-not-a-leader = 🐪 Only a clan leader can assemble a caravan — you are a regular member.
+caravans-receiver-not-found = 🐪 Chat with chat_id <code>{ $chat_id }</code> is not a registered clan. Pass another clan's chat_id.
+caravans-receiver-same-as-sender = 🐪 You can't caravan to your own clan. Pass another clan's chat_id.
+caravans-already-in = 🐪 Your clan already has an active caravan — wait for it to finish or cancel it from the lobby.
+caravans-cooldown = 🐪 The clan caravan cooldown hasn't expired yet. Try again in { NUMBER($remaining_minutes, useGrouping: 0) } min.
+caravans-requirement-thickness = 🐪 Assembling a caravan requires thickness ≥ { NUMBER($required, useGrouping: 0) }. You're at { NUMBER($actual, useGrouping: 0) }. Train via /upgrade.
+caravans-requirement-length = 🐪 After your contribution you must keep ≥ { NUMBER($required_cm, useGrouping: 0) } cm of length. You'd have { NUMBER($actual_cm, useGrouping: 0) } cm left.
+caravans-player-frozen = 🐪 Your profile is frozen — you can't assemble a caravan.
+caravans-clan-frozen-sender = 🐪 Your clan is frozen — you can't assemble a caravan.
+caravans-clan-frozen-receiver = 🐪 The receiver clan is frozen — you can't send a caravan to them.
+
+caravans-created-private =
+    🐪 Caravan assembled!
+    Receiver: <b>{ $receiver_clan_name }</b>
+    Contribution: { NUMBER($contribution_cm, useGrouping: 0) } cm
+    Lobby is open for { NUMBER($lobby_minutes, useGrouping: 0) } min — the announcement has been posted to your clan chat.
+caravans-created-announcement =
+    🐪 <b>{ $leader_nick }</b> is assembling a caravan!
+    Target: <b>{ $receiver_clan_name }</b>
+    Leader's contribution: { NUMBER($contribution_cm, useGrouping: 0) } cm
+    Lobby is open for { NUMBER($lobby_minutes, useGrouping: 0) } min — join while you can.
+caravans-button-show-lobby = Show lobby

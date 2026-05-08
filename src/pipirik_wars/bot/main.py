@@ -1557,6 +1557,12 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["broadcast_task_spawner"] = container.broadcast_task_spawner
     # Спринт 2.5-D.6 — `/admin_setup_totp` (self-service выдача TOTP-секрета).
     dispatcher["setup_admin_totp"] = container.setup_admin_totp
+    # Спринт 3.2-D — bot-handler `/caravan` (личка-only): use-case
+    # `CreateCaravan` + репозитории членства/клана для резолва
+    # `sender_chat_id` из membership лидера (D.3 добавит сюда `join`/
+    # `leave`/`cancel`-use-case-ы).
+    dispatcher["create_caravan"] = container.create_caravan
+    dispatcher["clan_members"] = container.clan_members
     return dispatcher
 
 

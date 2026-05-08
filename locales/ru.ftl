@@ -823,3 +823,45 @@ dungeon-toast-item-dropped = Предмет выброшен.
 dungeon-toast-foreign-button = Эта кнопка не для тебя.
 dungeon-toast-run-not-found = Этот поход уже неактивен.
 dungeon-toast-drop-mismatch = Кнопка устарела.
+
+# ============================================================================
+# /caravan (Спринт 3.2-D, ГДД §9). Караваны кланов: лидер
+# собирает группу, идёт в чат другого клана, ловит атаку рейдеров.
+# Команда работает только в личке бота: лидер указывает chat_id чата
+# клана-получателя и величину взноса в см. Пост-объявление с кнопкой
+# «Показать лобби» уходит в чат клана-отправителя.
+# ============================================================================
+
+caravans-group = 🐪 Команда /caravan доступна только в личке бота. Открой приватный чат и повтори.
+caravans-other = 🐪 Команда /caravan доступна только в личке бота.
+caravans-not-registered = 🐪 Похоже, ты ещё не зарегистрирован. Нажми /start в этом чате — и тогда сможешь собрать караван.
+caravans-usage =
+    🐪 Чтобы собрать караван, укажи чат клана-получателя и взнос в см:
+    <code>/caravan &lt;chat_id_получателя&gt; &lt;взнос_см&gt;</code>
+
+    Пример: <code>/caravan -1001234567890 30</code>
+caravans-receiver-invalid = 🐪 Не похоже на chat_id Telegram-чата: <code>{ $value }</code>. Передай числовой chat_id клана-получателя (для группового чата он отрицательный).
+caravans-contribution-invalid = 🐪 Взнос должен быть положительным целым числом, передано: <code>{ $value }</code>.
+caravans-no-clan = 🐪 У тебя нет клана. Караван собирает только лидер клана.
+caravans-not-a-leader = 🐪 Караван собирает только лидер клана. Ты — обычный участник.
+caravans-receiver-not-found = 🐪 Чат с chat_id <code>{ $chat_id }</code> не зарегистрирован как клан. Передай chat_id чата другого клана.
+caravans-receiver-same-as-sender = 🐪 Караван к собственному клану невозможен. Передай chat_id чужого клана.
+caravans-already-in = 🐪 У твоего клана уже идёт активный караван — дождись его завершения или отмени из лобби.
+caravans-cooldown = 🐪 Кулдаун клана между караванами ещё не истёк. Попробуй через { NUMBER($remaining_minutes, useGrouping: 0) } мин.
+caravans-requirement-thickness = 🐪 Караван собирает лидер с толщиной ≥ { NUMBER($required, useGrouping: 0) }. У тебя сейчас { NUMBER($actual, useGrouping: 0) }. Прокачай /upgrade.
+caravans-requirement-length = 🐪 После взноса должно остаться ≥ { NUMBER($required_cm, useGrouping: 0) } см длины. У тебя после взноса будет { NUMBER($actual_cm, useGrouping: 0) } см.
+caravans-player-frozen = 🐪 Твой профиль заморожен — собрать караван нельзя.
+caravans-clan-frozen-sender = 🐪 Твой клан заморожен — собрать караван нельзя.
+caravans-clan-frozen-receiver = 🐪 Клан-получатель заморожен — отправить караван к нему нельзя.
+
+caravans-created-private =
+    🐪 Караван собран!
+    Получатель: <b>{ $receiver_clan_name }</b>
+    Взнос: { NUMBER($contribution_cm, useGrouping: 0) } см
+    Лобби открыто на { NUMBER($lobby_minutes, useGrouping: 0) } мин — объявление ушло в чат твоего клана.
+caravans-created-announcement =
+    🐪 <b>{ $leader_nick }</b> собирает караван!
+    Цель: <b>{ $receiver_clan_name }</b>
+    Взнос лидера: { NUMBER($contribution_cm, useGrouping: 0) } см
+    Лобби открыто на { NUMBER($lobby_minutes, useGrouping: 0) } мин — успей вступить.
+caravans-button-show-lobby = Показать лобби

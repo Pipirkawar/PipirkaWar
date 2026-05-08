@@ -1,0 +1,306 @@
+"""Презентер `/caravan`-ветки (Спринт 3.2-D, ГДД §9).
+
+Отвечает за все локализованные сообщения handler-а `/caravan`:
+ответ-инструкции (групповой чат, не-личка, незарегистрированный игрок),
+ошибки (gate по толщине / длине, кулдаун клана, конфликт ролей,
+заморозка), сообщения об успехе (подтверждение лидеру в личке +
+объявление в чате клана-отправителя). Вся i18n идёт через
+`IMessageBundle` — handler никогда не клеит строки сам.
+
+Lobby-UI (inline-кнопки «вступить как X» × 3 ролей + «отменить»),
+сообщения о финале боя и сценарии «вернулись из похода» — будут
+добавлены в D.3 / D.4 этого же модуля.
+
+Сериализация `callback_data` для inline-кнопок — отдельный
+free-form helper (`caravan_callback_data` / `parse_caravan_callback_data`)
+в этом же модуле; держим её рядом с презентером по тому же
+паттерну, что у forest / mountains / dungeon (одна точка истины
+для префикса `caravan:` и форматов событий).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Final, Literal
+
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
+from pipirik_wars.bot.presenters.profile import title_message_key
+from pipirik_wars.domain.player import DisplayName, Player, PlayerName, Title
+
+_CARAVAN_CALLBACK_PREFIX: Final[str] = "caravan"
+
+CaravanCallbackAction = Literal["show_lobby"]
+_VALID_ACTIONS: Final[frozenset[CaravanCallbackAction]] = frozenset({"show_lobby"})
+
+
+@dataclass(frozen=True, slots=True)
+class CaravanCallbackData:
+    """Распаршенный `callback_data` инлайн-кнопки каравана.
+
+    Сейчас (D.2) поддерживается только `show_lobby` — кнопка под
+    объявлением в чате-отправителе. В D.3 здесь добавятся `join:<role>`,
+    `leave`, `cancel` и т.п.
+    """
+
+    action: CaravanCallbackAction
+    caravan_id: int
+
+
+def caravan_callback_data(*, action: CaravanCallbackAction, caravan_id: int) -> str:
+    """Сериализовать `callback_data` инлайн-кнопки каравана.
+
+    Формат: `caravan:<action>:<caravan_id>`. Telegram callback_data
+    — 64 байт жёстко; для `caravan_id` до 19 знаков и `action` до 16
+    символов укладываемся с большим запасом.
+    """
+    if action not in _VALID_ACTIONS:
+        raise ValueError(f"unknown caravan callback action: {action!r}")
+    if caravan_id <= 0:
+        raise ValueError(f"caravan_id must be > 0, got {caravan_id}")
+    return f"{_CARAVAN_CALLBACK_PREFIX}:{action}:{caravan_id}"
+
+
+def parse_caravan_callback_data(data: str) -> CaravanCallbackData:
+    """Распарсить `callback_data` каравана. На любой мусор — `ValueError`."""
+    parts = data.split(":")
+    if len(parts) != 3 or parts[0] != _CARAVAN_CALLBACK_PREFIX:
+        raise ValueError(f"caravan callback_data must be 'caravan:<action>:<id>', got {data!r}")
+    _, action_raw, caravan_id_raw = parts
+    if action_raw == "show_lobby":
+        action: CaravanCallbackAction = "show_lobby"
+    else:
+        raise ValueError(f"unknown caravan action: {action_raw!r}")
+    try:
+        caravan_id = int(caravan_id_raw)
+    except ValueError as exc:
+        raise ValueError(f"caravan_id must be int, got {caravan_id_raw!r}") from exc
+    if caravan_id <= 0:
+        raise ValueError(f"caravan_id must be > 0, got {caravan_id}")
+    return CaravanCallbackData(action=action, caravan_id=caravan_id)
+
+
+def is_caravan_callback(data: str | None) -> bool:
+    """Filter helper — это callback каравана?
+
+    Используется handler-ом через `F.data.startswith(...)`-фильтр,
+    чтобы не пересекаться с forest / mountains / dungeon.
+    """
+    if data is None:
+        return False
+    return data.startswith(f"{_CARAVAN_CALLBACK_PREFIX}:")
+
+
+class CaravanPresenter:
+    """Локализованный рендер ответов `/caravan`-handler-а через `IMessageBundle`.
+
+    Использует префикс ключей `caravans-*` (множественное число —
+    исторический выбор файла локалей: караваны как игровая механика,
+    в отличие от единичного `forest`/`mountains`/`dungeon`).
+    """
+
+    __slots__ = ("_bundle",)
+
+    def __init__(self, *, bundle: IMessageBundle) -> None:
+        self._bundle = bundle
+
+    # --- Команда `/caravan` — где её пускать ---
+
+    def group(self, *, locale: Locale) -> str:
+        """Команда вызвана в групповом чате — инструкция «открой ЛС»."""
+        return self._bundle.format(MessageKey("caravans-group"), locale=locale)
+
+    def other(self, *, locale: Locale) -> str:
+        """Команда вызвана не в групповом и не в приватном (channel и т.п.)."""
+        return self._bundle.format(MessageKey("caravans-other"), locale=locale)
+
+    def not_registered(self, *, locale: Locale) -> str:
+        """`PlayerNotFoundError` — игрок не нажимал /start."""
+        return self._bundle.format(MessageKey("caravans-not-registered"), locale=locale)
+
+    # --- Команда `/caravan` — usage / парсинг аргументов ---
+
+    def usage(self, *, locale: Locale) -> str:
+        """Игрок вызвал `/caravan` без двух аргументов или с не-парой."""
+        return self._bundle.format(MessageKey("caravans-usage"), locale=locale)
+
+    def receiver_invalid(self, *, value: str, locale: Locale) -> str:
+        """Первый аргумент не парсится в `int` (chat_id)."""
+        return self._bundle.format(
+            MessageKey("caravans-receiver-invalid"),
+            locale=locale,
+            value=value,
+        )
+
+    def contribution_invalid(self, *, value: str, locale: Locale) -> str:
+        """Второй аргумент не парсится в положительное `int` (взнос в см)."""
+        return self._bundle.format(
+            MessageKey("caravans-contribution-invalid"),
+            locale=locale,
+            value=value,
+        )
+
+    # --- Команда `/caravan` — отказы по правилам и состоянию ---
+
+    def no_clan(self, *, locale: Locale) -> str:
+        """Игрок не состоит ни в одном клане."""
+        return self._bundle.format(MessageKey("caravans-no-clan"), locale=locale)
+
+    def not_a_leader(self, *, locale: Locale) -> str:
+        """Игрок состоит в клане, но он не лидер."""
+        return self._bundle.format(MessageKey("caravans-not-a-leader"), locale=locale)
+
+    def receiver_not_found(self, *, chat_id: int, locale: Locale) -> str:
+        """`receiver_chat_id` не зарегистрирован как клан."""
+        return self._bundle.format(
+            MessageKey("caravans-receiver-not-found"),
+            locale=locale,
+            chat_id=chat_id,
+        )
+
+    def receiver_same_as_sender(self, *, locale: Locale) -> str:
+        """Лидер передал chat_id своего же клана — `_validate_clans_differ`."""
+        return self._bundle.format(MessageKey("caravans-receiver-same-as-sender"), locale=locale)
+
+    def already_in(self, *, locale: Locale) -> str:
+        """У клана уже идёт активный караван (`AlreadyInCaravanError`)."""
+        return self._bundle.format(MessageKey("caravans-already-in"), locale=locale)
+
+    def cooldown(self, *, remaining_seconds: int, locale: Locale) -> str:
+        """Кулдаун между караванами клана (`CaravanCooldownError`)."""
+        # Округляем вверх до минут — ниже минуты UX-смысла нет, плюс это
+        # совпадает с тем, как игрок видит лобби (минуты, не секунды).
+        remaining_minutes = max(1, (remaining_seconds + 59) // 60)
+        return self._bundle.format(
+            MessageKey("caravans-cooldown"),
+            locale=locale,
+            remaining_minutes=remaining_minutes,
+        )
+
+    def requirement_thickness(self, *, required: int, actual: int, locale: Locale) -> str:
+        """Толщина < `min_thickness_level_leader` (ГДД §9.1 = 7)."""
+        return self._bundle.format(
+            MessageKey("caravans-requirement-thickness"),
+            locale=locale,
+            required=required,
+            actual=actual,
+        )
+
+    def requirement_length(self, *, required_cm: int, actual_cm: int, locale: Locale) -> str:
+        """`length - contribution_cm < min_length_after_contribution_cm` (ГДД §9.2 = 20)."""
+        return self._bundle.format(
+            MessageKey("caravans-requirement-length"),
+            locale=locale,
+            required_cm=required_cm,
+            actual_cm=actual_cm,
+        )
+
+    def player_frozen(self, *, locale: Locale) -> str:
+        """Игрок `FROZEN`/`BANNED` (DAU-gate)."""
+        return self._bundle.format(MessageKey("caravans-player-frozen"), locale=locale)
+
+    def clan_frozen_sender(self, *, locale: Locale) -> str:
+        """Клан-отправитель заморожен (`ClanFrozenError` на sender)."""
+        return self._bundle.format(MessageKey("caravans-clan-frozen-sender"), locale=locale)
+
+    def clan_frozen_receiver(self, *, locale: Locale) -> str:
+        """Клан-получатель заморожен (`ClanFrozenError` на receiver)."""
+        return self._bundle.format(MessageKey("caravans-clan-frozen-receiver"), locale=locale)
+
+    # --- Команда `/caravan` — успех ---
+
+    def created_private(
+        self,
+        *,
+        receiver_clan_name: str,
+        contribution_cm: int,
+        lobby_minutes: int,
+        locale: Locale,
+    ) -> str:
+        """Подтверждение лидеру в личке: караван создан, объявление ушло."""
+        return self._bundle.format(
+            MessageKey("caravans-created-private"),
+            locale=locale,
+            receiver_clan_name=receiver_clan_name,
+            contribution_cm=contribution_cm,
+            lobby_minutes=lobby_minutes,
+        )
+
+    def created_announcement(
+        self,
+        *,
+        leader: Player,
+        leader_display_name: DisplayName,
+        receiver_clan_name: str,
+        contribution_cm: int,
+        lobby_minutes: int,
+        locale: Locale,
+    ) -> str:
+        """Объявление в чате клана-отправителя: лидер собирает караван."""
+        leader_nick = self._render_full_nick(
+            title=leader.title,
+            display_name=leader_display_name,
+            name=leader.name,
+            locale=locale,
+        )
+        return self._bundle.format(
+            MessageKey("caravans-created-announcement"),
+            locale=locale,
+            leader_nick=leader_nick,
+            receiver_clan_name=receiver_clan_name,
+            contribution_cm=contribution_cm,
+            lobby_minutes=lobby_minutes,
+        )
+
+    def announcement_keyboard(
+        self,
+        *,
+        caravan_id: int,
+        locale: Locale,
+    ) -> InlineKeyboardMarkup:
+        """Inline-клавиатура под объявлением: единственная кнопка
+        «Показать лобби» (full lobby UI — в D.3).
+        """
+        button = InlineKeyboardButton(
+            text=self._bundle.format(MessageKey("caravans-button-show-lobby"), locale=locale),
+            callback_data=caravan_callback_data(
+                action="show_lobby",
+                caravan_id=caravan_id,
+            ),
+        )
+        return InlineKeyboardMarkup(inline_keyboard=[[button]])
+
+    # --- helpers ---
+
+    def _render_full_nick(
+        self,
+        *,
+        title: Title | None,
+        display_name: DisplayName,
+        name: PlayerName | None,
+        locale: Locale,
+    ) -> str:
+        """Собрать «полный ник»: `[Локализованный титул] [Название] [Имя]`.
+
+        Дублирует `_PvePresenter._render_full_nick`; вынесение в общий
+        helper отложено до тех пор, пока презентеров с этой логикой не
+        станет ≥ 3 (правило 3 повторов).
+        """
+        parts: list[str] = []
+        if title is not None:
+            parts.append(self._bundle.format(title_message_key(title), locale=locale))
+        parts.append(display_name.value)
+        if name is not None:
+            parts.append(name.value)
+        return " ".join(parts)
+
+
+__all__ = [
+    "CaravanCallbackAction",
+    "CaravanCallbackData",
+    "CaravanPresenter",
+    "caravan_callback_data",
+    "is_caravan_callback",
+    "parse_caravan_callback_data",
+]
