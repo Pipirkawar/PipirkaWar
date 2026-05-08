@@ -24,11 +24,13 @@ from typing import Final
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from pipirik_wars.application.caravans import CloseCaravanLobby
 from pipirik_wars.application.daily_head import (
     RunDailyHeadCron,
     ScheduleDailyHeadCronJobs,
 )
 from pipirik_wars.application.dto.inputs import (
+    CloseCaravanLobbyInput,
     EscalateChatToGlobalInput,
     ExpireLobbyEntryInput,
     FinishDungeonRunInput,
@@ -80,6 +82,8 @@ _DAILY_HEAD_CRON_PREFIX: Final[str] = "daily_head_cron:"
 # 3.1-B (PvE: горы и данжон, ГДД §8). Те же контракты, что у леса.
 _MOUNTAIN_FINISH_JOB_PREFIX: Final[str] = "mountain_run_finish:"
 _DUNGEON_FINISH_JOB_PREFIX: Final[str] = "dungeon_run_finish:"
+# 3.2-B (Караваны, ГДД §9). Lobby-close-job переводит караван LOBBY → IN_BATTLE.
+_CARAVAN_LOBBY_CLOSE_JOB_PREFIX: Final[str] = "caravan_lobby_close:"
 _DAILY_HEAD_RESCHEDULE_JOB_ID: Final[str] = "daily_head_reschedule_cron"
 _WEEKLY_REFERRAL_SUMMARY_JOB_ID: Final[str] = "weekly_clan_referral_summary_cron"
 #: Расписание weekly-сводки рефералов клана: вс. 18:00 UTC (ГДД §13.3).
@@ -119,6 +123,10 @@ def _mountain_finish_job_id(run_id: int) -> str:
 
 def _dungeon_finish_job_id(run_id: int) -> str:
     return f"{_DUNGEON_FINISH_JOB_PREFIX}{run_id}"
+
+
+def _caravan_lobby_close_job_id(caravan_id: int) -> str:
+    return f"{_CARAVAN_LOBBY_CLOSE_JOB_PREFIX}{caravan_id}"
 
 
 class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
@@ -166,6 +174,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
 
     __slots__ = (
         "_afk_resolution_factory",
+        "_caravan_lobby_close_factory",
         "_clans",
         "_daily_head_cron_factory",
         "_daily_reschedule_factory",
@@ -202,6 +211,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         mountain_notifier: IMountainFinishNotifier | None = None,
         dungeon_finish_factory: Callable[[], FinishDungeonRun] | None = None,
         dungeon_notifier: IDungeonFinishNotifier | None = None,
+        caravan_lobby_close_factory: Callable[[], CloseCaravanLobby] | None = None,
         clans: IClanRepository | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
@@ -220,6 +230,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._mountain_notifier = mountain_notifier
         self._dungeon_finish_factory = dungeon_finish_factory
         self._dungeon_notifier = dungeon_notifier
+        self._caravan_lobby_close_factory = caravan_lobby_close_factory
         self._clans = clans
         self._logger = logger or logging.getLogger(__name__)
 
@@ -460,6 +471,55 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
                 "mountain_run_finish: notifier failed",
                 extra={"run_id": run_id, "error": type(exc).__name__},
             )
+
+    # ── Спринт 3.2-B: караван (lobby-close, ГДД §9) ──
+
+    async def schedule_caravan_lobby_close(
+        self,
+        *,
+        caravan_id: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_caravan_lobby_close_job,
+            trigger="date",
+            run_date=run_at,
+            args=(caravan_id,),
+            id=_caravan_lobby_close_job_id(caravan_id),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_caravan_lobby_close(self, *, caravan_id: int) -> None:
+        try:
+            self._scheduler.remove_job(_caravan_lobby_close_job_id(caravan_id))
+        except Exception:
+            return
+
+    async def _run_caravan_lobby_close_job(self, caravan_id: int) -> None:
+        """Callback `CloseCaravanLobby`-job-а (Спринт 3.2-B).
+
+        Срабатывает в `caravan.lobby_ends_at` и переводит караван
+        `LOBBY → IN_BATTLE`. Если фабрика не подвязана (полный
+        DI-wiring появится в Спринте 3.2-D bot-handler-ах) — пишем
+        warning и тихо выходим. Use-case сам идемпотентен: повторный
+        вызов на уже не-`LOBBY` караване вернёт `was_already_closed=True`.
+        """
+        if self._caravan_lobby_close_factory is None:
+            self._logger.warning(
+                "caravan_lobby_close: factory not wired",
+                extra={"caravan_id": caravan_id},
+            )
+            return
+        try:
+            use_case = self._caravan_lobby_close_factory()
+            await use_case.execute(CloseCaravanLobbyInput(caravan_id=caravan_id))
+        except Exception as exc:
+            self._logger.exception(
+                "caravan_lobby_close: unexpected error",
+                extra={"caravan_id": caravan_id, "error": type(exc).__name__},
+            )
+            return
 
     async def _run_dungeon_finish_job(self, run_id: int) -> None:
         """Callback `FinishDungeonRun`-job-а (Спринт 3.1-E).

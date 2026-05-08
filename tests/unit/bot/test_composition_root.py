@@ -38,6 +38,12 @@ from pipirik_wars.application.admin import (
 )
 from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.balance import ReloadBalance
+from pipirik_wars.application.caravans import (
+    CloseCaravanLobby,
+    CreateCaravan,
+    JoinCaravanLobby,
+    LeaveCaravanLobby,
+)
 from pipirik_wars.application.clan import (
     FreezeClan,
     JoinClan,
@@ -174,6 +180,8 @@ from tests.fakes import (
     FakeAuditLogger,
     FakeBalanceConfig,
     FakeBroadcastSender,
+    FakeCaravanParticipantRepository,
+    FakeCaravanRepository,
     FakeClanMassDuelHistoryQuery,
     FakeClanMembershipRepository,
     FakeClanQuoteTemplateProvider,
@@ -695,6 +703,48 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         secret_generator=totp_secret_generator,
         bootstrap_password=None,
     )
+    caravans_repo = FakeCaravanRepository()
+    caravan_participants_repo = FakeCaravanParticipantRepository()
+    create_caravan_uc = CreateCaravan(
+        uow=uow,
+        clans=clans,
+        clan_members=members,
+        players=players,
+        caravans=caravans_repo,
+        caravan_participants=caravan_participants_repo,
+        locks=activity_lock_service,
+        balance=balance,
+        random=rng,
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
+    )
+    join_caravan_lobby_uc = JoinCaravanLobby(
+        uow=uow,
+        caravans=caravans_repo,
+        caravan_participants=caravan_participants_repo,
+        clan_members=members,
+        players=players,
+        locks=activity_lock_service,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    leave_caravan_lobby_uc = LeaveCaravanLobby(
+        uow=uow,
+        caravans=caravans_repo,
+        caravan_participants=caravan_participants_repo,
+        players=players,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+    )
+    close_caravan_lobby_uc = CloseCaravanLobby(
+        uow=uow,
+        caravans=caravans_repo,
+        audit=audit,
+        clock=clock,
+    )
     return Container(
         clock=clock,
         random=rng,
@@ -936,6 +986,12 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         broadcast_task_spawner=broadcast_task_spawner,
         totp_secret_generator=totp_secret_generator,
         setup_admin_totp=setup_admin_totp_uc,
+        caravans=caravans_repo,
+        caravan_participants=caravan_participants_repo,
+        create_caravan=create_caravan_uc,
+        join_caravan_lobby=join_caravan_lobby_uc,
+        leave_caravan_lobby=leave_caravan_lobby_uc,
+        close_caravan_lobby=close_caravan_lobby_uc,
     )
 
 

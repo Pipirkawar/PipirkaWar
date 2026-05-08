@@ -76,6 +76,11 @@ class AuditAction(str, enum.Enum):
     # ── Спринт 2.4 (реферальная система, ГДД §13.1) ──
     REFERRAL_REGISTERED = "referral_registered"
     REFERRAL_RATE_LIMITED = "referral_rate_limited"
+    # ── Спринт 3.2-B (караваны, ГДД §9) ──
+    CARAVAN_CREATED = "caravan_created"
+    CARAVAN_PLAYER_JOINED = "caravan_player_joined"
+    CARAVAN_PLAYER_LEFT = "caravan_player_left"
+    CARAVAN_LOBBY_CLOSED = "caravan_lobby_closed"
 
 
 class AuditSource(str, enum.Enum):

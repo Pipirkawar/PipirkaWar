@@ -26,6 +26,10 @@ from tests.fakes.broadcast import (
     InlineBroadcastTaskSpawner,
     TaskGroupBroadcastTaskSpawner,
 )
+from tests.fakes.caravan_repo import (
+    FakeCaravanParticipantRepository,
+    FakeCaravanRepository,
+)
 from tests.fakes.clan_history import FakeClanMassDuelHistoryQuery
 from tests.fakes.clan_quotes import FakeClanQuoteTemplateProvider
 from tests.fakes.clan_repo import FakeClanMembershipRepository, FakeClanRepository
@@ -42,6 +46,7 @@ from tests.fakes.dau import (
 )
 from tests.fakes.delayed_job_scheduler import (
     FakeDelayedJobScheduler,
+    ScheduledCaravanLobbyCloseJob,
     ScheduledFinish,
     ScheduledLobbyJob,
     ScheduledRoundAfkJob,
@@ -85,6 +90,8 @@ __all__ = [
     "FakeAuditLogger",
     "FakeBalanceConfig",
     "FakeBroadcastSender",
+    "FakeCaravanParticipantRepository",
+    "FakeCaravanRepository",
     "FakeClanMassDuelHistoryQuery",
     "FakeClanMembershipRepository",
     "FakeClanQuoteTemplateProvider",
@@ -117,6 +124,7 @@ __all__ = [
     "FakeTotpVerifier",
     "FakeUnitOfWork",
     "InlineBroadcastTaskSpawner",
+    "ScheduledCaravanLobbyCloseJob",
     "ScheduledFinish",
     "ScheduledLobbyJob",
     "ScheduledRoundAfkJob",
