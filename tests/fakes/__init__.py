@@ -21,6 +21,10 @@ from tests.fakes.anticheat_admin_alerter import (
 from tests.fakes.anticheat_repo import FakeAnticheatRepository
 from tests.fakes.audit import FakeAuditLogger
 from tests.fakes.balance import FakeBalanceConfig
+from tests.fakes.boss_fight_repo import (
+    FakeBossFightRepository,
+    FakeBossParticipantRepository,
+)
 from tests.fakes.broadcast import (
     FakeBroadcastSender,
     InlineBroadcastTaskSpawner,
@@ -89,6 +93,8 @@ __all__ = [
     "FakeAnticheatRepository",
     "FakeAuditLogger",
     "FakeBalanceConfig",
+    "FakeBossFightRepository",
+    "FakeBossParticipantRepository",
     "FakeBroadcastSender",
     "FakeCaravanParticipantRepository",
     "FakeCaravanRepository",
