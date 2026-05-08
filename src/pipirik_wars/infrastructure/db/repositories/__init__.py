@@ -9,6 +9,12 @@ from pipirik_wars.infrastructure.db.repositories.admin import (
 from pipirik_wars.infrastructure.db.repositories.anticheat import (
     SqlAlchemyAnticheatRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.boss_fight import (
+    SqlAlchemyBossFightRepository,
+)
+from pipirik_wars.infrastructure.db.repositories.boss_participant import (
+    SqlAlchemyBossParticipantRepository,
+)
 from pipirik_wars.infrastructure.db.repositories.caravan import (
     SqlAlchemyCaravanRepository,
 )
@@ -63,6 +69,8 @@ __all__ = [
     "SqlAlchemyActivityLockRepository",
     "SqlAlchemyAdminRepository",
     "SqlAlchemyAnticheatRepository",
+    "SqlAlchemyBossFightRepository",
+    "SqlAlchemyBossParticipantRepository",
     "SqlAlchemyCaravanParticipantRepository",
     "SqlAlchemyCaravanRepository",
     "SqlAlchemyClanMassDuelHistoryQuery",
