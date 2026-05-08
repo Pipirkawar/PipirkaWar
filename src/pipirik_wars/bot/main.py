@@ -63,6 +63,7 @@ from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.caravans import (
     CloseCaravanLobby,
     CreateCaravan,
+    FinishCaravanBattle,
     JoinCaravanLobby,
     LeaveCaravanLobby,
 )
@@ -244,7 +245,7 @@ from pipirik_wars.infrastructure.i18n import (
     FluentMessageBundle,
     PlayerLocaleResolverDB,
 )
-from pipirik_wars.infrastructure.random import RealRandom
+from pipirik_wars.infrastructure.random import RealRandom, SeededRandom
 from pipirik_wars.infrastructure.rate_limit import (
     InMemoryTokenBucketRateLimiter,
     IRateLimiter,
@@ -733,6 +734,9 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         # Спринт 3.2-B: late-bound фабрика `caravan_lobby_close`.
         # `close_caravan_lobby` создаётся ниже (после delayed_jobs).
         caravan_lobby_close_factory=lambda: close_caravan_lobby,
+        # Спринт 3.2-C: late-bound фабрика `caravan_battle_finish`.
+        # `finish_caravan_battle` создаётся ниже (после delayed_jobs).
+        caravan_battle_finish_factory=lambda: finish_caravan_battle,
         clans=clans,
     )
     start_forest_run = StartForestRun(
@@ -841,6 +845,24 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         caravans=caravans,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
+    )
+    # Спринт 3.2-C: `FinishCaravanBattle` запускается APScheduler-job-ом
+    # из `delayed_jobs` через `caravan_battle_finish_factory`-замыкание
+    # ниже. `random_factory=SeededRandom` обеспечивает детерминизм
+    # resolve-боя по `caravan.random_seed`.
+    finish_caravan_battle = FinishCaravanBattle(
+        uow=uow,
+        caravans=caravans,
+        caravan_participants=caravan_participants,
+        clan_memberships=clan_members,
+        players=players,
+        length_granter=add_length,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+        balance=balance.get().caravans,
+        random_factory=SeededRandom,
     )
     upgrade_thickness = UpgradeThickness(
         uow=uow,

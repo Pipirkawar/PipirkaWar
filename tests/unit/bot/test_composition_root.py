@@ -744,6 +744,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         caravans=caravans_repo,
         audit=audit,
         clock=clock,
+        scheduler=delayed_jobs,
     )
     return Container(
         clock=clock,
