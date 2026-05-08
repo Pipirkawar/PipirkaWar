@@ -486,6 +486,91 @@ class CaravansConfig(_Frozen):
     blocked_strike_damage_cm: int = Field(ge=0)
 
 
+class BossScrollDropConfig(_Frozen):
+    """Шансы дропа скроллов при победе рейдеров над боссом (ГДД §10.5, §2.8.5).
+
+    Применяется per-player (каждому выжившему рейдеру независимо ролится
+    свой ролл). Шансы — `Decimal[0..1]`, валидируются на пересечения
+    нет (regular и blessed — независимые роллы).
+
+    `regular` — обычный скролл (ГДД §2.8.5: «небольшой шанс»). Дефолт
+    `0.05` (5%) — стартовое значение, уточнится по альфа-метрикам.
+
+    `blessed` — благословлённый скролл (ГДД §2.8.5: «очень небольшой
+    шанс»). Дефолт `0.005` (0.5%).
+    """
+
+    regular: float = Field(ge=0.0, le=1.0)
+    blessed: float = Field(ge=0.0, le=1.0)
+
+
+class BossesConfig(_Frozen):
+    """Конфиг рейд-боссов (ГДД §10, Спринт 3.3-A).
+
+    Все балансовые числа рейд-механики:
+
+    - `min_thickness_level_summoner=9` — минимальный уровень толщины для
+      призыва босса (ГДД §10.1: «Кинуть вызов — lvl 9+»).
+    - `min_thickness_level_raider=4` — для участия рейдером (ГДД §10.1:
+      «Участвовать — lvl 4+»).
+    - `min_length_cm=20` — минимальная длина саммонера / рейдера (ГДД
+      §10.1: «≥ 20 см» — для обеих ролей).
+    - `lobby_minutes=20` — длина фазы лобби (ГДД §10.3).
+    - `summon_cooldown_hours=4` — глобальный кулдаун между призывами
+      (ГДД §10.1: «1 раз в 4 часа (глобальный)»). По решению cyan91 на
+      старте 3.3-A — это кулдаун на весь сервер, не per-clan и не
+      per-player. Реализация — распределённый lock в Спринте 3.3-B.
+    - `top_n_pool=30` — размер пула кандидатов в боссы. Босс выбирается
+      случайно из топ-N игроков по `length_cm` (ГДД §10.1: «Босс =
+      случайный из топ-30»). По решению cyan91 — топ-30 **игроков**, не
+      кланов.
+    - `victory_threshold_cm=10` — длина босса, при `current_boss_length_cm
+      < victory_threshold_cm` рейдеры побеждают (ГДД §10.5: «победа =
+      босс < 10 см»).
+    - `round_min_seconds=20` / `round_max_seconds=60` — длина раунда
+      (timer внутри которого собираются ходы). Один раунд — это
+      `min..max` интервал; конкретное число выбирается раунд-резолверем
+      (3.3-C). Раундов в бою — до победы/поражения, без фиксированного N.
+    - `base_damage_cm=5` — базовый урон в раунде (ГДД §10.4). Применяется
+      одинаково в обе стороны: босс пробивает блок → рейдер -5 см и
+      выбывает; рейдер блокирует → босс -5 см.
+    - `bot_play_chance` (Спринт 3.3-C) — вероятность, что бот сыграет
+      за саммонера, если он AFK на ход дольше `round_max_seconds`.
+      Реалистично 1.0 (всегда), оставляем поле для тонкой настройки.
+    - `scroll_drop` — шансы дропа скроллов (см. `BossScrollDropConfig`).
+
+    Раунд-резолверная логика (`boss_round_resolution`) — Спринт 3.3-C.
+    """
+
+    min_thickness_level_summoner: int = Field(ge=1)
+    min_thickness_level_raider: int = Field(ge=1)
+    min_length_cm: int = Field(gt=0)
+    lobby_minutes: int = Field(gt=0)
+    summon_cooldown_hours: int = Field(ge=0)
+    top_n_pool: int = Field(gt=0)
+    victory_threshold_cm: int = Field(gt=0)
+    round_min_seconds: int = Field(gt=0)
+    round_max_seconds: int = Field(gt=0)
+    base_damage_cm: int = Field(ge=0)
+    bot_play_chance: float = Field(ge=0.0, le=1.0)
+    scroll_drop: BossScrollDropConfig
+
+    @model_validator(mode="after")
+    def _validate(self) -> BossesConfig:
+        if self.round_min_seconds > self.round_max_seconds:
+            raise ValueError(
+                f"bosses.round_min_seconds ({self.round_min_seconds}) "
+                f"must be <= round_max_seconds ({self.round_max_seconds})"
+            )
+        if self.min_thickness_level_summoner < self.min_thickness_level_raider:
+            raise ValueError(
+                f"bosses.min_thickness_level_summoner "
+                f"({self.min_thickness_level_summoner}) must be >= "
+                f"min_thickness_level_raider ({self.min_thickness_level_raider})"
+            )
+        return self
+
+
 class OracleConfig(_Frozen):
     """Конфиг предсказателя `/oracle` (ГДД §11)."""
 
@@ -780,6 +865,7 @@ class BalanceConfig(_Frozen):
     mountains: MountainsConfig
     dungeon: DungeonConfig
     caravans: CaravansConfig
+    bosses: BossesConfig
     oracle: OracleConfig
     referral: ReferralConfig
     thickness: ThicknessConfig
