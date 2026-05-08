@@ -21,6 +21,11 @@ from pipirik_wars.domain.bosses.repositories import (
     IBossFightRepository,
     IBossParticipantRepository,
 )
+from pipirik_wars.domain.bosses.services import (
+    BossRaiderRoundOutcome,
+    BossRoundResult,
+    resolve_boss_round,
+)
 from pipirik_wars.domain.bosses.value_objects import (
     BossDamage,
     BossFightStatus,
@@ -39,9 +44,12 @@ __all__ = [
     "BossKind",
     "BossParticipant",
     "BossPlayerPoolEmptyError",
+    "BossRaiderRoundOutcome",
+    "BossRoundResult",
     "BossSummonOnGlobalCooldownError",
     "IBossFightRepository",
     "IBossParticipantRepository",
     "InvalidBossFightStateError",
     "NotInBossFightError",
+    "resolve_boss_round",
 ]
