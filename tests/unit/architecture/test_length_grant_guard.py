@@ -70,6 +70,14 @@ _ALLOWED_FILES: frozenset[Path] = frozenset(
         # (`length_delta_cm < 0`) — прямой `with_length`. Cap-ы 1.6
         # к вычетам неприменимы (см. `pvp/apply_mass_outcome.py`).
         _SRC_ROOT / "application" / "caravans" / "finish_caravan_battle.py",
+        # Approved-use-case: списание длины босса при победе рейдеров
+        # (Спринт 3.3-C, ГДД §10.5–§10.6). Прибавки рейдерам и (на
+        # поражении) боссу — через `ILengthGranter.grant(source=RAID_REWARD)`;
+        # вычет с босса при победе рейдеров — прямой `with_length` с
+        # клампом снизу до `victory_threshold_cm` (refund-к-самому-себе,
+        # cap-ы 1.6 к вычетам неприменимы — см. `pvp/apply_mass_outcome.py`,
+        # `caravans/finish_caravan_battle.py`).
+        _SRC_ROOT / "application" / "bosses" / "finish_boss_fight.py",
     }
 )
 

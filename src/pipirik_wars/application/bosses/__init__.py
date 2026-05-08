@@ -21,6 +21,11 @@ from pipirik_wars.application.bosses.close_boss_lobby import (
     BossLobbyClosed,
     CloseBossLobby,
 )
+from pipirik_wars.application.bosses.finish_boss_fight import (
+    BossFightFinished,
+    BossScrollDrop,
+    FinishBossFight,
+)
 from pipirik_wars.application.bosses.join_boss_lobby import (
     BossLobbyJoined,
     JoinBossLobby,
@@ -29,18 +34,27 @@ from pipirik_wars.application.bosses.leave_boss_lobby import (
     BossLobbyLeft,
     LeaveBossLobby,
 )
+from pipirik_wars.application.bosses.run_boss_round import (
+    BossRoundResolved,
+    RunBossRound,
+)
 from pipirik_wars.application.bosses.summon_boss import (
     BossSummoned,
     SummonBoss,
 )
 
 __all__ = [
+    "BossFightFinished",
     "BossLobbyClosed",
     "BossLobbyJoined",
     "BossLobbyLeft",
+    "BossRoundResolved",
+    "BossScrollDrop",
     "BossSummoned",
     "CloseBossLobby",
+    "FinishBossFight",
     "JoinBossLobby",
     "LeaveBossLobby",
+    "RunBossRound",
     "SummonBoss",
 ]

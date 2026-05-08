@@ -62,8 +62,10 @@ from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.bosses import (
     CloseBossLobby,
+    FinishBossFight,
     JoinBossLobby,
     LeaveBossLobby,
+    RunBossRound,
     SummonBoss,
 )
 from pipirik_wars.application.caravans import (
@@ -394,15 +396,17 @@ class Container:
     cancel_caravan: CancelCaravan
     close_caravan_lobby: CloseCaravanLobby
     # Рейд-боссы (Спринт 3.3, ГДД §10). 3.3-B — use-case-ы + persistence;
-    # bot-handler `/boss` — 3.3-D. До тех пор use-case-ы доступны через
-    # Container, но в dispatcher не пробрасываются. Боевая механика
-    # (`RunBossRound` / `FinishBossFight` + scroll-drops) — 3.3-C.
+    # 3.3-C — боевая механика (`RunBossRound` / `FinishBossFight`) +
+    # scroll-drops; bot-handler `/boss` — 3.3-D. До тех пор use-case-ы
+    # доступны через Container, но в dispatcher не пробрасываются.
     boss_fights: IBossFightRepository
     boss_participants: IBossParticipantRepository
     summon_boss: SummonBoss
     join_boss_lobby: JoinBossLobby
     leave_boss_lobby: LeaveBossLobby
     close_boss_lobby: CloseBossLobby
+    run_boss_round: RunBossRound
+    finish_boss_fight: FinishBossFight
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
@@ -985,6 +989,37 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=audit,
         clock=clock,
     )
+    # Спринт 3.3-C: боевая механика рейд-боссов (ГДД §10.5–§10.6).
+    # `RunBossRound` запускается APScheduler-job-ом `boss_round_tick`
+    # (фабрика — в 3.3-D). `FinishBossFight` запускается двумя путями:
+    # safety-net-job-ом `boss_fight_finish` (фабрика — в 3.3-D) и
+    # напрямую `RunBossRound`-ом сразу после раунда, который закрыл бой.
+    # `random_factory=SeededRandom` обеспечивает детерминизм resolve-боя
+    # по `boss_fight.random_seed`.
+    run_boss_round = RunBossRound(
+        uow=uow,
+        boss_fights=boss_fights,
+        boss_participants=boss_participants,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
+        balance=balance.get().bosses,
+        random_factory=SeededRandom,
+    )
+    finish_boss_fight = FinishBossFight(
+        uow=uow,
+        boss_fights=boss_fights,
+        boss_participants=boss_participants,
+        players=players,
+        length_granter=add_length,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
+        balance=balance.get().bosses,
+        random_factory=SeededRandom,
+    )
     upgrade_thickness = UpgradeThickness(
         uow=uow,
         players=players,
@@ -1508,6 +1543,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         join_boss_lobby=join_boss_lobby,
         leave_boss_lobby=leave_boss_lobby,
         close_boss_lobby=close_boss_lobby,
+        run_boss_round=run_boss_round,
+        finish_boss_fight=finish_boss_fight,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,
