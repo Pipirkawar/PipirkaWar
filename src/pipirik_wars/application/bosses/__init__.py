@@ -13,10 +13,15 @@ Use-case-ы:
   `LOBBY → IN_BATTLE` идемпотентно, шедулит `boss_round_tick` и
   `boss_fight_finish` safety-net.
 
-Боевая механика (`RunBossRound` / `FinishBossFight` / `CancelBossFight`)
-— Спринт 3.3-C. Bot-handler-ы и i18n-сообщения — Спринт 3.3-D.
+Боевая механика (`RunBossRound` / `FinishBossFight`) — Спринт 3.3-C.
+Use-case `CancelBossFight` (саммонер отменяет рейд из лобби) +
+bot-handler-ы + i18n-сообщения — Спринт 3.3-D.
 """
 
+from pipirik_wars.application.bosses.cancel_boss_fight import (
+    BossFightCancelled,
+    CancelBossFight,
+)
 from pipirik_wars.application.bosses.close_boss_lobby import (
     BossLobbyClosed,
     CloseBossLobby,
@@ -44,6 +49,7 @@ from pipirik_wars.application.bosses.summon_boss import (
 )
 
 __all__ = [
+    "BossFightCancelled",
     "BossFightFinished",
     "BossLobbyClosed",
     "BossLobbyJoined",
@@ -51,6 +57,7 @@ __all__ = [
     "BossRoundResolved",
     "BossScrollDrop",
     "BossSummoned",
+    "CancelBossFight",
     "CloseBossLobby",
     "FinishBossFight",
     "JoinBossLobby",

@@ -177,6 +177,35 @@ class InvalidBossFightStateError(BossError):
         self.actual = actual
 
 
+class NotAuthorizedToCancelBossError(BossError):
+    """Игрок не саммонер этого рейд-боя — не может его отменить.
+
+    Бросает `CancelBossFight` (3.3-D), когда не-саммонер пытается
+    отменить рейд из лобби. Контракт ГДД §10.3: только саммонер
+    (тот, кто кинул вызов через `/boss`) может отменить рейд до
+    его старта; обычные рейдеры могут только выйти из лобби
+    (`LeaveBossLobby`). Bot-handler в 3.3-D маппит на toast
+    «не ты призывал — отменить не можешь».
+    """
+
+    __slots__ = ("boss_fight_id", "player_id", "summoner_player_id")
+
+    def __init__(
+        self,
+        *,
+        boss_fight_id: int,
+        player_id: int,
+        summoner_player_id: int,
+    ) -> None:
+        super().__init__(
+            f"player_id={player_id} is not authorized to cancel boss_fight "
+            f"id={boss_fight_id} (summoner_player_id={summoner_player_id})"
+        )
+        self.boss_fight_id = boss_fight_id
+        self.player_id = player_id
+        self.summoner_player_id = summoner_player_id
+
+
 __all__ = [
     "AlreadyInBossFightError",
     "BossError",
@@ -186,5 +215,6 @@ __all__ = [
     "BossPlayerPoolEmptyError",
     "BossSummonOnGlobalCooldownError",
     "InvalidBossFightStateError",
+    "NotAuthorizedToCancelBossError",
     "NotInBossFightError",
 ]
