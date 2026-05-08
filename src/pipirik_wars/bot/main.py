@@ -61,9 +61,12 @@ from pipirik_wars.application.admin import (
 from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.caravans import (
+    CancelCaravan,
     CloseCaravanLobby,
     CreateCaravan,
     FinishCaravanBattle,
+    ICaravanBattleFinishNotifier,
+    ICaravanLobbyCloseNotifier,
     JoinCaravanLobby,
     LeaveCaravanLobby,
 )
@@ -149,6 +152,8 @@ from pipirik_wars.application.top import (
 from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import AdminGuard, register_middlewares
 from pipirik_wars.bot.notifications import (
+    TelegramCaravanBattleFinishNotifier,
+    TelegramCaravanLobbyCloseNotifier,
     TelegramDungeonFinishNotifier,
     TelegramForestFinishNotifier,
     TelegramMountainFinishNotifier,
@@ -374,6 +379,7 @@ class Container:
     create_caravan: CreateCaravan
     join_caravan_lobby: JoinCaravanLobby
     leave_caravan_lobby: LeaveCaravanLobby
+    cancel_caravan: CancelCaravan
     close_caravan_lobby: CloseCaravanLobby
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
@@ -677,6 +683,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     weekly_referral_summary_notifier: IWeeklyClanReferralSummaryNotifier | None = None
     mountain_notifier: IMountainFinishNotifier | None = None
     dungeon_notifier: IDungeonFinishNotifier | None = None
+    caravan_lobby_close_notifier: ICaravanLobbyCloseNotifier | None = None
+    caravan_battle_finish_notifier: ICaravanBattleFinishNotifier | None = None
     if bot is not None:
         forest_notifier = TelegramForestFinishNotifier(
             bot=bot,
@@ -708,6 +716,29 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
             bundle=bundle,
             locale_resolver=player_locale_resolver,
         )
+        # Спринт 3.2-D D.6: caravan-нотификаторы старта/финиша боя.
+        # Шлют посты в чаты `sender_clan.chat_id` / `receiver_clan.chat_id`
+        # после `LOBBY → IN_BATTLE` (lobby_close) и `IN_BATTLE → FINISHED`
+        # (battle_finish). Доставка best-effort, локаль лидера резолвится
+        # через `player_locale_resolver` с фолбэком на EN.
+        caravan_lobby_close_notifier = TelegramCaravanLobbyCloseNotifier(
+            bot=bot,
+            bundle=bundle,
+            balance=balance,
+            clans=clans,
+            players=players,
+            participants=caravan_participants,
+            locale_resolver=player_locale_resolver,
+        )
+        caravan_battle_finish_notifier = TelegramCaravanBattleFinishNotifier(
+            bot=bot,
+            bundle=bundle,
+            balance=balance,
+            clans=clans,
+            players=players,
+            participants=caravan_participants,
+            locale_resolver=player_locale_resolver,
+        )
     # Late-bound фабрики для PvP-lobby job-ов: scheduler нужен раньше,
     # чем `escalate_chat_to_global` / `expire_lobby_entry`, поэтому передаём
     # лямбды-замыкания, которые резолвятся при срабатывании job-а — после
@@ -737,6 +768,10 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         # Спринт 3.2-C: late-bound фабрика `caravan_battle_finish`.
         # `finish_caravan_battle` создаётся ниже (после delayed_jobs).
         caravan_battle_finish_factory=lambda: finish_caravan_battle,
+        # Спринт 3.2-D D.6: caravan-нотификаторы (best-effort, могут быть
+        # `None` в unit-тестах APScheduler-а или когда `bot is None`).
+        caravan_lobby_close_notifier=caravan_lobby_close_notifier,
+        caravan_battle_finish_notifier=caravan_battle_finish_notifier,
         clans=clans,
     )
     start_forest_run = StartForestRun(
@@ -839,6 +874,18 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         locks=activity_lock_service,
         audit=audit,
         clock=clock,
+    )
+    # Спринт 3.2-D, D.1+D.3: лидер отменяет караван из лобби.
+    # Идемпотентен на повторный вызов в `CANCELLED`-статусе.
+    cancel_caravan = CancelCaravan(
+        uow=uow,
+        caravans=caravans,
+        caravan_participants=caravan_participants,
+        players=players,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
     )
     close_caravan_lobby = CloseCaravanLobby(
         uow=uow,
@@ -1379,6 +1426,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         create_caravan=create_caravan,
         join_caravan_lobby=join_caravan_lobby,
         leave_caravan_lobby=leave_caravan_lobby,
+        cancel_caravan=cancel_caravan,
         close_caravan_lobby=close_caravan_lobby,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
@@ -1557,6 +1605,20 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["broadcast_task_spawner"] = container.broadcast_task_spawner
     # Спринт 2.5-D.6 — `/admin_setup_totp` (self-service выдача TOTP-секрета).
     dispatcher["setup_admin_totp"] = container.setup_admin_totp
+    # Спринт 3.2-D — bot-handler `/caravan` (личка-only) + inline-кнопки
+    # лобби. D.3a/b — `caravan:cancel:<id>` (use-case `CancelCaravan`).
+    # D.3c — `caravan:show_lobby:<id>` (read-side: грузит караван +
+    # участников + лидера + клан-получатель, перерисовывает сообщение
+    # с join/leave/cancel-клавиатурой). `join_*` / `leave` use-case-ы
+    # подключатся к dispatcher по мере добавления callback-веток в
+    # последующих под-коммитах D.3 (D.3d/e/f).
+    dispatcher["create_caravan"] = container.create_caravan
+    dispatcher["cancel_caravan"] = container.cancel_caravan
+    dispatcher["join_caravan_lobby"] = container.join_caravan_lobby
+    dispatcher["leave_caravan_lobby"] = container.leave_caravan_lobby
+    dispatcher["caravans"] = container.caravans
+    dispatcher["caravan_participants"] = container.caravan_participants
+    dispatcher["clan_members"] = container.clan_members
     return dispatcher
 
 

@@ -823,3 +823,144 @@ dungeon-toast-item-dropped = Предмет выброшен.
 dungeon-toast-foreign-button = Эта кнопка не для тебя.
 dungeon-toast-run-not-found = Этот поход уже неактивен.
 dungeon-toast-drop-mismatch = Кнопка устарела.
+
+# ============================================================================
+# /caravan (Спринт 3.2-D, ГДД §9). Караваны кланов: лидер
+# собирает группу, идёт в чат другого клана, ловит атаку рейдеров.
+# Команда работает только в личке бота: лидер указывает chat_id чата
+# клана-получателя и величину взноса в см. Пост-объявление с кнопкой
+# «Показать лобби» уходит в чат клана-отправителя.
+# ============================================================================
+
+caravans-group = 🐪 Команда /caravan доступна только в личке бота. Открой приватный чат и повтори.
+caravans-other = 🐪 Команда /caravan доступна только в личке бота.
+caravans-not-registered = 🐪 Похоже, ты ещё не зарегистрирован. Нажми /start в этом чате — и тогда сможешь собрать караван.
+caravans-usage =
+    🐪 Чтобы собрать караван, укажи чат клана-получателя и взнос в см:
+    <code>/caravan &lt;chat_id_получателя&gt; &lt;взнос_см&gt;</code>
+
+    Пример: <code>/caravan -1001234567890 30</code>
+caravans-receiver-invalid = 🐪 Не похоже на chat_id Telegram-чата: <code>{ $value }</code>. Передай числовой chat_id клана-получателя (для группового чата он отрицательный).
+caravans-contribution-invalid = 🐪 Взнос должен быть положительным целым числом, передано: <code>{ $value }</code>.
+caravans-no-clan = 🐪 У тебя нет клана. Караван собирает только лидер клана.
+caravans-not-a-leader = 🐪 Караван собирает только лидер клана. Ты — обычный участник.
+caravans-receiver-not-found = 🐪 Чат с chat_id <code>{ $chat_id }</code> не зарегистрирован как клан. Передай chat_id чата другого клана.
+caravans-receiver-same-as-sender = 🐪 Караван к собственному клану невозможен. Передай chat_id чужого клана.
+caravans-already-in = 🐪 У твоего клана уже идёт активный караван — дождись его завершения или отмени из лобби.
+caravans-cooldown = 🐪 Кулдаун клана между караванами ещё не истёк. Попробуй через { NUMBER($remaining_minutes, useGrouping: 0) } мин.
+caravans-requirement-thickness = 🐪 Караван собирает лидер с толщиной ≥ { NUMBER($required, useGrouping: 0) }. У тебя сейчас { NUMBER($actual, useGrouping: 0) }. Прокачай /upgrade.
+caravans-requirement-length = 🐪 После взноса должно остаться ≥ { NUMBER($required_cm, useGrouping: 0) } см длины. У тебя после взноса будет { NUMBER($actual_cm, useGrouping: 0) } см.
+caravans-player-frozen = 🐪 Твой профиль заморожен — собрать караван нельзя.
+caravans-clan-frozen-sender = 🐪 Твой клан заморожен — собрать караван нельзя.
+caravans-clan-frozen-receiver = 🐪 Клан-получатель заморожен — отправить караван к нему нельзя.
+
+caravans-created-private =
+    🐪 Караван собран!
+    Получатель: <b>{ $receiver_clan_name }</b>
+    Взнос: { NUMBER($contribution_cm, useGrouping: 0) } см
+    Лобби открыто на { NUMBER($lobby_minutes, useGrouping: 0) } мин — объявление ушло в чат твоего клана.
+caravans-created-announcement =
+    🐪 <b>{ $leader_nick }</b> собирает караван!
+    Цель: <b>{ $receiver_clan_name }</b>
+    Взнос лидера: { NUMBER($contribution_cm, useGrouping: 0) } см
+    Лобби открыто на { NUMBER($lobby_minutes, useGrouping: 0) } мин — успей вступить.
+caravans-button-show-lobby = Показать лобби
+caravans-button-cancel = Отменить караван
+
+# --- Callback `caravan:show_lobby:<id>` (Спринт 3.2-D, D.3c) ---
+
+caravans-lobby-state =
+    🐪 <b>{ $leader_nick }</b> собирает караван к <b>{ $receiver_clan_name }</b>
+    Лобби { $lobby_status }.
+
+    Состав:
+    • Караванщики: { NUMBER($caravaneers_count, useGrouping: 0) } (взнос: { NUMBER($total_contribution_cm, useGrouping: 0) } см)
+    • Защитники: { NUMBER($defenders_count, useGrouping: 0) } / { NUMBER($defenders_cap, useGrouping: 0) }
+    • Рейдеры: { NUMBER($raiders_count, useGrouping: 0) } / { NUMBER($raiders_cap, useGrouping: 0) }
+caravans-lobby-status-open = закроется через { NUMBER($remaining_minutes, useGrouping: 0) } мин
+caravans-lobby-status-closing = закрывается
+caravans-button-join-defender = Вступить как защитник
+caravans-button-join-raider = Вступить как рейдер
+caravans-button-leave = Покинуть
+
+# --- Старт боя / финиш боя (Спринт 3.2-D, D.4–D.6) ---
+# Публикуются APScheduler-callback-ами в чат-отправитель и чат-получатель
+# каравана сразу после успешных `LOBBY → IN_BATTLE` и `IN_BATTLE → FINISHED`.
+
+caravans-battle-started =
+    🐪 Караван от <b>{ $sender_clan_name }</b> к <b>{ $receiver_clan_name }</b> отправился в путь!
+
+    Лидер: <b>{ $leader_nick }</b>
+    Караванщики: { NUMBER($caravaneers_count, useGrouping: 0) }
+    Защитники: { NUMBER($defenders_count, useGrouping: 0) }
+    Рейдеры: { NUMBER($raiders_count, useGrouping: 0) }
+    Груз: { NUMBER($total_cargo_cm, useGrouping: 0) } см
+
+    ⚔️ Бой завершится примерно через { NUMBER($battle_minutes, useGrouping: 0) } мин.
+caravans-battle-finished-delivered =
+    ✅ Караван от <b>{ $sender_clan_name }</b> доставлен в <b>{ $receiver_clan_name }</b>!
+
+    Лидер: <b>{ $leader_nick }</b>
+    Караванщики выжили: { NUMBER($caravaneers_alive, useGrouping: 0) } / { NUMBER($caravaneers_total, useGrouping: 0) }
+    Защитники выжили: { NUMBER($defenders_alive, useGrouping: 0) } / { NUMBER($defenders_total, useGrouping: 0) }
+
+    🎁 Каждый член клана-отправителя получил +{ NUMBER($clan_bonus_sender_cm, useGrouping: 0) } см.
+    🎁 Каждый член клана-получателя получил +{ NUMBER($clan_bonus_receiver_cm, useGrouping: 0) } см.
+caravans-battle-finished-raided =
+    ☠️ Караван от <b>{ $sender_clan_name }</b> к <b>{ $receiver_clan_name }</b> разграблен!
+
+    Лидер: <b>{ $leader_nick }</b>
+    Атаман-победитель: <b>{ $ataman_nick }</b>
+
+    Груз ({ NUMBER($total_cargo_cm, useGrouping: 0) } см) поделён между { NUMBER($raiders_count, useGrouping: 0) } рейдерами.
+
+# --- Callback `caravan:cancel:<id>` (Спринт 3.2-D, D.3) ---
+
+caravans-cancel-message = 🐪 Караван отменён лидером.
+caravans-cancel-toast-success = Караван отменён
+caravans-cancel-toast-already-cancelled = Караван уже был отменён ранее
+
+# --- Общие callback-toast-ы каравана (Спринт 3.2-D, D.3) ---
+
+caravans-callback-toast-caravan-not-found = Караван не найден
+caravans-callback-toast-invalid-state = Караван больше не в лобби
+caravans-callback-toast-not-a-leader = Только лидер может отменить караван
+caravans-callback-toast-player-not-found = Сначала нажми /start в личке бота
+caravans-callback-toast-generic-error = Что-то пошло не так. Попробуй ещё раз.
+
+# --- Callback `caravan:join_defender|join_raider:<id>` (Спринт 3.2-D, D.3d) ---
+
+caravans-join-toast-success-defender = Ты в лобби как защитник
+caravans-join-toast-success-raider = Ты в лобби как рейдер
+caravans-callback-toast-lobby-closed = Лобби каравана уже закрыто
+caravans-callback-toast-player-frozen = Твой профиль заморожен
+caravans-callback-toast-already-in-caravan = Ты уже участвуешь в активном караване
+caravans-callback-toast-role-conflict-defender = Защитник должен состоять в клане-получателе
+caravans-callback-toast-role-conflict-raider = Рейдер не должен состоять ни в одном из кланов каравана
+caravans-callback-toast-capacity-defender = Лимит защитников: { NUMBER($limit, useGrouping: 0) }. Слотов больше нет.
+caravans-callback-toast-capacity-raider = Лимит рейдеров: { NUMBER($limit, useGrouping: 0) }. Слотов больше нет.
+caravans-callback-toast-requirement-thickness = Нужна толщина ≥ { NUMBER($required, useGrouping: 0) }. У тебя { NUMBER($actual, useGrouping: 0) }.
+caravans-callback-toast-requirement-length = Нужна длина ≥ { NUMBER($required_cm, useGrouping: 0) } см. У тебя { NUMBER($actual_cm, useGrouping: 0) } см.
+
+# --- Callback `caravan:leave:<id>` (Спринт 3.2-D, D.3e) ---
+
+caravans-leave-toast-success = Ты вышел из лобби каравана
+caravans-leave-toast-success-with-contribution = Ты вышел из лобби. Возвращено: { NUMBER($contribution_cm, useGrouping: 0) } см
+caravans-leave-toast-leader-cannot-leave = Лидер не может выйти. Чтобы распустить караван, нажми «Отменить».
+caravans-leave-toast-not-a-participant = Ты не участник этого каравана
+
+# --- Команда `/caravan_join` (Спринт 3.2-D, D.3f) ---
+# Команда работает только в личке: игрок указывает caravan_id и взнос в см,
+# чтобы вступить в лобби как CARAVANEER (для DEFENDER/RAIDER — инлайн-кнопки
+# в lobby-сообщении, контрибьюция там не требуется).
+
+caravans-join-usage =
+    🐪 Чтобы вступить в караван как караванщик, укажи caravan_id (виден в лобби) и взнос в см:
+    <code>/caravan_join &lt;caravan_id&gt; &lt;взнос_см&gt;</code>
+
+    Пример: <code>/caravan_join 42 30</code>
+caravans-join-caravan-id-invalid = 🐪 caravan_id должен быть положительным целым числом, передано: <code>{ $value }</code>.
+caravans-join-success-caravaneer =
+    🐪 Ты вступил в караван как караванщик!
+    Взнос: { NUMBER($contribution_cm, useGrouping: 0) } см
+caravans-join-role-conflict-caravaneer = 🐪 Караванщиком может стать только член клана-отправителя.

@@ -39,6 +39,7 @@ from pipirik_wars.application.admin import (
 from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.caravans import (
+    CancelCaravan,
     CloseCaravanLobby,
     CreateCaravan,
     JoinCaravanLobby,
@@ -739,6 +740,16 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         audit=audit,
         clock=clock,
     )
+    cancel_caravan_uc = CancelCaravan(
+        uow=uow,
+        caravans=caravans_repo,
+        caravan_participants=caravan_participants_repo,
+        players=players,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
+    )
     close_caravan_lobby_uc = CloseCaravanLobby(
         uow=uow,
         caravans=caravans_repo,
@@ -992,6 +1003,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         create_caravan=create_caravan_uc,
         join_caravan_lobby=join_caravan_lobby_uc,
         leave_caravan_lobby=leave_caravan_lobby_uc,
+        cancel_caravan=cancel_caravan_uc,
         close_caravan_lobby=close_caravan_lobby_uc,
     )
 

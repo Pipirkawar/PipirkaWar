@@ -15,6 +15,7 @@ from pipirik_wars.domain.caravan.errors import (
     CaravanNotFoundError,
     CaravanRequirementError,
     CaravanRoleConflictError,
+    InvalidCaravanStateError,
 )
 from pipirik_wars.domain.caravan.repositories import (
     ICaravanParticipantRepository,
@@ -49,5 +50,6 @@ __all__ = [
     "CaravanStatus",
     "ICaravanParticipantRepository",
     "ICaravanRepository",
+    "InvalidCaravanStateError",
     "resolve_caravan_battle",
 ]

@@ -24,7 +24,14 @@ from typing import Final
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from pipirik_wars.application.caravans import CloseCaravanLobby, FinishCaravanBattle
+from pipirik_wars.application.caravans import (
+    CaravanBattleFinished,
+    CloseCaravanLobby,
+    ClosedCaravanLobby,
+    FinishCaravanBattle,
+    ICaravanBattleFinishNotifier,
+    ICaravanLobbyCloseNotifier,
+)
 from pipirik_wars.application.daily_head import (
     RunDailyHeadCron,
     ScheduleDailyHeadCronJobs,
@@ -182,7 +189,9 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
     __slots__ = (
         "_afk_resolution_factory",
         "_caravan_battle_finish_factory",
+        "_caravan_battle_finish_notifier",
         "_caravan_lobby_close_factory",
+        "_caravan_lobby_close_notifier",
         "_clans",
         "_daily_head_cron_factory",
         "_daily_reschedule_factory",
@@ -221,6 +230,8 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         dungeon_notifier: IDungeonFinishNotifier | None = None,
         caravan_lobby_close_factory: Callable[[], CloseCaravanLobby] | None = None,
         caravan_battle_finish_factory: Callable[[], FinishCaravanBattle] | None = None,
+        caravan_lobby_close_notifier: ICaravanLobbyCloseNotifier | None = None,
+        caravan_battle_finish_notifier: ICaravanBattleFinishNotifier | None = None,
         clans: IClanRepository | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
@@ -241,6 +252,8 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._dungeon_notifier = dungeon_notifier
         self._caravan_lobby_close_factory = caravan_lobby_close_factory
         self._caravan_battle_finish_factory = caravan_battle_finish_factory
+        self._caravan_lobby_close_notifier = caravan_lobby_close_notifier
+        self._caravan_battle_finish_notifier = caravan_battle_finish_notifier
         self._clans = clans
         self._logger = logger or logging.getLogger(__name__)
 
@@ -507,13 +520,17 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
             return
 
     async def _run_caravan_lobby_close_job(self, caravan_id: int) -> None:
-        """Callback `CloseCaravanLobby`-job-а (Спринт 3.2-B).
+        """Callback `CloseCaravanLobby`-job-а (Спринт 3.2-B + 3.2-D D.6).
 
         Срабатывает в `caravan.lobby_ends_at` и переводит караван
-        `LOBBY → IN_BATTLE`. Если фабрика не подвязана (полный
-        DI-wiring появится в Спринте 3.2-D bot-handler-ах) — пишем
-        warning и тихо выходим. Use-case сам идемпотентен: повторный
-        вызов на уже не-`LOBBY` караване вернёт `was_already_closed=True`.
+        `LOBBY → IN_BATTLE`. Если фабрика не подвязана (recovery /
+        тесты APScheduler-а самого по себе) — пишем warning и тихо
+        выходим. Use-case сам идемпотентен: повторный вызов на
+        уже не-`LOBBY` караване вернёт `was_already_closed=True`.
+
+        После успешного `execute(...)` — best-effort `notifier.notify(result)`,
+        который шлёт сообщение «лобби закрыто, бой начался» в чаты
+        обоих кланов (ГДД §9.3, Спринт 3.2-D D.6).
         """
         if self._caravan_lobby_close_factory is None:
             self._logger.warning(
@@ -521,15 +538,26 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
                 extra={"caravan_id": caravan_id},
             )
             return
+        result: ClosedCaravanLobby | None = None
         try:
             use_case = self._caravan_lobby_close_factory()
-            await use_case.execute(CloseCaravanLobbyInput(caravan_id=caravan_id))
+            result = await use_case.execute(CloseCaravanLobbyInput(caravan_id=caravan_id))
         except Exception as exc:
             self._logger.exception(
                 "caravan_lobby_close: unexpected error",
                 extra={"caravan_id": caravan_id, "error": type(exc).__name__},
             )
             return
+
+        if self._caravan_lobby_close_notifier is None or result is None:
+            return
+        try:
+            await self._caravan_lobby_close_notifier.notify(result)
+        except Exception as exc:
+            self._logger.exception(
+                "caravan_lobby_close: notifier failed",
+                extra={"caravan_id": caravan_id, "error": type(exc).__name__},
+            )
 
     # ── Спринт 3.2-C: караван (battle-finish, ГДД §9.5–§9.6) ──
 
@@ -556,7 +584,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
             return
 
     async def _run_caravan_battle_finish_job(self, caravan_id: int) -> None:
-        """Callback `FinishCaravanBattle`-job-а (Спринт 3.2-C).
+        """Callback `FinishCaravanBattle`-job-а (Спринт 3.2-C + 3.2-D D.6).
 
         Срабатывает в `caravan.battle_ends_at`, резолвит бой
         (детерминистично от `random_seed`), выдаёт награды,
@@ -564,6 +592,10 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         идемпотентен: повторный вызов на `FINISHED`-каравану вернёт
         `was_already_finished=True`. Если фабрика не подвязана
         (recovery / тесты APScheduler-а самого по себе) — лог + skip.
+
+        После успешного `execute(...)` — best-effort `notifier.notify(result)`,
+        который шлёт сообщение «караван доставлен» / «караван разграблен»
+        в чаты обоих кланов (ГДД §9.5–§9.6, Спринт 3.2-D D.6).
         """
         if self._caravan_battle_finish_factory is None:
             self._logger.warning(
@@ -571,15 +603,26 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
                 extra={"caravan_id": caravan_id},
             )
             return
+        result: CaravanBattleFinished | None = None
         try:
             use_case = self._caravan_battle_finish_factory()
-            await use_case.execute(FinishCaravanBattleInput(caravan_id=caravan_id))
+            result = await use_case.execute(FinishCaravanBattleInput(caravan_id=caravan_id))
         except Exception as exc:
             self._logger.exception(
                 "caravan_battle_finish: unexpected error",
                 extra={"caravan_id": caravan_id, "error": type(exc).__name__},
             )
             return
+
+        if self._caravan_battle_finish_notifier is None or result is None:
+            return
+        try:
+            await self._caravan_battle_finish_notifier.notify(result)
+        except Exception as exc:
+            self._logger.exception(
+                "caravan_battle_finish: notifier failed",
+                extra={"caravan_id": caravan_id, "error": type(exc).__name__},
+            )
 
     async def _run_dungeon_finish_job(self, run_id: int) -> None:
         """Callback `FinishDungeonRun`-job-а (Спринт 3.1-E).
