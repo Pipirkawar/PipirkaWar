@@ -27,6 +27,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
+from aiogram.methods import SendMessage
 from aiogram.types import CallbackQuery, Chat, InlineKeyboardMarkup, Message
 
 from pipirik_wars.application.bosses import (
@@ -477,7 +478,12 @@ class TestCommandHappyPath:
     async def test_announcement_failure_does_not_propagate(self) -> None:
         msg = _msg()
         # Первый answer (private) ок, второй (announcement) — падает.
-        msg.answer = AsyncMock(side_effect=[None, TelegramAPIError(method=None, message="oops")])
+        msg.answer = AsyncMock(
+            side_effect=[
+                None,
+                TelegramAPIError(method=SendMessage(chat_id=1, text="x"), message="oops"),
+            ]
+        )
         summon_uc = _stub_summon_boss()
         await _invoke(msg, identity=_identity(), summon_boss=summon_uc)
         # Handler не падает наружу.
