@@ -34,6 +34,7 @@ from pipirik_wars.bot.handlers.caravan import (
     handle_caravan_callback,
 )
 from pipirik_wars.bot.middlewares.auth import TgIdentity
+from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.caravan import (
     AlreadyInCaravanError,
     Caravan,
@@ -42,8 +43,11 @@ from pipirik_wars.domain.caravan import (
     CaravanNotFoundError,
     CaravanParticipant,
     CaravanRequirementError,
+    CaravanRole,
     CaravanRoleConflictError,
     CaravanStatus,
+    ICaravanParticipantRepository,
+    ICaravanRepository,
     InvalidCaravanStateError,
 )
 from pipirik_wars.domain.clan import (
@@ -54,9 +58,11 @@ from pipirik_wars.domain.clan import (
     ClanMemberRole,
     ClanStatus,
     ClanTitle,
+    IClanRepository,
 )
 from pipirik_wars.domain.player import (
     DisplayName,
+    IPlayerRepository,
     Length,
     Player,
     PlayerFrozenError,
@@ -65,10 +71,14 @@ from pipirik_wars.domain.player import (
     Thickness,
     Username,
 )
+from pipirik_wars.domain.shared.ports import IClock
 from pipirik_wars.shared.errors import IntegrityError
 from tests.fakes import (
+    FakeCaravanParticipantRepository,
+    FakeCaravanRepository,
     FakeClanMembershipRepository,
     FakeClanRepository,
+    FakeClock,
     FakeMessageBundle,
     FakePlayerRepository,
 )
@@ -798,18 +808,45 @@ def _callback(
     return callback
 
 
+# Маркер «параметр явно не передан» — нужен, чтобы отличить «дефолт» от
+# «вызывающий явно передал None» (для теста, где middleware не положила
+# identity и handler должен молча вернуться).
+_UNSET: object = object()
+
+
 async def _invoke_callback(
     callback: MagicMock,
     *,
-    identity: TgIdentity | None = None,
+    identity: TgIdentity | None | object = _UNSET,
     cancel_caravan: MagicMock | None = None,
+    caravans: ICaravanRepository | None = None,
+    caravan_participants: ICaravanParticipantRepository | None = None,
+    clans: IClanRepository | None = None,
+    players: IPlayerRepository | None = None,
+    get_profile: MagicMock | None = None,
+    balance: IBalanceConfig | None = None,
+    clock: IClock | None = None,
 ) -> MagicMock:
-    """Запустить callback-handler с дефолтами; возвращает stub use-case-а."""
+    """Запустить callback-handler с дефолтами; возвращает stub use-case-а отмены.
+
+    Read-only-зависимости (`caravans` / `caravan_participants` / `clans` /
+    `players` / `get_profile` / `balance` / `clock`) нужны для веток
+    `show_lobby`-callback-а; для cancel-веток подаются пустые фейки —
+    они до них не доходят (cancel идёт через use-case).
+    """
     cancel_uc = cancel_caravan or _stub_cancel_caravan()
+    effective_identity = _identity() if identity is _UNSET else cast(TgIdentity | None, identity)
     await handle_caravan_callback(
         cast(CallbackQuery, callback),
-        identity if identity is not None else _identity(),
+        effective_identity,
         cast(CancelCaravan, cancel_uc),
+        caravans or FakeCaravanRepository(),
+        caravan_participants or FakeCaravanParticipantRepository(),
+        clans or FakeClanRepository(),
+        players or FakePlayerRepository(),
+        cast(GetProfile, get_profile or _stub_get_profile()),
+        balance or _balance(),
+        clock or FakeClock(_NOW),
         _bundle(),
         _RU,
     )
@@ -821,13 +858,7 @@ class TestCancelCallback:
     async def test_no_identity_returns_silently(self) -> None:
         callback = _callback()
         cancel_uc = _stub_cancel_caravan()
-        await handle_caravan_callback(
-            cast(CallbackQuery, callback),
-            None,
-            cast(CancelCaravan, cancel_uc),
-            _bundle(),
-            _RU,
-        )
+        await _invoke_callback(callback, identity=None, cancel_caravan=cancel_uc)
         callback.answer.assert_not_called()
         cancel_uc.execute.assert_not_called()
 
@@ -840,9 +871,10 @@ class TestCancelCallback:
         assert "caravans-callback-toast-generic-error" in toast_text
 
     async def test_unsupported_action_acked_silently(self) -> None:
-        # `show_lobby` ещё не реализован в этом под-коммите — handler
-        # должен ack-нуть без мутации, чтобы кнопка не «висела».
-        callback = _callback(data=f"caravan:show_lobby:{_CARAVAN_ID}")
+        # `join_defender` / `join_raider` / `leave` пока не реализованы
+        # (D.3d/e) — handler должен ack-нуть без мутации, чтобы кнопка
+        # не «висела» с loading-индикатором.
+        callback = _callback(data=f"caravan:join_defender:{_CARAVAN_ID}")
         cancel_uc = await _invoke_callback(callback)
         cancel_uc.execute.assert_not_called()
         callback.answer.assert_awaited_once()
@@ -950,4 +982,253 @@ class TestCancelCallback:
         cancel_uc = _stub_cancel_caravan()
         # Не должно бросить — handler ловит ошибку edit-а.
         await _invoke_callback(callback, cancel_caravan=cancel_uc)
+        callback.answer.assert_awaited_once()
+
+
+# ──────────────────── callback `caravan:show_lobby:<id>` (D.3c) ────────────────────
+
+
+def _lobby_caravan(
+    *,
+    caravan_id: int = _CARAVAN_ID,
+    status: CaravanStatus = CaravanStatus.LOBBY,
+    lobby_ends_at: datetime | None = None,
+) -> Caravan:
+    """Каравана в лобби-состоянии для show_lobby-тестов.
+
+    Чтобы инвариант сущности (`lobby_ends_at > started_at`) держался даже
+    при «лобби в прошлом» (тест closing-статуса), `started_at` ставим за
+    1 час до `lobby_ends_at` если оно в прошлом, иначе — `_NOW`.
+    """
+    effective_lobby_ends = (
+        lobby_ends_at if lobby_ends_at is not None else _NOW + timedelta(minutes=20)
+    )
+    started_at = _NOW if effective_lobby_ends > _NOW else effective_lobby_ends - timedelta(hours=1)
+    return Caravan(
+        id=caravan_id,
+        sender_clan_id=1,
+        receiver_clan_id=2,
+        leader_player_id=1,
+        status=status,
+        started_at=started_at,
+        lobby_ends_at=effective_lobby_ends,
+        battle_ends_at=effective_lobby_ends + timedelta(minutes=60),
+        random_seed=12345,
+        finished_at=None,
+    )
+
+
+async def _seed_show_lobby(
+    *,
+    caravan: Caravan | None = None,
+    extra_participants: tuple[CaravanParticipant, ...] = (),
+    leader: Player | None = None,
+) -> tuple[
+    FakeCaravanRepository,
+    FakeCaravanParticipantRepository,
+    FakeClanRepository,
+    FakePlayerRepository,
+]:
+    """Засеять in-memory-репы под happy-path show_lobby.
+
+    По умолчанию: один караван в лобби, лидер с `id=1`, лидер-участник
+    как CARAVANEER (`is_leader=True`, contribution 30 см); приёмник —
+    клан с `id=2`. Через `extra_participants` можно добавить ещё
+    игроков (для теста ростера).
+    """
+    caravan_repo = FakeCaravanRepository()
+    participants_repo = FakeCaravanParticipantRepository()
+    clans = FakeClanRepository()
+    players = FakePlayerRepository()
+    # Сохраняем караван «как есть» (`save` для существующего id) — fake-репозиторий
+    # требует add() для нового, поэтому добавляем без id и потом save.
+    seed_caravan = caravan if caravan is not None else _lobby_caravan()
+    caravan_repo.rows.append(seed_caravan)
+    leader_player = leader if leader is not None else _player()
+    # Положить лидера как Player (с id=1) напрямую в rows fake-репы.
+    players.rows.append(leader_player)
+    # Получатель — клан id=2.
+    clans.rows.append(_receiver_clan())
+    # Лидер — CARAVANEER участник.
+    leader_part = CaravanParticipant.caravaneer(
+        caravan_id=cast(int, seed_caravan.id),
+        player_id=cast(int, leader_player.id),
+        contribution=CaravanContribution(cm=30),
+        is_leader=True,
+        joined_at=_NOW,
+    )
+    participants_repo.rows.append(leader_part)
+    for extra in extra_participants:
+        participants_repo.rows.append(extra)
+    return caravan_repo, participants_repo, clans, players
+
+
+@pytest.mark.asyncio
+class TestShowLobbyCallback:
+    async def test_caravan_not_found_emits_toast_no_edit(self) -> None:
+        callback = _callback(data=f"caravan:show_lobby:{_CARAVAN_ID}")
+        # Пустой caravans-репозиторий — get_by_id вернёт None.
+        await _invoke_callback(
+            callback,
+            caravans=FakeCaravanRepository(),
+        )
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-caravan-not-found" in toast_text
+        callback.message.edit_text.assert_not_called()
+
+    async def test_caravan_not_in_lobby_emits_invalid_state_toast(self) -> None:
+        callback = _callback(data=f"caravan:show_lobby:{_CARAVAN_ID}")
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby(
+            caravan=_lobby_caravan(status=CaravanStatus.IN_BATTLE),
+        )
+        await _invoke_callback(
+            callback,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+        )
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-invalid-state" in toast_text
+        callback.message.edit_text.assert_not_called()
+
+    async def test_happy_path_renders_lobby_state_and_keyboard(self) -> None:
+        callback = _callback(data=f"caravan:show_lobby:{_CARAVAN_ID}")
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby()
+        await _invoke_callback(
+            callback,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+        )
+        # Toast — пустой ack (без `args`/`kwargs` — успешный show без alert).
+        callback.answer.assert_awaited_once()
+        assert callback.answer.await_args.args == ()
+        # Сообщение перерисовано: текст + клавиатура с join/leave/cancel.
+        callback.message.edit_text.assert_awaited_once()
+        edit_kwargs = callback.message.edit_text.await_args.kwargs
+        assert "caravans-lobby-state" in edit_kwargs["text"]
+        markup = edit_kwargs["reply_markup"]
+        assert isinstance(markup, InlineKeyboardMarkup)
+        # 2×2: первая строка — два join, вторая — leave + cancel.
+        assert len(markup.inline_keyboard) == 2
+        first_row = markup.inline_keyboard[0]
+        second_row = markup.inline_keyboard[1]
+        assert {b.callback_data for b in first_row} == {
+            f"caravan:join_defender:{_CARAVAN_ID}",
+            f"caravan:join_raider:{_CARAVAN_ID}",
+        }
+        assert {b.callback_data for b in second_row} == {
+            f"caravan:leave:{_CARAVAN_ID}",
+            f"caravan:cancel:{_CARAVAN_ID}",
+        }
+
+    async def test_lobby_status_open_passes_remaining_minutes(self) -> None:
+        callback = _callback(data=f"caravan:show_lobby:{_CARAVAN_ID}")
+        # Лобби заканчивается через 7 минут 30 сек — ожидаем `ceil → 8`.
+        caravan = _lobby_caravan(lobby_ends_at=_NOW + timedelta(minutes=7, seconds=30))
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby(caravan=caravan)
+        await _invoke_callback(
+            callback,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+            clock=FakeClock(_NOW),
+        )
+        edit_kwargs = callback.message.edit_text.await_args.kwargs
+        assert "caravans-lobby-status-open" in edit_kwargs["text"]
+        assert "remaining_minutes=8" in edit_kwargs["text"]
+
+    async def test_lobby_status_closing_when_deadline_passed(self) -> None:
+        callback = _callback(data=f"caravan:show_lobby:{_CARAVAN_ID}")
+        # Лобби уже закончилось (дедлайн в прошлом), но караван ещё в LOBBY-статусе
+        # — статус-планировщик его пока не закрыл. Показываем «закрывается».
+        caravan = _lobby_caravan(lobby_ends_at=_NOW - timedelta(seconds=1))
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby(caravan=caravan)
+        await _invoke_callback(
+            callback,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+            clock=FakeClock(_NOW),
+        )
+        edit_kwargs = callback.message.edit_text.await_args.kwargs
+        assert "caravans-lobby-status-closing" in edit_kwargs["text"]
+
+    async def test_roster_counts_caps_match_participants(self) -> None:
+        callback = _callback(data=f"caravan:show_lobby:{_CARAVAN_ID}")
+        # 1 caravaneer (лидер) + 1 defender + 2 raider — итого 4 участника.
+        defender = CaravanParticipant(
+            caravan_id=_CARAVAN_ID,
+            player_id=10,
+            role=CaravanRole.DEFENDER,
+            contribution=None,
+            is_leader=False,
+            joined_at=_NOW + timedelta(seconds=1),
+        )
+        raider1 = CaravanParticipant(
+            caravan_id=_CARAVAN_ID,
+            player_id=20,
+            role=CaravanRole.RAIDER,
+            contribution=None,
+            is_leader=False,
+            joined_at=_NOW + timedelta(seconds=2),
+        )
+        raider2 = CaravanParticipant(
+            caravan_id=_CARAVAN_ID,
+            player_id=21,
+            role=CaravanRole.RAIDER,
+            contribution=None,
+            is_leader=False,
+            joined_at=_NOW + timedelta(seconds=3),
+        )
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby(
+            extra_participants=(defender, raider1, raider2),
+        )
+        await _invoke_callback(
+            callback,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+        )
+        text = callback.message.edit_text.await_args.kwargs["text"]
+        # caravaneers_count=1, defenders_count=1, raiders_count=2; capacity-капы
+        # из дефолтного баланса: max_defenders=2, max_raiders=4 на одного caravaneer.
+        assert "caravaneers_count=1" in text
+        assert "total_contribution_cm=30" in text
+        assert "defenders_count=1" in text
+        assert "defenders_cap=2" in text
+        assert "raiders_count=2" in text
+        assert "raiders_cap=4" in text
+
+    async def test_invalid_callback_data_emits_generic_toast(self) -> None:
+        # Хотя action `show_lobby` валиден, общий handler ловит и битые `data`.
+        callback = _callback(data="caravan:show_lobby:not-an-int")
+        await _invoke_callback(callback)
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-generic-error" in toast_text
+        callback.message.edit_text.assert_not_called()
+
+    async def test_edit_text_failure_does_not_propagate(self) -> None:
+        callback = _callback(data=f"caravan:show_lobby:{_CARAVAN_ID}")
+        callback.message.edit_text.side_effect = TelegramAPIError(
+            method=MagicMock(),
+            message="message too old",
+        )
+        caravan_repo, parts_repo, clans, players = await _seed_show_lobby()
+        # Не должно бросить — handler глушит TelegramAPIError на edit-е.
+        await _invoke_callback(
+            callback,
+            caravans=caravan_repo,
+            caravan_participants=parts_repo,
+            clans=clans,
+            players=players,
+        )
         callback.answer.assert_awaited_once()

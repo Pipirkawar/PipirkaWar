@@ -863,6 +863,22 @@ caravans-created-announcement =
 caravans-button-show-lobby = Show lobby
 caravans-button-cancel = Cancel caravan
 
+# --- Callback `caravan:show_lobby:<id>` (Sprint 3.2-D, D.3c) ---
+
+caravans-lobby-state =
+    🐪 <b>{ $leader_nick }</b> is assembling a caravan to <b>{ $receiver_clan_name }</b>
+    Lobby { $lobby_status }.
+
+    Roster:
+    • Caravaneers: { NUMBER($caravaneers_count, useGrouping: 0) } (contribution: { NUMBER($total_contribution_cm, useGrouping: 0) } cm)
+    • Defenders: { NUMBER($defenders_count, useGrouping: 0) } / { NUMBER($defenders_cap, useGrouping: 0) }
+    • Raiders: { NUMBER($raiders_count, useGrouping: 0) } / { NUMBER($raiders_cap, useGrouping: 0) }
+caravans-lobby-status-open = closes in { NUMBER($remaining_minutes, useGrouping: 0) } min
+caravans-lobby-status-closing = closing
+caravans-button-join-defender = Join as defender
+caravans-button-join-raider = Join as raider
+caravans-button-leave = Leave
+
 # --- Callback `caravan:cancel:<id>` (Sprint 3.2-D, D.3) ---
 
 caravans-cancel-message = 🐪 Caravan cancelled by the leader.

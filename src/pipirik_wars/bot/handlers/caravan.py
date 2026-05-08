@@ -48,6 +48,8 @@ from pipirik_wars.domain.caravan import (
     CaravanNotFoundError,
     CaravanRequirementError,
     CaravanRoleConflictError,
+    ICaravanParticipantRepository,
+    ICaravanRepository,
     InvalidCaravanStateError,
 )
 from pipirik_wars.domain.clan import (
@@ -62,6 +64,7 @@ from pipirik_wars.domain.player.errors import (
     PlayerFrozenError,
     PlayerNotFoundError,
 )
+from pipirik_wars.domain.shared.ports import IClock
 from pipirik_wars.shared.errors import IntegrityError
 
 router = Router(name="caravan")
@@ -383,14 +386,26 @@ async def handle_caravan_callback(
     callback: CallbackQuery,
     tg_identity: TgIdentity | None,
     cancel_caravan: CancelCaravan,
+    caravans: ICaravanRepository,
+    caravan_participants: ICaravanParticipantRepository,
+    clans: IClanRepository,
+    players: IPlayerRepository,
+    get_profile: GetProfile,
+    balance: IBalanceConfig,
+    clock: IClock,
     bundle: IMessageBundle,
     locale: Locale | None = None,
 ) -> None:
     """Маршрутизатор инлайн-кнопок каравана (D.3).
 
-    Сейчас поддержан `cancel`. Остальные действия (`show_lobby` /
-    `join_defender` / `join_raider` / `leave`) будут добавлены в
-    последующих под-коммитах D.3 — пока для них защитный ack без
+    Поддержанные `action`-ы:
+
+    - `cancel` — отменить караван (только лидер, D.3a/b).
+    - `show_lobby` — обновить сообщение лобби (актуальное состояние
+      + клавиатура с join/leave/cancel; D.3c).
+
+    Остальные (`join_defender` / `join_raider` / `leave`) добавляются
+    в следующих под-коммитах D.3 — пока для них защитный ack без
     мутации, чтобы кнопка не «висела» с loading-индикатором.
     """
     if tg_identity is None or callback.data is None or callback.message is None:
@@ -423,9 +438,25 @@ async def handle_caravan_callback(
         )
         return
 
-    # show_lobby / join_defender / join_raider / leave — реализация
-    # в следующих под-коммитах D.3. Защитный ack, чтобы UI у клиента
-    # не «висел» loading-индикатором на нажатой кнопке.
+    if parsed.action == "show_lobby":
+        await _handle_show_lobby_callback(
+            callback=callback,
+            caravan_id=parsed.caravan_id,
+            caravans=caravans,
+            caravan_participants=caravan_participants,
+            clans=clans,
+            players=players,
+            get_profile=get_profile,
+            balance=balance,
+            clock=clock,
+            presenter=presenter,
+            locale=effective_locale,
+        )
+        return
+
+    # join_defender / join_raider / leave — реализация в следующих
+    # под-коммитах D.3. Защитный ack, чтобы UI у клиента не «висел»
+    # loading-индикатором на нажатой кнопке.
     await callback.answer()
 
 
@@ -492,6 +523,101 @@ async def _handle_cancel_callback(
         callback=callback,
         text=presenter.cancel_message_text(locale=locale),
     )
+
+
+async def _handle_show_lobby_callback(
+    *,
+    callback: CallbackQuery,
+    caravan_id: int,
+    caravans: ICaravanRepository,
+    caravan_participants: ICaravanParticipantRepository,
+    clans: IClanRepository,
+    players: IPlayerRepository,
+    get_profile: GetProfile,
+    balance: IBalanceConfig,
+    clock: IClock,
+    presenter: CaravanPresenter,
+    locale: Locale,
+) -> None:
+    """Логика callback-а «Показать лобби» (`caravan:show_lobby:<id>`).
+
+    Read-only: грузит караван + участников + лидера + клан-получатель,
+    рендерит актуальный текст лобби и клавиатуру с join/leave/cancel,
+    редактирует сообщение в чате (best-effort).
+
+    Если караван не найден / больше не в лобби — toast без edit-а.
+    """
+    caravan = await caravans.get_by_id(caravan_id=caravan_id)
+    if caravan is None:
+        await callback.answer(
+            presenter.callback_toast_caravan_not_found(locale=locale),
+            show_alert=False,
+        )
+        return
+    if not caravan.is_in_lobby:
+        await callback.answer(
+            presenter.callback_toast_invalid_state(locale=locale),
+            show_alert=False,
+        )
+        return
+
+    leader = await players.get_by_id(player_id=caravan.leader_player_id)
+    if leader is None:  # pragma: no cover — битая FK, защитный путь
+        _LOGGER.error(
+            "caravan.show_lobby: leader_player_id not found",
+            extra={"caravan_id": caravan_id, "leader_player_id": caravan.leader_player_id},
+        )
+        await callback.answer(
+            presenter.callback_toast_generic_error(locale=locale),
+            show_alert=False,
+        )
+        return
+    leader_view = await get_profile.execute(tg_id=leader.tg_id)
+    if leader_view is None:  # pragma: no cover — лидер только что был в БД
+        _LOGGER.error(
+            "caravan.show_lobby: leader profile vanished",
+            extra={"caravan_id": caravan_id, "leader_tg_id": leader.tg_id},
+        )
+        await callback.answer(
+            presenter.callback_toast_generic_error(locale=locale),
+            show_alert=False,
+        )
+        return
+
+    receiver_clan = await clans.get_by_id(caravan.receiver_clan_id)
+    if receiver_clan is None:  # pragma: no cover — битая FK
+        _LOGGER.error(
+            "caravan.show_lobby: receiver_clan vanished",
+            extra={"caravan_id": caravan_id, "receiver_clan_id": caravan.receiver_clan_id},
+        )
+        await callback.answer(
+            presenter.callback_toast_generic_error(locale=locale),
+            show_alert=False,
+        )
+        return
+
+    participants = await caravan_participants.list_by_caravan(caravan_id=caravan_id)
+    cfg = balance.get().caravans
+    now = clock.now()
+
+    text = presenter.lobby_state_text(
+        caravan=caravan,
+        participants=participants,
+        leader=leader_view.player,
+        leader_display_name=leader_view.display_name,
+        receiver_clan_name=receiver_clan.title.value,
+        cfg=cfg,
+        now=now,
+        locale=locale,
+    )
+    keyboard = presenter.lobby_keyboard(caravan_id=caravan_id, locale=locale)
+
+    await callback.answer()
+    msg = callback.message
+    if msg is None:
+        return
+    with contextlib.suppress(Exception):
+        await msg.edit_text(text=text, reply_markup=keyboard)  # type: ignore[union-attr]
 
 
 async def _replace_with_cancelled(*, callback: CallbackQuery, text: str) -> None:

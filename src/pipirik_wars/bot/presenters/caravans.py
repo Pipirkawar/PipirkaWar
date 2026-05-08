@@ -20,13 +20,17 @@ free-form helper (`caravan_callback_data` / `parse_caravan_callback_data`)
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Final, Literal
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
 from pipirik_wars.bot.presenters.profile import title_message_key
+from pipirik_wars.domain.balance import CaravansConfig
+from pipirik_wars.domain.caravan import Caravan, CaravanParticipant, CaravanRole
 from pipirik_wars.domain.player import DisplayName, Player, PlayerName, Title
 
 _CARAVAN_CALLBACK_PREFIX: Final[str] = "caravan"
@@ -302,6 +306,136 @@ class CaravanPresenter:
             ),
         )
         return InlineKeyboardMarkup(inline_keyboard=[[button]])
+
+    # --- Callback `caravan:show_lobby:<id>` (D.3c) ---
+
+    def lobby_state_text(
+        self,
+        *,
+        caravan: Caravan,
+        participants: tuple[CaravanParticipant, ...],
+        leader: Player,
+        leader_display_name: DisplayName,
+        receiver_clan_name: str,
+        cfg: CaravansConfig,
+        now: datetime,
+        locale: Locale,
+    ) -> str:
+        """Текст лобби-сообщения (заголовок + статус + ростер по ролям).
+
+        Считает оставшееся время лобби (`ceil((lobby_ends_at - now) / 60`),
+        минимум 1 мин если ещё не закрыто; иначе — `caravans-lobby-status-closing`).
+        Ростер — счётчики по ролям + capacity-капы (defenders/raiders), плюс
+        суммарный взнос всех `CARAVANEER`-ов (включая лидера).
+        """
+        leader_nick = self._render_full_nick(
+            title=leader.title,
+            display_name=leader_display_name,
+            name=leader.name,
+            locale=locale,
+        )
+        caravaneers = [p for p in participants if p.role is CaravanRole.CARAVANEER]
+        defenders = [p for p in participants if p.role is CaravanRole.DEFENDER]
+        raiders = [p for p in participants if p.role is CaravanRole.RAIDER]
+        total_contribution_cm = sum(
+            (p.contribution.cm for p in caravaneers if p.contribution is not None),
+            start=0,
+        )
+        defenders_cap = cfg.max_defenders_per_caravaneer * len(caravaneers)
+        raiders_cap = cfg.max_raiders_per_caravaneer * len(caravaneers)
+        status_text = self._lobby_status_text(
+            caravan=caravan,
+            now=now,
+            locale=locale,
+        )
+        return self._bundle.format(
+            MessageKey("caravans-lobby-state"),
+            locale=locale,
+            leader_nick=leader_nick,
+            receiver_clan_name=receiver_clan_name,
+            lobby_status=status_text,
+            caravaneers_count=len(caravaneers),
+            total_contribution_cm=total_contribution_cm,
+            defenders_count=len(defenders),
+            defenders_cap=defenders_cap,
+            raiders_count=len(raiders),
+            raiders_cap=raiders_cap,
+        )
+
+    def lobby_keyboard(
+        self,
+        *,
+        caravan_id: int,
+        locale: Locale,
+    ) -> InlineKeyboardMarkup:
+        """Inline-клавиатура лобби: четыре кнопки — `join_defender`,
+        `join_raider`, `leave`, `cancel`.
+
+        Кнопки видны всем (валидацию роли/лидерства делают use-case-ы);
+        для CARAVANEER-роли отдельной кнопки нет — там нужен `contribution`,
+        поэтому используется команда `/caravan_join` (D.3f).
+
+        Раскладка: 2×2 (две кнопки в строке, две строки).
+        """
+        join_defender = InlineKeyboardButton(
+            text=self._bundle.format(
+                MessageKey("caravans-button-join-defender"),
+                locale=locale,
+            ),
+            callback_data=caravan_callback_data(
+                action="join_defender",
+                caravan_id=caravan_id,
+            ),
+        )
+        join_raider = InlineKeyboardButton(
+            text=self._bundle.format(
+                MessageKey("caravans-button-join-raider"),
+                locale=locale,
+            ),
+            callback_data=caravan_callback_data(
+                action="join_raider",
+                caravan_id=caravan_id,
+            ),
+        )
+        leave = InlineKeyboardButton(
+            text=self._bundle.format(MessageKey("caravans-button-leave"), locale=locale),
+            callback_data=caravan_callback_data(
+                action="leave",
+                caravan_id=caravan_id,
+            ),
+        )
+        cancel = InlineKeyboardButton(
+            text=self._bundle.format(MessageKey("caravans-button-cancel"), locale=locale),
+            callback_data=caravan_callback_data(
+                action="cancel",
+                caravan_id=caravan_id,
+            ),
+        )
+        return InlineKeyboardMarkup(
+            inline_keyboard=[[join_defender, join_raider], [leave, cancel]],
+        )
+
+    def _lobby_status_text(
+        self,
+        *,
+        caravan: Caravan,
+        now: datetime,
+        locale: Locale,
+    ) -> str:
+        """Подстрока статуса лобби: «закроется через N мин» / «закрывается»."""
+        remaining = caravan.lobby_ends_at - now
+        remaining_seconds = remaining.total_seconds()
+        if remaining_seconds <= 0:
+            return self._bundle.format(
+                MessageKey("caravans-lobby-status-closing"),
+                locale=locale,
+            )
+        remaining_minutes = max(1, math.ceil(remaining_seconds / 60))
+        return self._bundle.format(
+            MessageKey("caravans-lobby-status-open"),
+            locale=locale,
+            remaining_minutes=remaining_minutes,
+        )
 
     # --- Callback `caravan:cancel:<id>` (D.3) ---
 

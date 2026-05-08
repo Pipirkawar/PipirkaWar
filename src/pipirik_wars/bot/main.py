@@ -1572,14 +1572,19 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["broadcast_task_spawner"] = container.broadcast_task_spawner
     # Спринт 2.5-D.6 — `/admin_setup_totp` (self-service выдача TOTP-секрета).
     dispatcher["setup_admin_totp"] = container.setup_admin_totp
-    # Спринт 3.2-D — bot-handler `/caravan` (личка-only): use-case
-    # `CreateCaravan` + репозитории членства/клана для резолва
-    # `sender_chat_id` из membership лидера. D.3 добавил callback-
-    # handler `caravan:cancel:<id>` (use-case `CancelCaravan`);
-    # `join_*` / `leave` / `show_lobby` подвяжутся в следующих
-    # под-коммитах D.3.
+    # Спринт 3.2-D — bot-handler `/caravan` (личка-only) + inline-кнопки
+    # лобби. D.3a/b — `caravan:cancel:<id>` (use-case `CancelCaravan`).
+    # D.3c — `caravan:show_lobby:<id>` (read-side: грузит караван +
+    # участников + лидера + клан-получатель, перерисовывает сообщение
+    # с join/leave/cancel-клавиатурой). `join_*` / `leave` use-case-ы
+    # подключатся к dispatcher по мере добавления callback-веток в
+    # последующих под-коммитах D.3 (D.3d/e/f).
     dispatcher["create_caravan"] = container.create_caravan
     dispatcher["cancel_caravan"] = container.cancel_caravan
+    dispatcher["join_caravan_lobby"] = container.join_caravan_lobby
+    dispatcher["leave_caravan_lobby"] = container.leave_caravan_lobby
+    dispatcher["caravans"] = container.caravans
+    dispatcher["caravan_participants"] = container.caravan_participants
     dispatcher["clan_members"] = container.clan_members
     return dispatcher
 

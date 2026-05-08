@@ -867,6 +867,22 @@ caravans-created-announcement =
 caravans-button-show-lobby = Показать лобби
 caravans-button-cancel = Отменить караван
 
+# --- Callback `caravan:show_lobby:<id>` (Спринт 3.2-D, D.3c) ---
+
+caravans-lobby-state =
+    🐪 <b>{ $leader_nick }</b> собирает караван к <b>{ $receiver_clan_name }</b>
+    Лобби { $lobby_status }.
+
+    Состав:
+    • Караванщики: { NUMBER($caravaneers_count, useGrouping: 0) } (взнос: { NUMBER($total_contribution_cm, useGrouping: 0) } см)
+    • Защитники: { NUMBER($defenders_count, useGrouping: 0) } / { NUMBER($defenders_cap, useGrouping: 0) }
+    • Рейдеры: { NUMBER($raiders_count, useGrouping: 0) } / { NUMBER($raiders_cap, useGrouping: 0) }
+caravans-lobby-status-open = закроется через { NUMBER($remaining_minutes, useGrouping: 0) } мин
+caravans-lobby-status-closing = закрывается
+caravans-button-join-defender = Вступить как защитник
+caravans-button-join-raider = Вступить как рейдер
+caravans-button-leave = Покинуть
+
 # --- Callback `caravan:cancel:<id>` (Спринт 3.2-D, D.3) ---
 
 caravans-cancel-message = 🐪 Караван отменён лидером.
