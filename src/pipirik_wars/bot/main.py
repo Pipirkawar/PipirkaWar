@@ -60,6 +60,12 @@ from pipirik_wars.application.admin import (
 )
 from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.balance import ReloadBalance
+from pipirik_wars.application.caravans import (
+    CloseCaravanLobby,
+    CreateCaravan,
+    JoinCaravanLobby,
+    LeaveCaravanLobby,
+)
 from pipirik_wars.application.clan import (
     FreezeClan,
     JoinClan,
@@ -159,6 +165,10 @@ from pipirik_wars.domain.admin import (
 )
 from pipirik_wars.domain.anticheat import IAnticheatAdminAlerter, IAnticheatRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
+from pipirik_wars.domain.caravan import (
+    ICaravanParticipantRepository,
+    ICaravanRepository,
+)
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.daily_head import (
     DailyHeadService,
@@ -205,6 +215,8 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyActivityLockRepository,
     SqlAlchemyAdminRepository,
     SqlAlchemyAnticheatRepository,
+    SqlAlchemyCaravanParticipantRepository,
+    SqlAlchemyCaravanRepository,
     SqlAlchemyClanMassDuelHistoryQuery,
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
@@ -354,6 +366,14 @@ class Container:
     finish_mountain_run: FinishMountainRun
     start_dungeon_run: StartDungeonRun
     finish_dungeon_run: FinishDungeonRun
+    # Караваны (Спринт 3.2, ГДД §9). 3.2-B — use-case-ы + persistence;
+    # bot-handler-ы /caravan_create, /caravan_join, /caravan_leave — 3.2-D.
+    caravans: ICaravanRepository
+    caravan_participants: ICaravanParticipantRepository
+    create_caravan: CreateCaravan
+    join_caravan_lobby: JoinCaravanLobby
+    leave_caravan_lobby: LeaveCaravanLobby
+    close_caravan_lobby: CloseCaravanLobby
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
@@ -495,6 +515,12 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     forest_runs = SqlAlchemyForestRunRepository(uow=uow, balance=balance)
     mountain_runs = SqlAlchemyMountainRunRepository(uow=uow, balance=balance)
     dungeon_runs = SqlAlchemyDungeonRunRepository(uow=uow, balance=balance)
+    # Спринт 3.2-B: караван (ГДД §9). Bot-handler-ы /caravan_create,
+    # /caravan_join, /caravan_leave — 3.2-D. До тех пор use-case-ы
+    # доступны через Container; APScheduler-job
+    # `caravan_lobby_close` ходит через `close_caravan_lobby_factory`.
+    caravans = SqlAlchemyCaravanRepository(uow=uow)
+    caravan_participants = SqlAlchemyCaravanParticipantRepository(uow=uow)
     oracle_history = SqlAlchemyOracleHistoryRepository(uow=uow)
     duels = SqlAlchemyDuelRepository(uow=uow)
     mass_duels = SqlAlchemyMassDuelRepository(uow=uow)
@@ -704,6 +730,9 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         mountain_notifier=mountain_notifier,
         dungeon_finish_factory=lambda: finish_dungeon_run,
         dungeon_notifier=dungeon_notifier,
+        # Спринт 3.2-B: late-bound фабрика `caravan_lobby_close`.
+        # `close_caravan_lobby` создаётся ниже (после delayed_jobs).
+        caravan_lobby_close_factory=lambda: close_caravan_lobby,
         clans=clans,
     )
     start_forest_run = StartForestRun(
@@ -767,6 +796,51 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit=audit,
         clock=clock,
         scheduler=delayed_jobs,
+    )
+    # Спринт 3.2-B: караван use-case-ы (ГДД §9). `close_caravan_lobby`
+    # вызывается двумя путями: APScheduler-job-ом из `delayed_jobs`
+    # (через `caravan_lobby_close_factory`-замыкание) и bot-handler-ом
+    # `/caravan_start` (3.2-D). Use-case идемпотентен — оба пути
+    # безопасны при race-condition (см. `was_already_closed=True`).
+    create_caravan = CreateCaravan(
+        uow=uow,
+        clans=clans,
+        clan_members=clan_members,
+        players=players,
+        caravans=caravans,
+        caravan_participants=caravan_participants,
+        locks=activity_lock_service,
+        balance=balance,
+        random=RealRandom(),
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
+    )
+    join_caravan_lobby = JoinCaravanLobby(
+        uow=uow,
+        caravans=caravans,
+        caravan_participants=caravan_participants,
+        clan_members=clan_members,
+        players=players,
+        locks=activity_lock_service,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    leave_caravan_lobby = LeaveCaravanLobby(
+        uow=uow,
+        caravans=caravans,
+        caravan_participants=caravan_participants,
+        players=players,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+    )
+    close_caravan_lobby = CloseCaravanLobby(
+        uow=uow,
+        caravans=caravans,
+        audit=audit,
+        clock=clock,
     )
     upgrade_thickness = UpgradeThickness(
         uow=uow,
@@ -1278,6 +1352,12 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         finish_mountain_run=finish_mountain_run,
         start_dungeon_run=start_dungeon_run,
         finish_dungeon_run=finish_dungeon_run,
+        caravans=caravans,
+        caravan_participants=caravan_participants,
+        create_caravan=create_caravan,
+        join_caravan_lobby=join_caravan_lobby,
+        leave_caravan_lobby=leave_caravan_lobby,
+        close_caravan_lobby=close_caravan_lobby,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,
