@@ -23,6 +23,41 @@
 
 ---
 
+## 2026-05-08 — Спринт 3.2-D: bot-handlers `/caravan` + лобби UI + презентеры + локали + APScheduler factory-wiring (закрытие Спринта 3.2)
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** Спринт 3.2 ([`current_tasks.md`](current_tasks.md) «Декомпозиция Спринта 3.2 на фичевые PR-ы»), ПД §6.3.2 «Спринт 3.2 — Караваны (полная механика)», ГДД §9 «Караваны». **Финальный PR Спринта 3.2** — приземляет Telegram-сторону на use-case-ы 3.2-A/B/C: bot-handler-ы, lobby-UI, презентеры, локали, APScheduler-нотификаторы.
+
+Что сделано:
+
+- **D.1 — Use-case `CancelCaravan`** (`application/caravans/cancel_caravan.py`): только лидер может отменить караван из `LOBBY`-статуса; возврат всех контрибьюций (лидер + caravaneers) на длину игроков; снятие activity-lock-ов всех участников; отмена `caravan_lobby_close` + `caravan_battle_finish` APScheduler-job-ов; `Caravan.mark_cancelled(cancelled_at)`; идемпотентен (повторный вызов на `CANCELLED` — no-op с `was_already_cancelled=True`); audit `CARAVAN_CANCELLED` с детерминистичным idempotency-key (`caravan_cancelled:{caravan_id}`). Использует уже зарезервированный в 3.2-C `AuditAction.CARAVAN_CANCELLED`.
+- **D.2 — Bot-handler `/caravan`** (`bot/handlers/caravan.py`): личка-only (как `/forest`/`/mountains`/`/dungeon`), gate `chat_kind == PRIVATE`, gate lvl ≥ 7 + ≥ 20 см total через `CreateCaravan` use-case (он сам проверяет уровень/длину после контрибьюта). Аргументы: `<receiver_chat_id> <contribution_cm>`. По успеху — приватное подтверждение лидеру + пост в чат-отправитель (`sender_clan.chat_id`) с inline-кнопкой «Показать лобби».
+- **D.3 — Lobby-UI** (inline-кнопки): закрыто 6 коммитами `D.3a/b/c/d/e/f` — cancel-button + DI, show_lobby callback + lobby_state presenter, join_defender/join_raider callbacks, leave callback, `/caravan_join` команда. Live-обновление через `edit_message_text` при `JoinedCaravanLobby` / `LeftCaravanLobby`. Disabled-state кнопок зависит от двойного членства (5 кейсов §9.4).
+- **D.4 — `CaravanPresenter`** (`bot/presenters/caravans.py`): рендер lobby-state (роли, capacity, контрибьюции, оставшееся время) — был в D.3; добавлены battle-state (`battle_started_text`) и finished-state (`battle_finished_delivered_text` + `battle_finished_raided_text` + helper `_count_survivors`). Локализация через Fluent.
+- **D.5 — Локали** (`locales/{ru,en}.ftl`): добавлены `caravans-battle-started`, `caravans-battle-finished-delivered`, `caravans-battle-finished-raided` (ключи + `*-leader-line`/`*-clans-line`/`*-time-line`/`*-no-deliveries-line`/`*-rewards-grant-line`/etc.). RU+EN parity покрыта (`tests/unit/bot/test_locales_parity.py`).
+- **D.6 — APScheduler factory-wiring + Telegram-нотификаторы:** введены application-порты `ICaravanLobbyCloseNotifier` + `ICaravanBattleFinishNotifier` (`application/caravans/notifier.py`); реализованы `TelegramCaravanLobbyCloseNotifier` + `TelegramCaravanBattleFinishNotifier` (`bot/notifications/caravans.py`) — резолвят клан / лидера / Атамана через репозитории, локаль через `IPlayerLocaleResolver`, рендерят текст через `CaravanPresenter`, шлют сообщения в чаты обоих кланов через `aiogram.Bot.send_message` (best-effort, обёрнутые в try/except — APScheduler-job уже зафиксировал доменный side-effect, потеря TG-сообщения не должна откатывать транзакцию). APScheduler-callback-и `_run_caravan_lobby_close_job` и `_run_caravan_battle_finish_job` (`infrastructure/scheduler/aps.py`) после успешного `execute(...)` use-case-а вызывают `notifier.notify(result)`. Идемпотентны через флаги `was_already_closed` / `was_already_finished` use-case-результата. `bot/main.py::build_container` инстанциирует оба нотификатора при `bot is not None` и пробрасывает их в `APSchedulerDelayedJobScheduler`. Это закрывает блокер из 3.2-C (APScheduler не публиковал пост в чат при finish-battle).
+- **D.7 — DI `CancelCaravan`:** уже подключён в `Container` в коммите D.3a/b (`cdc3a7d`).
+- **D.8 — Юнит-тесты:**
+  - `tests/unit/application/caravans/test_cancel_caravan.py` — happy-path лидер отменяет; идемпотентность повторного вызова на `CANCELLED`; error-cases (не лидер, не в `LOBBY`, караван не найден).
+  - `tests/unit/bot/handlers/test_caravan.py` — gate lvl ≥ 7, gate ≥ 20 см, личка-only, успешный флоу через `FakeBot`, мэппинг доменных ошибок в локализованные сообщения.
+  - `tests/unit/bot/notifications/test_caravans.py` (709 строк) — обширное покрытие обоих нотификаторов: idempotency, happy-path, локаль-резолюция (default + per-player override), edge-cases (caravan_id is None, missing clan, missing leader), swallow `TelegramAPIError` / `RuntimeError`, fallback на default-логгер, marker-bundle для проверки правильных i18n-ключей.
+- **D.10 — Финальный док-коммит этого PR-а** (этот) — обновил `history.md` (запись 3.2-D, закрытие Спринта 3.2) + переразметил `current_tasks.md` под старт **Спринта 3.3 «Рейд-боссы»** ([`development_plan.md`](development_plan.md) §6.3.3).
+
+Результат / артефакты:
+- 11 файлов изменено (excl. docs): `application/caravans/__init__.py` (export `ICaravanLobbyCloseNotifier`/`ICaravanBattleFinishNotifier`), новый порт `application/caravans/notifier.py`, `bot/notifications/__init__.py` (export Telegram-нотификаторов), новый `bot/notifications/caravans.py` (364 строк), `bot/presenters/caravans.py` (873 строк, +battle-/finished-методы), `bot/main.py` (DI-wiring), `infrastructure/scheduler/aps.py` (callback-и вызывают `notifier.notify()`), `locales/{ru,en}.ftl` (новые ключи), новый тест `tests/unit/bot/notifications/test_caravans.py`.
+- `make ci` локально: ruff ✅, mypy --strict 0 issues ✅, import-linter 3 contracts kept ✅, **pytest 4065 passed / 1 skipped, coverage 95.63%** (gate 80%).
+
+Заметки / решения:
+- **`CaravanLobbyCloseNotifier` и `CaravanBattleFinishNotifier` — это application-port-ы, реализация в `bot/notifications/`.** Это единственное чистое место — application-слой определяет «что должно произойти после закрытия лобби / финиша боя в нотификации» (через типизированный port-DTO), а bot-слой умеет отрисовать TG-сообщение через `CaravanPresenter` и отправить через `aiogram.Bot`. APScheduler (infrastructure-слой) знает только об application-порте и вызывает его — не знает ничего про aiogram. Это симметрично `IForestRunCompletionNotifier` / `IMountainRunCompletionNotifier` / `IDungeonRunCompletionNotifier` (PvE).
+- **Best-effort TG-publish.** В callback-ах APScheduler-а `notifier.notify(result)` обёрнут в try/except (логируем, не пропагируем). Причина: domain-side-effects уже закоммичены в БД к моменту вызова нотификатора (use-case `execute(...)` уже выполнился успешно). Если падает aiogram (timeout, API-error, чат удалён) — это lost-message для пользователя, но не должно откатывать доменную транзакцию (длина выдана, audit записан, караван `FINISHED`).
+- **Идемпотентность нотификации.** Use-case-ы `CloseCaravanLobby` и `FinishCaravanBattle` возвращают `was_already_*`-флаги. Нотификатор проверяет флаг — если `True` (повторный вызов), не шлёт сообщение. Это закрывает кейс retry-ев APScheduler-а (job упал между commit-ом и notify-ем — на retry use-case вернёт `was_already_closed=True`, и нотификатор скипнет публикацию во избежание дабл-постов).
+- **Подсчёт survivors через helper в презентере.** `_count_survivors(participants_outcomes, role)` — приватный helper в `CaravanPresenter`, агрегирует по `role` через `is_alive`-флаг. Вынесен из render-методов, чтобы не дублировать логику между `battle_finished_delivered_text` и `battle_finished_raided_text`.
+- **Cyclomatic-complexity refactor нотификаторов.** В первой реализации `notify(...)` имел 7 early-returns (caravan_id is None, was_already_*, missing clan, missing leader, и т.п.) — превышал лимит ruff PLR0911 (>6). Извлечена приватная prep-функция `_prepare(...)` в базовом классе `_CaravanNotifierBase`, которая возвращает either prepared-DTO либо `None` (skip). Главный `notify(...)` теперь имеет 2 return-ветки — успешная публикация и skip.
+- **`Clan.title.value`, не `.name`.** В первой реализации использовали `clan.name.value` — но `Clan` entity у нас имеет `title: ClanTitle` (не `name`). Поправлено по образцу `bot/handlers/caravan.py`. mypy-strict отлавливает такие баги, важно прогонять локально перед пушем.
+
+---
+
 ## 2026-05-08 — Спринт 3.2-C: боевая механика + награды + Атаман-роль (Караваны, resolve битвы)
 
 **Автор:** Devin (агент)
