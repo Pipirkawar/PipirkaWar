@@ -791,3 +791,36 @@ class FinishCaravanBattleInput(_StrictBase):
     """
 
     caravan_id: int = Field(gt=0, description="caravans.id")
+
+
+class CancelCaravanInput(_StrictBase):
+    """Отмена каравана лидером из `LOBBY` (Спринт 3.2-D, ГДД §9.3).
+
+    Лидер каравана (создатель, `caravan.leader_player_id`) жмёт
+    «Отменить караван» в лобби. Use-case `CancelCaravan`:
+
+    - Резолвит караван (`status == LOBBY`); из `IN_BATTLE`/`FINISHED`
+      бросает `InvalidCaravanStateError`. Из уже-`CANCELLED` —
+      идемпотентный no-op (`was_already_cancelled=True`).
+    - Сверяет, что `tg_id` == игрок-лидер каравана; иначе
+      `CaravanRoleConflictError(attempted_role="cancel")`.
+    - Переводит караван `LOBBY → CANCELLED` (`Caravan.mark_cancelled`).
+    - Снимает `activity_lock(player, CARAVAN)` для всех участников
+      (включая лидера). NO-OP, если лок уже снят.
+    - Отзывает запланированные APScheduler-job-ы:
+      `cancel_caravan_lobby_close(caravan_id)` (battle-finish-job ещё
+      не был запланирован — его ставит `CloseCaravanLobby` при
+      переходе `LOBBY → IN_BATTLE`).
+    - Audit `CARAVAN_CANCELLED` с idempotency-key
+      `caravan_cancelled:{caravan_id}`.
+
+    Длины игроков НЕ восстанавливаются — на этапе лобби они и не
+    списывались (списание только в `FinishCaravanBattle`,
+    Спринт 3.2-C).
+    """
+
+    caravan_id: int = Field(gt=0, description="caravans.id")
+    tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id игрока-инициатора отмены (должен быть лидером)",
+    )
