@@ -10,6 +10,11 @@
 Импорт-контракт `bot → application` соблюдается.
 """
 
+from pipirik_wars.bot.notifications.bosses import (
+    TelegramBossFightFinishNotifier,
+    TelegramBossLobbyCloseNotifier,
+    TelegramBossRoundTickNotifier,
+)
 from pipirik_wars.bot.notifications.caravans import (
     TelegramCaravanBattleFinishNotifier,
     TelegramCaravanLobbyCloseNotifier,
@@ -22,6 +27,9 @@ from pipirik_wars.bot.notifications.weekly_referral_summary import (
 )
 
 __all__ = [
+    "TelegramBossFightFinishNotifier",
+    "TelegramBossLobbyCloseNotifier",
+    "TelegramBossRoundTickNotifier",
     "TelegramCaravanBattleFinishNotifier",
     "TelegramCaravanLobbyCloseNotifier",
     "TelegramDungeonFinishNotifier",

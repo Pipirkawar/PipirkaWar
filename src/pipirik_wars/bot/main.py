@@ -61,8 +61,12 @@ from pipirik_wars.application.admin import (
 from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.bosses import (
+    CancelBossFight,
     CloseBossLobby,
     FinishBossFight,
+    IBossFightFinishNotifier,
+    IBossLobbyCloseNotifier,
+    IBossRoundTickNotifier,
     JoinBossLobby,
     LeaveBossLobby,
     RunBossRound,
@@ -160,6 +164,9 @@ from pipirik_wars.application.top import (
 from pipirik_wars.bot.handlers import register_routers
 from pipirik_wars.bot.middlewares import AdminGuard, register_middlewares
 from pipirik_wars.bot.notifications import (
+    TelegramBossFightFinishNotifier,
+    TelegramBossLobbyCloseNotifier,
+    TelegramBossRoundTickNotifier,
     TelegramCaravanBattleFinishNotifier,
     TelegramCaravanLobbyCloseNotifier,
     TelegramDungeonFinishNotifier,
@@ -404,6 +411,7 @@ class Container:
     summon_boss: SummonBoss
     join_boss_lobby: JoinBossLobby
     leave_boss_lobby: LeaveBossLobby
+    cancel_boss_fight: CancelBossFight
     close_boss_lobby: CloseBossLobby
     run_boss_round: RunBossRound
     finish_boss_fight: FinishBossFight
@@ -716,6 +724,9 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     dungeon_notifier: IDungeonFinishNotifier | None = None
     caravan_lobby_close_notifier: ICaravanLobbyCloseNotifier | None = None
     caravan_battle_finish_notifier: ICaravanBattleFinishNotifier | None = None
+    boss_lobby_close_notifier: IBossLobbyCloseNotifier | None = None
+    boss_round_tick_notifier: IBossRoundTickNotifier | None = None
+    boss_fight_finish_notifier: IBossFightFinishNotifier | None = None
     if bot is not None:
         forest_notifier = TelegramForestFinishNotifier(
             bot=bot,
@@ -770,6 +781,34 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
             participants=caravan_participants,
             locale_resolver=player_locale_resolver,
         )
+        # Спринт 3.3-D D.7+D.8: boss-нотификаторы старта боя / round-tick /
+        # финиша. Шлются в личный чат каждого рейдера (включая саммонера).
+        # Доставка best-effort, локаль из `users.locale_override` через
+        # `player_locale_resolver` с фолбэком на EN.
+        boss_lobby_close_notifier = TelegramBossLobbyCloseNotifier(
+            bot=bot,
+            bundle=bundle,
+            balance=balance,
+            players=players,
+            participants=boss_participants,
+            locale_resolver=player_locale_resolver,
+        )
+        boss_round_tick_notifier = TelegramBossRoundTickNotifier(
+            bot=bot,
+            bundle=bundle,
+            balance=balance,
+            players=players,
+            participants=boss_participants,
+            locale_resolver=player_locale_resolver,
+        )
+        boss_fight_finish_notifier = TelegramBossFightFinishNotifier(
+            bot=bot,
+            bundle=bundle,
+            balance=balance,
+            players=players,
+            participants=boss_participants,
+            locale_resolver=player_locale_resolver,
+        )
     # Late-bound фабрики для PvP-lobby job-ов: scheduler нужен раньше,
     # чем `escalate_chat_to_global` / `expire_lobby_entry`, поэтому передаём
     # лямбды-замыкания, которые резолвятся при срабатывании job-а — после
@@ -810,9 +849,11 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         boss_lobby_close_factory=lambda: close_boss_lobby,
         boss_round_tick_factory=lambda: run_boss_round,
         boss_fight_finish_factory=lambda: finish_boss_fight,
-        # Спринт 3.3-D D.7: boss-нотификаторы (best-effort, могут быть
-        # `None` в unit-тестах APScheduler-а или когда `bot is None`).
-        # Реальные `Telegram*Notifier`-имплементации создаются ниже.
+        # Спринт 3.3-D D.7+D.8: boss-нотификаторы (best-effort, могут
+        # быть `None` в unit-тестах APScheduler-а или когда `bot is None`).
+        boss_lobby_close_notifier=boss_lobby_close_notifier,
+        boss_round_tick_notifier=boss_round_tick_notifier,
+        boss_fight_finish_notifier=boss_fight_finish_notifier,
         clans=clans,
     )
     start_forest_run = StartForestRun(
@@ -1024,6 +1065,18 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         scheduler=delayed_jobs,
         balance=balance.get().bosses,
         random_factory=SeededRandom,
+    )
+    # Спринт 3.3-D D.1: саммонер отменяет рейд из лобби. Идемпотентен
+    # на повторный вызов в `CANCELLED`-статусе.
+    cancel_boss_fight = CancelBossFight(
+        uow=uow,
+        boss_fights=boss_fights,
+        boss_participants=boss_participants,
+        players=players,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
     )
     upgrade_thickness = UpgradeThickness(
         uow=uow,
@@ -1547,6 +1600,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         summon_boss=summon_boss,
         join_boss_lobby=join_boss_lobby,
         leave_boss_lobby=leave_boss_lobby,
+        cancel_boss_fight=cancel_boss_fight,
         close_boss_lobby=close_boss_lobby,
         run_boss_round=run_boss_round,
         finish_boss_fight=finish_boss_fight,
@@ -1741,6 +1795,17 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["caravans"] = container.caravans
     dispatcher["caravan_participants"] = container.caravan_participants
     dispatcher["clan_members"] = container.clan_members
+    # Спринт 3.3-D — bot-handler `/boss` (личка-only) + inline-кнопки
+    # лобби. Команда `/boss` запускает `SummonBoss`. Callback-роутер
+    # `boss:show_lobby|join|leave|cancel:<id>` делает read-side render
+    # лобби (`boss_fights` + `boss_participants` + `players`) и зовёт
+    # соответствующий use-case.
+    dispatcher["summon_boss"] = container.summon_boss
+    dispatcher["join_boss_lobby"] = container.join_boss_lobby
+    dispatcher["leave_boss_lobby"] = container.leave_boss_lobby
+    dispatcher["cancel_boss_fight"] = container.cancel_boss_fight
+    dispatcher["boss_fights"] = container.boss_fights
+    dispatcher["boss_participants"] = container.boss_participants
     return dispatcher
 
 
