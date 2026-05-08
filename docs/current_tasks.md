@@ -17,13 +17,13 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный PR — **3.2-B** (этот PR; `<коммит_слияния>`) — use-case-ы `CreateCaravan` / `JoinCaravanLobby` / `LeaveCaravanLobby` / `CloseCaravanLobby` (`application/caravans/`), миграция `0019_caravans` + ORM + SQLAlchemy-репо (`infrastructure/db/models/caravan.py`, `infrastructure/db/repositories/{caravan,caravan_participant}.py`), APScheduler `schedule_caravan_lobby_close` / `cancel_caravan_lobby_close` (`infrastructure/scheduler/aps.py` + `tests/fakes/delayed_job_scheduler.py`), 4 новых `AuditAction.CARAVAN_*` (`domain/shared/ports/audit.py`), 4 новых input-DTO (`application/dto/inputs.py`), DI-wiring в `bot/main.py`. Полное unit + integration-покрытие (28 integration + ~ 67 unit-тестов, 95.93% coverage).
+**На `main`:** последний смерженный PR — **3.2-B** (PR #109, `e27968b`) — use-case-ы `CreateCaravan` / `JoinCaravanLobby` / `LeaveCaravanLobby` / `CloseCaravanLobby` (`application/caravans/`), миграция `0019_caravans` + ORM + SQLAlchemy-репо (`infrastructure/db/models/caravan.py`, `infrastructure/db/repositories/{caravan,caravan_participant}.py`), APScheduler `schedule_caravan_lobby_close` / `cancel_caravan_lobby_close` (`infrastructure/scheduler/aps.py` + `tests/fakes/delayed_job_scheduler.py`), 4 новых `AuditAction.CARAVAN_*` (`domain/shared/ports/audit.py`), 4 новых input-DTO (`application/dto/inputs.py`), DI-wiring в `bot/main.py`. Полное unit + integration-покрытие (28 integration + ~ 67 unit-тестов, 95.93% coverage).
 
 Перед ним: **3.2-A** (PR #108, `fe959c6`) — каркас доменов «Караван». Перед ним: **3.1-E** (PR #107, `5c1b26f`) — bot-handlers `/mountains` + `/dungeon` (закрытие Спринта 3.1). Перед ним: **catch-up docs 3.1-D** (PR #106, `76af44a`). Перед ним: **3.1-D** (PR #105, `2208ae6`). Перед ним: **3.1-C** (PR #103). Перед ним: **3.1-B** (PR #101). Перед ним: **3.1-A** (PR #99). Перед ним: PR-ы Спринта 2.5 (#79–#97).
 
-**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов: 3.1-A → 3.1-E + catch-up #106). Идёт **Спринт 3.2 «Караваны (полная механика)»** — каркас доменов закрыт в 3.2-A, движущаяся часть (use-cases + persistence + миграция + APScheduler-job на закрытие лобби) — в этом 3.2-B PR-е. Боевая механика + награды + Атаман-роль — в **3.2-C**, bot-handlers + локали + UI — в **3.2-D**.
+**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов: 3.1-A → 3.1-E + catch-up #106). Идёт **Спринт 3.2 «Караваны (полная механика)»** — каркас доменов закрыт в 3.2-A, use-cases + persistence + миграция + APScheduler-job на закрытие лобби — в 3.2-B (PR #109, мердж). Боевая механика + награды + Атаман-роль — в **этом 3.2-C PR-е**, bot-handlers + локали + UI — в **3.2-D**.
 
-**Активная feature-ветка:** ещё не создана. После мерджа этого 3.2-B PR-а в `main` следующий агент создаёт `devin/<unix_ts>-sprint-3-2-C-caravan-battle-resolution` от свежего `main` и стартует **Спринт 3.2-C** (use-cases `StartCaravanBattle` + `FinishCaravanBattle` + доменный сервис `caravan_battle_resolution` + награды + Атаман-роль).
+**Активная feature-ветка:** `devin/1778223350-sprint-3-2-C-caravan-battle-resolution` — стартовала от `main = e27968b` (мердж 3.2-B).
 
 ---
 
@@ -68,11 +68,11 @@
 
 > Этот PR закрывает боевую механику каравана: resolve битвы по `random_seed`, начисление наград (lengths + clan +1 см), Атаман-роль, идемпотентность через `IIdempotencyService`. Bot-handlers и UI — в 3.2-D.
 
-- [ ] Дождаться мерджа `main = <коммит-слияния-3.2-B>` (этот PR).
-- [ ] `git fetch && git checkout main && git pull`.
-- [ ] `make ci` локально на свежем `main`: ✅ зелёный.
-- [ ] Создать ветку `devin/<unix_ts>-sprint-3-2-C-caravan-battle-resolution` от `main`.
-- [ ] **C.0 — Обновить `current_tasks.md`** под старт Спринта 3.2-C (первый коммит).
+- [x] Дождаться мерджа `main = e27968b` (3.2-B, PR #109).
+- [x] `git fetch && git checkout main && git pull`.
+- [x] `make ci` локально на свежем `main`: ✅ зелёный (3889 passed / 1 skipped, coverage 95.93%).
+- [x] Создать ветку `devin/1778223350-sprint-3-2-C-caravan-battle-resolution` от `main`.
+- [x] **C.0 — Обновить `current_tasks.md`** под старт Спринта 3.2-C (этот коммит).
 - [ ] **C.1 — Расширить `domain/shared/ports/audit.py`:** добавить `AuditAction.CARAVAN_BATTLE_FINISHED`, `CARAVAN_REWARDS_GRANTED`, `CARAVAN_CANCELLED` (если cancel-flow появится в этом же PR).
 - [ ] **C.2 — Расширить `domain/shared/ports/scheduler.py`:** `schedule_caravan_battle_finish(caravan_id, run_at)` + `cancel_caravan_battle_finish(caravan_id)`.
 - [ ] **C.3 — Расширить `Title` enum** (`domain/player/value_objects.py`): добавить значение `ATAMAN` («Атаман»). Обновить миграцию или CHECK-constraint на `users.title` если есть.
