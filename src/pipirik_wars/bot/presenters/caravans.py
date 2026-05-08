@@ -31,17 +31,40 @@ from pipirik_wars.domain.player import DisplayName, Player, PlayerName, Title
 
 _CARAVAN_CALLBACK_PREFIX: Final[str] = "caravan"
 
-CaravanCallbackAction = Literal["show_lobby"]
-_VALID_ACTIONS: Final[frozenset[CaravanCallbackAction]] = frozenset({"show_lobby"})
+CaravanCallbackAction = Literal[
+    "show_lobby",
+    "join_defender",
+    "join_raider",
+    "leave",
+    "cancel",
+]
+_VALID_ACTIONS: Final[frozenset[CaravanCallbackAction]] = frozenset(
+    {
+        "show_lobby",
+        "join_defender",
+        "join_raider",
+        "leave",
+        "cancel",
+    },
+)
 
 
 @dataclass(frozen=True, slots=True)
 class CaravanCallbackData:
     """Распаршенный `callback_data` инлайн-кнопки каравана.
 
-    Сейчас (D.2) поддерживается только `show_lobby` — кнопка под
-    объявлением в чате-отправителе. В D.3 здесь добавятся `join:<role>`,
-    `leave`, `cancel` и т.п.
+    `caravan:<action>:<caravan_id>`. Поддерживаемые `action`-ы:
+
+    - `show_lobby` — открыть лобби в личке (под объявлением в чате
+      клана-отправителя; добавлено в D.2);
+    - `join_defender` / `join_raider` — вступить в лобби как защитник
+      / рейдер (без `contribution`, добавлено в D.3);
+    - `leave` — выйти из лобби (для не-лидеров, D.3);
+    - `cancel` — отменить караван (только лидер, D.3).
+
+    Для `join_caravaneer` инлайн-кнопки нет: вступление караванщиком
+    требует размер взноса, поэтому делается отдельной командой
+    `/caravan_join <caravan_id> <contribution_cm>` в личке.
     """
 
     action: CaravanCallbackAction
@@ -68,8 +91,17 @@ def parse_caravan_callback_data(data: str) -> CaravanCallbackData:
     if len(parts) != 3 or parts[0] != _CARAVAN_CALLBACK_PREFIX:
         raise ValueError(f"caravan callback_data must be 'caravan:<action>:<id>', got {data!r}")
     _, action_raw, caravan_id_raw = parts
+    action: CaravanCallbackAction
     if action_raw == "show_lobby":
-        action: CaravanCallbackAction = "show_lobby"
+        action = "show_lobby"
+    elif action_raw == "join_defender":
+        action = "join_defender"
+    elif action_raw == "join_raider":
+        action = "join_raider"
+    elif action_raw == "leave":
+        action = "leave"
+    elif action_raw == "cancel":
+        action = "cancel"
     else:
         raise ValueError(f"unknown caravan action: {action_raw!r}")
     try:
@@ -270,6 +302,60 @@ class CaravanPresenter:
             ),
         )
         return InlineKeyboardMarkup(inline_keyboard=[[button]])
+
+    # --- Callback `caravan:cancel:<id>` (D.3) ---
+
+    def cancel_message_text(self, *, locale: Locale) -> str:
+        """Текст, которым заменяется сообщение с кнопкой после отмены."""
+        return self._bundle.format(MessageKey("caravans-cancel-message"), locale=locale)
+
+    def cancel_toast_success(self, *, locale: Locale) -> str:
+        """Toast в callback после успешной отмены каравана."""
+        return self._bundle.format(MessageKey("caravans-cancel-toast-success"), locale=locale)
+
+    def cancel_toast_already_cancelled(self, *, locale: Locale) -> str:
+        """Toast: караван уже отменён ранее (идемпотентный no-op)."""
+        return self._bundle.format(
+            MessageKey("caravans-cancel-toast-already-cancelled"),
+            locale=locale,
+        )
+
+    # --- Общие callback-toast-ы каравана (D.3) ---
+
+    def callback_toast_caravan_not_found(self, *, locale: Locale) -> str:
+        """Toast: караван не найден (мог быть удалён/не существует)."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-caravan-not-found"),
+            locale=locale,
+        )
+
+    def callback_toast_invalid_state(self, *, locale: Locale) -> str:
+        """Toast: караван больше не в LOBBY (бой / финал / отменён)."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-invalid-state"),
+            locale=locale,
+        )
+
+    def callback_toast_not_a_leader(self, *, locale: Locale) -> str:
+        """Toast: только лидер может отменить караван."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-not-a-leader"),
+            locale=locale,
+        )
+
+    def callback_toast_player_not_found(self, *, locale: Locale) -> str:
+        """Toast: игрок не зарегистрирован — нажми /start."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-player-not-found"),
+            locale=locale,
+        )
+
+    def callback_toast_generic_error(self, *, locale: Locale) -> str:
+        """Toast: общая ошибка (мусорный callback_data, неизвестная action)."""
+        return self._bundle.format(
+            MessageKey("caravans-callback-toast-generic-error"),
+            locale=locale,
+        )
 
     # --- helpers ---
 

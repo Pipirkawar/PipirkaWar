@@ -61,6 +61,7 @@ from pipirik_wars.application.admin import (
 from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.balance import ReloadBalance
 from pipirik_wars.application.caravans import (
+    CancelCaravan,
     CloseCaravanLobby,
     CreateCaravan,
     FinishCaravanBattle,
@@ -374,6 +375,7 @@ class Container:
     create_caravan: CreateCaravan
     join_caravan_lobby: JoinCaravanLobby
     leave_caravan_lobby: LeaveCaravanLobby
+    cancel_caravan: CancelCaravan
     close_caravan_lobby: CloseCaravanLobby
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
@@ -839,6 +841,18 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         locks=activity_lock_service,
         audit=audit,
         clock=clock,
+    )
+    # Спринт 3.2-D, D.1+D.3: лидер отменяет караван из лобби.
+    # Идемпотентен на повторный вызов в `CANCELLED`-статусе.
+    cancel_caravan = CancelCaravan(
+        uow=uow,
+        caravans=caravans,
+        caravan_participants=caravan_participants,
+        players=players,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
     )
     close_caravan_lobby = CloseCaravanLobby(
         uow=uow,
@@ -1379,6 +1393,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         create_caravan=create_caravan,
         join_caravan_lobby=join_caravan_lobby,
         leave_caravan_lobby=leave_caravan_lobby,
+        cancel_caravan=cancel_caravan,
         close_caravan_lobby=close_caravan_lobby,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
@@ -1559,9 +1574,12 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["setup_admin_totp"] = container.setup_admin_totp
     # Спринт 3.2-D — bot-handler `/caravan` (личка-only): use-case
     # `CreateCaravan` + репозитории членства/клана для резолва
-    # `sender_chat_id` из membership лидера (D.3 добавит сюда `join`/
-    # `leave`/`cancel`-use-case-ы).
+    # `sender_chat_id` из membership лидера. D.3 добавил callback-
+    # handler `caravan:cancel:<id>` (use-case `CancelCaravan`);
+    # `join_*` / `leave` / `show_lobby` подвяжутся в следующих
+    # под-коммитах D.3.
     dispatcher["create_caravan"] = container.create_caravan
+    dispatcher["cancel_caravan"] = container.cancel_caravan
     dispatcher["clan_members"] = container.clan_members
     return dispatcher
 

@@ -861,3 +861,18 @@ caravans-created-announcement =
     Leader's contribution: { NUMBER($contribution_cm, useGrouping: 0) } cm
     Lobby is open for { NUMBER($lobby_minutes, useGrouping: 0) } min — join while you can.
 caravans-button-show-lobby = Show lobby
+caravans-button-cancel = Cancel caravan
+
+# --- Callback `caravan:cancel:<id>` (Sprint 3.2-D, D.3) ---
+
+caravans-cancel-message = 🐪 Caravan cancelled by the leader.
+caravans-cancel-toast-success = Caravan cancelled
+caravans-cancel-toast-already-cancelled = Caravan was already cancelled
+
+# --- Common caravan callback toasts (Sprint 3.2-D, D.3) ---
+
+caravans-callback-toast-caravan-not-found = Caravan not found
+caravans-callback-toast-invalid-state = Caravan is no longer in the lobby
+caravans-callback-toast-not-a-leader = Only the leader can cancel the caravan
+caravans-callback-toast-player-not-found = Press /start in the bot's private chat first
+caravans-callback-toast-generic-error = Something went wrong. Please try again.

@@ -19,22 +19,32 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import Chat, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, Chat, InlineKeyboardMarkup, Message
 
-from pipirik_wars.application.caravans import CaravanCreated, CreateCaravan
+from pipirik_wars.application.caravans import (
+    CancelCaravan,
+    CaravanCancelled,
+    CaravanCreated,
+    CreateCaravan,
+)
 from pipirik_wars.application.i18n import IMessageBundle, Locale
 from pipirik_wars.application.player import GetProfile, ProfileView
-from pipirik_wars.bot.handlers.caravan import handle_caravan
+from pipirik_wars.bot.handlers.caravan import (
+    handle_caravan,
+    handle_caravan_callback,
+)
 from pipirik_wars.bot.middlewares.auth import TgIdentity
 from pipirik_wars.domain.caravan import (
     AlreadyInCaravanError,
     Caravan,
     CaravanContribution,
     CaravanCooldownError,
+    CaravanNotFoundError,
     CaravanParticipant,
     CaravanRequirementError,
     CaravanRoleConflictError,
     CaravanStatus,
+    InvalidCaravanStateError,
 )
 from pipirik_wars.domain.clan import (
     ChatKind,
@@ -734,3 +744,210 @@ class TestHappyPath:
         )
         # Личное подтверждение всё равно ушло.
         msg.answer.assert_awaited_once()
+
+
+# ──────────────────── callback `caravan:cancel:<id>` (D.3) ────────────────────
+
+
+def _stub_cancel_caravan(
+    *,
+    error: BaseException | None = None,
+    was_already_cancelled: bool = False,
+) -> MagicMock:
+    """`CancelCaravan`-stub. На `error` — `side_effect`, иначе — `return_value`."""
+    use_case = MagicMock(spec=CancelCaravan)
+    if error is not None:
+        use_case.execute = AsyncMock(side_effect=error)
+        return use_case
+    caravan = Caravan(
+        id=_CARAVAN_ID,
+        sender_clan_id=1,
+        receiver_clan_id=2,
+        leader_player_id=1,
+        status=CaravanStatus.CANCELLED,
+        started_at=_NOW,
+        lobby_ends_at=_NOW + timedelta(minutes=20),
+        battle_ends_at=_NOW + timedelta(minutes=80),
+        random_seed=12345,
+        finished_at=None,
+    )
+    use_case.execute = AsyncMock(
+        return_value=CaravanCancelled(
+            caravan=caravan,
+            was_already_cancelled=was_already_cancelled,
+        ),
+    )
+    return use_case
+
+
+def _callback(
+    *,
+    data: str = f"caravan:cancel:{_CARAVAN_ID}",
+    chat_type: str = "group",
+    chat_id: int = _SENDER_CHAT_ID,
+) -> MagicMock:
+    """Сборка `CallbackQuery`-stub-а с прикреплённым `Message`."""
+    msg = MagicMock(spec=Message)
+    msg.chat = Chat(id=chat_id, type=chat_type)
+    msg.edit_text = AsyncMock()
+    msg.edit_reply_markup = AsyncMock()
+    callback = MagicMock(spec=CallbackQuery)
+    callback.data = data
+    callback.message = msg
+    callback.answer = AsyncMock()
+    return callback
+
+
+async def _invoke_callback(
+    callback: MagicMock,
+    *,
+    identity: TgIdentity | None = None,
+    cancel_caravan: MagicMock | None = None,
+) -> MagicMock:
+    """Запустить callback-handler с дефолтами; возвращает stub use-case-а."""
+    cancel_uc = cancel_caravan or _stub_cancel_caravan()
+    await handle_caravan_callback(
+        cast(CallbackQuery, callback),
+        identity if identity is not None else _identity(),
+        cast(CancelCaravan, cancel_uc),
+        _bundle(),
+        _RU,
+    )
+    return cancel_uc
+
+
+@pytest.mark.asyncio
+class TestCancelCallback:
+    async def test_no_identity_returns_silently(self) -> None:
+        callback = _callback()
+        cancel_uc = _stub_cancel_caravan()
+        await handle_caravan_callback(
+            cast(CallbackQuery, callback),
+            None,
+            cast(CancelCaravan, cancel_uc),
+            _bundle(),
+            _RU,
+        )
+        callback.answer.assert_not_called()
+        cancel_uc.execute.assert_not_called()
+
+    async def test_invalid_callback_data_emits_generic_toast(self) -> None:
+        callback = _callback(data="caravan:bogus:7")
+        cancel_uc = await _invoke_callback(callback)
+        cancel_uc.execute.assert_not_called()
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-generic-error" in toast_text
+
+    async def test_unsupported_action_acked_silently(self) -> None:
+        # `show_lobby` ещё не реализован в этом под-коммите — handler
+        # должен ack-нуть без мутации, чтобы кнопка не «висела».
+        callback = _callback(data=f"caravan:show_lobby:{_CARAVAN_ID}")
+        cancel_uc = await _invoke_callback(callback)
+        cancel_uc.execute.assert_not_called()
+        callback.answer.assert_awaited_once()
+        # Защитный ack без аргументов (без локализованного текста).
+        assert callback.answer.await_args.args == ()
+        assert callback.answer.await_args.kwargs == {}
+
+    async def test_caravan_not_found_emits_toast_no_edit(self) -> None:
+        callback = _callback()
+        cancel_uc = _stub_cancel_caravan(
+            error=CaravanNotFoundError(caravan_id=_CARAVAN_ID),
+        )
+        await _invoke_callback(callback, cancel_caravan=cancel_uc)
+        cancel_uc.execute.assert_awaited_once()
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-caravan-not-found" in toast_text
+        callback.message.edit_text.assert_not_called()
+
+    async def test_invalid_state_emits_toast_no_edit(self) -> None:
+        callback = _callback()
+        cancel_uc = _stub_cancel_caravan(
+            error=InvalidCaravanStateError(
+                caravan_id=_CARAVAN_ID,
+                expected="lobby",
+                actual="in_battle",
+            ),
+        )
+        await _invoke_callback(callback, cancel_caravan=cancel_uc)
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-invalid-state" in toast_text
+        callback.message.edit_text.assert_not_called()
+
+    async def test_role_conflict_maps_to_not_a_leader_toast(self) -> None:
+        callback = _callback()
+        cancel_uc = _stub_cancel_caravan(
+            error=CaravanRoleConflictError(
+                player_id=2,
+                attempted_role="cancel",
+                reason="not the leader",
+            ),
+        )
+        await _invoke_callback(callback, cancel_caravan=cancel_uc)
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-not-a-leader" in toast_text
+        callback.message.edit_text.assert_not_called()
+
+    async def test_player_not_found_emits_toast(self) -> None:
+        callback = _callback()
+        cancel_uc = _stub_cancel_caravan(
+            error=PlayerNotFoundError(tg_id=_LEADER_TG_ID),
+        )
+        await _invoke_callback(callback, cancel_caravan=cancel_uc)
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-callback-toast-player-not-found" in toast_text
+        callback.message.edit_text.assert_not_called()
+
+    async def test_happy_path_emits_success_toast_and_replaces_message(self) -> None:
+        callback = _callback()
+        cancel_uc = _stub_cancel_caravan(was_already_cancelled=False)
+        await _invoke_callback(callback, cancel_caravan=cancel_uc)
+        cancel_uc.execute.assert_awaited_once()
+        # Toast `caravans-cancel-toast-success`.
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-cancel-toast-success" in toast_text
+        # Сообщение с кнопкой заменено на «караван отменён» + клавиатура снята.
+        callback.message.edit_text.assert_awaited_once()
+        edit_kwargs = callback.message.edit_text.await_args.kwargs
+        assert "caravans-cancel-message" in edit_kwargs["text"]
+        assert edit_kwargs["reply_markup"] is None
+
+    async def test_already_cancelled_emits_idempotent_toast(self) -> None:
+        callback = _callback()
+        cancel_uc = _stub_cancel_caravan(was_already_cancelled=True)
+        await _invoke_callback(callback, cancel_caravan=cancel_uc)
+        cancel_uc.execute.assert_awaited_once()
+        callback.answer.assert_awaited_once()
+        toast_text = callback.answer.await_args.args[0]
+        assert "caravans-cancel-toast-already-cancelled" in toast_text
+        # Сообщение с кнопкой всё равно заменяем на «караван отменён».
+        callback.message.edit_text.assert_awaited_once()
+
+    async def test_use_case_input_dto_carries_caravan_id_and_tg_id(self) -> None:
+        callback = _callback(data=f"caravan:cancel:{_CARAVAN_ID}")
+        cancel_uc = _stub_cancel_caravan()
+        await _invoke_callback(
+            callback,
+            identity=_identity(tg_user_id=_LEADER_TG_ID),
+            cancel_caravan=cancel_uc,
+        )
+        ((dto,), _kwargs) = cancel_uc.execute.await_args
+        assert dto.caravan_id == _CARAVAN_ID
+        assert dto.tg_id == _LEADER_TG_ID
+
+    async def test_edit_text_failure_does_not_propagate(self) -> None:
+        callback = _callback()
+        callback.message.edit_text.side_effect = TelegramAPIError(
+            method=MagicMock(),
+            message="message too old",
+        )
+        cancel_uc = _stub_cancel_caravan()
+        # Не должно бросить — handler ловит ошибку edit-а.
+        await _invoke_callback(callback, cancel_caravan=cancel_uc)
+        callback.answer.assert_awaited_once()

@@ -865,3 +865,18 @@ caravans-created-announcement =
     Взнос лидера: { NUMBER($contribution_cm, useGrouping: 0) } см
     Лобби открыто на { NUMBER($lobby_minutes, useGrouping: 0) } мин — успей вступить.
 caravans-button-show-lobby = Показать лобби
+caravans-button-cancel = Отменить караван
+
+# --- Callback `caravan:cancel:<id>` (Спринт 3.2-D, D.3) ---
+
+caravans-cancel-message = 🐪 Караван отменён лидером.
+caravans-cancel-toast-success = Караван отменён
+caravans-cancel-toast-already-cancelled = Караван уже был отменён ранее
+
+# --- Общие callback-toast-ы каравана (Спринт 3.2-D, D.3) ---
+
+caravans-callback-toast-caravan-not-found = Караван не найден
+caravans-callback-toast-invalid-state = Караван больше не в лобби
+caravans-callback-toast-not-a-leader = Только лидер может отменить караван
+caravans-callback-toast-player-not-found = Сначала нажми /start в личке бота
+caravans-callback-toast-generic-error = Что-то пошло не так. Попробуй ещё раз.

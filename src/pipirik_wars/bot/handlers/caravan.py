@@ -21,27 +21,34 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from dataclasses import dataclass
 from typing import Final
 
-from aiogram import Bot, Router
+from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 
-from pipirik_wars.application.caravans import CreateCaravan
-from pipirik_wars.application.dto.inputs import CreateCaravanInput
+from pipirik_wars.application.caravans import CancelCaravan, CreateCaravan
+from pipirik_wars.application.dto.inputs import (
+    CancelCaravanInput,
+    CreateCaravanInput,
+)
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.application.player import GetProfile
 from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters import CaravanPresenter
+from pipirik_wars.bot.presenters.caravans import parse_caravan_callback_data
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.caravan import (
     AlreadyInCaravanError,
     CaravanCooldownError,
+    CaravanNotFoundError,
     CaravanRequirementError,
     CaravanRoleConflictError,
+    InvalidCaravanStateError,
 )
 from pipirik_wars.domain.clan import (
     Clan,
@@ -371,4 +378,137 @@ def _split_args(text: str | None) -> tuple[str, str] | None:
     return parts[1], parts[2]
 
 
-__all__ = ["handle_caravan", "router"]
+@router.callback_query(F.data.startswith("caravan:"))
+async def handle_caravan_callback(
+    callback: CallbackQuery,
+    tg_identity: TgIdentity | None,
+    cancel_caravan: CancelCaravan,
+    bundle: IMessageBundle,
+    locale: Locale | None = None,
+) -> None:
+    """Маршрутизатор инлайн-кнопок каравана (D.3).
+
+    Сейчас поддержан `cancel`. Остальные действия (`show_lobby` /
+    `join_defender` / `join_raider` / `leave`) будут добавлены в
+    последующих под-коммитах D.3 — пока для них защитный ack без
+    мутации, чтобы кнопка не «висела» с loading-индикатором.
+    """
+    if tg_identity is None or callback.data is None or callback.message is None:
+        return
+
+    presenter = CaravanPresenter(bundle=bundle)
+    effective_locale = locale or DEFAULT_LOCALE
+
+    try:
+        parsed = parse_caravan_callback_data(callback.data)
+    except ValueError:
+        _LOGGER.warning(
+            "caravan.callback: invalid callback_data",
+            extra={"data": callback.data, "tg_id": tg_identity.tg_user_id},
+        )
+        await callback.answer(
+            presenter.callback_toast_generic_error(locale=effective_locale),
+            show_alert=False,
+        )
+        return
+
+    if parsed.action == "cancel":
+        await _handle_cancel_callback(
+            callback=callback,
+            tg_identity=tg_identity,
+            caravan_id=parsed.caravan_id,
+            cancel_caravan=cancel_caravan,
+            presenter=presenter,
+            locale=effective_locale,
+        )
+        return
+
+    # show_lobby / join_defender / join_raider / leave — реализация
+    # в следующих под-коммитах D.3. Защитный ack, чтобы UI у клиента
+    # не «висел» loading-индикатором на нажатой кнопке.
+    await callback.answer()
+
+
+async def _handle_cancel_callback(
+    *,
+    callback: CallbackQuery,
+    tg_identity: TgIdentity,
+    caravan_id: int,
+    cancel_caravan: CancelCaravan,
+    presenter: CaravanPresenter,
+    locale: Locale,
+) -> None:
+    """Логика callback-а отмены каравана (`caravan:cancel:<id>`).
+
+    Зовёт `CancelCaravan` use-case (он сам проверит лидерство и
+    статус). На каждый доменный отказ — локализованный toast. На
+    успех — toast + замена сообщения текстом «караван отменён» +
+    снятие клавиатуры.
+    """
+    try:
+        result = await cancel_caravan.execute(
+            CancelCaravanInput(
+                caravan_id=caravan_id,
+                tg_id=tg_identity.tg_user_id,
+            ),
+        )
+    except CaravanNotFoundError:
+        await callback.answer(
+            presenter.callback_toast_caravan_not_found(locale=locale),
+            show_alert=False,
+        )
+        return
+    except InvalidCaravanStateError:
+        await callback.answer(
+            presenter.callback_toast_invalid_state(locale=locale),
+            show_alert=False,
+        )
+        return
+    except CaravanRoleConflictError:
+        await callback.answer(
+            presenter.callback_toast_not_a_leader(locale=locale),
+            show_alert=False,
+        )
+        return
+    except PlayerNotFoundError:
+        await callback.answer(
+            presenter.callback_toast_player_not_found(locale=locale),
+            show_alert=False,
+        )
+        return
+
+    if result.was_already_cancelled:
+        await callback.answer(
+            presenter.cancel_toast_already_cancelled(locale=locale),
+            show_alert=False,
+        )
+    else:
+        await callback.answer(
+            presenter.cancel_toast_success(locale=locale),
+            show_alert=False,
+        )
+
+    await _replace_with_cancelled(
+        callback=callback,
+        text=presenter.cancel_message_text(locale=locale),
+    )
+
+
+async def _replace_with_cancelled(*, callback: CallbackQuery, text: str) -> None:
+    """Заменить сообщение с кнопкой на «караван отменён» и снять клавиатуру.
+
+    Best-effort: ошибки edit-а (старое сообщение, недоступно, уже
+    отредактировано) поглощаем — они не критичны для UX, главное,
+    что use-case уже успешно завершился.
+    """
+    msg = callback.message
+    if msg is None:
+        return
+    # CallbackQuery.message — `Message | InaccessibleMessage`; у обоих есть
+    # `edit_text`, но у `InaccessibleMessage` он бросит TelegramAPIError,
+    # которое мы поглотим.
+    with contextlib.suppress(Exception):
+        await msg.edit_text(text=text, reply_markup=None)  # type: ignore[union-attr]
+
+
+__all__ = ["handle_caravan", "handle_caravan_callback", "router"]
