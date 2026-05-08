@@ -27,6 +27,7 @@ from tests.fakes import (
     FakeAuditLogger,
     FakeCaravanRepository,
     FakeClock,
+    FakeDelayedJobScheduler,
     FakeUnitOfWork,
 )
 
@@ -44,18 +45,21 @@ def _build_use_case(
     FakeCaravanRepository,
     FakeAuditLogger,
     FakeClock,
+    FakeDelayedJobScheduler,
 ]:
     uow = FakeUnitOfWork()
     caravans = FakeCaravanRepository()
     audit = FakeAuditLogger()
+    scheduler = FakeDelayedJobScheduler()
     used_clock = clock or FakeClock(_NOW)
     use_case = CloseCaravanLobby(
         uow=uow,
         caravans=caravans,
         audit=audit,
         clock=used_clock,
+        scheduler=scheduler,
     )
-    return use_case, uow, caravans, audit, used_clock
+    return use_case, uow, caravans, audit, used_clock, scheduler
 
 
 async def _seed_caravan(
@@ -99,7 +103,7 @@ def _input(*, caravan_id: int) -> CloseCaravanLobbyInput:
 class TestHappyPath:
     @pytest.mark.asyncio
     async def test_lobby_to_in_battle_transition(self) -> None:
-        use_case, uow, caravans, _audit, _clock = _build_use_case()
+        use_case, uow, caravans, _audit, _clock, scheduler = _build_use_case()
         caravan = await _seed_caravan(caravans, status=CaravanStatus.LOBBY)
         assert caravan.id is not None
 
@@ -116,6 +120,10 @@ class TestHappyPath:
         # Транзакция коммитится.
         assert uow.commits == 1
         assert uow.rollbacks == 0
+        # battle-finish-job запланирован на battle_ends_at.
+        assert caravan.id in scheduler.scheduled_caravan_battle_finish
+        scheduled = scheduler.scheduled_caravan_battle_finish[caravan.id]
+        assert scheduled.run_at == result.caravan.battle_ends_at
 
 
 # ---------- Audit ----------
@@ -124,7 +132,7 @@ class TestHappyPath:
 class TestAuditEntry:
     @pytest.mark.asyncio
     async def test_audit_records_caravan_lobby_closed(self) -> None:
-        use_case, _uow, caravans, audit, clock = _build_use_case()
+        use_case, _uow, caravans, audit, clock, _scheduler = _build_use_case()
         caravan = await _seed_caravan(caravans, status=CaravanStatus.LOBBY)
         assert caravan.id is not None
 
@@ -150,7 +158,7 @@ class TestAuditEntry:
 class TestIdempotency:
     @pytest.mark.asyncio
     async def test_already_in_battle_is_noop(self) -> None:
-        use_case, uow, caravans, audit, _clock = _build_use_case()
+        use_case, uow, caravans, audit, _clock, scheduler = _build_use_case()
         caravan = await _seed_caravan(caravans, status=CaravanStatus.IN_BATTLE)
         assert caravan.id is not None
 
@@ -162,10 +170,12 @@ class TestIdempotency:
         assert audit.entries == []
         # Транзакция всё равно коммитится (выходит из `async with self._uow`).
         assert uow.commits == 1
+        # battle-finish-job НЕ планируется при no-op.
+        assert scheduler.scheduled_caravan_battle_finish == {}
 
     @pytest.mark.asyncio
     async def test_already_finished_is_noop(self) -> None:
-        use_case, _uow, caravans, audit, _clock = _build_use_case()
+        use_case, _uow, caravans, audit, _clock, _scheduler = _build_use_case()
         caravan = await _seed_caravan(caravans, status=CaravanStatus.FINISHED)
         assert caravan.id is not None
 
@@ -177,7 +187,7 @@ class TestIdempotency:
 
     @pytest.mark.asyncio
     async def test_already_cancelled_is_noop(self) -> None:
-        use_case, _uow, caravans, audit, _clock = _build_use_case()
+        use_case, _uow, caravans, audit, _clock, _scheduler = _build_use_case()
         caravan = await _seed_caravan(caravans, status=CaravanStatus.CANCELLED)
         assert caravan.id is not None
 
@@ -190,7 +200,7 @@ class TestIdempotency:
     @pytest.mark.asyncio
     async def test_double_close_idempotent(self) -> None:
         # Второй вызов на уже закрытом лобби — no-op.
-        use_case, _uow, caravans, audit, _clock = _build_use_case()
+        use_case, _uow, caravans, audit, _clock, _scheduler = _build_use_case()
         caravan = await _seed_caravan(caravans, status=CaravanStatus.LOBBY)
         assert caravan.id is not None
 
@@ -209,7 +219,7 @@ class TestIdempotency:
 class TestErrors:
     @pytest.mark.asyncio
     async def test_caravan_not_found_raises(self) -> None:
-        use_case, uow, _caravans, audit, _clock = _build_use_case()
+        use_case, uow, _caravans, audit, _clock, _scheduler = _build_use_case()
 
         with pytest.raises(CaravanNotFoundError) as exc:
             await use_case.execute(_input(caravan_id=999))

@@ -22,6 +22,10 @@ from pipirik_wars.application.caravans.create_caravan import (
     CaravanCreated,
     CreateCaravan,
 )
+from pipirik_wars.application.caravans.finish_caravan_battle import (
+    CaravanBattleFinished,
+    FinishCaravanBattle,
+)
 from pipirik_wars.application.caravans.join_caravan_lobby import (
     JoinCaravanLobby,
     JoinedCaravanLobby,
@@ -32,10 +36,12 @@ from pipirik_wars.application.caravans.leave_caravan_lobby import (
 )
 
 __all__ = [
+    "CaravanBattleFinished",
     "CaravanCreated",
     "CloseCaravanLobby",
     "ClosedCaravanLobby",
     "CreateCaravan",
+    "FinishCaravanBattle",
     "JoinCaravanLobby",
     "JoinedCaravanLobby",
     "LeaveCaravanLobby",

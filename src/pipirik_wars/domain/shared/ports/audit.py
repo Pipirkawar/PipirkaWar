@@ -81,6 +81,10 @@ class AuditAction(str, enum.Enum):
     CARAVAN_PLAYER_JOINED = "caravan_player_joined"
     CARAVAN_PLAYER_LEFT = "caravan_player_left"
     CARAVAN_LOBBY_CLOSED = "caravan_lobby_closed"
+    # ── Спринт 3.2-C (караваны: бой + награды + отмена, ГДД §9.5–§9.6) ──
+    CARAVAN_BATTLE_FINISHED = "caravan_battle_finished"
+    CARAVAN_REWARDS_GRANTED = "caravan_rewards_granted"
+    CARAVAN_CANCELLED = "caravan_cancelled"
 
 
 class AuditSource(str, enum.Enum):

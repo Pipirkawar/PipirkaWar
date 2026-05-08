@@ -50,6 +50,7 @@ profile-not-registered = 🍆 You don't seem to be registered yet. Tap /start in
 # Localized title names from `domain.player.value_objects.Title`.
 # Keys mirror enum values: `Title.NEWBIE = "newbie"` → `profile-title-newbie`.
 profile-title-newbie = Newbie
+profile-title-ataman = Bandit Ataman
 
 # Player card from GDD §2.2. Parameters:
 # - `$nick` — assembled "Title DisplayName Name" (built by presenter)

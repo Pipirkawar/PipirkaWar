@@ -1,4 +1,4 @@
-"""Use-case `CloseCaravanLobby` (Спринт 3.2-B, ГДД §9.3).
+"""Use-case `CloseCaravanLobby` (Спринт 3.2-B, расширен в 3.2-C, ГДД §9.3).
 
 Триггерится APScheduler-job-ом, поставленным в `CreateCaravan`
 (в момент `now + caravans.lobby_minutes`), либо может быть вызван
@@ -7,15 +7,16 @@
 Контракт идемпотентен:
 
 - если `status == LOBBY` — переводим `LOBBY → IN_BATTLE`, аудитим
-  событие;
+  событие, шедулим `caravan_battle_finish`-job на `caravan.battle_ends_at`;
 - если `status == IN_BATTLE | FINISHED | CANCELLED` — NO-OP, не
   бросаем ошибку (был уже закрыт в параллельной транзакции или
-  закрыт вручную lhassл по `/caravan_start`).
+  закрыт вручную по `/caravan_start`).
 
-3.2-B **не** реализует resolve-боя — это Спринт 3.2-C. Здесь только
-state-transition + audit. Финальный таймер (`battle_ends_at`)
-планирует выходящий слой DI (3.2-C добавит `schedule_caravan_battle_finish`
-сюда же или соседним хендлером).
+3.2-C добавил планирование `caravan_battle_finish`-job-а внутри этой
+же транзакции: после успешного `mark_in_battle()` зовём
+`IDelayedJobScheduler.schedule_caravan_battle_finish(...)`.
+Соответствующий callback в APScheduler-е (`_run_caravan_battle_finish_job`)
+вызывает `FinishCaravanBattle` use-case. Сам resolve-боя — в нём.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ from pipirik_wars.domain.shared.ports import (
     AuditEntry,
     IAuditLogger,
     IClock,
+    IDelayedJobScheduler,
     IUnitOfWork,
 )
 
@@ -56,6 +58,7 @@ class CloseCaravanLobby:
         "_audit",
         "_caravans",
         "_clock",
+        "_scheduler",
         "_uow",
     )
 
@@ -66,11 +69,13 @@ class CloseCaravanLobby:
         caravans: ICaravanRepository,
         audit: IAuditLogger,
         clock: IClock,
+        scheduler: IDelayedJobScheduler,
     ) -> None:
         self._uow = uow
         self._caravans = caravans
         self._audit = audit
         self._clock = clock
+        self._scheduler = scheduler
 
     async def execute(self, input_dto: CloseCaravanLobbyInput) -> ClosedCaravanLobby:
         """Закрыть лобби. См. docstring модуля для контракта."""
@@ -90,6 +95,16 @@ class CloseCaravanLobby:
 
             transitioned = caravan.mark_in_battle()
             saved = await self._caravans.save(transitioned)
+            assert saved.id is not None
+
+            # 3.2-C: шедулим финиш-боя на `battle_ends_at`. APScheduler
+            # `replace_existing=True`, поэтому повторный вызов на гонке
+            # двух CloseCaravanLobby (что блокирует idempotency-чек выше)
+            # безопасен.
+            await self._scheduler.schedule_caravan_battle_finish(
+                caravan_id=saved.id,
+                run_at=saved.battle_ends_at,
+            )
 
             await self._audit.record(
                 AuditEntry(

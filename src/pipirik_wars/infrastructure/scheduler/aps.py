@@ -24,7 +24,7 @@ from typing import Final
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from pipirik_wars.application.caravans import CloseCaravanLobby
+from pipirik_wars.application.caravans import CloseCaravanLobby, FinishCaravanBattle
 from pipirik_wars.application.daily_head import (
     RunDailyHeadCron,
     ScheduleDailyHeadCronJobs,
@@ -33,6 +33,7 @@ from pipirik_wars.application.dto.inputs import (
     CloseCaravanLobbyInput,
     EscalateChatToGlobalInput,
     ExpireLobbyEntryInput,
+    FinishCaravanBattleInput,
     FinishDungeonRunInput,
     FinishForestRunInput,
     FinishMountainRunInput,
@@ -84,6 +85,8 @@ _MOUNTAIN_FINISH_JOB_PREFIX: Final[str] = "mountain_run_finish:"
 _DUNGEON_FINISH_JOB_PREFIX: Final[str] = "dungeon_run_finish:"
 # 3.2-B (Караваны, ГДД §9). Lobby-close-job переводит караван LOBBY → IN_BATTLE.
 _CARAVAN_LOBBY_CLOSE_JOB_PREFIX: Final[str] = "caravan_lobby_close:"
+# 3.2-C (Караваны, ГДД §9.5–§9.6). Battle-finish-job резолвит бой и выдаёт награды.
+_CARAVAN_BATTLE_FINISH_JOB_PREFIX: Final[str] = "caravan_battle_finish:"
 _DAILY_HEAD_RESCHEDULE_JOB_ID: Final[str] = "daily_head_reschedule_cron"
 _WEEKLY_REFERRAL_SUMMARY_JOB_ID: Final[str] = "weekly_clan_referral_summary_cron"
 #: Расписание weekly-сводки рефералов клана: вс. 18:00 UTC (ГДД §13.3).
@@ -127,6 +130,10 @@ def _dungeon_finish_job_id(run_id: int) -> str:
 
 def _caravan_lobby_close_job_id(caravan_id: int) -> str:
     return f"{_CARAVAN_LOBBY_CLOSE_JOB_PREFIX}{caravan_id}"
+
+
+def _caravan_battle_finish_job_id(caravan_id: int) -> str:
+    return f"{_CARAVAN_BATTLE_FINISH_JOB_PREFIX}{caravan_id}"
 
 
 class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
@@ -174,6 +181,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
 
     __slots__ = (
         "_afk_resolution_factory",
+        "_caravan_battle_finish_factory",
         "_caravan_lobby_close_factory",
         "_clans",
         "_daily_head_cron_factory",
@@ -212,6 +220,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         dungeon_finish_factory: Callable[[], FinishDungeonRun] | None = None,
         dungeon_notifier: IDungeonFinishNotifier | None = None,
         caravan_lobby_close_factory: Callable[[], CloseCaravanLobby] | None = None,
+        caravan_battle_finish_factory: Callable[[], FinishCaravanBattle] | None = None,
         clans: IClanRepository | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
@@ -231,6 +240,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._dungeon_finish_factory = dungeon_finish_factory
         self._dungeon_notifier = dungeon_notifier
         self._caravan_lobby_close_factory = caravan_lobby_close_factory
+        self._caravan_battle_finish_factory = caravan_battle_finish_factory
         self._clans = clans
         self._logger = logger or logging.getLogger(__name__)
 
@@ -517,6 +527,56 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         except Exception as exc:
             self._logger.exception(
                 "caravan_lobby_close: unexpected error",
+                extra={"caravan_id": caravan_id, "error": type(exc).__name__},
+            )
+            return
+
+    # ── Спринт 3.2-C: караван (battle-finish, ГДД §9.5–§9.6) ──
+
+    async def schedule_caravan_battle_finish(
+        self,
+        *,
+        caravan_id: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_caravan_battle_finish_job,
+            trigger="date",
+            run_date=run_at,
+            args=(caravan_id,),
+            id=_caravan_battle_finish_job_id(caravan_id),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_caravan_battle_finish(self, *, caravan_id: int) -> None:
+        try:
+            self._scheduler.remove_job(_caravan_battle_finish_job_id(caravan_id))
+        except Exception:
+            return
+
+    async def _run_caravan_battle_finish_job(self, caravan_id: int) -> None:
+        """Callback `FinishCaravanBattle`-job-а (Спринт 3.2-C).
+
+        Срабатывает в `caravan.battle_ends_at`, резолвит бой
+        (детерминистично от `random_seed`), выдаёт награды,
+        начисляет Атаман-роль рейдеру-победителю. Use-case
+        идемпотентен: повторный вызов на `FINISHED`-каравану вернёт
+        `was_already_finished=True`. Если фабрика не подвязана
+        (recovery / тесты APScheduler-а самого по себе) — лог + skip.
+        """
+        if self._caravan_battle_finish_factory is None:
+            self._logger.warning(
+                "caravan_battle_finish: factory not wired",
+                extra={"caravan_id": caravan_id},
+            )
+            return
+        try:
+            use_case = self._caravan_battle_finish_factory()
+            await use_case.execute(FinishCaravanBattleInput(caravan_id=caravan_id))
+        except Exception as exc:
+            self._logger.exception(
+                "caravan_battle_finish: unexpected error",
                 extra={"caravan_id": caravan_id, "error": type(exc).__name__},
             )
             return

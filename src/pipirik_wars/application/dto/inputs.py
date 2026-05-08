@@ -772,3 +772,22 @@ class CloseCaravanLobbyInput(_StrictBase):
     """
 
     caravan_id: int = Field(gt=0, description="caravans.id")
+
+
+class FinishCaravanBattleInput(_StrictBase):
+    """Завершение боя каравана по таймеру (Спринт 3.2-C, ГДД §9.5–§9.6).
+
+    Вызывается APScheduler-job-ом `caravan_battle_finish` в
+    `caravan.battle_ends_at` (через `caravans.battle_minutes` после
+    закрытия лобби). Use-case детерминистично резолвит бой по
+    `caravan.random_seed` (через `resolve_caravan_battle`), применяет
+    per-player длины + клан-бонус +1 см к участникам обоих кланов
+    + `Title.ATAMAN` случайному рейдеру при их победе, и переводит
+    караван `IN_BATTLE → FINISHED`.
+
+    Идемпотентность — через сам статус: повторный вызов на
+    `FINISHED`/`CANCELLED` — NO-OP с `was_already_finished=True`,
+    без повторного применения наград и без новых audit-записей.
+    """
+
+    caravan_id: int = Field(gt=0, description="caravans.id")

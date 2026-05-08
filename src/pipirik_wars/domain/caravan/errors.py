@@ -156,6 +156,32 @@ class CaravanCapacityExceededError(CaravanError):
         self.limit = limit
 
 
+class InvalidCaravanStateError(CaravanError):
+    """Караван в неожиданном статусе для запрашиваемой операции.
+
+    Бросает `FinishCaravanBattle` (3.2-C), когда APScheduler-job
+    `caravan_battle_finish` стрельнул на караване в `LOBBY`-статусе
+    (т.е. инвариант перехода `LOBBY → IN_BATTLE` нарушен — job на
+    `battle_ends_at` не должен срабатывать без предварительного закрытия
+    лобби). Это симптом баги шедулера / админ-вмешательства; ловится
+    bot-handler-ом на верхнем уровне как «непредвиденное состояние».
+
+    Идемпотентные no-op-ы (повторный вызов на `FINISHED`/`CANCELLED`)
+    эту ошибку НЕ бросают — они выходят раньше с
+    `was_already_finished=True`.
+    """
+
+    __slots__ = ("actual", "caravan_id", "expected")
+
+    def __init__(self, *, caravan_id: int, expected: str, actual: str) -> None:
+        super().__init__(
+            f"caravan id={caravan_id} unexpected status: expected {expected!r}, got {actual!r}"
+        )
+        self.caravan_id = caravan_id
+        self.expected = expected
+        self.actual = actual
+
+
 __all__ = [
     "AlreadyInCaravanError",
     "CaravanCapacityExceededError",
@@ -165,4 +191,5 @@ __all__ = [
     "CaravanNotFoundError",
     "CaravanRequirementError",
     "CaravanRoleConflictError",
+    "InvalidCaravanStateError",
 ]

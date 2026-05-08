@@ -63,6 +63,13 @@ _ALLOWED_FILES: frozenset[Path] = frozenset(
         # Approved-use-case: списание длины при loss-исходе похода в данжон
         # (Спринт 3.1-B, ГДД §8). Симметрично `mountains/finish_run.py`.
         _SRC_ROOT / "application" / "dungeon" / "finish_run.py",
+        # Approved-use-case: списание длины убитым / получившим блок
+        # участникам каравана (Спринт 3.2-C, ГДД §9.5–§9.6). Прибавки
+        # (доставка / Атаман-бонус / клан +1 см) — через
+        # `ILengthGranter.grant(source=CARAVAN_REWARD)`; вычеты
+        # (`length_delta_cm < 0`) — прямой `with_length`. Cap-ы 1.6
+        # к вычетам неприменимы (см. `pvp/apply_mass_outcome.py`).
+        _SRC_ROOT / "application" / "caravans" / "finish_caravan_battle.py",
     }
 )
 
