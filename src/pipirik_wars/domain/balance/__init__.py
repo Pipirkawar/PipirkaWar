@@ -14,6 +14,7 @@
 from pipirik_wars.domain.balance.config import (
     AnticheatConfig,
     BalanceConfig,
+    CaravansConfig,
     ContentPolicy,
     ContentPolicyClanQuotes,
     DailyHeadConfig,
@@ -46,6 +47,7 @@ __all__ = [
     "AnticheatConfig",
     "BalanceConfig",
     "BalanceKeyError",
+    "CaravansConfig",
     "ContentPolicy",
     "ContentPolicyClanQuotes",
     "DailyHeadConfig",
