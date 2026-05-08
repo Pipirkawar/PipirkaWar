@@ -275,6 +275,38 @@ class IDelayedJobScheduler(abc.ABC):
         успешного перевода в `IN_BATTLE` (best-effort cleanup).
         """
 
+    # ── Спринт 3.2-C: караваны (battle-finish, ГДД §9.5–§9.6) ──
+
+    @abc.abstractmethod
+    async def schedule_caravan_battle_finish(
+        self,
+        *,
+        caravan_id: int,
+        run_at: datetime,
+    ) -> None:
+        """Запланировать `FinishCaravanBattle(caravan_id=...)` на `run_at` (UTC).
+
+        Срабатывает через `caravans.battle_minutes` после перехода
+        каравана `LOBBY → IN_BATTLE` (ставится в `CloseCaravanLobby` use-case-е
+        при mark_in_battle). Идемпотентно по `caravan_id`: повторный
+        вызов перезаписывает job (recovery-сценарий после рестарта
+        воркера).
+
+        Сам resolve боя — синхронный в callback-е, без раунд-tick-ов
+        (см. ГДД §9.5: каждый рейдер — 1 удар, караванщики — 2 блока,
+        защитники — 1 блок, детерминистично от `random_seed`).
+        """
+
+    @abc.abstractmethod
+    async def cancel_caravan_battle_finish(self, *, caravan_id: int) -> None:
+        """Снять battle-finish-job каравана (NO-OP, если его нет).
+
+        Вызывается, когда бой завершается раньше срока (например, при
+        ручной отмене каравана лидером — но это сценарий из `LOBBY`,
+        где battle-finish ещё не запланирован) или из самого callback-а
+        после успешного завершения боя (best-effort cleanup).
+        """
+
     # ── Спринт 2.4.E: еженедельная сводка рефералов клана ──
 
     @abc.abstractmethod
