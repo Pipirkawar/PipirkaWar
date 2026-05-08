@@ -956,3 +956,55 @@ class CloseBossLobbyInput(_StrictBase):
     """
 
     boss_fight_id: int = Field(gt=0, description="boss_fights.id")
+
+
+# ── Спринт 3.3-C (рейд-боссы: бой, ГДД §10.4–§10.5) ──
+
+
+class RunBossRoundInput(_StrictBase):
+    """Резолв одного раунда рейд-боя (Спринт 3.3-C, ГДД §10.4).
+
+    Вызывается APScheduler-job-ом `boss_round_tick` (первый — поставлен
+    `CloseBossLobby` в момент `LOBBY → IN_BATTLE` в 3.3-D; последующие —
+    самим `RunBossRound`-use-case-ом, если бой продолжается). Use-case:
+
+    - Резолвит рейд-бой (`IBossFightRepository.get_by_id`); не найден →
+      `BossFightNotFoundError`.
+    - Идемпотентность по статусу: `FINISHED`/`CANCELLED` → no-op
+      (`was_already_finished=True`), без аудита и шедула.
+    - Не-`IN_BATTLE` (например, `LOBBY` — bug шедулера) →
+      `InvalidBossFightStateError`.
+    - Загружает всех живых рейдеров через
+      `IBossParticipantRepository.list_by_boss_fight(...)`. Если их 0
+      (corner-case: все выбыли в предыдущем раунде, но `mark_finished`
+      ещё не успел стрельнуть) — выходит из боя через `mark_finished`
+      без вызова resolve-сервиса (рейдеры проиграли — `FinishBossFight`
+      в 3.3-C распределит «штрафные» длины).
+    - Резолвит раунд через `boss_round_resolution.resolve_boss_round`
+      (Спринт 3.3-C / C.1) с детерминистичным `SeededRandom`, seed
+      которого — комбинация `boss_fight.random_seed` и `current_round`
+      (это даёт независимо воспроизводимые результаты per-round).
+    - Применяет `BossRoundResult`:
+        * `boss_fight.with_boss_length(max(0, current - boss_damage_taken_cm))`;
+        * удаление выбывших рейдеров (`participants.remove`) +
+          `ActivityLockService.release` для каждого;
+        * `boss_fight.with_round_advanced()` — инкремент счётчика;
+        * `mark_finished` если `current_boss_length_cm < victory_threshold_cm`
+          (рейдеры победили) или если после раунда все рейдеры выбыли
+          (босс победил).
+    - Записывает audit `BOSS_FIGHT_ROUND_RESOLVED` с idempotency-key
+      `boss_fight_round_resolved:{boss_fight_id}:{round_number}`.
+    - Если бой не закончен — шедулит следующий `boss_round_tick` на
+      `now + bosses.round_max_seconds` через
+      `IDelayedJobScheduler.schedule_boss_round_tick`. Если закончен —
+      cancel-ит pending-tick и safety-net-finish (best-effort cleanup;
+      реальный `FinishBossFight` шедулится отдельно из этого же
+      use-case-а **в C.3** — пока что в C.2 это TODO, статус-переход в
+      `FINISHED` записывается, но раздачу наград C.2 не делает).
+
+    В C.2 саммонер-mode-стаб: всегда AFK (`is_summoner_online=False`),
+    все ходы за рейдеров и босса генерирует `IRandom`-сервис. UI выбора
+    блоков и ходов саммонера — Спринт 3.3-D.
+    """
+
+    boss_fight_id: int = Field(gt=0, description="boss_fights.id")

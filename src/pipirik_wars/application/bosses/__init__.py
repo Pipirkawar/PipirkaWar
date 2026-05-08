@@ -29,6 +29,10 @@ from pipirik_wars.application.bosses.leave_boss_lobby import (
     BossLobbyLeft,
     LeaveBossLobby,
 )
+from pipirik_wars.application.bosses.run_boss_round import (
+    BossRoundResolved,
+    RunBossRound,
+)
 from pipirik_wars.application.bosses.summon_boss import (
     BossSummoned,
     SummonBoss,
@@ -38,9 +42,11 @@ __all__ = [
     "BossLobbyClosed",
     "BossLobbyJoined",
     "BossLobbyLeft",
+    "BossRoundResolved",
     "BossSummoned",
     "CloseBossLobby",
     "JoinBossLobby",
     "LeaveBossLobby",
+    "RunBossRound",
     "SummonBoss",
 ]
