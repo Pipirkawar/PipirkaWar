@@ -20,6 +20,11 @@ from pipirik_wars.domain.caravan.repositories import (
     ICaravanParticipantRepository,
     ICaravanRepository,
 )
+from pipirik_wars.domain.caravan.services import (
+    CaravanBattleResult,
+    CaravanParticipantOutcome,
+    resolve_caravan_battle,
+)
 from pipirik_wars.domain.caravan.value_objects import (
     CaravanContribution,
     CaravanRole,
@@ -29,6 +34,7 @@ from pipirik_wars.domain.caravan.value_objects import (
 __all__ = [
     "AlreadyInCaravanError",
     "Caravan",
+    "CaravanBattleResult",
     "CaravanCapacityExceededError",
     "CaravanContribution",
     "CaravanCooldownError",
@@ -36,10 +42,12 @@ __all__ = [
     "CaravanLobbyClosedError",
     "CaravanNotFoundError",
     "CaravanParticipant",
+    "CaravanParticipantOutcome",
     "CaravanRequirementError",
     "CaravanRole",
     "CaravanRoleConflictError",
     "CaravanStatus",
     "ICaravanParticipantRepository",
     "ICaravanRepository",
+    "resolve_caravan_battle",
 ]

@@ -151,8 +151,11 @@ def valid_balance_payload() -> dict[str, Any]:
                 "caravaneer": 3,
                 "defender": 1,
                 "raider": 0,
+                "ataman_bonus_share": 4,
             },
             "clan_bonus_cm": 1,
+            "unblocked_strike_damage_cm": 1,
+            "blocked_strike_damage_cm": 1,
         },
         "oracle": {
             "cooldown_tz": "Europe/Moscow",

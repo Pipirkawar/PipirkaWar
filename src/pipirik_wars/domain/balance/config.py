@@ -420,12 +420,22 @@ class CaravanRewardMultipliers(_Frozen):
     больше длины, чем «базовая» награда (`base_reward_cm` ниже).
     Все множители — целые ≥ 0 (можно поставить 0, чтобы выключить
     награды конкретной роли).
+
+    `ataman_bonus_share` (Спринт 3.2-C, ГДД §9.6) — множитель «доли
+    от системы», которую дополнительно получает один случайный рейдер
+    (Атаман) при разграблении каравана: его итоговая длина-награда =
+    `base_share_per_raider_cm + ataman_bonus_share × base_share_per_raider_cm`,
+    где `base_share_per_raider_cm = ceil(total_cargo_cm / num_raiders)`.
+    Дефолт `4` (ГДД §9.6 «×4 к доле от системы»). Заодно выдаётся
+    `Title.ATAMAN`. `0` — отключить бонус Атамана (никто не выделяется
+    из общей доли).
     """
 
     leader: int = Field(ge=0)
     caravaneer: int = Field(ge=0)
     defender: int = Field(ge=0)
     raider: int = Field(ge=0)
+    ataman_bonus_share: int = Field(ge=0)
 
 
 class CaravansConfig(_Frozen):
@@ -448,6 +458,12 @@ class CaravansConfig(_Frozen):
       ГДД §9.6: ×4 / ×3 / ×1 / -.
     - `clan_bonus_cm=1` — клан-получатель получает ровно +1 см к
       «общей длине клана» при успешном получении каравана (ГДД §9.6).
+    - `unblocked_strike_damage_cm` (Спринт 3.2-C, ГДД §9.5) — «немного
+      −длины», которое теряет караванщик/защитник, когда удар рейдера
+      пришёлся не в его блок (он также погибает). Дефолт `1`.
+    - `blocked_strike_damage_cm` (Спринт 3.2-C, ГДД §9.5) — «немного
+      −длины», которое теряет рейдер, когда его удар пришёлся в блок
+      цели. Дефолт `1`.
 
     Подсекции `lobby_minutes`/`battle_minutes` НЕ объединены в единый
     `cooldown_min/max` (как у PvE), потому что у каравана это две
@@ -466,6 +482,8 @@ class CaravansConfig(_Frozen):
     base_reward_cm: int = Field(ge=0)
     reward_multipliers: CaravanRewardMultipliers
     clan_bonus_cm: int = Field(ge=0)
+    unblocked_strike_damage_cm: int = Field(ge=0)
+    blocked_strike_damage_cm: int = Field(ge=0)
 
 
 class OracleConfig(_Frozen):

@@ -36,8 +36,11 @@ class TestCaravansConfig:
                 "caravaneer": 3,
                 "defender": 1,
                 "raider": 0,
+                "ataman_bonus_share": 4,
             },
             "clan_bonus_cm": 1,
+            "unblocked_strike_damage_cm": 1,
+            "blocked_strike_damage_cm": 1,
         }
 
     def test_valid_payload_parses(self) -> None:
@@ -49,7 +52,10 @@ class TestCaravansConfig:
         assert cfg.reward_multipliers.caravaneer == 3
         assert cfg.reward_multipliers.defender == 1
         assert cfg.reward_multipliers.raider == 0
+        assert cfg.reward_multipliers.ataman_bonus_share == 4
         assert cfg.clan_bonus_cm == 1
+        assert cfg.unblocked_strike_damage_cm == 1
+        assert cfg.blocked_strike_damage_cm == 1
 
     def test_frozen(self) -> None:
         cfg = CaravansConfig.model_validate(self._payload())
@@ -103,6 +109,8 @@ class TestCaravansConfig:
             "max_defenders_per_caravaneer",
             "base_reward_cm",
             "clan_bonus_cm",
+            "unblocked_strike_damage_cm",
+            "blocked_strike_damage_cm",
         ],
     )
     def test_non_negative_fields_accept_zero(self, field: str) -> None:
@@ -119,6 +127,8 @@ class TestCaravansConfig:
             "max_defenders_per_caravaneer",
             "base_reward_cm",
             "clan_bonus_cm",
+            "unblocked_strike_damage_cm",
+            "blocked_strike_damage_cm",
         ],
     )
     def test_non_negative_fields_reject_negative(self, field: str) -> None:
@@ -130,12 +140,35 @@ class TestCaravansConfig:
 
 class TestCaravanRewardMultipliers:
     def test_all_multipliers_can_be_zero(self) -> None:
-        m = CaravanRewardMultipliers(leader=0, caravaneer=0, defender=0, raider=0)
+        m = CaravanRewardMultipliers(
+            leader=0,
+            caravaneer=0,
+            defender=0,
+            raider=0,
+            ataman_bonus_share=0,
+        )
         assert m.leader == 0
+        assert m.ataman_bonus_share == 0
 
     def test_negative_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            CaravanRewardMultipliers(leader=-1, caravaneer=3, defender=1, raider=0)
+            CaravanRewardMultipliers(
+                leader=-1,
+                caravaneer=3,
+                defender=1,
+                raider=0,
+                ataman_bonus_share=4,
+            )
+
+    def test_negative_ataman_bonus_share_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            CaravanRewardMultipliers(
+                leader=4,
+                caravaneer=3,
+                defender=1,
+                raider=0,
+                ataman_bonus_share=-1,
+            )
 
     def test_extra_field_rejected(self) -> None:
         with pytest.raises(ValidationError, match="extra"):
@@ -145,6 +178,7 @@ class TestCaravanRewardMultipliers:
                     "caravaneer": 3,
                     "defender": 1,
                     "raider": 0,
+                    "ataman_bonus_share": 4,
                     "ataman_bonus": 5,
                 }
             )
