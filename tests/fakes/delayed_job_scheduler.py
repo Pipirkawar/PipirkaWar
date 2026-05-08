@@ -65,6 +65,30 @@ class ScheduledCaravanBattleFinishJob:
     run_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class ScheduledBossLobbyCloseJob:
+    """Запись «что и на когда» для lobby-close-job рейд-босса (Спринт 3.3-B)."""
+
+    boss_fight_id: int
+    run_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduledBossRoundTickJob:
+    """Запись «что и на когда» для round-tick-job рейд-босса (Спринт 3.3-B / 3.3-C)."""
+
+    boss_fight_id: int
+    run_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduledBossFightFinishJob:
+    """Запись «что и на когда» для fight-finish safety-net-job рейд-босса (Спринт 3.3-B / 3.3-C)."""
+
+    boss_fight_id: int
+    run_at: datetime
+
+
 @dataclass
 class FakeDelayedJobScheduler(IDelayedJobScheduler):
     """Фиксирует все вызовы `schedule_*` / `cancel_*`."""
@@ -108,6 +132,24 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
         default_factory=dict,
     )
     cancelled_caravan_battle_finish: list[int] = field(default_factory=list)
+    # 3.3-B: per-boss_fight_id lobby-close-job. Идемпотентно по
+    # `boss_fight_id`; cancel — NO-OP если job-а нет.
+    scheduled_boss_lobby_close: dict[int, ScheduledBossLobbyCloseJob] = field(
+        default_factory=dict,
+    )
+    cancelled_boss_lobby_close: list[int] = field(default_factory=list)
+    # 3.3-B: per-boss_fight_id round-tick-job. Один tick на бой
+    # одновременно (re-schedule перезаписывает существующий).
+    scheduled_boss_round_tick: dict[int, ScheduledBossRoundTickJob] = field(
+        default_factory=dict,
+    )
+    cancelled_boss_round_tick: list[int] = field(default_factory=list)
+    # 3.3-B: per-boss_fight_id fight-finish safety-net-job. Один на бой;
+    # cancel — NO-OP если job-а нет.
+    scheduled_boss_fight_finish: dict[int, ScheduledBossFightFinishJob] = field(
+        default_factory=dict,
+    )
+    cancelled_boss_fight_finish: list[int] = field(default_factory=list)
 
     async def schedule_finish_forest_run(
         self,
@@ -254,6 +296,51 @@ class FakeDelayedJobScheduler(IDelayedJobScheduler):
     async def cancel_caravan_battle_finish(self, *, caravan_id: int) -> None:
         self.cancelled_caravan_battle_finish.append(caravan_id)
         self.scheduled_caravan_battle_finish.pop(caravan_id, None)
+
+    async def schedule_boss_lobby_close(
+        self,
+        *,
+        boss_fight_id: int,
+        run_at: datetime,
+    ) -> None:
+        self.scheduled_boss_lobby_close[boss_fight_id] = ScheduledBossLobbyCloseJob(
+            boss_fight_id=boss_fight_id,
+            run_at=run_at,
+        )
+
+    async def cancel_boss_lobby_close(self, *, boss_fight_id: int) -> None:
+        self.cancelled_boss_lobby_close.append(boss_fight_id)
+        self.scheduled_boss_lobby_close.pop(boss_fight_id, None)
+
+    async def schedule_boss_round_tick(
+        self,
+        *,
+        boss_fight_id: int,
+        run_at: datetime,
+    ) -> None:
+        self.scheduled_boss_round_tick[boss_fight_id] = ScheduledBossRoundTickJob(
+            boss_fight_id=boss_fight_id,
+            run_at=run_at,
+        )
+
+    async def cancel_boss_round_tick(self, *, boss_fight_id: int) -> None:
+        self.cancelled_boss_round_tick.append(boss_fight_id)
+        self.scheduled_boss_round_tick.pop(boss_fight_id, None)
+
+    async def schedule_boss_fight_finish(
+        self,
+        *,
+        boss_fight_id: int,
+        run_at: datetime,
+    ) -> None:
+        self.scheduled_boss_fight_finish[boss_fight_id] = ScheduledBossFightFinishJob(
+            boss_fight_id=boss_fight_id,
+            run_at=run_at,
+        )
+
+    async def cancel_boss_fight_finish(self, *, boss_fight_id: int) -> None:
+        self.cancelled_boss_fight_finish.append(boss_fight_id)
+        self.scheduled_boss_fight_finish.pop(boss_fight_id, None)
 
     async def schedule_weekly_clan_referral_summary_cron(self) -> None:
         self.scheduled_weekly_clan_referral_summary_cron = True

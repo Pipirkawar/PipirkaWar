@@ -186,6 +186,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0019 is not None
         assert rev_0019.down_revision == "0018_pve_runs"
 
+    def test_0020_descends_from_0019(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0020 = script.get_revision("0020_boss_fights")
+        assert rev_0020 is not None
+        assert rev_0020.down_revision == "0019_caravans"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -209,6 +216,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260507_0017_admins_totp_secret.py",
             "20260507_0018_pve_runs.py",
             "20260508_0019_caravans.py",
+            "20260508_0020_boss_fights.py",
         ]
 
     def test_upgrade_head_creates_all_tables(

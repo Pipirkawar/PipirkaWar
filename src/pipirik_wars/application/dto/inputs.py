@@ -824,3 +824,135 @@ class CancelCaravanInput(_StrictBase):
         gt=0,
         description="Telegram user_id игрока-инициатора отмены (должен быть лидером)",
     )
+
+
+# ── Спринт 3.3-B (рейд-боссы, ГДД §10) ──
+
+
+class SummonBossInput(_StrictBase):
+    """Призыв рейд-босса игроком (Спринт 3.3-B, ГДД §10.1 — §10.3).
+
+    Игрок-саммонер инициирует рейд через `/boss`-команду (handler — 3.3-D).
+    Use-case `SummonBoss` (3.3-B):
+
+    - Резолвит игрока по `summoner_tg_id` (`PlayerNotFoundError` /
+      `PlayerFrozenError` для не-`ACTIVE`).
+    - Валидирует требования к саммонеру (ГДД §10.1):
+        * `thickness.level >= bosses.min_thickness_level_summoner` (=9);
+        * `length.cm >= bosses.min_length_cm` (=20).
+    - Проверяет глобальный 4-часовой кулдаун (ГДД §10.1: «1 раз в 4 часа
+      (глобальный)») через `IBossFightRepository.get_last_global_started_at`
+      → `BossSummonOnGlobalCooldownError` с остатком в секундах. По решению
+      cyan91 на старте 3.3-A — кулдаун **на весь сервер**, не per-clan и
+      не per-player; CANCELLED-бои тоже «съедают» кулдаун.
+    - Берёт `activity_lock(player, BOSS_FIGHT, ttl=lobby_minutes)` для
+      саммонера; `LockAlreadyHeldError` → `AlreadyInBossFightError`.
+    - Выбирает `boss_player_id` случайно из топ-N по длине через
+      `IPlayerRepository.list_top_by_length(limit=bosses.top_n_pool)`,
+      исключая саммонера. Пустой пул → `BossPlayerPoolEmptyError`.
+    - Создаёт `BossFight.starting(...)` (`status=LOBBY`,
+      `current_boss_length_cm=initial_boss_length_cm`).
+    - Создаёт первого `BossParticipant.raider(is_summoner=True, ...)`
+      (саммонер — всегда первый рейдер; ГДД §10.3 «минимум 1 рейдер»).
+    - Шедулит `boss_lobby_close(boss_fight_id, run_at=lobby_ends_at)`
+      на `started_at + bosses.lobby_minutes`.
+    - Audit `BOSS_FIGHT_SUMMONED` (idempotency-key
+      `boss_fight_summoned:{boss_fight_id}`).
+
+    Поле `chat_id` не требуется на уровне use-case — рейд глобальный,
+    презентация (в каком чате опубликовать «вступить»-кнопку) — забота
+    bot-handler-а в Спринте 3.3-D.
+    """
+
+    summoner_tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id игрока-саммонера, призывающего босса",
+    )
+
+
+class JoinBossLobbyInput(_StrictBase):
+    """Вступление рейдера в лобби рейд-боя (Спринт 3.3-B, ГДД §10.1, §10.3).
+
+    Игрок жмёт кнопку «Вступить в рейд» под объявлением вызова. Use-case
+    `JoinBossLobby`:
+
+    - Резолвит рейд-бой (`IBossFightRepository.get_by_id`); не найден →
+      `BossFightNotFoundError`. `status != LOBBY` → `BossFightLobbyClosedError`.
+    - Резолвит игрока по `tg_id`; не найден → `PlayerNotFoundError`,
+      `FROZEN`/`BANNED` → `PlayerFrozenError`.
+    - Валидирует требования к рейдеру (ГДД §10.1):
+        * `thickness.level >= bosses.min_thickness_level_raider` (=4);
+        * `length.cm >= bosses.min_length_cm` (=20).
+    - Проверяет, что игрок — не саммонер (он уже вступил в `SummonBoss`)
+      и не сам босс (босс не может быть рейдером в собственном бою) —
+      `NotInBossFightError`-семантически некорректно бросать; используем
+      `AlreadyInBossFightError(player_id=...)` для саммонера и просто
+      no-op-on-duplicate-семантику через `IBossParticipantRepository`-
+      UNIQUE-индекс. Для босса — отдельный `CaravanRoleConflictError`-
+      аналог; в 3.3-B — через `AlreadyInBossFightError` (бросает
+      `_ensure_not_boss`). Конкретику смотри в use-case-е.
+    - Берёт `activity_lock(player, BOSS_FIGHT, ttl)`; `LockAlreadyHeldError` →
+      `AlreadyInBossFightError`.
+    - Сохраняет `BossParticipant.raider(is_summoner=False, ...)` через
+      `IBossParticipantRepository.add(...)`. БД-инвариант UNIQUE
+      `(boss_fight_id, player_id)` гарантирует от повторного входа.
+    - Audit `BOSS_RAIDER_JOINED` (idempotency-key
+      `boss_raider_joined:{boss_fight_id}:{player_id}`).
+    """
+
+    tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id вступающего рейдера",
+    )
+    boss_fight_id: int = Field(gt=0, description="boss_fights.id")
+
+
+class LeaveBossLobbyInput(_StrictBase):
+    """Выход рейдера из лобби рейд-боя (Спринт 3.3-B, ГДД §10.3).
+
+    Игрок жмёт «Выйти» в лобби. Use-case `LeaveBossLobby`:
+
+    - Резолвит рейд-бой; не найден → `BossFightNotFoundError`.
+      `status != LOBBY` → `BossFightLobbyClosedError` (после старта боя
+      выход — это уже выбывание в раунде, не «выход из лобби»).
+    - Резолвит игрока по `tg_id`.
+    - Игрок должен быть участником этого боя — иначе
+      `NotInBossFightError`. Саммонер выйти из лобби **может**:
+      это эквивалентно отмене рейда (use-case переводит бой
+      `LOBBY → CANCELLED` в той же транзакции, кулдаун не сбрасывается
+      по решению cyan91 в 3.3-A — см. `domain/bosses/value_objects.py`).
+      В 3.3-B саммонер-leave идёт по тому же пути, что и обычный
+      рейдер-leave (просто удаляется participant + снимается lock).
+      Если после ухода саммонера рейдеров больше нет, бот-handler в
+      3.3-D отдельно вызовет `CancelBossFight` (use-case 3.3-C).
+      В 3.3-B — saummoner-leave НЕ переводит бой в `CANCELLED`
+      автоматически (этот use-case добавим в 3.3-C).
+    - `IBossParticipantRepository.remove(boss_fight_id, player_id)`.
+    - Снимает `activity_lock(player, BOSS_FIGHT)` (NO-OP, если лока нет).
+    - Audit `BOSS_RAIDER_LEFT` (idempotency-key
+      `boss_raider_left:{boss_fight_id}:{player_id}:{joined_at_iso}`).
+    """
+
+    tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id выходящего рейдера",
+    )
+    boss_fight_id: int = Field(gt=0, description="boss_fights.id")
+
+
+class CloseBossLobbyInput(_StrictBase):
+    """Закрытие лобби рейд-боя по таймеру (Спринт 3.3-B, ГДД §10.3 → §10.4).
+
+    Вызывается APScheduler-job-ом `boss_lobby_close` через
+    `bosses.lobby_minutes` (=20) после `SummonBoss`. Use-case переводит
+    рейд-бой `LOBBY → IN_BATTLE` идемпотентно (повторный вызов на уже
+    `IN_BATTLE`/`FINISHED`/`CANCELLED` — no-op с `was_already_closed=True`).
+
+    Сам resolve-боя (раунды, выбывание рейдеров, награды) — отдельные
+    use-case-ы `RunBossRound` / `FinishBossFight` в Спринте 3.3-C; здесь
+    только переход статуса + audit `BOSS_FIGHT_STARTED` + постановка
+    `boss_round_tick`-job-а на первый раунд + `boss_fight_finish`-job-а
+    как safety-net (на случай зависшего боя).
+    """
+
+    boss_fight_id: int = Field(gt=0, description="boss_fights.id")

@@ -24,6 +24,10 @@ from typing import Final
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from pipirik_wars.application.bosses import (
+    BossLobbyClosed,
+    CloseBossLobby,
+)
 from pipirik_wars.application.caravans import (
     CaravanBattleFinished,
     CloseCaravanLobby,
@@ -37,6 +41,7 @@ from pipirik_wars.application.daily_head import (
     ScheduleDailyHeadCronJobs,
 )
 from pipirik_wars.application.dto.inputs import (
+    CloseBossLobbyInput,
     CloseCaravanLobbyInput,
     EscalateChatToGlobalInput,
     ExpireLobbyEntryInput,
@@ -94,6 +99,11 @@ _DUNGEON_FINISH_JOB_PREFIX: Final[str] = "dungeon_run_finish:"
 _CARAVAN_LOBBY_CLOSE_JOB_PREFIX: Final[str] = "caravan_lobby_close:"
 # 3.2-C (Караваны, ГДД §9.5–§9.6). Battle-finish-job резолвит бой и выдаёт награды.
 _CARAVAN_BATTLE_FINISH_JOB_PREFIX: Final[str] = "caravan_battle_finish:"
+# 3.3-B (Рейд-боссы, ГДД §10). Lobby-close → IN_BATTLE; round-tick — pending-раунд;
+# fight-finish — safety-net на случай зависшего боя.
+_BOSS_LOBBY_CLOSE_JOB_PREFIX: Final[str] = "boss_lobby_close:"
+_BOSS_ROUND_TICK_JOB_PREFIX: Final[str] = "boss_round_tick:"
+_BOSS_FIGHT_FINISH_JOB_PREFIX: Final[str] = "boss_fight_finish:"
 _DAILY_HEAD_RESCHEDULE_JOB_ID: Final[str] = "daily_head_reschedule_cron"
 _WEEKLY_REFERRAL_SUMMARY_JOB_ID: Final[str] = "weekly_clan_referral_summary_cron"
 #: Расписание weekly-сводки рефералов клана: вс. 18:00 UTC (ГДД §13.3).
@@ -143,6 +153,18 @@ def _caravan_battle_finish_job_id(caravan_id: int) -> str:
     return f"{_CARAVAN_BATTLE_FINISH_JOB_PREFIX}{caravan_id}"
 
 
+def _boss_lobby_close_job_id(boss_fight_id: int) -> str:
+    return f"{_BOSS_LOBBY_CLOSE_JOB_PREFIX}{boss_fight_id}"
+
+
+def _boss_round_tick_job_id(boss_fight_id: int) -> str:
+    return f"{_BOSS_ROUND_TICK_JOB_PREFIX}{boss_fight_id}"
+
+
+def _boss_fight_finish_job_id(boss_fight_id: int) -> str:
+    return f"{_BOSS_FIGHT_FINISH_JOB_PREFIX}{boss_fight_id}"
+
+
 class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
     """Production-адаптер: APScheduler `AsyncIOScheduler`.
 
@@ -188,6 +210,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
 
     __slots__ = (
         "_afk_resolution_factory",
+        "_boss_lobby_close_factory",
         "_caravan_battle_finish_factory",
         "_caravan_battle_finish_notifier",
         "_caravan_lobby_close_factory",
@@ -232,6 +255,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         caravan_battle_finish_factory: Callable[[], FinishCaravanBattle] | None = None,
         caravan_lobby_close_notifier: ICaravanLobbyCloseNotifier | None = None,
         caravan_battle_finish_notifier: ICaravanBattleFinishNotifier | None = None,
+        boss_lobby_close_factory: Callable[[], CloseBossLobby] | None = None,
         clans: IClanRepository | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
@@ -254,6 +278,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._caravan_battle_finish_factory = caravan_battle_finish_factory
         self._caravan_lobby_close_notifier = caravan_lobby_close_notifier
         self._caravan_battle_finish_notifier = caravan_battle_finish_notifier
+        self._boss_lobby_close_factory = boss_lobby_close_factory
         self._clans = clans
         self._logger = logger or logging.getLogger(__name__)
 
@@ -623,6 +648,154 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
                 "caravan_battle_finish: notifier failed",
                 extra={"caravan_id": caravan_id, "error": type(exc).__name__},
             )
+
+    # ── Спринт 3.3-B: рейд-боссы (lobby-close + round-tick + fight-finish, ГДД §10) ──
+    #
+    # На уровне 3.3-B регистрируем date-job-ы; callback-и логируют
+    # «factory not wired» и тихо выходят, потому что use-case-ы
+    # `CloseBossLobby` / `RunBossRound` / `FinishBossFight` подвязываются
+    # в `bot/main.py` отдельным шагом B.11 (factory-параметры на
+    # конструкторе адаптера) и Спринтом 3.3-D (notifier-ы).
+    # Регистрация job-а в APScheduler-е нужна уже сейчас, чтобы
+    # `SummonBoss` / `CloseBossLobby` (B.4 / B.7) могли вызывать
+    # `schedule_boss_*`-методы порта.
+
+    async def schedule_boss_lobby_close(
+        self,
+        *,
+        boss_fight_id: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_boss_lobby_close_job,
+            trigger="date",
+            run_date=run_at,
+            args=(boss_fight_id,),
+            id=_boss_lobby_close_job_id(boss_fight_id),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_boss_lobby_close(self, *, boss_fight_id: int) -> None:
+        try:
+            self._scheduler.remove_job(_boss_lobby_close_job_id(boss_fight_id))
+        except Exception:
+            return
+
+    async def schedule_boss_round_tick(
+        self,
+        *,
+        boss_fight_id: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_boss_round_tick_job,
+            trigger="date",
+            run_date=run_at,
+            args=(boss_fight_id,),
+            id=_boss_round_tick_job_id(boss_fight_id),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_boss_round_tick(self, *, boss_fight_id: int) -> None:
+        try:
+            self._scheduler.remove_job(_boss_round_tick_job_id(boss_fight_id))
+        except Exception:
+            return
+
+    async def schedule_boss_fight_finish(
+        self,
+        *,
+        boss_fight_id: int,
+        run_at: datetime,
+    ) -> None:
+        self._scheduler.add_job(
+            self._run_boss_fight_finish_job,
+            trigger="date",
+            run_date=run_at,
+            args=(boss_fight_id,),
+            id=_boss_fight_finish_job_id(boss_fight_id),
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def cancel_boss_fight_finish(self, *, boss_fight_id: int) -> None:
+        try:
+            self._scheduler.remove_job(_boss_fight_finish_job_id(boss_fight_id))
+        except Exception:
+            return
+
+    async def _run_boss_lobby_close_job(self, boss_fight_id: int) -> None:
+        """Callback `CloseBossLobby`-job-а (Спринт 3.3-B B.11).
+
+        Срабатывает в `boss_fight.lobby_ends_at` и переводит рейд-бой
+        `LOBBY → IN_BATTLE`. Если фабрика не подвязана (recovery /
+        тесты APScheduler-а самого по себе) — пишем warning и тихо
+        выходим. Use-case сам идемпотентен: повторный вызов на
+        уже не-`LOBBY` рейд-бое вернёт `was_already_closed=True`.
+
+        Notifier пока не предусмотрен (3.3-D добавит уведомление в
+        чат саммонера / рейдеров о старте боя).
+        """
+        if self._boss_lobby_close_factory is None:
+            self._logger.warning(
+                "boss_lobby_close: factory not wired",
+                extra={"boss_fight_id": boss_fight_id},
+            )
+            return
+        result: BossLobbyClosed | None = None
+        try:
+            use_case = self._boss_lobby_close_factory()
+            result = await use_case.execute(CloseBossLobbyInput(boss_fight_id=boss_fight_id))
+        except Exception as exc:
+            self._logger.exception(
+                "boss_lobby_close: unexpected error",
+                extra={"boss_fight_id": boss_fight_id, "error": type(exc).__name__},
+            )
+            return
+
+        # 3.3-D добавит notifier; пока просто логируем результат на info-уровне.
+        if result is None:
+            return
+        self._logger.info(
+            "boss_lobby_close: done",
+            extra={
+                "boss_fight_id": boss_fight_id,
+                "was_already_closed": result.was_already_closed,
+            },
+        )
+
+    async def _run_boss_round_tick_job(self, boss_fight_id: int) -> None:
+        """Callback `RunBossRound`-job-а (Спринт 3.3-B B.3, full impl — 3.3-C).
+
+        `RunBossRound`-use-case появляется в Спринте 3.3-C (боевая
+        механика); в B.3 callback — заглушка, которая логирует и
+        тихо выходит. Регистрация job-а уже работает: это нужно,
+        чтобы `CloseBossLobby` (B.7) мог планировать первый раунд-tick
+        через `schedule_boss_round_tick(...)`. В 3.3-C callback
+        переписывается на полную реализацию по образцу
+        `_run_caravan_battle_finish_job`.
+        """
+        self._logger.warning(
+            "boss_round_tick: factory not wired",
+            extra={"boss_fight_id": boss_fight_id},
+        )
+
+    async def _run_boss_fight_finish_job(self, boss_fight_id: int) -> None:
+        """Callback `FinishBossFight`-safety-net-job-а (Спринт 3.3-B B.3,
+        full impl — 3.3-C).
+
+        `FinishBossFight`-use-case появляется в Спринте 3.3-C; в B.3
+        callback — заглушка. Регистрация job-а уже работает: это
+        нужно, чтобы `CloseBossLobby` (B.7) мог планировать
+        safety-net через `schedule_boss_fight_finish(...)`. В 3.3-C
+        callback переписывается на полную реализацию.
+        """
+        self._logger.warning(
+            "boss_fight_finish: factory not wired",
+            extra={"boss_fight_id": boss_fight_id},
+        )
 
     async def _run_dungeon_finish_job(self, run_id: int) -> None:
         """Callback `FinishDungeonRun`-job-а (Спринт 3.1-E).

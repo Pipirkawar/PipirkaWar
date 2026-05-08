@@ -24,6 +24,8 @@ from pipirik_wars.infrastructure.db.models import (  # noqa: F401  (регист
     AdminAuditLogORM,
     AdminORM,
     AuditLogORM,
+    BossFightORM,
+    BossParticipantORM,
     ClanMemberORM,
     ClanORM,
     DailyActiveORM,

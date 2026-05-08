@@ -38,6 +38,12 @@ from pipirik_wars.application.admin import (
 )
 from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.balance import ReloadBalance
+from pipirik_wars.application.bosses import (
+    CloseBossLobby,
+    JoinBossLobby,
+    LeaveBossLobby,
+    SummonBoss,
+)
 from pipirik_wars.application.caravans import (
     CancelCaravan,
     CloseCaravanLobby,
@@ -180,6 +186,8 @@ from tests.fakes import (
     FakeAnticheatRepository,
     FakeAuditLogger,
     FakeBalanceConfig,
+    FakeBossFightRepository,
+    FakeBossParticipantRepository,
     FakeBroadcastSender,
     FakeCaravanParticipantRepository,
     FakeCaravanRepository,
@@ -704,6 +712,45 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         secret_generator=totp_secret_generator,
         bootstrap_password=None,
     )
+    boss_participants_repo = FakeBossParticipantRepository()
+    boss_fights_repo = FakeBossFightRepository(participants=boss_participants_repo)
+    summon_boss_uc = SummonBoss(
+        uow=uow,
+        players=players,
+        boss_fights=boss_fights_repo,
+        boss_participants=boss_participants_repo,
+        locks=activity_lock_service,
+        balance=balance,
+        random=rng,
+        audit=audit,
+        clock=clock,
+        scheduler=delayed_jobs,
+    )
+    join_boss_lobby_uc = JoinBossLobby(
+        uow=uow,
+        players=players,
+        boss_fights=boss_fights_repo,
+        boss_participants=boss_participants_repo,
+        locks=activity_lock_service,
+        balance=balance,
+        audit=audit,
+        clock=clock,
+    )
+    leave_boss_lobby_uc = LeaveBossLobby(
+        uow=uow,
+        players=players,
+        boss_fights=boss_fights_repo,
+        boss_participants=boss_participants_repo,
+        locks=activity_lock_service,
+        audit=audit,
+        clock=clock,
+    )
+    close_boss_lobby_uc = CloseBossLobby(
+        uow=uow,
+        boss_fights=boss_fights_repo,
+        audit=audit,
+        clock=clock,
+    )
     caravans_repo = FakeCaravanRepository()
     caravan_participants_repo = FakeCaravanParticipantRepository()
     create_caravan_uc = CreateCaravan(
@@ -1005,6 +1052,12 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         leave_caravan_lobby=leave_caravan_lobby_uc,
         cancel_caravan=cancel_caravan_uc,
         close_caravan_lobby=close_caravan_lobby_uc,
+        boss_fights=boss_fights_repo,
+        boss_participants=boss_participants_repo,
+        summon_boss=summon_boss_uc,
+        join_boss_lobby=join_boss_lobby_uc,
+        leave_boss_lobby=leave_boss_lobby_uc,
+        close_boss_lobby=close_boss_lobby_uc,
     )
 
 

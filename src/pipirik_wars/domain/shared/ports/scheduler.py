@@ -307,6 +307,101 @@ class IDelayedJobScheduler(abc.ABC):
         после успешного завершения боя (best-effort cleanup).
         """
 
+    # ── Спринт 3.3-B: рейд-боссы (lobby-close + round-tick + fight-finish, ГДД §10) ──
+
+    @abc.abstractmethod
+    async def schedule_boss_lobby_close(
+        self,
+        *,
+        boss_fight_id: int,
+        run_at: datetime,
+    ) -> None:
+        """Запланировать `CloseBossLobby(boss_fight_id=...)` на `run_at` (UTC).
+
+        Срабатывает через `bosses.lobby_minutes` (=20) после
+        `SummonBoss` и переводит рейд-бой `LOBBY → IN_BATTLE`.
+        Идемпотентно по `boss_fight_id`: повторный вызов перезаписывает
+        job (recovery-сценарий после рестарта воркера).
+
+        Сам resolve-боя (раунд-tick-и + finish) — отдельные job-ы
+        `boss_round_tick` / `boss_fight_finish`, которые ставятся в
+        `CloseBossLobby` use-case-е после успешного перевода в
+        `IN_BATTLE`.
+        """
+
+    @abc.abstractmethod
+    async def cancel_boss_lobby_close(self, *, boss_fight_id: int) -> None:
+        """Снять lobby-close-job рейд-боя (NO-OP, если его нет).
+
+        Вызывается, когда бой переведён в `IN_BATTLE`/`CANCELLED` раньше
+        срока (ручная отмена саммонером в 3.3-C) или из самого callback-а
+        после успешного перевода в `IN_BATTLE` (best-effort cleanup).
+        """
+
+    @abc.abstractmethod
+    async def schedule_boss_round_tick(
+        self,
+        *,
+        boss_fight_id: int,
+        run_at: datetime,
+    ) -> None:
+        """Запланировать `RunBossRound(boss_fight_id=...)` на `run_at` (UTC).
+
+        Срабатывает через `bosses.round_seconds` (20..60 сек) после
+        перехода `LOBBY → IN_BATTLE` (первый раунд) или после resolve-а
+        предыдущего раунда (последующие). Идемпотентно по
+        `boss_fight_id`: повторный вызов перезаписывает job. В отличие
+        от 1×1-PvP, ключ — без `round_num`: в активном бою ровно один
+        pending раунд за раз, сам use-case `RunBossRound` отвечает за
+        правильный `current_round`-инкремент через
+        `BossFight.with_round_advanced`.
+
+        Сам resolve раунда — синхронный в callback-е, через домен-сервис
+        `boss_round_resolution` (3.3-C), детерминированный от
+        `BossFight.random_seed + current_round`.
+        """
+
+    @abc.abstractmethod
+    async def cancel_boss_round_tick(self, *, boss_fight_id: int) -> None:
+        """Снять round-tick-job рейд-боя (NO-OP, если его нет).
+
+        Вызывается из `FinishBossFight` (бой завершён победой/поражением
+        раньше истечения раунд-таймера) и из самого `RunBossRound`-callback-а
+        (best-effort cleanup на случай повторного срабатывания).
+        """
+
+    @abc.abstractmethod
+    async def schedule_boss_fight_finish(
+        self,
+        *,
+        boss_fight_id: int,
+        run_at: datetime,
+    ) -> None:
+        """Запланировать `FinishBossFight(boss_fight_id=...)` на `run_at` (UTC).
+
+        Срабатывает через `bosses.battle_minutes` (=10..15) после
+        перехода `LOBBY → IN_BATTLE` (ставится в `CloseBossLobby`
+        use-case-е). Это **safety-net**: если по каким-то причинам
+        раунд-tick-и не дошли до естественного финиша (HP < 10 см или
+        все рейдеры выбыли), этот job принудительно завершит бой по
+        тайм-ауту. Идемпотентно по `boss_fight_id`: повторный вызов
+        перезаписывает job.
+
+        Сам resolve финиша — синхронный в callback-е, через use-case
+        `FinishBossFight` (3.3-C): подсчёт текущего `current_boss_length_cm`
+        и оставшихся рейдеров → выдача наград + per-player ролл скроллов
+        заточки (ГДД §2.8.5).
+        """
+
+    @abc.abstractmethod
+    async def cancel_boss_fight_finish(self, *, boss_fight_id: int) -> None:
+        """Снять fight-finish-safety-net-job рейд-боя (NO-OP, если его нет).
+
+        Вызывается из `FinishBossFight` (бой завершён нормальным путём
+        раньше тайм-аута) и из самого callback-а после успешного
+        завершения боя (best-effort cleanup).
+        """
+
     # ── Спринт 2.4.E: еженедельная сводка рефералов клана ──
 
     @abc.abstractmethod
