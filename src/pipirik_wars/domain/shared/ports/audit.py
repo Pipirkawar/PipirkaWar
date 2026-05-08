@@ -95,6 +95,12 @@ class AuditAction(str, enum.Enum):
     BOSS_FIGHT_FINISHED = "boss_fight_finished"
     BOSS_REWARDS_GRANTED = "boss_rewards_granted"
     BOSS_FIGHT_CANCELLED = "boss_fight_cancelled"
+    # Per-player scroll-drop из рейда (ГДД §2.8.5; Спринт 3.3-C / C.6).
+    # До Спринта 3.4 «Заточка предметов» дроп-скроллов **только** в audit
+    # пишется (не накапливается в инвентаре игрока) — see also `PveScrollDrop`
+    # из Спринта 3.1-D. После 3.4 этот же event начнёт сопровождаться
+    # реальной записью в `inventory.scrolls`.
+    SCROLL_DROP = "scroll_drop"
 
 
 class AuditSource(str, enum.Enum):

@@ -1008,3 +1008,77 @@ class RunBossRoundInput(_StrictBase):
     """
 
     boss_fight_id: int = Field(gt=0, description="boss_fights.id")
+
+
+class FinishBossFightInput(_StrictBase):
+    """Применение исхода рейд-боя и распределение наград (Спринт 3.3-C, ГДД §10.5–§10.6).
+
+    Вызывается APScheduler-job-ом `boss_fight_finish` (safety-net,
+    поставленный `CloseBossLobby` в момент `LOBBY → IN_BATTLE`), либо
+    напрямую `RunBossRound`-use-case-ом сразу после раунда, который
+    закрыл бой (HP босса < `victory_threshold_cm` или все рейдеры
+    выбыли). Use-case `FinishBossFight`:
+
+    - Резолвит рейд-бой (`IBossFightRepository.get_by_id`); не найден →
+      `BossFightNotFoundError`.
+    - Идемпотентность по статусу: если `FINISHED` уже был обработан
+      `FinishBossFight`-ом ранее (определяется по аудит-записи
+      `BOSS_REWARDS_GRANTED:{boss_fight_id}` — `idempotency_key`-CHECK
+      в БД отсекает дубль), либо `CANCELLED` — no-op
+      (`was_already_finished=True`), без аудита и без grant-ов.
+      В C.3 идемпотентность реализована через сам факт `status=FINISHED`
+      + наличие `BOSS_REWARDS_GRANTED`-записи: повторный вызов
+      даёт UNIQUE-conflict в audit_log и откатывает транзакцию,
+      эффективно превращая повторный финиш в no-op.
+    - `LOBBY` (job не должен был сработать без перехода) →
+      `InvalidBossFightStateError`.
+    - `IN_BATTLE` (safety-net-job стрельнул, но раунды ещё идут — это
+      «таймаут боя») — закрываем бой как поражение рейдеров.
+    - Загружает живых рейдеров (`IBossParticipantRepository.list_by_boss_fight`).
+      Если `current_boss_length_cm < bosses.victory_threshold_cm` —
+      рейдеры победили (победа сохраняется даже при пустом списке
+      рейдеров — это редкий corner-case "оба умерли в один раунд").
+      Иначе — рейдеры проиграли.
+    - **Победа рейдеров** (ГДД §10.5):
+        * Каждый живой рейдер получает length-grant
+          `+initial_boss_length_cm / N` см (N = число живых) через
+          `ILengthGranter.grant(source=RAID_REWARD)` с idempotency-key
+          `add_length:boss_fight_reward:{boss_fight_id}:{player_id}`.
+        * Per-player ролл скроллов (regular + blessed, независимо)
+          через `IRandom.bernoulli`; на каждый успех пишется audit
+          `SCROLL_DROP` с idempotency-key
+          `boss_scroll_drop:{boss_fight_id}:{player_id}:{scroll_kind}`.
+          Скролл сейчас (3.3-C) **не** записывается в инвентарь —
+          только audit (см. §6.3.1+ из `development_plan.md`); реальная
+          инвентарная инфраструктура — Спринт 3.4 «Заточка предметов».
+        * Босс получает refund-возврат своей длины **до уровня
+          `victory_threshold_cm`**: его текущая `length` подтягивается
+          вверх до `victory_threshold_cm`, чтобы он не остался на 9 см.
+          Это прямой вызов метода `Player.with_length` + audit
+          `LENGTH_GRANT`,
+          не через `ILengthGranter` — refund к себе самому от себя
+          самого, anti-cheat hardcap не применим.
+    - **Поражение рейдеров** (ГДД §10.5):
+        * Каждый живой рейдер теряет фиксированную сумму, накопленную
+          им за раунды (`base_damage_cm` × число «отбитых блоков») —
+          но по решению cyan91 на 3.3-C raider-loss-вычеты выносим
+          в Спринт 3.3-D (вместе с UI «вы проиграли»). Здесь — только
+          length-grant боссу (`+sum(length_at_join_cm)` всех живых на
+          входе участников; реалистичный «он съел всех») через
+          `ILengthGranter.grant(source=RAID_REWARD)` с idempotency-key
+          `add_length:boss_loss_grant:{boss_fight_id}`.
+    - Снимает `activity_lock(player, *)` для всех живых рейдеров +
+      саммонера + босса (NO-OP, если уже снят/истёк).
+    - `boss_fight.mark_finished(finished_at=now)`, сохраняет.
+    - Cancel-ит pending-tick-job + safety-net-finish-job (best-effort).
+    - Audit `BOSS_FIGHT_FINISHED` (idempotency-key
+      `boss_fight_finished:{boss_fight_id}`) + `BOSS_REWARDS_GRANTED`
+      (агрегаты — granted/loss/scroll-drops; idempotency-key
+      `boss_rewards_granted:{boss_fight_id}`).
+
+    Транзакционность: всё внутри `IUnitOfWork`. Любая ошибка откатывает
+    все mutations + аудит — job-воркер ретраит позже, `idempotency_key`-и
+    защитят от двойного применения.
+    """
+
+    boss_fight_id: int = Field(gt=0, description="boss_fights.id")
