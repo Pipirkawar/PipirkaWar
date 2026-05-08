@@ -17,13 +17,15 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный PR — **3.3-B** (этот PR, открывается следующим коммитом) — use-case-ы `SummonBoss` / `JoinBossLobby` / `LeaveBossLobby` / `CloseBossLobby` (`application/bosses/`), миграция `0020_boss_fights` + ORM + SQLAlchemy-репо (`infrastructure/db/models/boss.py`, `infrastructure/db/repositories/{boss_fight,boss_participant}.py`), APScheduler (`infrastructure/scheduler/aps.py` — 6 boss-методов через 3 фабрики `boss_lobby_close_factory` / `boss_round_tick_factory` / `boss_fight_finish_factory` со `factory=None` до 3.3-D), 8 новых `AuditAction.BOSS_*` (`domain/shared/ports/audit.py`), 4 новых input-DTO (`application/dto/inputs.py`), DI-wiring в `bot/main.py`. Полное unit + integration-покрытие (27 integration + ~ 46 unit-тестов; total `make ci`: 4246 passed / 1 skipped, coverage 95.56%).
+**На `main`:** последний смерженный PR — **3.3-B** (PR #113, `9c859b7`) — use-case-ы `SummonBoss` / `JoinBossLobby` / `LeaveBossLobby` / `CloseBossLobby` (`application/bosses/`), миграция `0020_boss_fights` + ORM + SQLAlchemy-репо (`infrastructure/db/models/boss.py`, `infrastructure/db/repositories/{boss_fight,boss_participant}.py`), APScheduler (`infrastructure/scheduler/aps.py` — 6 boss-методов через 3 фабрики `boss_lobby_close_factory` / `boss_round_tick_factory` / `boss_fight_finish_factory` со `factory=None` до 3.3-D), 8 новых `AuditAction.BOSS_*` (`domain/shared/ports/audit.py`), 4 новых input-DTO (`application/dto/inputs.py`), DI-wiring в `bot/main.py`. Полное unit + integration-покрытие (27 integration + ~ 46 unit-тестов; total `make ci`: 4246 passed / 1 skipped, coverage 95.56%).
+
+**В работе (этот PR; ветка `devin/1778255195-sprint-3-3-C-boss-battle-resolution`)** — **Спринт 3.3-C: боевая механика + завершение + scroll-drops «Рейд-босс»**. По образцу 3.2-C (караванов): чистый доменный сервис `boss_round_resolution` (boss attacks vs raider blocks, deterministic by seed через `SeededRandom(boss_fight.random_seed)`); use-case `RunBossRound` интегрирует с `IRandom`; use-case `FinishBossFight` распределяет награды + per-player ролл скроллов через `IRandom` (обычный + blessed; idempotency-key `(boss_fight_id, player_id, scroll_kind)`); audit-actions `BOSS_FIGHT_ROUND_RESOLVED` / `BOSS_FIGHT_FINISHED` / `BOSS_REWARDS_GRANTED` / `BOSS_FIGHT_CANCELLED` уже whitelist-нуты в 3.3-B; новый audit-action `SCROLL_DROP` добавляется здесь; архитектурный гард `test_length_grant_guard.py` whitelist-нёт `application/bosses/finish_boss_fight.py`; **критично:** интеграционный тест на 100 рейдов × 5 игроков с проверкой частот scroll-drop-а в границах толерантности. Bot-handlers + UI + локали + APScheduler factory-wiring — следующий PR (3.3-D).
 
 Перед ним: **3.3-A** (PR #112, `dbb9b1c`) — каркас доменов «Рейд-босс». Перед ним: **3.2-D** (PR #111, `89e4f0a`) — bot-handlers `/caravan` + lobby-UI + презентеры + локали + APScheduler factory-wiring (закрытие Спринта 3.2). Перед ним: **3.2-C** (PR #110, `2333297`) — боевая механика каравана. Перед ним: **3.2-B** (PR #109, `e27968b`) — use-case-ы каравана + миграция `0019_caravans`. Перед ним: **3.2-A** (PR #108, `fe959c6`) — каркас доменов «Караван». Перед ним: **3.1-E** (PR #107, `5c1b26f`) — bot-handlers `/mountains` + `/dungeon` (закрытие Спринта 3.1). Перед ним: **catch-up docs 3.1-D** (PR #106, `76af44a`). Перед ним: **3.1-D** (PR #105, `2208ae6`). Перед ним: **3.1-C** (PR #103). Перед ним: **3.1-B** (PR #101). Перед ним: **3.1-A** (PR #99). Перед ним: PR-ы Спринта 2.5 (#79–#97).
 
-**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов: 3.1-A → 3.1-E + catch-up #106). **Закрыт Спринт 3.2 «Караваны (полная механика)»** (4 PR-а: 3.2-A → 3.2-D). **Активный — Спринт 3.3 «Рейд-боссы»** ([`development_plan.md`](development_plan.md) §6.3.3); закрыты 2 PR-а из 4 (3.3-A + 3.3-B), следующий — 3.3-C.
+**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов: 3.1-A → 3.1-E + catch-up #106). **Закрыт Спринт 3.2 «Караваны (полная механика)»** (4 PR-а: 3.2-A → 3.2-D). **Активный — Спринт 3.3 «Рейд-боссы»** ([`development_plan.md`](development_plan.md) §6.3.3); этот PR — третий из 4 (3.3-A → 3.3-D).
 
-**Активная feature-ветка:** ещё не создана. Следующий агент создаст ветку **3.3-C** (боевая механика + завершение + scroll-drops) от свежего `main` после мерджа 3.3-B.
+**Активная feature-ветка:** `devin/1778255195-sprint-3-3-C-boss-battle-resolution` (создана от свежего `main = 9c859b7` после мерджа 3.3-B; шаги C.0–C.13).
 
 ---
 
@@ -43,8 +45,8 @@
 **Декомпозиция Спринта 3.3 на фичевые PR-ы:**
 
 - **3.3-A — Каркас доменов «Рейд-босс».** ✅ Закрыт PR #112.
-- **3.3-B — Use-cases + persistence + миграция.** ✅ Этот PR (открывается после докоммита).
-- **3.3-C — Боевая механика + завершение + scroll-drops.** ⏳ Следующий PR. Чистый доменный сервис `boss_round_resolution` (boss attacks vs raider blocks, deterministic by seed через `SeededRandom(boss_fight.random_seed)`). Use-case `RunBossRound` интегрирует с `IRandom`. Use-case `FinishBossFight` распределяет награды + per-player ролл скроллов через `IRandom` (обычный + blessed; idempotency-key `(boss_fight_id, player_id, scroll_kind)`). Audit-actions `BOSS_FIGHT_ROUND_RESOLVED` / `BOSS_FIGHT_FINISHED` / `BOSS_REWARDS_GRANTED` / `BOSS_FIGHT_CANCELLED` уже whitelist-нуты в 3.3-B. Архитектурный гард `test_length_grant_guard.py` whitelist-нёт нужные модули. **Критично:** интеграционный тест на 100 рейдов × 5 игроков с проверкой частот скролл-дропа в границах толерантности.
+- **3.3-B — Use-cases + persistence + миграция.** ✅ Закрыт PR #113.
+- **3.3-C — Боевая механика + завершение + scroll-drops.** ⏳ Этот PR. Чистый доменный сервис `boss_round_resolution` (boss attacks vs raider blocks, deterministic by seed через `SeededRandom(boss_fight.random_seed)`). Use-case `RunBossRound` интегрирует с `IRandom`. Use-case `FinishBossFight` распределяет награды + per-player ролл скроллов через `IRandom` (обычный + blessed; idempotency-key `(boss_fight_id, player_id, scroll_kind)`). Audit-actions `BOSS_FIGHT_ROUND_RESOLVED` / `BOSS_FIGHT_FINISHED` / `BOSS_REWARDS_GRANTED` / `BOSS_FIGHT_CANCELLED` уже whitelist-нуты в 3.3-B. Архитектурный гард `test_length_grant_guard.py` whitelist-нёт нужные модули. **Критично:** интеграционный тест на 100 рейдов × 5 игроков с проверкой частот скролл-дропа в границах толерантности.
 - **3.3-D — Bot-handlers `/raid_boss` (или `/boss`) + лобби UI + презентеры + локали + APScheduler factory-wiring.** По образцу 3.1-E / 3.2-D: handler `/boss` в личке (lvl 9+, ≥ 20 см, 1/4 ч cooldown); inline-кнопки «вступить» + пересылаемая кнопка; `BossPresenter`; локали `bosses-*` (RU+EN parity); APScheduler-фабрики; DI-wiring; нотификаторы для round-tick / fight-finish; manual smoke-тест.
 
 **Финальный коммит каждого PR-а Спринта 3.3** (внутри ветки, последним перед мерджем) — обновить `history.md` (запись «Спринт 3.3-X: ...») + пересобрать «Снимок состояния» в `current_tasks.md` под `main = <коммит_слияния>`, передвинуть чек-лист на следующий PR (или закрыть Спринт 3.3 на 3.3-D и расписать чек-лист **первого PR-а Спринта 3.4** «Заточка предметов» по [`development_plan.md`](development_plan.md) §6.3.4).
@@ -55,11 +57,11 @@
 
 > Этот PR — третий PR Спринта 3.3. Он приземляет резолв раундов рейда (atk vs block через `SeededRandom`), завершение боя (победа рейдеров если босс < 10 см / поражение если время вышло), распределение наград (length-grants через `ILengthGranter` + ataman/clan-bonus аналогии), per-player ролл скроллов заточки (обычный + blessed). Bot-handlers + UI + локали + APScheduler factory-wiring — следующий PR (3.3-D).
 
-- [ ] Дождаться мерджа `main = <коммит-слияния-3.3-B>` (PR `#<номер>`; 3.3-B).
-- [ ] `git fetch && git checkout main && git pull`.
-- [ ] `make ci` локально на свежем `main`: должен быть зелёный.
-- [ ] Создать ветку `devin/<timestamp>-sprint-3-3-C-boss-battle-resolution` от `main`.
-- [ ] **C.0 — Обновить `current_tasks.md`** под старт Спринта 3.3-C (этот коммит).
+- [x] Дождаться мерджа `main = 9c859b7` (PR #113; 3.3-B).
+- [x] `git fetch && git checkout main && git pull`.
+- [x] `make ci` локально на свежем `main`: ✅ зелёный (4246 passed / 1 skipped, coverage 95.56%).
+- [x] Создать ветку `devin/1778255195-sprint-3-3-C-boss-battle-resolution` от `main`.
+- [x] **C.0 — Обновить `current_tasks.md`** под старт Спринта 3.3-C (этот коммит).
 - [ ] **C.1 — Доменный сервис `boss_round_resolution`** (`domain/bosses/services.py`): чистая функция `resolve_round(*, boss_player_length_cm, raiders, boss_attack_targets, raider_blocks, base_damage_cm, rng) -> RoundOutcome`. RoundOutcome: damage_per_raider (dict), survivors (list), boss_damage_taken (int). Симметрично `domain/caravan/services.py`. Юнит-тесты: deterministic by seed; full-block escape-кейс; full-hit kill-кейс; partial-block fractional damage.
 - [ ] **C.2 — Use-case `RunBossRound`** (`application/bosses/run_boss_round.py`): загрузка boss_fight + всех participants + summoner-моды (если AFK — бот ролит атаку через `IRandom`); резолв через `boss_round_resolution`; обновление participant.damage_dealt_cm + boss_fight.current_boss_length_cm; `mark_finished` если `< victory_threshold_cm`; audit `BOSS_FIGHT_ROUND_RESOLVED` (idempotency-key `boss_fight_round_resolved:{boss_fight_id}:{round_number}`); шедул следующего `boss_round_tick` если бой продолжается.
 - [ ] **C.3 — Use-case `FinishBossFight`** (`application/bosses/finish_boss_fight.py`): rewards-механика. Победа рейдеров (`current_boss_length_cm < victory_threshold_cm`) — length-grant каждому живому рейдеру через `ILengthGranter` + per-player ролл скроллов заточки (обычный + blessed) через `IRandom` с idempotency-key `boss_scroll_drop:{boss_fight_id}:{player_id}:{scroll_kind}`; босс получает refund (если применимо). Поражение (timeout) — рейдеры теряют контрибьюцию, босс получает grant. Audit-actions `BOSS_FIGHT_FINISHED` + `BOSS_REWARDS_GRANTED` + N× `LENGTH_GRANT` + N× `SCROLL_DROP` (action добавится в C.0). Идемпотентность повторного вызова (повторный шедул APScheduler).
@@ -82,7 +84,11 @@
 
 > Сюда пиши **дельту** к плану: что именно меняешь, какие use-cases / порты / handler-ы / тесты затронуты.
 
-**Текущий PR — 3.3-B (use-cases + persistence + миграция «Рейд-босс»):** ✅ закрыт.
+**Предыдущий PR — 3.3-B (use-cases + persistence + миграция «Рейд-босс»):** ✅ закрыт PR #113.
+
+**Текущий PR — 3.3-C (боевая механика + завершение + scroll-drops):** в работе на ветке `devin/1778255195-sprint-3-3-C-boss-battle-resolution`. C.0 — обновление `current_tasks.md` (этот коммит); далее по чек-листу C.1–C.13.
+
+**Что было закрыто в 3.3-B:**
 - **Application-слой:** `application/dto/inputs.py` +4 input-DTO (`SummonBossInput`, `JoinBossLobbyInput`, `LeaveBossLobbyInput`, `CloseBossLobbyInput`); новый пакет `application/bosses/` с 4 use-case-ами (`SummonBoss` с lvl 9+ / ≥ 20 см / 4ч-кулдаун / выбор boss_player_id из топ-30 через `IRandom.choice`, `JoinBossLobby` с проверкой не-summoner/не-boss, `LeaveBossLobby` с запретом для summoner-а, `CloseBossLobby` идемпотентный LOBBY → IN_BATTLE с шедулингом `boss_round_tick` + `boss_fight_finish`).
 - **Domain-слой (расширения):** `domain/shared/ports/audit.py` +8 `BOSS_*`-actions (whitelist для `audit_log.action`); `domain/shared/ports/scheduler.py` +6 `schedule_boss_*` / `cancel_boss_*` методов.
 - **Infrastructure-слой:** миграция `0020_boss_fights` + ORM `BossFightORM`/`BossParticipantORM` + репо `SqlAlchemyBossFightRepository` / `SqlAlchemyBossParticipantRepository` (с `get_active_for_player` через JOIN с `boss_participants` для саммонера/рейдера и прямой WHERE по `boss_player_id`); APScheduler-адаптер `_run_boss_lobby_close_job` / `_run_boss_round_tick_job` / `_run_boss_fight_finish_job` через 3 фабрики (`None` до 3.3-D). БД-инварианты: composite-PK `(boss_fight_id, player_id)` + partial-unique `uq_boss_participants_one_summoner_per_boss_fight` + CHECK `summoner_player_id <> boss_player_id` + ON DELETE CASCADE.
@@ -105,4 +111,4 @@
 
 > Обновляется автоматически перед каждым `git push`. После `git log --oneline -1` — short sha + subject.
 
-`d851123` — `test(3.3-B): integration tests for boss_fight + boss_participant repos (B.15)` (последний коммит перед docs-коммитом B.17).
+`9c859b7` — `Merge pull request #113 from Pipirkawar/devin/1778248645-sprint-3-3-B-boss-usecases-persistence` (старт ветки 3.3-C; будет обновлён первым коммитом C.0).
