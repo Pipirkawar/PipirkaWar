@@ -26,6 +26,7 @@ from __future__ import annotations
 import enum
 from dataclasses import dataclass, replace
 
+from pipirik_wars.domain.balance.config import Slot
 from pipirik_wars.domain.enchantment.entities import Scroll, ScrollCategory
 from pipirik_wars.domain.inventory.errors import (
     MaxLevelReachedError,
@@ -71,6 +72,33 @@ class ItemCategory(str, enum.Enum):
     WEAPON = "weapon"
     ARMOR = "armor"
     JEWELRY = "jewelry"
+
+    @classmethod
+    def from_slot(cls, slot: Slot) -> ItemCategory:
+        """Маппинг слота экипировки → категории заточки (ГДД §2.6, §2.8.1).
+
+        | Слоты | Категория |
+        |---|---|
+        | `right_hand`, `left_hand`           | `WEAPON`  |
+        | `hat`, `body`, `legs`, `boots`      | `ARMOR`   |
+        | `ring`, `chain`                     | `JEWELRY` |
+
+        Используется репозиторием `IItemRepository` (Спринт 3.4-B) для
+        восстановления `Item.category` из строки таблицы `items` —
+        категория **не** хранится в БД, она выводится из `Slot`
+        (один источник правды — каталог `items_catalog` в `balance.yaml`).
+
+        Если в будущем добавят 9-й слот, не покрытый таблицей выше, —
+        упадёт `ValueError` (явная защита, чтобы не пропустить
+        миграционный пробел).
+        """
+        if slot in (Slot.RIGHT_HAND, Slot.LEFT_HAND):
+            return cls.WEAPON
+        if slot in (Slot.HAT, Slot.BODY, Slot.LEGS, Slot.BOOTS):
+            return cls.ARMOR
+        if slot in (Slot.RING, Slot.CHAIN):
+            return cls.JEWELRY
+        raise ValueError(f"slot {slot!r} has no enchant category mapping")
 
 
 class RegularEnchantOutcome(str, enum.Enum):

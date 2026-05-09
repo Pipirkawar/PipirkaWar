@@ -33,6 +33,7 @@ from pipirik_wars.infrastructure.db.models import (  # noqa: F401  (регист
     DungeonRunORM,
     ForestRunORM,
     IdempotencyKeyORM,
+    ItemORM,
     MountainRunORM,
     OracleInvocationORM,
     PvpDuelORM,

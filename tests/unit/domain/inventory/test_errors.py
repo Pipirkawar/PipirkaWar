@@ -19,6 +19,7 @@ from pipirik_wars.domain.inventory import (
     InventoryDomainError,
     ItemCategory,
     ItemDestroyedError,
+    ItemNotFoundError,
     MaxLevelReachedError,
     WrongScrollCategoryError,
 )
@@ -33,6 +34,7 @@ class TestInheritanceChain:
             WrongScrollCategoryError,
             MaxLevelReachedError,
             ItemDestroyedError,
+            ItemNotFoundError,
         ],
     )
     def test_inherits_domain_error(self, exc_cls: type[Exception]) -> None:
@@ -45,6 +47,7 @@ class TestInheritanceChain:
             WrongScrollCategoryError,
             MaxLevelReachedError,
             ItemDestroyedError,
+            ItemNotFoundError,
         ],
     )
     def test_inherits_inventory_domain_error(self, exc_cls: type[Exception]) -> None:
@@ -125,6 +128,27 @@ class TestItemDestroyedError:
     def test_caught_by_inventory_domain_error(self) -> None:
         with pytest.raises(InventoryDomainError):
             raise ItemDestroyedError(item_id="x")
+
+
+class TestItemNotFoundError:
+    def test_keyword_only_args(self) -> None:
+        with pytest.raises(TypeError):
+            ItemNotFoundError(42, "item.x")
+
+    def test_attributes(self) -> None:
+        exc = ItemNotFoundError(player_id=42, item_id="item.weapon.sword")
+        assert exc.player_id == 42
+        assert exc.item_id == "item.weapon.sword"
+
+    def test_message_contains_player_and_item(self) -> None:
+        exc = ItemNotFoundError(player_id=7, item_id="item.armor.cloak")
+        msg = str(exc)
+        assert "item.armor.cloak" in msg
+        assert "7" in msg
+
+    def test_caught_by_inventory_domain_error(self) -> None:
+        with pytest.raises(InventoryDomainError):
+            raise ItemNotFoundError(player_id=1, item_id="x")
 
 
 class TestErrorsAreDistinct:
