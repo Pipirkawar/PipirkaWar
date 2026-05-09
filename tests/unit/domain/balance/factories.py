@@ -56,6 +56,17 @@ def _build_valid_enchantment() -> dict[str, Any]:
     return dict(raw["enchantment"])
 
 
+def _build_valid_roulette() -> dict[str, Any]:
+    """Нагружает `roulette`-блок из `config/balance.yaml` (Спринт 3.5-A).
+
+    Источник дефолтов — ГДД §12.4.2 (5 outcomes + 4 length-bucket-а с весами).
+    Идентично подходу `_build_valid_enchantment`: явно ссылаемся на живой
+    баланс, чтобы фабрика не дрейфовала.
+    """
+    raw: dict[str, Any] = yaml.safe_load(_BALANCE_YAML_PATH.read_text(encoding="utf-8"))
+    return dict(raw["roulette"])
+
+
 def valid_balance_payload() -> dict[str, Any]:
     """Минимально валидный сырой dict (как после `yaml.safe_load`).
 
@@ -278,6 +289,7 @@ def valid_balance_payload() -> dict[str, Any]:
             }
         },
         "enchantment": _build_valid_enchantment(),
+        "roulette": _build_valid_roulette(),
         "items_catalog": _build_valid_items_catalog(),
         "names_catalog": _build_valid_names_catalog(),
     }
