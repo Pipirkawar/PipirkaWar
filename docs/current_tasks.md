@@ -17,65 +17,91 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный PR — **3.4-C** (PR подготовлен, ожидает мерджа) — application-слой заточки: VO `Scroll(category, blessed)` + проперти `scroll_id`/`from_scroll_id`; порт `IScrollRepository` + `ScrollNotFoundError`/`ScrollOutOfStockError` + `IItemRepository.delete`; ORM `ScrollORM` + миграция `0022_scrolls` (composite PK `(player_id, scroll_id)`, `qty INT NOT NULL CHECK qty >= 0`); `SqlAlchemyScrollRepository` (get/consume/add); `AuditAction.ITEM_ENCHANT_ATTEMPT` + `AuditAction.ENCHANT_ANOMALY` (без новых `AuditSource`); доменный порт `IEnchantHistoryReader` + SQL-impl `SqlAlchemyEnchantHistoryReader` (читает `audit_log` с JSON-фильтрацией в Python); use-case `EnchantItem(*, item_repo, scroll_repo, balance, random, audit, idempotency, clock, enchant_history)` → `EnchantAttemptResult` DTO с 10-шаговым flow (idempotency `enchant:{key}` namespace → load Item → parse Scroll → matches_scroll → consume scroll qty=1 → pick_enchant_outcome → apply (update/delete) → audit → mark idempotency → trip-wire); trip-wire `ENCHANT_ANOMALY` (10 подряд success-ов на тирах `+18→+25`). 22 integration-теста на `SqlAlchemyScrollRepository` + 25 unit-тестов `EnchantItem` + 4 integration-теста use-case-а через realDB. local `make ci`: **4762 passed / 2 skipped, coverage 96%**. Перед ним — **3.4-B** (PR #118, `7259fad`) — persistence-слой инвентаря (`items`-таблица + миграция `0021_items` + `IItemRepository` + `SqlAlchemyItemRepository`). Перед ним — **3.4-A** (PR #117, `5c21d4e`) — каркас доменов «Заточка»: пакет `domain/inventory/` (`Item` / `ItemCategory` / `pick_enchant_outcome`) + pydantic `EnchantmentConfig` + секция `enchantment` в `balance.yaml`. Перед ним — **3.6 design doc** (PR #116, `f7d671f`). **Закрыт Спринт 3.3 «Рейд-боссы»**, **активен Спринт 3.4 «Заточка предметов»** (закрыты 3.4-A/B/C; в работе **3.4-D** — бот-UI + локали + display + закрытие Спринта).
+**На `main`:** последний смерженный PR — **3.4-D** (PR #<TBD>, `<merge_3_4_D>`) — bot-UI заточки: команда `/inventory` + `InventoryPresenter` (карточка предметов с `+N` суффиксом + стэки скроллов + inline-кнопка «Заточить»); команда `/enchant <item_id> <scroll_id>` + `EnchantPresenter` (warning-карточка с emoji-индикатором тира + confirm/cancel-кнопки + result-сообщение для всех 4+5 исходов); use-case `GetInventory(player_id) → InventoryView` (`application/inventory/get_inventory.py`); расширение портов `IItemRepository.list_by_player` + `IScrollRepository.list_by_player` + `ScrollStack` DTO; локали `enchant-*` + `inventory-*` (~40 ключей × RU/EN); inline-кнопки `inv:enchant`/`inv:pick`/`inv:pickcancel` в карточке `/inventory` с picker-flow (0/1/2 подходящих скролла); composition root wiring `EnchantItem` + `GetInventory` + 3 репозитория в `bot/main.py`. Хелпер `enchant_suffix(level: int) -> str` — `" +N"` для `level > 0`, `""` для `level=0`. Идемпотентность confirm-кнопки через `idempotency_key = f"{tg_user_id}:{message_id}"`. local `make ci`: **4941 passed / 2 skipped, coverage 95.59%**. Перед ним — **3.4-C** (PR #119, `e490095`) — application-слой заточки (`EnchantItem` + `IScrollRepository` + audit + trip-wire + `ScrollORM`); **3.4-B** (PR #118, `7259fad`) — persistence-слой инвентаря; **3.4-A** (PR #117, `5c21d4e`) — каркас доменов; **3.6 design doc** (PR #116, `f7d671f`). **Закрыт Спринт 3.3 «Рейд-боссы»**, **закрыт Спринт 3.4 «Заточка предметов»** (4 PR-а: 3.4-A/B/C/D). **Активен Спринт 3.5 «Free-to-play рулетка»** ([`development_plan.md`](development_plan.md) §6.3.5).
 
-**Текущая ветка** — после мерджа 3.4-C будет создана `devin/<ts>-sprint-3-4-D-enchant-bot-ui` от `main = <merge_3_4_C>`, **следующий feature-PR** Спринта 3.4-D «Bot UI + локали + display + закрытие Спринта 3.4».
+**Текущая ветка** — старт **Спринта 3.5 «Free-to-play рулетка»** будет открыт от свежего `main = <merge_3_4_D>` после мерджа PR #<TBD> (3.4-D). Имя ветки следующего PR-а: `devin/<unix_ts>-sprint-3-5-A-roulette-domain` (или аналог по декомпозиции — см. ниже).
 
-Перед `3.4-A` (PR #117): **3.6 design doc** (PR #116, `f7d671f`) — docs-only. Перед ним: **3.3-D** (PR #115, `5d6c9a3`) — bot-handler `/boss` + lobby-UI + локали + APScheduler-фабрики + 3 нотификатора + use-case `CancelBossFight` + raider-loss length-вычеты + integration-тест scroll-drop частот. Перед ним: **3.3-C** (PR #114, `d08985e`) — доменный сервис `boss_round_resolution` + use-case-ы `RunBossRound` / `FinishBossFight`. Перед ним: **3.3-B** (PR #113, `9c859b7`), **3.3-A** (PR #112, `dbb9b1c`); **3.2-D** (PR #111, `89e4f0a`), **3.2-C** (PR #110, `2333297`), **3.2-B** (PR #109, `e27968b`), **3.2-A** (PR #108, `fe959c6`); **3.1-E** (PR #107, `5c1b26f`) и PR-ы Спринтов 3.1 (#99–#106) и 2.5 (#79–#97).
+Перед `3.4-D`: **3.4-C** (PR #119, `e490095`) — application-слой заточки. Перед ним: **3.4-B** (PR #118, `7259fad`), **3.4-A** (PR #117, `5c21d4e`); **3.6 design doc** (PR #116, `f7d671f`); **3.3-D** (PR #115, `5d6c9a3`); **3.3-C** (PR #114, `d08985e`); **3.3-B** (PR #113, `9c859b7`), **3.3-A** (PR #112, `dbb9b1c`); **3.2-A→D** (#108–#111); **3.1-E** (PR #107, `5c1b26f`) и PR-ы Спринтов 3.1 (#99–#106) и 2.5 (#79–#97).
 
-**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов: 3.1-A → 3.1-E + catch-up #106). **Закрыт Спринт 3.2 «Караваны (полная механика)»** (4 PR-а: 3.2-A → 3.2-D). **Закрыт Спринт 3.3 «Рейд-боссы»** (4 PR-а: 3.3-A + 3.3-B + 3.3-C + 3.3-D). **Активен Спринт 3.4 «Заточка предметов»** ([`development_plan.md`](development_plan.md) §6.3.4) — закрыты **3.4-A** (каркас домена + балансовый конфиг), **3.4-B** (persistence-слой `items`) и **3.4-C** (use-case `EnchantItem` + audit + trip-wire + `ScrollORM`), следующий PR — **3.4-D** «Bot UI + локали + display + закрытие Спринта 3.4» по чек-листу ниже.
+**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов). **Закрыт Спринт 3.2 «Караваны (полная механика)»** (4 PR-а). **Закрыт Спринт 3.3 «Рейд-боссы»** (4 PR-а). **Закрыт Спринт 3.4 «Заточка предметов»** (4 PR-а: 3.4-A/B/C/D). **Активен Спринт 3.5 «Free-to-play рулетка»** ([`development_plan.md`](development_plan.md) §6.3.5).
 
-**Roadmap (после Спринта 3.4 → 3.5):**
-- **Спринт 3.4 «Заточка предметов»** ([`development_plan.md`](development_plan.md) §6.3.4) — **активный**, 4 PR-а (3.4-A/B/C/D).
-- **Спринт 3.5 «Free-to-play рулетка»** ([`development_plan.md`](development_plan.md) §6.3.5) — после 3.4.
-- **Спринт 3.6 «Бонус-за-племена в Предсказателе»** 🎯 ([`development_plan.md`](development_plan.md) §6.3.6, ГДД §11.1) — **новый, добавлен этим docs-PR**. Виральная мини-механика: за каждое активное племя (status='active', участников `>3`, игрок — член) `/predict` начисляет `+1 см` к базовому `uniform(1,20)`, cap `+131 см` (итого `≤ 151 см`). Отдельный лимит anti-cheat (`source = "oracle_tribe_bonus"` НЕ входит в organic 24h/7d). Display: явная строка `+N см за племена` в результате `/predict`. Снапшот — live в момент `/predict`. **Реализация — после 3.5**, 1–2 PR-а (3.6-A: domain + config + use-case + anti-cheat; 3.6-B: bot UI + локали + закрытие).
-
----
-
-## 🎯 Активный спринт — Спринт 3.4 «Заточка предметов» 🪛
-
-> Цель спринта (по [`development_plan.md`](development_plan.md) §6.3.4 «Спринт 3.4 — Заточка предметов»): sink-механика для лишних СМ. Зависит от 3.1 (источники скроллов из mountain/dungeon) и 3.3 (boss-drop из рейда). Доменный слой инвентаря — расширение агрегата `Item` полем `enchant_level: int (0..30)` + категории `weapon`/`armor`/`jewelry` для слотов (ГДД §2.6, §2.8.1). Бот-UI с warnings/confirmations (ГДД §2.8.7); audit-trail (`ITEM_ENCHANT_ATTEMPT`); анти-чит trip-wire на аномальные серии успехов на высоких тирах. Стартовые дефолты весов исходов всех уровней `0..29` уже зафиксированы в ГДД §2.8.6 (полные таблицы regular/blessed) — копируются в `balance.yaml` как есть.
-
-**Скоуп — 9 задач из плана:**
-
-- **3.4.1** — Domain: расширение `Item`-агрегата полем `enchant_level: int (0..30)` + категории `weapon`/`armor`/`jewelry` (см. ГДД §2.6, §2.8.1). Доменный VO `Scroll(category, blessed: bool)`. Domain errors `WrongScrollCategory`, `MaxLevelReached`, `ItemDestroyed`. **Критерий:** Юнит-тесты на каждое правило; mypy --strict.
-- **3.4.2** — Persistence: миграция Alembic `add_enchant_level_to_items` + ORM-маппинг + `IItemRepository.update_enchant_level(...)`. **Критерий:** Integration-тесты: round-trip, default `enchant_level=0` для legacy-предметов.
-- **3.4.3** — Application: use-case `EnchantItem(*, player_id, item_id, scroll_id) -> EnchantOutcome`. Внутри: load + check category + roll исход через `IRandom` + audit `ITEM_ENCHANT_ATTEMPT` + idempotency-key. **Критерий:** Юнит: всех 4 (regular) и 5 (blessed) исходов; idempotency повторного применения; категория-mismatch → `WrongScrollCategory`.
-- **3.4.4** — Доменный picker `pick_enchant_outcome(*, level, blessed, weights)` — чистая функция. **Критерий:** Юнит-тесты на: (a) safe-zone forced-success, (b) все 4/5 исходов в каждом тире, (c) `clamp(0, 30)` на нижней границе.
-- **3.4.5** — Балансовый конфиг: pydantic `EnchantmentConfig` с инвариантами (см. ГДД §2.8.6: сумма весов = 1.0 на каждой группе исходов; safe-zone-zero для drop/destroy; `blessed_outcomes_per_level["29"].success_2 == 0.0`, см. ГДД §2.8.4). Стартовые дефолты — копируются из ГДД §2.8.6. **Критерий:** Юнит-тесты на pydantic-валидаторы; интеграционный тест: дефолтный `balance.yaml` парсится без ошибок и сумма весов на каждом уровне = 1.0 ± ε.
-- **3.4.6** — Bot-handler `/enchant <item_id> <scroll_id>` или callback из карточки предмета. UX: предупреждение → подтверждение → ролл → результат с emoji-индикатором тира (ГДД §2.8.7). **Критерий:** Handler-тесты; визуальная проверка предупреждений в RU+EN.
-- **3.4.7** — Локализация ключей `enchant-*` (RU+EN): `enchant-warning-regular`, `enchant-warning-blessed`, `enchant-success`, `enchant-no-effect`, `enchant-drop`, `enchant-destroy`, `enchant-tier-{safe,easy,hard,very-hard,extreme,impossible}`, `enchant-wrong-category`. **Критерий:** Все ключи в обоих файлах; e2e-snapshot.
-- **3.4.8** — Отображение `+N` рядом с именем предмета во всех местах: `/profile`, инвентарь, нотификации о дропе, audit-лог. **Критерий:** Снэпшот-тесты презентеров.
-- **3.4.9** — Trip-wire анти-чита: аномальные серии успехов на высоких тирах → admin alert (event `ENCHANT_ANOMALY` в `audit_log`). **Критерий:** Юнит-тест: 10 подряд успехов на тире `+18→+25` → alert.
-
-**Декомпозиция Спринта 3.4 на фичевые PR-ы (предложение):**
-
-- **3.4-A — Каркас доменов «Заточка» + балансовый конфиг.** Этот PR (открывается следующим). Расширение агрегата `Item` (поле `enchant_level: int (0..30)`, категория `weapon`/`armor`/`jewelry`); VO `Scroll(category, blessed: bool)`; domain errors (`WrongScrollCategory`, `MaxLevelReached`, `ItemDestroyed`); чистый picker `pick_enchant_outcome(*, level, blessed, weights, random)`; pydantic `EnchantmentConfig` с инвариантами + дефолты в `balance.yaml` (стартовые таблицы из ГДД §2.8.6). Юнит-тесты на каждый invariant + статистический тест picker-а на `n=10000` rolls на каждом тире. Покрывает задачи плана **3.4.1, 3.4.4, 3.4.5**. Без миграции и без use-case-а — это 3.4-B/C.
-- **3.4-B — Persistence-слой инвентаря (создание `items`-таблицы).** Текущий PR. **Корректировка скоупа на старте 3.4-B:** план §3.4.2 говорил «миграция `add_enchant_level_to_items`» — подразумевалось, что таблица `items` уже существует. Реальность (на `main = 5c21d4e`): **таблицы `items` нет**, последняя миграция — `0020_boss_fights.py`; в `application/bosses/finish_boss_fight.py:35` явный комментарий «реальная инвентарная инфраструктура — 3.4-B и далее». Поэтому 3.4-B **создаёт** `items`-таблицу с нуля (`player_id` BIGINT FK → `users.id`, `item_id` VARCHAR(64) — каталожная ссылка `item.<slot>.<short>`, `enchant_level` INT default 0, `acquired_at` TIMESTAMP). Composite PK `(player_id, item_id)` — каждый каталожный предмет — единственная инстанция на игрока (ГДД §2.6 «Не копится: надеть или выбросить»; владение/equipment-state — отдельный концерн, выйдет в 3.4-C/D). Категория `weapon`/`armor`/`jewelry` **не хранится** в таблице — выводится из `Slot` (как и в `forest_run` репо: `_columns_to_drop` + `IBalanceConfig`). `IItemRepository` порт (`domain/inventory/ports.py`) с методами `get(player_id, item_id) -> Item`, `add(player_id, item_id, now) -> Item`, `update_enchant_level(player_id, item_id, new_level) -> Item`. `ItemNotFoundError` (extends `InventoryDomainError`). SQLAlchemy-импл (`infrastructure/db/repositories/items.py`) с балансом-вытяжкой `slot → category` через `IBalanceConfig.items_catalog`. **Скроллы откладываются в 3.4-C** (вместе с `EnchantItem`-use-case-ом — там и так нужно их грузить). Покрывает **3.4.2**, частично готовит почву под **3.4.3** (порт + ItemNotFoundError).
-- **3.4-C — Application use-case `EnchantItem` + audit + анти-чит trip-wire.** `application/inventory/enchant_item.py` с use-case-ом `EnchantItem(*, player_id, item_id, scroll_id) -> EnchantOutcome`: load Item + load Scroll + check category-match (иначе `WrongScrollCategory`) + spend Scroll (consume from inventory) + roll исход через `IRandom` + audit `ITEM_ENCHANT_ATTEMPT` + idempotency-key (`enchant:{player_id}:{scroll_id}`); audit-action `ITEM_ENCHANT_ATTEMPT` whitelist в `domain/shared/ports/audit.py`. Trip-wire `ENCHANT_ANOMALY` (10 подряд успехов на тирах `+18→+25` → admin alert). Юнит-тесты на все 4/5 исходов; idempotency; category-mismatch; trip-wire. Покрывает **3.4.3, 3.4.9**.
-- **3.4-D — Bot UI + локали + display + закрытие Спринта 3.4.** Bot-handler `/enchant <item_id> <scroll_id>` + callback из карточки предмета (`/profile` → inventory → item card → «Заточить»); UX: warning → confirmation → roll → result с emoji-тиром. Локали `enchant-*` (RU+EN parity, ~10–12 ключей × 2 языка). Display `+N` рядом с именем предмета во всех местах (`/profile`, инвентарь, нотификации о дропе, audit-лог). Покрывает **3.4.6, 3.4.7, 3.4.8**.
-
-**Финальный коммит каждого PR-а Спринта 3.4** (внутри ветки, последним перед мерджем) — обновить `history.md` (запись «Спринт 3.4-X: ...») + пересобрать «Снимок состояния» в `current_tasks.md` под `main = <коммит_слияния>`, передвинуть чек-лист на следующий PR (или закрыть Спринт 3.4 на 3.4-D и расписать чек-лист **первого PR-а Спринта 3.5** «Free-to-play рулетка» по [`development_plan.md`](development_plan.md) §6.3.5).
+**Roadmap (после Спринта 3.5 → далее):**
+- **Спринт 3.5 «Free-to-play рулетка»** ([`development_plan.md`](development_plan.md) §6.3.5) — **активный**, ожидаемая декомпозиция 3–4 PR-а (см. ниже).
+- **Спринт 3.6 «Бонус-за-племена в Предсказателе»** 🎯 ([`development_plan.md`](development_plan.md) §6.3.6, ГДД §11.1) — после 3.5. Виральная мини-механика: за каждое активное племя `/predict` начисляет `+1 см` к базовому `uniform(1,20)`, cap `+131 см` (итого `≤ 151 см`). Отдельный лимит anti-cheat (`source = "oracle_tribe_bonus"` НЕ входит в organic 24h/7d). 1–2 PR-а (3.6-A: domain + config + use-case + anti-cheat; 3.6-B: bot UI + локали + закрытие).
 
 ---
 
-## 📝 Чек-лист текущего PR (Спринт 3.4-D — Bot UI + локали + display + закрытие Спринта 3.4)
+## 🎯 Активный спринт — Спринт 3.5 «Free-to-play рулетка» 🎰
 
-> Этот PR — финальный PR Спринта 3.4. Поднимает bot-UI над use-case-ом `EnchantItem` (3.4-C): handler `/enchant <item_id> <scroll_id>` и/или callback из карточки предмета (`/profile` → inventory → item card → «Заточить»); UX warning → confirmation → roll → result с emoji-тиром. Локали `enchant-*` (RU+EN parity, ~10–12 ключей × 2 языка). Display `+N` рядом с именем предмета во всех местах (`/profile`, инвентарь, нотификации о дропе, audit-лог). Покрывает задачи плана **3.4.6, 3.4.7, 3.4.8**.
+> Цель спринта (по [`development_plan.md`](development_plan.md) §6.3.5 «Спринт 3.5 — Free-to-play рулетка»): монетизация-альтернатива через free-to-play-рулетку. Игрок раскручивает рулетку (1× / день бесплатно + N× за внутреннюю валюту); рулетка выпадает с одним из тиров (common/uncommon/rare/epic/legendary), внутри тира — пул призов (длина / скроллы / предметы / boost-эффекты). См. ГДД §11 «Монетизация» (если соответствующий раздел есть) и ПД §6.3.5.
 
-- [ ] Дождаться мерджа `3.4-C` в `main` (PR — в обработке).
+**Скоуп — задачи плана 3.5.* (детали — в [`development_plan.md`](development_plan.md)):**
+
+- Domain: каталог тиров + пулов призов; weighted_choice по тирам; pydantic `RouletteConfig` с инвариантами (сумма весов = 1.0 на каждом уровне).
+- Persistence: таблица `roulette_spins` (player_id, occurred_at, tier, prize_id, source); ORM + миграция Alembic `0023_roulette_spins`.
+- Application: use-case `SpinRoulette(*, player_id, source) -> SpinResult` с idempotency и аудитом `ROULETTE_SPIN`.
+- Bot UI: команда `/roulette` + warning/result-карточки + локали `roulette-*` (RU/EN parity).
+- Anti-cheat: лимит 1× free spin/день (или согласно ГДД); audit-source НЕ входит в organic-окно.
+
+**Декомпозиция Спринта 3.5 на фичевые PR-ы (предложение, уточняется на C.0):**
+
+- **3.5-A — Каркас домена + балансовый конфиг.** `domain/roulette/` с `Tier` / `Prize` / `pick_roulette_prize(...)`; pydantic `RouletteConfig` с инвариантами; стартовые дефолты в `balance.yaml`. Юнит-тесты на picker + конфиг.
+- **3.5-B — Persistence-слой.** `IRouletteSpinRepository` + ORM `RouletteSpinORM` + миграция Alembic `0023_roulette_spins` + SQL-impl. Integration-тесты на round-trip.
+- **3.5-C — Application use-case `SpinRoulette` + audit + ограничение 1× free/день.** `application/roulette/spin_roulette.py`; audit-action `ROULETTE_SPIN` whitelist; daily-cooldown-проверка через `IRouletteSpinRepository.last_free_spin_at(...)`. Юнит + integration-тесты.
+- **3.5-D — Bot UI + локали + display + закрытие Спринта 3.5.** Команда `/roulette` + warning/spin/result-карточки + локали `roulette-*` (RU/EN parity) + composition root wiring. Закрытие Спринта.
+
+**Финальный коммит каждого PR-а Спринта 3.5** (внутри ветки, последним перед мерджем) — обновить `history.md` (запись «Спринт 3.5-X: ...») + пересобрать «Снимок состояния» в `current_tasks.md` под `main = <коммит_слияния>`, передвинуть чек-лист на следующий PR (или закрыть Спринт 3.5 на 3.5-D и расписать чек-лист **первого PR-а Спринта 3.6** «Бонус-за-племена в Предсказателе»).
+
+---
+
+## 📝 Чек-лист следующего PR (Спринт 3.5-A — Каркас домена «Рулетка» + балансовый конфиг)
+
+> Этот PR — первый PR Спринта 3.5. Создаёт каркас домена `domain/roulette/` (`Tier`, `Prize`, чистая `pick_roulette_prize(...)`), pydantic `RouletteConfig` с инвариантами и стартовые дефолты в `balance.yaml`. Без use-case-а и без миграции — это 3.5-B/C.
+
+- [ ] Дождаться мерджа `3.4-D` в `main` (PR #<TBD>, `<merge_3_4_D>`).
 - [ ] `git fetch && git checkout main && git pull`.
-- [ ] Создать ветку `devin/<ts>-sprint-3-4-D-enchant-bot-ui` от `main = <merge_3_4_C>`.
-- [ ] **D.0 — Обновить `current_tasks.md`** под старт Спринта 3.4-D: пересобрать «Снимок состояния» под `main = <merge_3_4_C>`, перенести чек-лист на D.1–D.9.
-- [ ] **D.1 — Bot-handler `/enchant`**: два входа — команда `/enchant <item_id> <scroll_id>` и callback из карточки предмета. Первый запрос → показать warning (ГДД §2.8.7) с вероятностями исходов для текущего тира. Confirm-button вызывает `EnchantItem` use-case (3.4-C). Результат — ответ с итоговым уровнем, emoji-индикатором тира и локализованным сообщением исхода. Idempotency-key — callback_id или message_id.
-- [ ] **D.2 — Локали `enchant-*`** (RU+EN, в `messages-ru.ftl` и `messages-en.ftl`): `enchant-warning-regular`, `enchant-warning-blessed`, `enchant-confirm`, `enchant-cancel`, `enchant-success` (с плейсхолдерами для старого/нового уровня), `enchant-no-effect`, `enchant-drop`, `enchant-destroy`, `enchant-tier-{safe,easy,hard,very-hard,extreme,impossible}`, `enchant-wrong-category`, `enchant-out-of-stock`, `enchant-item-not-found`. e2e snapshot-тест на RU/EN parity как в 3.3-D.
-- [ ] **D.3 — Display `+N`**: презентеры `/profile`, инвентаря, нотификации о дропе предмета, audit-лога — все выводят `<item_name> +N` (или `<item_name>` при `enchant_level=0`). Снэпшот-тесты на каждый презентер.
-- [ ] **D.4 — Composition root**: зарегистрировать `EnchantItem`-use-case + репозитории (`SqlAlchemyItemRepository`, `SqlAlchemyScrollRepository`, `SqlAlchemyEnchantHistoryReader`) в `bot/composition_root.py` и пробросить в новые handler-ы. Тест композиции (как `test_composition_root.py`) на резолв.
-- [ ] **D.5 — Handler-тесты**: получение warning, confirm → success/no-effect/drop/destroy ответы, cancel-button, обработка всех ошибок (`WrongScrollCategoryError`, `ItemNotFoundError`, `ScrollNotFoundError`, `ScrollOutOfStockError`).
-- [ ] **D.6 — Обновить инвентарные презентеры**: в карточке предмета добавить кнопку «Заточить» (разблокирована при наличии хотя бы одного подходящего скролла). При 0 скроллах — disabled с hint-ом.
-- [ ] **D.7 — e2e снэпшот-тесты** всех исходов на RU/EN в стиле `tests/e2e/test_enchant_flow.py`.
-- [ ] **D.8 — `make ci` локально:** ruff + mypy --strict + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%).
-- [ ] **D.9 — Финальный док-коммит:** `history.md` + запись 3.4-D, `current_tasks.md` пересборка под старт **Спринта 3.5 «Free-to-play рулетка»** (закрытие Спринта 3.4).
+- [ ] Создать ветку `devin/<unix_ts>-sprint-3-5-A-roulette-domain` от свежего `main`.
+- [ ] **A.0 — Обновить `current_tasks.md`** под старт Спринта 3.5-A: пересобрать «Снимок состояния» под актуальный `main`, расписать чек-лист 3.5-A.
+- [ ] **A.1 — Доменный пакет `domain/roulette/`**:
+  - `entities.py` — `Tier(StrEnum)` (`COMMON`/`UNCOMMON`/`RARE`/`EPIC`/`LEGENDARY`), `Prize(frozen=True, slots=True)` с `prize_id`/`prize_kind`/`magnitude`.
+  - `services.py` — чистая `pick_roulette_prize(*, config, random) -> tuple[Tier, Prize]` (weighted_choice по тирам → внутри тира — weighted_choice по призам).
+  - `errors.py` — `RouletteDomainError(DomainError)` + `InvalidRouletteConfigError`.
+  - `__init__.py` — экспорт всех публичных символов.
+  - **Критерий:** `mypy --strict` 0 issues; юнит-тесты на picker (safe-branch, weighted distribution на `n=10000` rolls, edge-cases).
+- [ ] **A.2 — Балансовый конфиг `RouletteConfig`** (`domain/balance/config.py`):
+  - pydantic-модель с двумя уровнями: `tier_weights: dict[Tier, float]` (сумма = 1.0 ± ε) + `prizes_per_tier: dict[Tier, dict[str, float]]` (сумма весов внутри тира = 1.0 ± ε).
+  - Стартовые дефолты — копировать из ГДД §11.x (или ПД §6.3.5; уточняется на C.0).
+  - Секция `roulette` в `balance.yaml`.
+  - **Критерий:** pydantic-валидаторы; integration-тест: дефолтный `balance.yaml` парсится без ошибок и сумма весов = 1.0 ± ε на каждом уровне.
+- [ ] **A.3 — `make ci` локально:** ruff + mypy --strict + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%).
+- [ ] **A.4 — Финальный док-коммит:** `history.md` + запись 3.5-A, `current_tasks.md` пересборка под старт **Спринта 3.5-B «Persistence-слой рулетки»**.
+- [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md`.
+- [ ] Дождаться зелёного GitHub CI.
+
+---
+
+## 📦 Архив чек-листа (Спринт 3.4-D — Bot UI заточки + локали + display + закрытие Спринта 3.4) ✅
+
+> Этот PR закрыт, чек-лист сохранён для истории.
+
+- [x] Дождаться мерджа `3.4-C` в `main` (PR #119, `e490095`).
+- [x] `git fetch && git checkout main && git pull`.
+- [x] Создать ветку `devin/1778323886-sprint-3-4-D-enchant-bot-ui` от `main = e490095`.
+- [x] **D.0 — Обновить `current_tasks.md`** под старт Спринта 3.4-D (Вариант A: добавлены D.½, D.1a-D.1d). Коммит `3c09d0e`.
+- [x] **D.½ — Расширить порты инвентаря**: `IItemRepository.list_by_player` + `IScrollRepository.list_by_player` + `ScrollStack` DTO. Коммит `d78e100`.
+- [x] **D.1a — Application use-case `GetInventory(player_id) → InventoryView`** + `ItemView`/`ScrollView` DTO. Коммит `5f0312d`.
+- [x] **fix(3.4-D)** — реализация `list_by_player` в InMemory-fakes + удаление 4 неиспользуемых `# type: ignore[misc]`. Коммит `0f2ac00`.
+- [x] **D.1b — Bot-handler `/inventory` + `InventoryPresenter`** + хелпер `enchant_suffix(level)` + snapshot-тесты RU/EN. Коммит `740e61e`.
+- [x] **D.1c — Bot-handler `/enchant <item_id> <scroll_id>` + `EnchantPresenter`** + warning/result-карточки + handler-тесты + snapshot-тесты RU/EN. Коммиты `f3f7972` + `4cf503a`.
+- [x] **D.1d — Inline-кнопка «Заточить»** в карточке `/inventory` + picker (0/1/2 скролла) + handler-тесты. Коммит `5b77f06`.
+- [x] **D.2 — Локали `enchant-*` + `inventory-*`** (~40 ключей × RU/EN). Коммит `5f0312d`.
+- [x] **D.3 — Display `+N`** — реализовано через хелпер `enchant_suffix(level)` в `/inventory` (D.1b) + `/enchant` warning/result (D.1c). `/profile` Equipment skeleton (отложено до Спринта 1.3+); forest/PvE/dungeon-`Item` не имеют `enchant_level` (всегда дроп `level=0`); audit-лог в TG не отображается. Все актуальные display-точки покрыты.
+- [x] **D.4 — Composition root**: `EnchantItem` + `GetInventory` + `SqlAlchemyEnchantHistoryReader` зарегистрированы в `bot/main.py` + composition-тесты. Коммит `225987c`.
+- [x] **D.5 — Handler-тесты** — покрыто в `test_enchant.py` (D.1c): параметризованный `test_use_case_domain_error_maps_to_toast` по 5 ошибкам (`ItemNotFoundError`/`WrongScrollCategoryError`/`ScrollNotFoundError`/`ScrollOutOfStockError` + `ValueError`).
+- [x] **D.6 — Кнопка «Заточить»** — реализована в D.1d.
+- [x] **D.7 — e2e snapshot-тесты** — покрыто в `test_inventory.py` + `test_enchant.py` презентер-тестах (D.1b + D.1c) RU/EN parity.
+- [x] **D.8 — `make ci` локально зелёный**: 4941 passed / 2 skipped, coverage 95.59%, mypy --strict 0 issues, import-linter 4 contracts KEPT.
+- [x] **D.9 — Финальный док-коммит:** `history.md` (запись 3.4-D) + `current_tasks.md` пересборка под старт Спринта 3.5 (этот коммит).
 - [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md`.
 - [ ] Дождаться зелёного GitHub CI.
 
@@ -147,19 +173,19 @@
 
 > Сюда пиши **дельту** к плану: что именно меняешь, какие use-cases / порты / handler-ы / тесты затронуты.
 
-**Текущий PR — 3.4-C «Application use-case `EnchantItem` + audit + анти-чит trip-wire + `ScrollORM`»** — в работе.
-- **На `main`:** 3.4-B смержен (PR #118, `7259fad`). 3.4-C открыт от фреш-`main`.
-- **Разведка (важно):** VO `Scroll` уже живёт в `pipirik_wars.domain.enchantment.entities` (Спринт 3.1-D), со своим `ScrollCategory(StrEnum)` и вроде `ScrollCategory.WEAPON.value == "weapon_scroll"` (отличается от `ItemCategory.WEAPON.value == "weapon"` ­— это by design, см. `domain/inventory/__init__.py` docstring). `Item.matches_scroll(scroll)` сравнивает по `Enum.name`. `IItemRepository` + `ItemORM` + `SqlAlchemyItemRepository` уже есть.
-- **Надо добавить:** порт `IScrollRepository` + 2 ошибки (`ScrollNotFoundError` / `ScrollOutOfStockError`); стабильный string-id для `Scroll` в persistence (`Scroll.scroll_id` property + classmethod `Scroll.from_scroll_id(...)` — формат `«или weapon_scroll:regular, или armor_scroll:blessed»`); ORM `ScrollORM` + миграцию `0022_scrolls` (`(player_id, scroll_id)` PK, `qty INT CHECK qty >= 0`); `SqlAlchemyScrollRepository` (get/consume/add); 2 новых audit-action (`ITEM_ENCHANT_ATTEMPT`, `ENCHANT_ANOMALY`); use-case `EnchantItem`; trip-wire `ENCHANT_ANOMALY` поиск (в `application/inventory/anti_cheat.py`).
+**Текущий PR — 3.4-D «Bot UI заточки + локали + display + закрытие Спринта 3.4»** — D.1d/D.4/D.3/D.5/D.7/D.8/D.9 закрыты, осталось открыть PR в `main` и дождаться зелёного CI.
+- **На `main`:** 3.4-C смержен (PR #119, `e490095`). 3.4-D открыт от фреш-`main`.
+- **Что закрыли в 3.4-D:** см. архив чек-листа выше — 9 шагов (D.0–D.9 + D.½ + D.1a–D.1d) полностью покрыты. Спринт 3.4 «Заточка предметов» закрывается этим PR.
 - **Открытые блокеры:** нет.
 
 ---
 
 ## 🛑 Известные блокеры / открытые вопросы PR-а
 
-- **Заточка — финальные `success_probability`** (отложено до Спринта 3.4-A) — стартовые дефолты для всех уровней `0..29` зафиксированы в ГДД §2.8.6 (полные таблицы regular/blessed). После альфа-теста подбираются по метрикам; настройка через `balance.yaml` без релиза кода. Стартовый PR 3.4-A копирует эти дефолты как есть.
-- **Заточка — bad-luck protection** (open question, см. ПД п.15 «Открытые вопросы») — нужна ли «гарантированный успех после N подряд провалов» в MVP механики или только в Фазе 4? Сейчас не предусмотрена (ГДД §2.8.8). На 3.4-C/D остаётся как есть; решение по итогам альфа-теста.
-- **`AuditAction.SCROLL_DROP` сейчас audit-only** (с 3.3-C/D и 3.1-D) — до Спринта 3.4-B/C дроп-скроллов из рейдов и PvE **только** в `audit_log` пишется (не накапливается в инвентаре игрока). На 3.4-B (миграция инвентаря) + 3.4-C (use-case `EnchantItem`) этот же event начнёт сопровождаться реальной записью в `inventory.scrolls`. Симметрично `PveScrollDrop` из 3.1-D.
+- **Заточка — финальные `success_probability`** — стартовые дефолты для всех уровней `0..29` зафиксированы в ГДД §2.8.6 (полные таблицы regular/blessed). После альфа-теста подбираются по метрикам; настройка через `balance.yaml` без релиза кода.
+- **Заточка — bad-luck protection** (open question, см. ПД п.15 «Открытые вопросы») — нужна ли «гарантированный успех после N подряд провалов» в MVP механики или только в Фазе 4? Сейчас не предусмотрена (ГДД §2.8.8); решение по итогам альфа-теста.
+- **`AuditAction.SCROLL_DROP` всё ещё audit-only без write-trough в инвентарь** — рейды и PvE дропают скроллы только в `audit_log`, без `INSERT` в `scrolls`-таблицу. Это запланировано как отдельная задача в Спринте 3.4-E или после 3.5 (инвентарь готов с 3.4-B/C; нужен только wire-up в use-case-ах `FinishBossFight` / `FinishMountainRun` / `FinishDungeonRun`). Пока остаётся как есть.
+- **`/profile` Equipment skeleton** — секция «экипировка» в `/profile` ещё не реализована (отложена до Спринта 1.3+ или равноуровневого с реализацией equipment-state). Когда поднимется, использует `enchant_suffix(...)` хелпер из 3.4-D.
 
 ---
 
@@ -167,4 +193,4 @@
 
 > Обновляется автоматически перед каждым `git push`. После `git log --oneline -1` — short sha + subject.
 
-`7259fad` (на `main`) — мердж PR #118. Следующий коммит на ветке 3.4-C — C.0 (этот docs-snapshot), потом C.1 (`IScrollRepository` + `ScrollNotFoundError` + `ScrollOutOfStockError` + `Scroll.scroll_id`).
+`5b77f06` — `feat(3.4-D): D.1d — inv: callback handler (enchant/pick/pickcancel) + tests` (последний коммит перед docs-коммитом D.9).

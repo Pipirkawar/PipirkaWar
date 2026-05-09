@@ -35,6 +35,7 @@ from pipirik_wars.domain.inventory import (
     RegularEnchantOutcome,
     ScrollNotFoundError,
     ScrollOutOfStockError,
+    ScrollStack,
     WrongScrollCategoryError,
 )
 from pipirik_wars.domain.shared.ports import IRandom
@@ -133,6 +134,9 @@ class _InMemoryItemRepository(IItemRepository):
         except KeyError as exc:
             raise ItemNotFoundError(player_id=player_id, item_id=item_id) from exc
 
+    async def list_by_player(self, *, player_id: int) -> tuple[Item, ...]:
+        return tuple(item for (pid, _item_id), item in self.items.items() if pid == player_id)
+
 
 class _InMemoryScrollRepository(IScrollRepository):
     """In-memory `IScrollRepository`."""
@@ -181,6 +185,13 @@ class _InMemoryScrollRepository(IScrollRepository):
                 available_qty=available,
             )
         self.scrolls[(player_id, scroll_id)] = available - qty
+
+    async def list_by_player(self, *, player_id: int) -> tuple[ScrollStack, ...]:
+        return tuple(
+            ScrollStack(scroll=Scroll.from_scroll_id(scroll_id), qty=qty)
+            for (pid, scroll_id), qty in self.scrolls.items()
+            if pid == player_id and qty > 0
+        )
 
 
 class _StubEnchantHistoryReader(IEnchantHistoryReader):

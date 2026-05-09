@@ -308,3 +308,116 @@ class TestSqlAlchemyItemRepositoryServerDefault:
             loaded = await repo.get(player_id=player.id, item_id="item.legs.test_1")
         assert loaded.enchant_level == 0
         assert loaded.category is ItemCategory.ARMOR
+
+
+class TestSqlAlchemyItemRepositoryListByPlayer:
+    """Тесты `list_by_player` (Спринт 3.4-D, D.½)."""
+
+    @pytest.mark.asyncio
+    async def test_list_by_player_returns_empty_for_no_items(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """Игрок без предметов → пустой кортеж, без ошибки."""
+        player = await _seed_player(uow, tg_id=50)
+        assert player.id is not None
+        repo = _make_repo(uow)
+
+        async with uow:
+            items = await repo.list_by_player(player_id=player.id)
+        assert items == ()
+
+    @pytest.mark.asyncio
+    async def test_list_by_player_returns_all_items(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """`add` 3 предметов → `list_by_player` возвращает их все."""
+        player = await _seed_player(uow, tg_id=51)
+        assert player.id is not None
+        repo = _make_repo(uow)
+
+        async with uow:
+            await repo.add(
+                player_id=player.id,
+                item_id="item.right_hand.test_1",
+                now=datetime(2026, 1, 1, tzinfo=UTC),
+            )
+            await repo.add(
+                player_id=player.id,
+                item_id="item.body.test_1",
+                now=datetime(2026, 1, 2, tzinfo=UTC),
+            )
+            await repo.add(
+                player_id=player.id,
+                item_id="item.ring.test_1",
+                now=datetime(2026, 1, 3, tzinfo=UTC),
+            )
+            await repo.update_enchant_level(
+                player_id=player.id,
+                item_id="item.body.test_1",
+                new_level=7,
+            )
+
+        async with uow:
+            items = await repo.list_by_player(player_id=player.id)
+
+        # ASC по acquired_at: weapon → armor → jewelry.
+        assert len(items) == 3
+        assert items[0].id == "item.right_hand.test_1"
+        assert items[0].category is ItemCategory.WEAPON
+        assert items[0].enchant_level == 0
+        assert items[1].id == "item.body.test_1"
+        assert items[1].category is ItemCategory.ARMOR
+        assert items[1].enchant_level == 7
+        assert items[2].id == "item.ring.test_1"
+        assert items[2].category is ItemCategory.JEWELRY
+        assert items[2].enchant_level == 0
+
+    @pytest.mark.asyncio
+    async def test_list_by_player_isolates_between_players(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """Предметы одного игрока не попадают в листинг другого."""
+        alice = await _seed_player(uow, tg_id=52)
+        bob = await _seed_player(uow, tg_id=53)
+        assert alice.id is not None and bob.id is not None
+        repo = _make_repo(uow)
+
+        async with uow:
+            await repo.add(player_id=alice.id, item_id="item.hat.test_1", now=NOW)
+            await repo.add(player_id=bob.id, item_id="item.body.test_1", now=NOW)
+
+        async with uow:
+            alice_items = await repo.list_by_player(player_id=alice.id)
+            bob_items = await repo.list_by_player(player_id=bob.id)
+
+        assert len(alice_items) == 1
+        assert alice_items[0].id == "item.hat.test_1"
+        assert len(bob_items) == 1
+        assert bob_items[0].id == "item.body.test_1"
+
+    @pytest.mark.asyncio
+    async def test_list_by_player_deterministic_order(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """При равных `acquired_at` сортировка по `item_id ASC`."""
+        player = await _seed_player(uow, tg_id=54)
+        assert player.id is not None
+        repo = _make_repo(uow)
+        same_ts = datetime(2026, 1, 1, tzinfo=UTC)
+
+        async with uow:
+            # Добавляем «не в алфавитном порядке».
+            await repo.add(player_id=player.id, item_id="item.ring.test_1", now=same_ts)
+            await repo.add(player_id=player.id, item_id="item.body.test_1", now=same_ts)
+            await repo.add(player_id=player.id, item_id="item.hat.test_1", now=same_ts)
+
+        async with uow:
+            items = await repo.list_by_player(player_id=player.id)
+
+        # ASC по item_id при равном acquired_at: body < hat < ring.
+        item_ids = [i.id for i in items]
+        assert item_ids == ["item.body.test_1", "item.hat.test_1", "item.ring.test_1"]

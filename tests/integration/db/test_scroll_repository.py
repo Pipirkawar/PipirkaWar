@@ -23,6 +23,7 @@ from pipirik_wars.domain.enchantment.entities import Scroll, ScrollCategory
 from pipirik_wars.domain.inventory import (
     ScrollNotFoundError,
     ScrollOutOfStockError,
+    ScrollStack,
 )
 from pipirik_wars.domain.player import Player
 from pipirik_wars.infrastructure.db.models import ScrollORM
@@ -450,3 +451,148 @@ class TestSqlAlchemyScrollRepositoryIsolation:
             qty_p2 = (await uow.session.execute(stmt_p2)).scalar_one()
         assert qty_p1 == 2
         assert qty_p2 == 5
+
+
+class TestSqlAlchemyScrollRepositoryListByPlayer:
+    """Тесты `list_by_player` (Спринт 3.4-D, D.½)."""
+
+    @pytest.mark.asyncio
+    async def test_list_by_player_returns_empty_for_no_scrolls(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """Игрок без скроллов → пустой кортеж, без ошибки."""
+        player = await _seed_player(uow, tg_id=200)
+        assert player.id is not None
+        repo = _make_repo(uow)
+
+        async with uow:
+            stacks = await repo.list_by_player(player_id=player.id)
+        assert stacks == ()
+
+    @pytest.mark.asyncio
+    async def test_list_by_player_returns_all_stacks_in_id_order(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """`add` 3 разных скроллов → все возвращаются, отсортированные по `scroll_id ASC`."""
+        player = await _seed_player(uow, tg_id=201)
+        assert player.id is not None
+        repo = _make_repo(uow)
+
+        async with uow:
+            await repo.add(
+                player_id=player.id,
+                scroll_id="weapon_scroll:regular",
+                qty=3,
+                now=NOW,
+            )
+            await repo.add(
+                player_id=player.id,
+                scroll_id="armor_scroll:blessed",
+                qty=1,
+                now=NOW,
+            )
+            await repo.add(
+                player_id=player.id,
+                scroll_id="jewelry_scroll:regular",
+                qty=2,
+                now=NOW,
+            )
+
+        async with uow:
+            stacks = await repo.list_by_player(player_id=player.id)
+
+        # ASC по scroll_id: armor_scroll < jewelry_scroll < weapon_scroll.
+        assert len(stacks) == 3
+        assert stacks[0].scroll == Scroll(category=ScrollCategory.ARMOR, blessed=True)
+        assert stacks[0].qty == 1
+        assert stacks[1].scroll == Scroll(category=ScrollCategory.JEWELRY, blessed=False)
+        assert stacks[1].qty == 2
+        assert stacks[2].scroll == Scroll(category=ScrollCategory.WEAPON, blessed=False)
+        assert stacks[2].qty == 3
+
+    @pytest.mark.asyncio
+    async def test_list_by_player_skips_zero_qty_stacks(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """`qty=0`-стэки (после consume → 0) не попадают в листинг."""
+        player = await _seed_player(uow, tg_id=202)
+        assert player.id is not None
+        repo = _make_repo(uow)
+
+        async with uow:
+            await repo.add(
+                player_id=player.id,
+                scroll_id="weapon_scroll:regular",
+                qty=1,
+                now=NOW,
+            )
+            await repo.add(
+                player_id=player.id,
+                scroll_id="armor_scroll:regular",
+                qty=2,
+                now=NOW,
+            )
+            # Полностью расходуем `weapon_scroll:regular` → qty=0.
+            await repo.consume(
+                player_id=player.id,
+                scroll_id="weapon_scroll:regular",
+                qty=1,
+            )
+
+        async with uow:
+            stacks = await repo.list_by_player(player_id=player.id)
+
+        # Только `armor_scroll:regular` (qty=2); `weapon_scroll:regular`
+        # с qty=0 отфильтрован.
+        assert len(stacks) == 1
+        assert stacks[0].scroll == Scroll(category=ScrollCategory.ARMOR, blessed=False)
+        assert stacks[0].qty == 2
+
+    @pytest.mark.asyncio
+    async def test_list_by_player_isolates_between_players(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """Скроллы одного игрока не попадают в листинг другого."""
+        alice = await _seed_player(uow, tg_id=203)
+        bob = await _seed_player(uow, tg_id=204)
+        assert alice.id is not None and bob.id is not None
+        repo = _make_repo(uow)
+
+        async with uow:
+            await repo.add(
+                player_id=alice.id,
+                scroll_id="weapon_scroll:regular",
+                qty=5,
+                now=NOW,
+            )
+            await repo.add(
+                player_id=bob.id,
+                scroll_id="armor_scroll:regular",
+                qty=3,
+                now=NOW,
+            )
+
+        async with uow:
+            alice_stacks = await repo.list_by_player(player_id=alice.id)
+            bob_stacks = await repo.list_by_player(player_id=bob.id)
+
+        assert len(alice_stacks) == 1
+        assert alice_stacks[0].scroll == Scroll(category=ScrollCategory.WEAPON, blessed=False)
+        assert alice_stacks[0].qty == 5
+        assert len(bob_stacks) == 1
+        assert bob_stacks[0].scroll == Scroll(category=ScrollCategory.ARMOR, blessed=False)
+        assert bob_stacks[0].qty == 3
+
+    @pytest.mark.asyncio
+    async def test_scroll_stack_dataclass_is_frozen(self) -> None:
+        """`ScrollStack` — frozen dataclass, нельзя мутировать."""
+        stack = ScrollStack(
+            scroll=Scroll(category=ScrollCategory.WEAPON, blessed=False),
+            qty=5,
+        )
+        with pytest.raises((AttributeError, TypeError)):
+            stack.qty = 7

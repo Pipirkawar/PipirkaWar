@@ -31,6 +31,7 @@ from pipirik_wars.domain.inventory import (
     IScrollRepository,
     ScrollNotFoundError,
     ScrollOutOfStockError,
+    ScrollStack,
 )
 from pipirik_wars.infrastructure.db.models import ScrollORM
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
@@ -141,4 +142,23 @@ class SqlAlchemyScrollRepository(IScrollRepository):
             scroll_id=scroll_id,
             requested_qty=qty,
             available_qty=int(available),
+        )
+
+    async def list_by_player(self, *, player_id: int) -> tuple[ScrollStack, ...]:
+        # Только `qty > 0`-стэки — нулевые стэки UI прячет.
+        # Сортировка `scroll_id ASC` — детерминированный порядок для
+        # snapshot-тестов и предсказуемого UI.
+        stmt = (
+            select(ScrollORM)
+            .where(ScrollORM.player_id == player_id, ScrollORM.qty > 0)
+            .order_by(ScrollORM.scroll_id.asc())
+        )
+        result = await self._uow.session.execute(stmt)
+        rows = result.scalars().all()
+        return tuple(
+            ScrollStack(
+                scroll=Scroll.from_scroll_id(row.scroll_id),
+                qty=int(row.qty),
+            )
+            for row in rows
         )

@@ -112,6 +112,7 @@ from pipirik_wars.application.forest import (
     StartForestRun,
 )
 from pipirik_wars.application.i18n import IMessageBundle, IPlayerLocaleResolver
+from pipirik_wars.application.inventory import EnchantItem, GetInventory
 from pipirik_wars.application.mountains import (
     FinishMountainRun,
     IMountainFinishNotifier,
@@ -203,6 +204,11 @@ from pipirik_wars.domain.daily_head import (
 from pipirik_wars.domain.dau import IDauCounter, IDauLimit, IDauThresholdAlerter
 from pipirik_wars.domain.dungeon import IDungeonRunRepository
 from pipirik_wars.domain.forest import IForestRunRepository
+from pipirik_wars.domain.inventory import (
+    IEnchantHistoryReader,
+    IItemRepository,
+    IScrollRepository,
+)
 from pipirik_wars.domain.mountains import IMountainRunRepository
 from pipirik_wars.domain.oracle import IOracleHistoryRepository
 from pipirik_wars.domain.player import IPlayerRepository
@@ -251,13 +257,16 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyDailyHeadRepository,
     SqlAlchemyDuelRepository,
     SqlAlchemyDungeonRunRepository,
+    SqlAlchemyEnchantHistoryReader,
     SqlAlchemyForestRunRepository,
     SqlAlchemyGlobalLobbyRepository,
+    SqlAlchemyItemRepository,
     SqlAlchemyMassDuelRepository,
     SqlAlchemyMountainRunRepository,
     SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemyReferralRepository,
+    SqlAlchemyScrollRepository,
     SqlAlchemySignupQueueRepository,
 )
 from pipirik_wars.infrastructure.db.services import (
@@ -415,6 +424,15 @@ class Container:
     close_boss_lobby: CloseBossLobby
     run_boss_round: RunBossRound
     finish_boss_fight: FinishBossFight
+    # Инвентарь и заточка (Спринт 3.4, ГДД §2.6 + §2.8). 3.4-A/B/C — домен
+    # + persistence + use-case заточки + audit + trip-wire. 3.4-D —
+    # /inventory + /enchant + presenter-ы + handler-ы. Репо и use-case-ы
+    # пробрасываются в dispatcher в build_dispatcher (3.4-D спринт).
+    items: IItemRepository
+    scrolls: IScrollRepository
+    enchant_history: IEnchantHistoryReader
+    enchant_item: EnchantItem
+    get_inventory: GetInventory
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
@@ -567,6 +585,15 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     # `boss_lobby_close` ходит через `boss_lobby_close_factory`.
     boss_fights = SqlAlchemyBossFightRepository(uow=uow)
     boss_participants = SqlAlchemyBossParticipantRepository(uow=uow)
+    # Спринт 3.4-B/C: инвентарь (ГДД §2.6) + заточка (§2.8).
+    # `items` — реализация `IItemRepository`, `scrolls` —
+    # `IScrollRepository` (UPSERT-стэки), `enchant_history` —
+    # `IEnchantHistoryReader` (read-only скан audit-лога для trip-wire-а).
+    # Bot-handler-ы /inventory + /enchant их пробрасывают через dispatcher
+    # workflow-data (3.4-D).
+    items = SqlAlchemyItemRepository(uow=uow, balance=balance)
+    scrolls = SqlAlchemyScrollRepository(uow=uow)
+    enchant_history = SqlAlchemyEnchantHistoryReader(uow=uow)
     oracle_history = SqlAlchemyOracleHistoryRepository(uow=uow)
     duels = SqlAlchemyDuelRepository(uow=uow)
     mass_duels = SqlAlchemyMassDuelRepository(uow=uow)
@@ -1066,6 +1093,23 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         balance=balance.get().bosses,
         random_factory=SeededRandom,
     )
+    # Спринт 3.4-C: use-case заточки (`EnchantItem`) + read-only
+    # инвентарь (`GetInventory`). `EnchantItem` требует уже открытый
+    # `IUnitOfWork`-контекст у вызывающего (бот-handler `/enchant`
+    # открывает `async with uow:` перед вызовом — контракт «one
+    # transaction per HTTP/Telegram update»).
+    enchant_item = EnchantItem(
+        uow=uow,
+        item_repo=items,
+        scroll_repo=scrolls,
+        balance=balance,
+        random=RealRandom(),
+        audit=audit,
+        idempotency=idempotency,
+        clock=clock,
+        enchant_history=enchant_history,
+    )
+    get_inventory = GetInventory(item_repo=items, scroll_repo=scrolls, balance=balance)
     # Спринт 3.3-D D.1: саммонер отменяет рейд из лобби. Идемпотентен
     # на повторный вызов в `CANCELLED`-статусе.
     cancel_boss_fight = CancelBossFight(
@@ -1604,6 +1648,11 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         close_boss_lobby=close_boss_lobby,
         run_boss_round=run_boss_round,
         finish_boss_fight=finish_boss_fight,
+        items=items,
+        scrolls=scrolls,
+        enchant_history=enchant_history,
+        enchant_item=enchant_item,
+        get_inventory=get_inventory,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,
@@ -1806,6 +1855,14 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["cancel_boss_fight"] = container.cancel_boss_fight
     dispatcher["boss_fights"] = container.boss_fights
     dispatcher["boss_participants"] = container.boss_participants
+    # Спринт 3.4-D — bot-handler-ы `/inventory` (личка-only карточка
+    # инвентаря) + `/enchant <item_id> <scroll_id>` (warning-карточка
+    # + confirm/cancel callback-и). `enchant_item` требует уже открытый
+    # `IUnitOfWork`-контекст — confirm-callback открывает `async with uow:`
+    # перед вызовом, `uow` проброшен через workflow-data.
+    dispatcher["get_inventory"] = container.get_inventory
+    dispatcher["enchant_item"] = container.enchant_item
+    dispatcher["uow"] = container.uow
     return dispatcher
 
 

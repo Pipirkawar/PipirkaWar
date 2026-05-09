@@ -26,13 +26,36 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
 from pipirik_wars.domain.enchantment.entities import Scroll
 from pipirik_wars.domain.inventory.entities import Item
 
-__all__ = ["IEnchantHistoryReader", "IItemRepository", "IScrollRepository"]
+__all__ = [
+    "IEnchantHistoryReader",
+    "IItemRepository",
+    "IScrollRepository",
+    "ScrollStack",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class ScrollStack:
+    """Стэк скроллов одного типа в инвентаре игрока (Спринт 3.4-D).
+
+    Доменное представление одной строки `scrolls`-таблицы для
+    UI-листинга `/inventory`: VO-скролл + текущее `qty`. Не входит
+    в `Item`-агрегат, не пересекается с `Scroll`-VO (тот идентичен
+    по `(category, blessed)` и не содержит количество).
+
+    Используется только `IScrollRepository.list_by_player` и
+    application use-case-ом `GetInventory`.
+    """
+
+    scroll: Scroll
+    qty: int
 
 
 class IItemRepository(Protocol):
@@ -99,6 +122,19 @@ class IItemRepository(Protocol):
         Поднимает `ItemNotFoundError(player_id, item_id)`, если строки
         в `items` нет (0 rows affected). Это защита от двойного DELETE
         при race-condition use-case-ов.
+        """
+        ...
+
+    async def list_by_player(self, *, player_id: int) -> tuple[Item, ...]:
+        """Прочитать все предметы игрока (Спринт 3.4-D).
+
+        Используется UI-командой `/inventory` (через application
+        use-case `GetInventory`). Сортировка — детерминированная
+        (по `acquired_at ASC, item_id ASC`), чтобы snapshot-тесты
+        UI давали стабильный порядок.
+
+        Возвращает пустой кортеж, если у игрока нет предметов.
+        Никогда не бросает: «инвентарь пуст» — валидное состояние.
         """
         ...
 
@@ -173,6 +209,20 @@ class IScrollRepository(Protocol):
         `rowcount == 0` означает, что либо нет записи, либо
         `qty < n` (различие выявляется отдельным `SELECT`-ом перед
         падением, чтобы дать точную ошибку).
+        """
+        ...
+
+    async def list_by_player(self, *, player_id: int) -> tuple[ScrollStack, ...]:
+        """Прочитать все стэки скроллов игрока (Спринт 3.4-D).
+
+        Возвращает кортеж `ScrollStack(scroll, qty)`-DTO для каждой
+        строки `scrolls` с `qty > 0`. `qty == 0`-строки пропускаются
+        (теоретически могут существовать после consume → 0; UI их
+        прячет).
+
+        Сортировка — детерминированная (по `scroll_id ASC`), для
+        стабильности snapshot-тестов. Возвращает пустой кортеж,
+        если у игрока нет скроллов.
         """
         ...
 

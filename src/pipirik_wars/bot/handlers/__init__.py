@@ -30,6 +30,7 @@ from pipirik_wars.bot.handlers.clan_history import router as clan_history_router
 from pipirik_wars.bot.handlers.clantop import router as clantop_router
 from pipirik_wars.bot.handlers.duel import router as duel_router
 from pipirik_wars.bot.handlers.dungeon import router as dungeon_router
+from pipirik_wars.bot.handlers.enchant import router as enchant_router
 from pipirik_wars.bot.handlers.forest import router as forest_router
 from pipirik_wars.bot.handlers.lang import router as lang_router
 from pipirik_wars.bot.handlers.mass_duel import router as mass_duel_router
@@ -60,6 +61,14 @@ def register_routers(dispatcher: Dispatcher) -> None:
     # Спринт 3.3-D: `/boss` (личка-only) + объявление с inline-кнопкой
     # «Показать лобби». Префикс callback_data — `boss:`.
     dispatcher.include_router(boss_router)
+    # Спринт 3.4-D: `/enchant <item_id> <scroll_id>` (личка-only) +
+    # warning-карточка с inline-кнопками «Подтвердить»/«Отмена».
+    # Префикс callback_data — `enc:`. `/inventory` (просмотр items+scrolls)
+    # пока выезжает на `inv:`-callback-ах в собственном роутере (D.1b);
+    # «Заточить» из карточки `/inventory` (D.1d) подключается отдельным
+    # callback-ом и сводится к показу того же warning-а через
+    # `EnchantPresenter`.
+    dispatcher.include_router(enchant_router)
     dispatcher.include_router(upgrade_router)
     dispatcher.include_router(duel_router)
     dispatcher.include_router(mass_duel_router)

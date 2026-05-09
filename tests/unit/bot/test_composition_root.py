@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import cast
 from unittest.mock import MagicMock
@@ -81,6 +82,7 @@ from pipirik_wars.application.forest import (
     StartForestRun,
 )
 from pipirik_wars.application.i18n import IMessageBundle
+from pipirik_wars.application.inventory import EnchantItem, GetInventory
 from pipirik_wars.application.mountains import (
     FinishMountainRun,
     StartMountainRun,
@@ -123,7 +125,16 @@ from pipirik_wars.domain.admin import IAdminConfirmStore, IAdminRepository, ITot
 from pipirik_wars.domain.clan import IClanMembershipRepository, IClanRepository
 from pipirik_wars.domain.daily_head import DailyHeadService
 from pipirik_wars.domain.dungeon import IDungeonRunRepository
+from pipirik_wars.domain.enchantment.entities import Scroll, ScrollCategory
 from pipirik_wars.domain.forest import IForestRunRepository
+from pipirik_wars.domain.inventory import (
+    IEnchantHistoryReader,
+    IItemRepository,
+    IScrollRepository,
+    Item,
+    ItemNotFoundError,
+    ScrollStack,
+)
 from pipirik_wars.domain.mountains import IMountainRunRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.pvp import IDuelRepository, IMassDuelRepository
@@ -153,11 +164,14 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyDailyHeadRepository,
     SqlAlchemyDuelRepository,
     SqlAlchemyDungeonRunRepository,
+    SqlAlchemyEnchantHistoryReader,
     SqlAlchemyForestRunRepository,
     SqlAlchemyGlobalLobbyRepository,
+    SqlAlchemyItemRepository,
     SqlAlchemyMassDuelRepository,
     SqlAlchemyMountainRunRepository,
     SqlAlchemyPlayerRepository,
+    SqlAlchemyScrollRepository,
     SqlAlchemySignupQueueRepository,
 )
 from pipirik_wars.infrastructure.db.services import (
@@ -226,6 +240,91 @@ from tests.fakes import (
     InlineBroadcastTaskSpawner,
 )
 from tests.unit.domain.balance.factories import build_valid_balance
+
+
+class _StubItemRepository(IItemRepository):
+    """In-memory `IItemRepository` для composition-root тестов.
+
+    Не реализует логику бизнес-операций — только удовлетворяет protocol
+    для инстанцирования `EnchantItem` / `GetInventory` use-case-ов.
+    Полные фейки живут в `tests/unit/application/inventory/`.
+    """
+
+    __slots__ = ()
+
+    async def get(self, *, player_id: int, item_id: str) -> Item:
+        raise ItemNotFoundError(player_id=player_id, item_id=item_id)
+
+    async def add(
+        self,
+        *,
+        player_id: int,
+        item_id: str,
+        now: datetime,
+    ) -> Item:
+        raise NotImplementedError
+
+    async def update_enchant_level(
+        self,
+        *,
+        player_id: int,
+        item_id: str,
+        new_level: int,
+    ) -> Item:
+        raise NotImplementedError
+
+    async def delete(self, *, player_id: int, item_id: str) -> None:
+        raise NotImplementedError
+
+    async def list_by_player(self, *, player_id: int) -> tuple[Item, ...]:
+        return ()
+
+
+class _StubScrollRepository(IScrollRepository):
+    """In-memory `IScrollRepository` для composition-root тестов."""
+
+    __slots__ = ()
+
+    async def get(self, *, player_id: int, scroll_id: str) -> Scroll:
+        return Scroll(category=ScrollCategory.WEAPON, blessed=False)
+
+    async def add(
+        self,
+        *,
+        player_id: int,
+        scroll_id: str,
+        qty: int,
+        now: datetime,
+    ) -> None:
+        raise NotImplementedError
+
+    async def consume(
+        self,
+        *,
+        player_id: int,
+        scroll_id: str,
+        qty: int = 1,
+    ) -> None:
+        raise NotImplementedError
+
+    async def list_by_player(self, *, player_id: int) -> tuple[ScrollStack, ...]:
+        return ()
+
+
+class _StubEnchantHistoryReader(IEnchantHistoryReader):
+    """Стаб `IEnchantHistoryReader` для composition-root тестов."""
+
+    __slots__ = ()
+
+    async def get_recent_high_tier_outcomes(
+        self,
+        *,
+        player_id: int,
+        tier_min: int,
+        tier_max: int,
+        limit: int,
+    ) -> tuple[bool, ...]:
+        return ()
 
 
 def _test_settings() -> Settings:
@@ -824,6 +923,27 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         audit=audit,
         clock=clock,
     )
+    # Спринт 3.4-B/C/D: инвентарь (ГДД §2.6) + заточка (§2.8). Репо
+    # и use-case-ы пробрасываются в dispatcher в build_dispatcher (3.4-D).
+    items_repo: IItemRepository = _StubItemRepository()
+    scrolls_repo: IScrollRepository = _StubScrollRepository()
+    enchant_history_reader: IEnchantHistoryReader = _StubEnchantHistoryReader()
+    enchant_item_uc = EnchantItem(
+        uow=uow,
+        item_repo=items_repo,
+        scroll_repo=scrolls_repo,
+        balance=balance,
+        random=rng,
+        audit=audit,
+        idempotency=idempotency,
+        clock=clock,
+        enchant_history=enchant_history_reader,
+    )
+    get_inventory_uc = GetInventory(
+        item_repo=items_repo,
+        scroll_repo=scrolls_repo,
+        balance=balance,
+    )
     cancel_caravan_uc = CancelCaravan(
         uow=uow,
         caravans=caravans_repo,
@@ -1098,6 +1218,11 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         close_boss_lobby=close_boss_lobby_uc,
         run_boss_round=run_boss_round_uc,
         finish_boss_fight=finish_boss_fight_uc,
+        items=items_repo,
+        scrolls=scrolls_repo,
+        enchant_history=enchant_history_reader,
+        enchant_item=enchant_item_uc,
+        get_inventory=get_inventory_uc,
     )
 
 
@@ -1196,6 +1321,15 @@ class TestContainer:
         assert isinstance(c.grant_referral_signup_bonus, GrantReferralSignupBonus)
         assert isinstance(c.grant_referral_thickness_milestone, GrantReferralThicknessMilestone)
         assert isinstance(c.run_weekly_clan_referral_summary, RunWeeklyClanReferralSummary)
+
+    def test_container_holds_inventory_use_cases(self) -> None:
+        """Инвентарь и заточка (Спринт 3.4-B/C/D, ГДД §2.6 + §2.8)."""
+        c = _container_with_fakes()
+        assert isinstance(c.items, _StubItemRepository)
+        assert isinstance(c.scrolls, _StubScrollRepository)
+        assert isinstance(c.enchant_history, _StubEnchantHistoryReader)
+        assert isinstance(c.enchant_item, EnchantItem)
+        assert isinstance(c.get_inventory, GetInventory)
 
     def test_container_holds_admin_support_use_cases(self) -> None:
         """Расширенный админ-интерфейс (Спринт 2.5-A.3 + 2.5-B)."""
@@ -1311,6 +1445,13 @@ class TestBuildContainer:
         assert isinstance(c.ban_player, BanPlayer)
         assert isinstance(c.request_admin_confirm, RequestAdminConfirm)
         assert isinstance(c.verify_admin_confirm, VerifyAdminConfirm)
+        # Инвентарь и заточка (Спринт 3.4-B/C/D): реальные
+        # SQLAlchemy-репозитории + use-case-ы.
+        assert isinstance(c.items, SqlAlchemyItemRepository)
+        assert isinstance(c.scrolls, SqlAlchemyScrollRepository)
+        assert isinstance(c.enchant_history, SqlAlchemyEnchantHistoryReader)
+        assert isinstance(c.enchant_item, EnchantItem)
+        assert isinstance(c.get_inventory, GetInventory)
 
 
 class TestBuildDispatcher:
@@ -1381,3 +1522,8 @@ class TestBuildDispatcher:
         assert dp["ban_player"] is c.ban_player
         assert dp["request_admin_confirm"] is c.request_admin_confirm
         assert dp["verify_admin_confirm"] is c.verify_admin_confirm
+        # Sprint 3.4-D: инвентарь + заточка use-case-ы + uow в workflow-data
+        # для handler-ов `/inventory` и `/enchant`.
+        assert dp["get_inventory"] is c.get_inventory
+        assert dp["enchant_item"] is c.enchant_item
+        assert dp["uow"] is c.uow

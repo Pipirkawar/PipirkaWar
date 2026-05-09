@@ -1066,3 +1066,182 @@ bosses-callback-toast-requirement-length = Requires length ≥ { NUMBER($require
 bosses-leave-toast-success = You left the raid lobby
 bosses-leave-toast-not-a-participant = You are not a participant of this raid
 bosses-leave-toast-summoner-leaves = Summoner can't leave — use "Cancel raid" instead.
+
+## /inventory + /enchant (Sprint 3.4-D)
+
+# --- /inventory ---
+
+inventory-group = 🎒 The /inventory command works only in the bot's DM. Open a private chat and try again.
+
+inventory-other = 🎒 The /inventory command works only in the bot's DM.
+
+inventory-not-registered = 🎒 You don't seem to be registered yet. Tap /start in this chat — then you'll be able to view your inventory.
+
+inventory-empty = 🎒 Your inventory is empty.\nGo on a /forest expedition or /mountains run, fight a /boss, or join a /caravan to get items and scrolls.
+
+# Inventory listing card. Parameters:
+# - `$items_count` — total number of items the player owns.
+# - `$scrolls_count` — total number of scroll stacks the player owns.
+inventory-card =
+    🎒 Inventory
+    Items: { NUMBER($items_count, useGrouping: 0) }
+    Scroll stacks: { NUMBER($scrolls_count, useGrouping: 0) }
+
+# One item line. Parameters:
+# - `$display_name` — catalog display name (e.g. "Hat of the Voivode").
+# - `$enchant_suffix` — pre-formatted "+N" suffix (or empty for level 0).
+# - `$slot_label` — localized slot name.
+# - `$rarity_label` — localized rarity name.
+inventory-item-line = • <b>{ $display_name }{ $enchant_suffix }</b> [{ $slot_label }, { $rarity_label }]
+
+# One scroll stack line. Parameters:
+# - `$scroll_label` — localized scroll display name (e.g. "Weapon scroll, blessed").
+# - `$qty` — integer count.
+inventory-scroll-line = • { $scroll_label } × { NUMBER($qty, useGrouping: 0) }
+
+inventory-section-items = 📦 Items:
+inventory-section-scrolls = 📜 Scrolls:
+
+# Inline button "Enchant" on item card.
+inventory-button-enchant = ⚒ Enchant
+
+# Disabled hint when player has no matching scrolls for the item.
+inventory-toast-no-scroll = No matching scrolls for this item.
+
+# Picker card to choose between regular and blessed scrolls — D.1d.
+# Parameters:
+# - `$item_display` — full pretty item name with +N (e.g. "Sword +5").
+inventory-picker-card =
+    ⚒ Enchanting an item
+    Item: <b>{ $item_display }</b>
+
+    Choose a scroll to enchant with.
+
+inventory-picker-button-regular = Regular scroll
+inventory-picker-button-blessed = Blessed scroll
+inventory-picker-button-cancel = Cancel
+
+inventory-picker-cancelled = Enchant cancelled.
+
+# Toast after the picker "Cancel" button (Telegram limit ≤ 200 chars).
+inventory-picker-toast-cancelled = Cancelled.
+
+# Slot labels (8 slots, ГДД §2.6).
+inventory-slot-hat = head
+inventory-slot-body = body
+inventory-slot-legs = legs
+inventory-slot-boots = boots
+inventory-slot-ring = ring
+inventory-slot-chain = chain
+inventory-slot-right-hand = right hand
+inventory-slot-left-hand = left hand
+
+# Rarity labels (ГДД §2.5).
+inventory-rarity-common = common
+inventory-rarity-uncommon = uncommon
+inventory-rarity-rare = rare
+inventory-rarity-epic = epic
+inventory-rarity-legendary = legendary
+
+# Scroll display labels.
+# `$category_label` is one of inventory-scroll-category-* values.
+inventory-scroll-display-regular = { $category_label } scroll
+inventory-scroll-display-blessed = blessed { $category_label } scroll
+
+inventory-scroll-category-weapon = weapon
+inventory-scroll-category-armor = armor
+inventory-scroll-category-jewelry = jewelry
+
+# --- /enchant ---
+
+enchant-group = ⚒ The /enchant command works only in the bot's DM. Open a private chat and try again.
+
+enchant-other = ⚒ The /enchant command works only in the bot's DM.
+
+enchant-not-registered = ⚒ You don't seem to be registered yet. Tap /start in this chat — then you'll be able to enchant.
+
+enchant-usage = Usage: <code>/enchant &lt;item_id&gt; &lt;scroll_id&gt;</code>\n\nExample: <code>/enchant item.right_hand.test_1 weapon_scroll:regular</code>\n\nOr open /inventory and tap the ⚒ Enchant button on an item card.
+
+# Warning card before confirmation. Parameters:
+# - `$item_display` — full pretty item name with +N (e.g. "Sword +5").
+# - `$scroll_display` — pretty scroll name.
+# - `$tier_label` — localized tier (safe / easy / hard / very-hard / extreme / impossible).
+# - `$tier_emoji` — single emoji indicating tier.
+enchant-warning-regular =
+    ⚒ Enchant attempt
+    Item: <b>{ $item_display }</b>
+    Scroll: { $scroll_display }
+    Tier: { $tier_emoji } { $tier_label }
+
+    Possible outcomes:
+    • Success (+1)
+    • No effect
+    • Drop (-1)
+    • <b>Destroy</b> (item is lost forever)
+
+enchant-warning-blessed =
+    ⚒ Blessed enchant attempt
+    Item: <b>{ $item_display }</b>
+    Scroll: { $scroll_display }
+    Tier: { $tier_emoji } { $tier_label }
+
+    Possible outcomes:
+    • Big success (+2)
+    • Success (+1)
+    • No effect
+    • Drop (-1)
+    • Big drop (-2)
+
+    A blessed scroll never destroys the item.
+
+# Inline buttons for confirm/cancel.
+enchant-button-confirm = Confirm
+enchant-button-cancel = Cancel
+
+# Result messages. Parameters in all:
+# - `$item_display` — full pretty item name with the new +N (after).
+# - `$old_level` — integer, level before attempt.
+# - `$new_level` — integer, level after attempt.
+enchant-success =
+    ✅ Success! { $item_display }
+    Level: +{ NUMBER($old_level, useGrouping: 0) } → +{ NUMBER($new_level, useGrouping: 0) }
+
+enchant-no-effect =
+    ⚪ No effect.
+    Item: <b>{ $item_display }</b>
+    Level unchanged: +{ NUMBER($old_level, useGrouping: 0) }
+    The scroll was consumed.
+
+enchant-drop =
+    🔻 Drop.
+    Item: <b>{ $item_display }</b>
+    Level: +{ NUMBER($old_level, useGrouping: 0) } → +{ NUMBER($new_level, useGrouping: 0) }
+
+enchant-destroy =
+    💥 The item was destroyed!
+    <b>{ $item_display }</b> is lost forever.
+
+enchant-cancelled = Enchant cancelled.
+
+enchant-idempotent = ℹ The attempt has already been processed. Open /inventory to see the current state.
+
+# Tier labels + emoji (ГДД §2.8.5).
+enchant-tier-safe = safe
+enchant-tier-easy = easy
+enchant-tier-hard = hard
+enchant-tier-very-hard = very hard
+enchant-tier-extreme = extreme
+enchant-tier-impossible = impossible
+
+# Error messages.
+enchant-error-wrong-category = ⚠ This scroll cannot enchant this item: category mismatch.
+enchant-error-item-not-found = ⚠ Item not found in your inventory.
+enchant-error-scroll-not-found = ⚠ You don't own this scroll.
+enchant-error-out-of-stock = ⚠ You ran out of this scroll.
+enchant-error-bad-args = ⚠ Bad arguments. See /enchant for usage.
+
+# Toasts on callback responses (Telegram limit ≤ 200 chars).
+enchant-toast-confirmed = Enchant complete.
+enchant-toast-cancelled = Enchant cancelled.
+enchant-toast-already-processed = Already processed.
+enchant-toast-error = Something went wrong.
