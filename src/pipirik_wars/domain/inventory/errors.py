@@ -17,6 +17,7 @@ from pipirik_wars.shared.errors import DomainError
 __all__ = [
     "InventoryDomainError",
     "ItemDestroyedError",
+    "ItemNotFoundError",
     "MaxLevelReachedError",
     "WrongScrollCategoryError",
 ]
@@ -98,3 +99,27 @@ class ItemDestroyedError(InventoryDomainError):
     def __init__(self, *, item_id: str) -> None:
         self.item_id = item_id
         super().__init__(f"item {item_id!r} was destroyed and cannot be enchanted")
+
+
+class ItemNotFoundError(InventoryDomainError):
+    """Предмет с заданным `(player_id, item_id)` не найден в инвентаре.
+
+    Бросается репозиторием `IItemRepository` в `get(...)` и
+    `update_enchant_level(...)`, когда соответствующая строка в таблице
+    `items` отсутствует. Use-case `EnchantItem` (3.4-C) должен ловить
+    эту ошибку и преобразовывать в audit-событие
+    `ITEM_ENCHANT_ATTEMPT` с `outcome="item_missing"` + дружелюбное
+    сообщение через локаль `enchant-item-not-found` (3.4-D).
+
+    Атрибуты:
+    - `player_id: int` — владелец инвентаря.
+    - `item_id: str` — id каталожной записи (`item.<slot>.<short>`),
+      по которой искали запись.
+    """
+
+    def __init__(self, *, player_id: int, item_id: str) -> None:
+        self.player_id = player_id
+        self.item_id = item_id
+        super().__init__(
+            f"item {item_id!r} not found in inventory of player {player_id}",
+        )

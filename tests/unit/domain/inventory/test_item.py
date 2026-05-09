@@ -23,6 +23,7 @@ from dataclasses import FrozenInstanceError, replace
 
 import pytest
 
+from pipirik_wars.domain.balance.config import Slot
 from pipirik_wars.domain.enchantment import Scroll, ScrollCategory
 from pipirik_wars.domain.inventory import (
     Item,
@@ -169,6 +170,37 @@ class TestItemCategoryEnum:
         """
         assert isinstance(ItemCategory.WEAPON, str)
         assert ItemCategory.WEAPON.value == "weapon"
+
+
+class TestItemCategoryFromSlot:
+    """`ItemCategory.from_slot(Slot)` — маппинг ГДД §2.6 / §2.8.1."""
+
+    @pytest.mark.parametrize(
+        "slot",
+        [Slot.RIGHT_HAND, Slot.LEFT_HAND],
+    )
+    def test_weapon_slots(self, slot: Slot) -> None:
+        assert ItemCategory.from_slot(slot) is ItemCategory.WEAPON
+
+    @pytest.mark.parametrize(
+        "slot",
+        [Slot.HAT, Slot.BODY, Slot.LEGS, Slot.BOOTS],
+    )
+    def test_armor_slots(self, slot: Slot) -> None:
+        assert ItemCategory.from_slot(slot) is ItemCategory.ARMOR
+
+    @pytest.mark.parametrize(
+        "slot",
+        [Slot.RING, Slot.CHAIN],
+    )
+    def test_jewelry_slots(self, slot: Slot) -> None:
+        assert ItemCategory.from_slot(slot) is ItemCategory.JEWELRY
+
+    def test_all_8_slots_have_a_mapping(self) -> None:
+        """Полнота: каждый из 8 слотов — известная категория, без пробелов."""
+        for slot in Slot:
+            cat = ItemCategory.from_slot(slot)
+            assert cat in {ItemCategory.WEAPON, ItemCategory.ARMOR, ItemCategory.JEWELRY}
 
 
 class TestMaxEnchantLevelMatchesBalance:

@@ -42,18 +42,22 @@ from pipirik_wars.domain.inventory.entities import (
 from pipirik_wars.domain.inventory.errors import (
     InventoryDomainError,
     ItemDestroyedError,
+    ItemNotFoundError,
     MaxLevelReachedError,
     WrongScrollCategoryError,
 )
+from pipirik_wars.domain.inventory.ports import IItemRepository
 from pipirik_wars.domain.inventory.services import pick_enchant_outcome
 
 __all__ = [
     "BlessedEnchantOutcome",
     "EnchantOutcome",
+    "IItemRepository",
     "InventoryDomainError",
     "Item",
     "ItemCategory",
     "ItemDestroyedError",
+    "ItemNotFoundError",
     "MaxLevelReachedError",
     "RegularEnchantOutcome",
     "WrongScrollCategoryError",
