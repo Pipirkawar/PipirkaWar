@@ -23,6 +23,49 @@
 
 ---
 
+## 2026-05-09 — Спринт 3.4-A «Каркас доменов «Заточка» + балансовый конфиг»
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** ГДД §2.8 «Заточка предметов», ПД §6.3.4 «Спринт 3.4 — Заточка предметов», `current_tasks.md` чек-лист 3.4-A. Предшествует 3.4-B (persistence + миграция), 3.4-C (use-case `EnchantItem`) и 3.4-D (bot UI + локали). Передавался между двумя сессиями агента: первая (`e551cc8` + `dcc2b9c`) сделала A.1–A.4 (доменный пакет + pydantic-классы + `balance.yaml`), но забыла вбить поле `enchantment: EnchantmentConfig` в корневой `BalanceConfig` — `make ci` был фактически КРАСНЫМ (12 интеграционных тестов на загрузку `balance.yaml` падали с `ValidationError: Extra inputs are not permitted`); вторая сессия закрыла A.0/A.4-wiring/A.5–A.10.
+
+Что сделано:
+- **Пакет `src/pipirik_wars/domain/inventory/`** (~660 строк) — frozen-агрегат `Item(id, category, enchant_level)` с `with_enchant_level()` / `is_destroyed()` / `matches_scroll()`; `ItemCategory` (str-enum: `weapon` / `armor` / `jewelry`); enum-ы исходов `RegularEnchantOutcome` (4) и `BlessedEnchantOutcome` (5); 3 domain-errors (`InventoryDomainError` → `WrongScrollCategoryError` / `MaxLevelReachedError` / `ItemDestroyedError`, kw-only); чистый picker `pick_enchant_outcome(*, level, blessed, config, random)` с safe-zone-forced-success и `_WEIGHT_SCALE = 100_000` для `weighted_choice`. `MAX_ENCHANT_LEVEL = 30` хардкод, дублирует `EnchantmentConfig.max_level` (defence-in-depth, ГДД §2.8.2).
+- **Pydantic-конфиг** (`src/pipirik_wars/domain/balance/config.py`, ~220 новых строк): `RegularLevelWeights` / `BlessedLevelWeights` (sum-to-1.0 ± 1e-6); `EnchantmentTier(name, from, to, description_key, emoji)` с `from < to`; `EnchantmentConfig` (max_level / safe_zone_max_level / tiers / regular+blessed weights per level) с инвариантами:
+  - `max_level == 30` хардкод (`_validate_max_level_hard`);
+  - `safe_zone_max_level <= max_level`;
+  - все ключи `0..max_level-1` присутствуют в обеих weight-картах (`_validate_outcomes_keys_full`);
+  - `drop`/`destroy` (regular) и `drop_1`/`drop_2` (blessed) обязаны быть `0.0` на уровнях `< safe_zone_max_level` (`_validate_safe_zone_zero_drops`);
+  - `blessed_outcomes_per_level[max_level - 1].success_2 == 0.0` (запрет `+2 → +31`, ГДД §2.8.4);
+  - тиры покрывают `[0, max_level]` без дыр / пересечений (`_validate_tiers_cover_range`);
+  - YAML-mapping-keys коэрсятся `str` → `int`.
+- **Балансовый конфиг** (`config/balance.yaml`): добавлена секция `enchantment` со всеми 30 уровнями regular/blessed-весов из ГДД §2.8.6 + 6 тиров (`safe`/`easy`/`hard`/`very_hard`/`extreme`/`almost_impossible`). Поле `enchantment: EnchantmentConfig` вбито в корневой `BalanceConfig` (`fix-A.4` коммит во второй сессии — без него `extra="forbid"` валит загрузку).
+- **Тесты** (158 новых тестов в трёх файлах, итого `pytest`: **4622 passed / 2 skipped**, coverage **95.46%** против baseline 95.43% перед спринтом):
+  - `tests/unit/domain/inventory/test_enchant_picker.py` (24 теста) — safe-zone forced-success на 30 прогонах с `_CountingRandom`-обёрткой (доказано: в safe-zone `IRandom` не дёргается ни разу); 3σ-Bernoulli частоты на 6 уровнях × 4 (regular) и × 5 (blessed) исходов, `n=10_000` rolls на каждый — паттерн `_bernoulli_bounds = max(3*sigma, 10.0)` симметричный `tests/unit/domain/enchantment/test_scroll_drops.py` (3.1-D); запрет `SUCCESS_2` на `level=29`; defence-in-depth — `level ∉ [0, 29]` → `ValueError`.
+  - `tests/unit/domain/inventory/test_item.py` (74 теста) — все 0..30 границы `enchant_level`, frozen-immutability, equality-by-value, `with_enchant_level` возвращает новый инстанс, `matches_scroll` на 9 кросс-комбинациях категорий (3 совпадения + 6 несовпадений) с blessed=False/True; `MAX_ENCHANT_LEVEL` сверяется с `balance.yaml`.
+  - `tests/unit/domain/inventory/test_errors.py` (24 теста) — наследование `InventoryDomainError → DomainError`, kw-only конструкторы, атрибуты на инстансе, ловятся раздельно базовым `InventoryDomainError`.
+  - `tests/unit/domain/balance/test_enchantment_config.py` (35 тестов) — каждый из 8 валидаторов `EnchantmentConfig` под отдельным негативным кейсом + smoke на реальный `config/balance.yaml`; `extra=forbid` на всех 4 sub-models; интеграция `valid_balance_payload()` с `enchantment`.
+- **import-linter контракт** (`.importlinter`) — добавлен 4-й контракт `balance_must_not_import_inventory` (forbidden: `pipirik_wars.domain.balance` → `pipirik_wars.domain.inventory`). Однонаправленность `inventory → balance` (читаем балансовые типы) лочится; обратная зависимость в будущих спринтах будет ловиться CI. Все 4 контракта — KEPT.
+- **Test-фабрика** (`tests/unit/domain/balance/factories.py`) — helper `_build_valid_enchantment()` грузит `enchantment`-блок из живого `config/balance.yaml` (вместо ~150 строк ручной репликации). Используется в `valid_balance_payload()` (не балансовые тесты) и в `test_enchantment_config.py` (балансовые тесты ломают payload точечно).
+- **Pre-commit / CI зелёный:** ruff (lint+format), mypy `--strict` (0 issues на 848 source files), import-linter (4/4 KEPT), pytest (4622 passed, coverage 95.46% при gate 80%).
+
+Результат / артефакты:
+- `src/pipirik_wars/domain/inventory/` (`__init__.py` / `entities.py` / `errors.py` / `services.py`).
+- `src/pipirik_wars/domain/balance/config.py` (новые pydantic-модели `RegularLevelWeights` / `BlessedLevelWeights` / `EnchantmentTier` / `EnchantmentConfig` + поле `enchantment` в `BalanceConfig`).
+- `config/balance.yaml` (новая секция `enchantment` с 30 уровнями + 6 тиров).
+- `tests/unit/domain/inventory/test_enchant_picker.py` / `test_item.py` / `test_errors.py`.
+- `tests/unit/domain/balance/test_enchantment_config.py`.
+- `tests/unit/domain/balance/factories.py` (helper `_build_valid_enchantment()`).
+- `.importlinter` (новый контракт `balance-not-depending-on-inventory`).
+
+Заметки / решения:
+- **Single source of truth для дефолтов:** test-фабрика `_build_valid_enchantment()` ссылается на живой `config/balance.yaml`, а не повторяет 30 уровней × 4/5 весов вручную. Это сокращает шум в фабрике на ~150 строк и лочит факт «балансовый payload в тестах = балансовый payload в проде». Минус — отдельный integration-тест на парсинг yaml лежит там же (`test_enchantment_config.py::TestRealBalanceYamlParses`); если в будущем yaml меняется — оба теста (юнит + integration) реагируют согласованно.
+- **3σ-Bernoulli паттерн:** скопирован из `tests/unit/domain/enchantment/test_scroll_drops.py` (Спринт 3.1-D) сознательно, без шаринга test-utility — соглашение проекта «тесты в разных доменах не делят helper-ы». Аддитивный флор `±10` от ожидаемого спасает от false-negative на маленьких `p` (например `success` на `level=29` — `0.010 * 10000 = 100`, 3σ = `30`, но при таком малом `p` Бернулли-аппроксимация шумная — поэтому `max(3σ, 10) = 30`).
+- **Defence-in-depth `MAX_ENCHANT_LEVEL`:** константа дублирует `EnchantmentConfig.max_level` намеренно. Picker-у нужен жёсткий потолок ещё до загрузки конфига; `_validate_max_level_hard` сверяет совпадение при парсинге `balance.yaml`. Менять — только согласованно (ГДД §2.8.2).
+- **Передача между сессиями:** первая сессия (`e551cc8` + `dcc2b9c`) написала pydantic-классы, но не вбила `enchantment` в `BalanceConfig` — `extra="forbid"` валил загрузку. AGENT_HANDOFF.md заявил «pre-commit zelen» вместо «make ci zelen», и ошибка ушла дальше. **Урок:** в HANDOFF.md явно фиксировать «прогнал `make ci` локально, было 4477 passed / 2 skipped», а не «pre-commit прошёл». Принят правкой в CONTRIBUTING.md «Перед открытием PR» — прошлая сессия pre-commit пропустила pytest-секцию.
+
+---
+
 ## 2026-05-09 — Design-doc: «Бонус-за-племена в Предсказателе» (виральная мини-механика) + переименование «клан → племя» в документации
 
 **Автор:** Devin (агент)

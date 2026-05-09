@@ -720,6 +720,226 @@ class AnticheatConfig(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Заточка предметов (ГДД §2.8, Спринт 3.4-A)
+# --------------------------------------------------------------------------- #
+
+
+# Жёсткий потолок лестницы заточки. Дублируется с
+# `domain/inventory/entities.MAX_ENCHANT_LEVEL` намеренно (defence-in-depth).
+# Совпадение проверяется тестом A.7. Менять — только согласованно
+# (см. ГДД §2.8.2).
+_ENCHANT_HARD_MAX_LEVEL: int = 30
+# Эпсилон для проверки «сумма весов в строке == 1.0». Веса в ГДД §2.8.6
+# заданы с тремя знаками после запятой; FP-погрешность сложения не
+# должна превышать `1e-6`.
+_ENCHANT_WEIGHT_SUM_EPSILON: float = 1e-6
+
+
+class RegularLevelWeights(_Frozen):
+    """Веса 4 исходов обычной заточки на одном уровне (ГДД §2.8.3, §2.8.6).
+
+    Сумма `success + no_effect + drop + destroy == 1.0` (± ε) — invariant
+    `_validate_sum_to_one`. На уровнях `< safe_zone_max_level` веса
+    `drop` и `destroy` обязаны быть нулевыми (ГДД §2.8.6) — это
+    проверяется на уровне `EnchantmentConfig` (cross-row invariant).
+    """
+
+    success: float = Field(ge=0.0, le=1.0)
+    no_effect: float = Field(ge=0.0, le=1.0)
+    drop: float = Field(ge=0.0, le=1.0)
+    destroy: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _validate_sum_to_one(self) -> RegularLevelWeights:
+        total = self.success + self.no_effect + self.drop + self.destroy
+        if abs(total - 1.0) > _ENCHANT_WEIGHT_SUM_EPSILON:
+            raise ValueError(
+                f"regular enchant weights must sum to 1.0, got {total} "
+                f"(success={self.success}, no_effect={self.no_effect}, "
+                f"drop={self.drop}, destroy={self.destroy})",
+            )
+        return self
+
+
+class BlessedLevelWeights(_Frozen):
+    """Веса 5 исходов благословлённой заточки на одном уровне (ГДД §2.8.4, §2.8.6).
+
+    Сумма `success_1 + success_2 + no_effect + drop_1 + drop_2 == 1.0`
+    (± ε) — invariant `_validate_sum_to_one`.
+
+    Жёсткое правило `+29` (ГДД §2.8.4): на `level == max_level - 1` поле
+    `success_2` обязано быть `0.0` (запрет `+2 → +31`). Эта cross-level
+    проверка делается в `EnchantmentConfig._validate_blessed_last_level_no_success_2`.
+    """
+
+    success_1: float = Field(ge=0.0, le=1.0)
+    success_2: float = Field(ge=0.0, le=1.0)
+    no_effect: float = Field(ge=0.0, le=1.0)
+    drop_1: float = Field(ge=0.0, le=1.0)
+    drop_2: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _validate_sum_to_one(self) -> BlessedLevelWeights:
+        total = self.success_1 + self.success_2 + self.no_effect + self.drop_1 + self.drop_2
+        if abs(total - 1.0) > _ENCHANT_WEIGHT_SUM_EPSILON:
+            raise ValueError(
+                f"blessed enchant weights must sum to 1.0, got {total} "
+                f"(success_1={self.success_1}, success_2={self.success_2}, "
+                f"no_effect={self.no_effect}, drop_1={self.drop_1}, "
+                f"drop_2={self.drop_2})",
+            )
+        return self
+
+
+class EnchantmentTier(_Frozen):
+    """Один тир сложности заточки (ГДД §2.8.6).
+
+    Тиры — чисто **презентационная** группировка для UI emoji /
+    локализации (`enchant-tier-*`). Покрытие диапазона `[0, max_level]`
+    без дыр и пересечений — invariant
+    `EnchantmentConfig._validate_tiers_cover_range`.
+    """
+
+    name: str = Field(min_length=1)
+    from_level: int = Field(ge=0, le=_ENCHANT_HARD_MAX_LEVEL, alias="from")
+    to_level: int = Field(ge=0, le=_ENCHANT_HARD_MAX_LEVEL, alias="to")
+    description_key: str = Field(min_length=1)
+    emoji: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_range(self) -> EnchantmentTier:
+        if self.from_level >= self.to_level:
+            raise ValueError(
+                f"enchant tier {self.name!r}: from ({self.from_level}) must be "
+                f"< to ({self.to_level})",
+            )
+        return self
+
+
+class EnchantmentConfig(_Frozen):
+    """Конфиг лестницы заточки `+0..+30` (ГДД §2.8, Спринт 3.4-A).
+
+    Содержит все вероятности исходов на каждом уровне `0..29` для regular
+    и blessed-скроллов, плюс safe-zone и тиры сложности.
+    """
+
+    max_level: int = Field(ge=1, le=_ENCHANT_HARD_MAX_LEVEL)
+    safe_zone_max_level: int = Field(ge=0, le=_ENCHANT_HARD_MAX_LEVEL)
+    tiers: tuple[EnchantmentTier, ...] = Field(min_length=1)
+    regular_outcomes_per_level: dict[int, RegularLevelWeights]
+    blessed_outcomes_per_level: dict[int, BlessedLevelWeights]
+
+    @field_validator(
+        "regular_outcomes_per_level",
+        "blessed_outcomes_per_level",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_string_keys(cls, value: object) -> object:
+        """YAML mapping-keys могут читаться как `str`. Превращаем в `int`."""
+        if isinstance(value, dict):
+            return {int(k) if isinstance(k, str) else k: v for k, v in value.items()}
+        return value
+
+    @model_validator(mode="after")
+    def _validate_max_level_hard(self) -> EnchantmentConfig:
+        if self.max_level != _ENCHANT_HARD_MAX_LEVEL:
+            raise ValueError(
+                f"enchantment.max_level must be {_ENCHANT_HARD_MAX_LEVEL}, got {self.max_level}",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_safe_zone_within_max(self) -> EnchantmentConfig:
+        if self.safe_zone_max_level > self.max_level:
+            raise ValueError(
+                f"enchantment.safe_zone_max_level ({self.safe_zone_max_level}) must be "
+                f"<= max_level ({self.max_level})",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_outcomes_keys_full(self) -> EnchantmentConfig:
+        """Каждый уровень `0..max_level-1` должен быть в обеих картах."""
+        expected: set[int] = set(range(self.max_level))
+        regular_keys = set(self.regular_outcomes_per_level)
+        if regular_keys != expected:
+            missing = sorted(expected - regular_keys)
+            extra = sorted(regular_keys - expected)
+            raise ValueError(
+                f"enchantment.regular_outcomes_per_level keys must be "
+                f"0..{self.max_level - 1}: missing={missing}, extra={extra}",
+            )
+        blessed_keys = set(self.blessed_outcomes_per_level)
+        if blessed_keys != expected:
+            missing = sorted(expected - blessed_keys)
+            extra = sorted(blessed_keys - expected)
+            raise ValueError(
+                f"enchantment.blessed_outcomes_per_level keys must be "
+                f"0..{self.max_level - 1}: missing={missing}, extra={extra}",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_safe_zone_zero_drops(self) -> EnchantmentConfig:
+        """На уровнях `< safe_zone_max_level` `drop`/`destroy` обязаны быть `0.0`."""
+        for level in range(self.safe_zone_max_level):
+            reg = self.regular_outcomes_per_level[level]
+            if reg.drop != 0.0 or reg.destroy != 0.0:
+                raise ValueError(
+                    f"enchantment.regular_outcomes_per_level[{level}]: "
+                    f"drop/destroy must be 0.0 in safe zone "
+                    f"(level < safe_zone_max_level={self.safe_zone_max_level}), "
+                    f"got drop={reg.drop}, destroy={reg.destroy}",
+                )
+            bls = self.blessed_outcomes_per_level[level]
+            if bls.drop_1 != 0.0 or bls.drop_2 != 0.0:
+                raise ValueError(
+                    f"enchantment.blessed_outcomes_per_level[{level}]: "
+                    f"drop_1/drop_2 must be 0.0 in safe zone "
+                    f"(level < safe_zone_max_level={self.safe_zone_max_level}), "
+                    f"got drop_1={bls.drop_1}, drop_2={bls.drop_2}",
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_blessed_last_level_no_success_2(self) -> EnchantmentConfig:
+        """ГДД §2.8.4: на `level == max_level - 1` blessed `success_2 == 0.0`."""
+        last_level = self.max_level - 1
+        bls_last = self.blessed_outcomes_per_level[last_level]
+        if bls_last.success_2 != 0.0:
+            raise ValueError(
+                f"enchantment.blessed_outcomes_per_level[{last_level}]."
+                f"success_2 must be 0.0 (would push enchant_level past "
+                f"max_level={self.max_level}), got {bls_last.success_2}",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_tiers_cover_range(self) -> EnchantmentConfig:
+        """Тиры покрывают `[0, max_level]` без дыр/пересечений."""
+        tiers = self.tiers
+        if tiers[0].from_level != 0:
+            raise ValueError(
+                f"enchantment.tiers must start at 0, got {tiers[0].from_level} "
+                f"(tier {tiers[0].name!r})",
+            )
+        if tiers[-1].to_level != self.max_level:
+            raise ValueError(
+                f"enchantment.tiers must end at max_level={self.max_level}, "
+                f"got {tiers[-1].to_level} (tier {tiers[-1].name!r})",
+            )
+        for prev, nxt in itertools.pairwise(tiers):
+            if prev.to_level != nxt.from_level:
+                raise ValueError(
+                    f"enchantment.tiers: hole/overlap between {prev.name!r} "
+                    f"(to={prev.to_level}) and {nxt.name!r} "
+                    f"(from={nxt.from_level})",
+                )
+        return self
+
+
 class PvpDuel1v1Config(_Frozen):
     """Конфиг боя PvP 1×1 (ГДД §7.1, Спринт 2.1.A).
 
@@ -874,6 +1094,7 @@ class BalanceConfig(_Frozen):
     anticheat: AnticheatConfig
     pvp: PvpConfig
     content_policy: ContentPolicy
+    enchantment: EnchantmentConfig
     items_catalog: tuple[ItemEntry, ...] = Field(min_length=_MIN_ITEMS_CATALOG_SIZE)
     names_catalog: tuple[str, ...] = Field(min_length=_MIN_NAMES_CATALOG_SIZE)
 
