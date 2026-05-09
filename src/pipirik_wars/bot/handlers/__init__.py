@@ -39,6 +39,7 @@ from pipirik_wars.bot.handlers.oracle import router as oracle_router
 from pipirik_wars.bot.handlers.profile import router as profile_router
 from pipirik_wars.bot.handlers.referral_share import router as referral_share_router
 from pipirik_wars.bot.handlers.registration import router as registration_router
+from pipirik_wars.bot.handlers.roulette import router as roulette_router
 from pipirik_wars.bot.handlers.start import router as start_router
 from pipirik_wars.bot.handlers.top import router as top_router
 from pipirik_wars.bot.handlers.upgrade import router as upgrade_router
@@ -69,6 +70,13 @@ def register_routers(dispatcher: Dispatcher) -> None:
     # callback-ом и сводится к показу того же warning-а через
     # `EnchantPresenter`.
     dispatcher.include_router(enchant_router)
+    # Спринт 3.5-D: `/roulette_free` (личка-only) + spin-callback
+    # `roulette_free:spin`. Pre-spin gate (thickness < 2 / length < 100
+    # см) показывает warning-карточку без кнопки; при прохождении
+    # gate-ов — prompt + инлайн-кнопка «Прокрутить — 100 см». Spin
+    # выполняется через `SpinFreeRoulette` с идемпотентностью
+    # по `f"msg:{message_id}"` (один клик = один spin).
+    dispatcher.include_router(roulette_router)
     dispatcher.include_router(upgrade_router)
     dispatcher.include_router(duel_router)
     dispatcher.include_router(mass_duel_router)

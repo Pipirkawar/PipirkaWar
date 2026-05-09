@@ -154,6 +154,7 @@ from pipirik_wars.application.referral import (
     RegisterReferral,
     RunWeeklyClanReferralSummary,
 )
+from pipirik_wars.application.roulette import SpinFreeRoulette
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.application.top import (
@@ -216,6 +217,7 @@ from pipirik_wars.domain.progression import ILengthGranter
 from pipirik_wars.domain.pvp import IDuelRepository, IMassDuelRepository
 from pipirik_wars.domain.pvp.lobby import IGlobalLobbyRepository
 from pipirik_wars.domain.referral import IReferralRepository
+from pipirik_wars.domain.roulette import IRouletteSpinRepository
 from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import (
     IAuditLogger,
@@ -266,6 +268,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemyReferralRepository,
+    SqlAlchemyRouletteSpinRepository,
     SqlAlchemyScrollRepository,
     SqlAlchemySignupQueueRepository,
 )
@@ -433,6 +436,14 @@ class Container:
     enchant_history: IEnchantHistoryReader
     enchant_item: EnchantItem
     get_inventory: GetInventory
+    # Free-to-play рулетка (Спринт 3.5-B/C/D, ГДД §12.4). 3.5-B —
+    # `IRouletteSpinRepository` + персистентный append-only лог `roulette_spins`.
+    # 3.5-C — use-case `SpinFreeRoulette` (10-step flow с гейтами,
+    # cost-deduction, outcome-pick, награждением). 3.5-D — bot-handler
+    # `/roulette_free` (личка-only) + spin-callback. `spin_free_roulette`
+    # пробрасывается в dispatcher через workflow-data в build_dispatcher.
+    roulette_spins: IRouletteSpinRepository
+    spin_free_roulette: SpinFreeRoulette
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
@@ -1110,6 +1121,23 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         enchant_history=enchant_history,
     )
     get_inventory = GetInventory(item_repo=items, scroll_repo=scrolls, balance=balance)
+    # Спринт 3.5-B/C/D: free-to-play рулетка. `roulette_spins` —
+    # append-only persistence; `spin_free_roulette` — use-case с
+    # 10-step flow (idempotency-check, player load, gate-ы, cost-deduction,
+    # outcome-pick, record, audit, reward-grant, idempotency-mark).
+    # `RealRandom()` детерминирует выбор бакета через `IRandom.random()`.
+    roulette_spins = SqlAlchemyRouletteSpinRepository(uow=uow)
+    spin_free_roulette = SpinFreeRoulette(
+        uow=uow,
+        players=players,
+        roulette_spins=roulette_spins,
+        length_granter=add_length,
+        balance=balance,
+        audit=audit,
+        idempotency=idempotency,
+        random=RealRandom(),
+        clock=clock,
+    )
     # Спринт 3.3-D D.1: саммонер отменяет рейд из лобби. Идемпотентен
     # на повторный вызов в `CANCELLED`-статусе.
     cancel_boss_fight = CancelBossFight(
@@ -1653,6 +1681,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         enchant_history=enchant_history,
         enchant_item=enchant_item,
         get_inventory=get_inventory,
+        roulette_spins=roulette_spins,
+        spin_free_roulette=spin_free_roulette,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,
@@ -1863,6 +1893,10 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["get_inventory"] = container.get_inventory
     dispatcher["enchant_item"] = container.enchant_item
     dispatcher["uow"] = container.uow
+    # Спринт 3.5-D — bot-handler `/roulette_free` (личка-only) +
+    # spin-callback `roulette_free:spin`. Использует `get_profile` для
+    # pre-spin gate-чека и `spin_free_roulette` для самой прокрутки.
+    dispatcher["spin_free_roulette"] = container.spin_free_roulette
     return dispatcher
 
 
