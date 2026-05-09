@@ -23,6 +23,70 @@
 
 ---
 
+## 2026-05-09 — Спринт 3.5-A «Каркас домена «Рулетка» + балансовый конфиг»
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** ГДД §12.4 «Free-to-play рулетка», ПД §6.3.5 «Спринт 3.5 — Free-to-play рулетка» (задача 3.5.1 «каркас домена + балансовый конфиг»). `current_tasks.md` чек-лист 3.5-A. Базируется на 3.4-D (PR #120, `9ebbf15` — bot-UI заточки + закрытие Спринта 3.4). Открывает Спринт 3.5 «Free-to-play рулетка»; следующий PR — 3.5-B «Persistence-слой рулетки».
+
+Что сделано (по чек-листу A.0–A.5):
+
+- **A.0 — Обновлён `current_tasks.md`** под старт Спринта 3.5-A: «Снимок состояния» пересобран под `main = 9ebbf15`, добавлен чек-лист 3.5-A. Без отдельного коммита (объединено с A.1+A.2 в `7757a6a`).
+- **A.1 — Доменный пакет `domain/roulette/`** (`src/pipirik_wars/domain/roulette/`):
+  - `entities.py` (~60 строк) — `RouletteOutcome` frozen-VO (`dataclass(frozen=True, slots=True)`) с полями `kind: RouletteOutcomeKind` и `length_cm: int | None = None`. Инвариант `__post_init__`: `kind=LENGTH ⟺ length_cm is not None and length_cm >= 1`; для `kind != LENGTH` — `length_cm is None`. `RouletteOutcomeKind` (StrEnum) ре-экспортируется из `domain/balance/config.py` (см. A.2 для обоснования). Pattern зеркалит `domain/inventory/entities.py`, который ре-экспортирует `Slot` из `domain/balance/config`.
+  - `services.py` (~165 строк) — pure picker `pick_roulette_outcome(*, config, random, crypto_pool_empty) -> RouletteOutcome`. Двухуровневый weighted_choice: сначала по `RouletteOutcomeKind` (5 типов), потом — для `LENGTH` — по 4 length-buckets с последующим `random.uniform(min_cm, max_cm)`. Реализация правила ГДД §12.4.2 «crypto-пул пуст → вес `crypto_lot` перетекает на `length`» через флаг `crypto_pool_empty=True`: вес CRYPTO_LOT добавляется к LENGTH, а сам CRYPTO_LOT-исход не выпадает. Хелперы: `_roll_kind`, `_roll_length_bucket`, `_weighted_choice` (фильтр zero-weights + scale `float→int` через `_WEIGHT_SCALE = 100_000` для `IRandom.weighted_choice` API).
+  - `errors.py` (~30 строк) — `RouletteDomainError(DomainError)` базовый класс + `InvalidRouletteConfigError(RouletteDomainError)` для случаев, когда picker получил неконсистентный конфиг (например, все веса в одном уровне = 0).
+  - `__init__.py` — экспорт публичных символов (`RouletteOutcome`, `RouletteOutcomeKind`, `pick_roulette_outcome`, `RouletteDomainError`, `InvalidRouletteConfigError`).
+  - Закоммичено в `7757a6a`.
+- **A.2 — Балансовый конфиг `RouletteFreeConfig`** (`src/pipirik_wars/domain/balance/config.py`, +167 строк):
+  - `RouletteOutcomeKind(StrEnum)` — единый источник истины для машинных id (LENGTH/ITEM/SCROLL_REGULAR/SCROLL_BLESSED/CRYPTO_LOT). Размещён в `domain/balance/config.py` (а не в `domain/roulette/entities.py`) по аналогии с `Slot`/`Rarity`: стабильные value-строки попадают в `audit_log.target_id` будущего use-case-а 3.5-C, а конфиг — единственное место, где значения «связаны» с доменными правилами.
+  - `RouletteOutcomeWeight` — pydantic-модель `(kind: RouletteOutcomeKind, weight: float)` с `extra="forbid"`.
+  - `RouletteLengthBucket` — pydantic-модель `(name: str, min_cm: int, max_cm: int, weight: float)` с валидатором `min_cm <= max_cm`.
+  - `RouletteFreeConfig` — pydantic-модель с полями `cost_cm: int = 100`, `min_thickness_level: int = 2`, `outcomes: list[RouletteOutcomeWeight]`, `length_buckets: list[RouletteLengthBucket]`. 5 валидаторов: `_validate_outcome_weights_sum_to_one` (Σ = 1.0 ± 1e-6), `_validate_outcome_kinds_unique`, `_validate_outcome_kinds_full` (все 5 `RouletteOutcomeKind` присутствуют), `_validate_bucket_weights_sum_to_one`, `_validate_bucket_names_unique`.
+  - `RouletteConfig` — корневая модель с `free: RouletteFreeConfig`. Будущие nested-конфиги (paid-рулетка, специальные пулы) подключаются сюда же.
+  - `BalanceConfig.roulette: RouletteConfig` — обязательное поле верхнего уровня.
+  - **Стартовые дефолты в `config/balance.yaml`** (по ГДД §12.4.2):
+    - `outcomes`: LENGTH 0.85 / ITEM 0.10 / SCROLL_REGULAR 0.04 / SCROLL_BLESSED 0.005 / CRYPTO_LOT 0.005.
+    - `length_buckets`: `small[10..50]` 0.7 / `medium[50..150]` 0.25 / `good[150..300]` 0.04 / `big[300..500]` 0.01.
+  - Обновлён `tests/unit/domain/balance/factories.py`: добавлен `_build_valid_roulette()` (читает дефолтный `roulette`-блок из `config/balance.yaml`), `valid_balance_payload()` теперь включает поле `roulette`.
+  - Закоммичено в `7757a6a`.
+- **A.3 — Юнит-тесты picker-а + integration-тесты config-валидаторов** (47 новых тестов):
+  - `tests/unit/domain/roulette/test_entities.py` (~92 строки, 11 тестов) — инварианты `RouletteOutcome.__post_init__` для всех 5 `RouletteOutcomeKind` (LENGTH с/без `length_cm`, `length_cm <= 0`, не-LENGTH с/без `length_cm`); frozen-свойство (`FrozenInstanceError`); equality.
+  - `tests/unit/domain/roulette/test_picker.py` (~280 строк, 14 тестов) — `TestForcedOutcomeKinds` (5 тестов: вес=1.0 для каждого `RouletteOutcomeKind`); `TestKindFrequenciesOnDefaultBalance` (2 теста — Bernoulli-распределения на 10 000 ролов с 3σ-границами + ±10-floor через хелпер `_bernoulli_bounds(p, n=10000)`); `TestLengthBucketFrequencies` (1 тест — все 4 бакета в 3σ-границах); `TestCryptoPoolDrain` (3 теста — crypto-пул пуст → вес CRYPTO_LOT перетекает на LENGTH; CRYPTO_LOT не выпадает при флаге); `TestZeroWeightFiltering` (2 теста — фильтр zero-weights); `TestInvalidConfigDefence` (1 тест — `InvalidRouletteConfigError` при всех весах = 0).
+  - `tests/unit/domain/balance/test_roulette_config.py` (~226 строк, 18 тестов + 4 integration) — `TestRealBalanceYamlParses` (2 smoke-теста); `TestOutcomeWeightsSumToOne` (4 теста: дефолт passes, ниже/выше 1.0 reject, в epsilon passes); `TestOutcomeKindsUnique` (1 тест — duplicate kind reject); `TestOutcomeKindsFull` (1 тест — missing kind reject); `TestBucketWeightsSumToOne` (2 теста); `TestBucketNamesUnique` (1 тест); `TestLengthBucketRange` (2 теста — `min > max` reject + `min == max` passes для legitimate degenerate-cases); `TestExtraFieldsForbidden` (3 теста на free/outcome/bucket уровнях); `TestBalancePayloadIntegration` (2 теста — `BalanceConfig` парсит с roulette + breakage в roulette ломает весь `BalanceConfig`).
+  - Закоммичено в `0dc408a` (вместе с mypy-фиксами: `_payload()` явная аннотация в test_roulette_config.py:65 + удаление неиспользуемого `# type: ignore[misc]` в test_entities.py:80).
+- **A.4 — `make ci` локально:** ruff (clean), `mypy --strict` (0 issues, 882 source files), import-linter (4 contracts KEPT), pytest **4988 passed / 2 skipped** (4941 baseline 3.4-D → +47 новых тестов), **coverage 95.56%** (gate ≥ 80%, было 95.59% — небольшое снижение из-за нового `services.py` с защитной веткой `InvalidRouletteConfigError`, не покрытой пока тестами на уровне `_weighted_choice`-внутренних zero-зашит).
+- **A.5 — Финальный док-коммит:** `history.md` (эта запись) + пересборка «Снимка состояния» в `current_tasks.md` под `main = <merge_3_5_A>`, чек-лист передвинут на старт **Спринта 3.5-B «Persistence-слой рулетки»**. Старый чек-лист 3.5-A архивирован.
+
+Результат / артефакты:
+
+- Новые файлы:
+  - `src/pipirik_wars/domain/roulette/__init__.py` (~30 строк, экспорты).
+  - `src/pipirik_wars/domain/roulette/entities.py` (~60 строк, `RouletteOutcome` VO + ре-экспорт `RouletteOutcomeKind`).
+  - `src/pipirik_wars/domain/roulette/services.py` (~165 строк, `pick_roulette_outcome` + хелперы).
+  - `src/pipirik_wars/domain/roulette/errors.py` (~30 строк, `RouletteDomainError` + `InvalidRouletteConfigError`).
+  - `tests/unit/domain/roulette/__init__.py` (пустой).
+  - `tests/unit/domain/roulette/test_entities.py` (~92 строки, 11 тестов).
+  - `tests/unit/domain/roulette/test_picker.py` (~280 строк, 14 тестов).
+  - `tests/unit/domain/balance/test_roulette_config.py` (~226 строк, 22 теста).
+- Изменённые файлы:
+  - `src/pipirik_wars/domain/balance/config.py` (+167 строк) — `RouletteOutcomeKind` + `RouletteOutcomeWeight` + `RouletteLengthBucket` + `RouletteFreeConfig` + `RouletteConfig` + `BalanceConfig.roulette`-поле.
+  - `config/balance.yaml` (+25 строк) — секция `roulette.free` со стартовыми дефолтами.
+  - `tests/unit/domain/balance/factories.py` (+9 строк) — `_build_valid_roulette()` хелпер + `valid_balance_payload()` подхватывает `roulette`-блок.
+
+Заметки / решения:
+
+- **`RouletteOutcomeKind` живёт в `domain/balance/config.py`, а не в `domain/roulette/entities.py`.** Причина: machine-id-значения (`length`/`item`/`scroll_regular`/`scroll_blessed`/`crypto_lot`) попадают в `audit_log.target_id` будущего use-case-а 3.5-C. Чтобы не дублировать строковые литералы, единый источник истины — `domain/balance/config.py` (как `Slot`/`Rarity`/`AuditAction`). Доменный пакет `domain/roulette/` ре-экспортирует enum, чтобы код в `services.py` мог импортировать «одной строкой» из `domain.roulette` (по аналогии с `domain/inventory/entities.py`, ре-экспортирующим `Slot`).
+- **`crypto_pool_empty: bool` параметр picker-а — а не флаг в `RouletteFreeConfig`.** Решение оставить crypto-pool-state в use-case-уровне (3.5-C), а не в config: pool-availability — это runtime-state (зависит от наличия активных лотов, последней покупки, etc.), а конфиг — статичен. На 3.5-A picker-логика покрывает оба случая (`True` — drain, `False` — обычный roll), use-case в 3.5-C будет всегда передавать `True` до запуска Фазы 4.
+- **`_WEIGHT_SCALE = 100_000` для `float→int` конверсии.** `IRandom.weighted_choice(items, weights)` ожидает `Sequence[int]`. Pydantic-валидация уже гарантирует Σ = 1.0 ± 1e-6, поэтому масштаб 100 000 даёт достаточную точность (epsilon 1e-6 → 0.1 unit при scale 100 000) и не приводит к int-overflow при 5 outcomes × 100 000 = 500 000 (помещается в int32). Зеркалит подход в `domain/enchantment/services.py` (Спринт 3.4-A).
+- **Bernoulli-bounds-хелпер `_bernoulli_bounds(p, n=10000)` использует 3σ + ±10 floor.** При `n=10 000` ролов на kind с p=0.005 ожидаемая частота = 50, σ ≈ 7.05; 3σ-граница ±21 (или 0.21% от n). Floor +10 защищает от false positive на редких kind (CRYPTO_LOT, SCROLL_BLESSED — 0.005 каждый): даже один outlier-ролл может выйти за «строгую» 3σ-границу, но не за 3σ+10. Зеркалит подход в `tests/unit/domain/enchantment/test_picker.py`.
+- **`RouletteLengthBucket.min_cm <= max_cm` (а не `<`).** Допускает degenerate-bucket с `min == max`, что редко, но логично для кастомных балансов (например, `narrow_legacy[100..100]` — точно 100 см). Picker корректно обрабатывает: `random.uniform(100, 100) → 100`.
+- **`length_buckets` имеют overlap по диапазонам (`small[10..50]` + `medium[50..150]`).** Это нормально: bucket выбирается weighted_choice-ом по `weight` (а не по `length_cm`-диапазону), а внутри bucket-а `length_cm` — uniform по `[min_cm, max_cm]`. Overlap не приводит к double-counting.
+- **`extra="forbid"` на всех новых pydantic-моделях.** Стандарт проекта (зеркалит `EnchantmentConfig`, `BalanceConfig`, etc.). Защищает от typo в YAML-конфиге.
+- **Открытие Спринта 3.5 «Free-to-play рулетка».** Этот PR — первый из 4 PR-ов (3.5-A/B/C/D). 3.5-A — каркас домена + конфиг (без use-case-а, без миграции, без bot-UI). 3.5-B — persistence-слой (`RouletteSpinORM` + Alembic). 3.5-C — application use-case `SpinFreeRoulette`. 3.5-D — bot UI + закрытие Спринта 3.5.
+
+---
+
 ## 2026-05-09 — Спринт 3.4-D «Bot UI заточки + локали + display + закрытие Спринта 3.4»
 
 **Автор:** Devin (агент)
