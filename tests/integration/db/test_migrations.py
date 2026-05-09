@@ -70,6 +70,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0019_caravans" in revisions
         assert "0020_boss_fights" in revisions
         assert "0021_items" in revisions
+        assert "0022_scrolls" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -204,6 +205,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0021 is not None
         assert rev_0021.down_revision == "0020_boss_fights"
 
+    def test_0022_descends_from_0021(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0022 = script.get_revision("0022_scrolls")
+        assert rev_0022 is not None
+        assert rev_0022.down_revision == "0021_items"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -229,6 +237,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260508_0019_caravans.py",
             "20260508_0020_boss_fights.py",
             "20260509_0021_items.py",
+            "20260509_0022_scrolls.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -283,6 +292,7 @@ class TestAlembicMigrationsApplyCleanly:
             "referrals",
             "admin_audit_log",
             "items",
+            "scrolls",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 
@@ -362,6 +372,39 @@ class TestAlembicMigrationsApplyCleanly:
 
         assert items_cols == {"player_id", "item_id", "enchant_level", "acquired_at"}
         assert set(pk["constrained_columns"]) == {"player_id", "item_id"}
+        # FK на users.id с каскадом.
+        assert any(
+            fk["referred_table"] == "users"
+            and fk["constrained_columns"] == ["player_id"]
+            and fk["options"].get("ondelete", "").upper() == "CASCADE"
+            for fk in fks
+        )
+
+    def test_0022_creates_scrolls_table(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Спринт 3.4-C: миграция создаёт `scrolls`-таблицу с PK + FK + CHECK."""
+        db_path = tmp_path / "alembic_0022.sqlite"
+        async_url = f"sqlite+aiosqlite:///{db_path}"
+        monkeypatch.setenv("DATABASE_URL", async_url)
+
+        cfg = _alembic_config(async_url)
+        command.upgrade(cfg, "head")
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                inspector = inspect(conn)
+                scrolls_cols = {c["name"] for c in inspector.get_columns("scrolls")}
+                pk = inspector.get_pk_constraint("scrolls")
+                fks = inspector.get_foreign_keys("scrolls")
+        finally:
+            engine.dispose()
+
+        assert scrolls_cols == {"player_id", "scroll_id", "qty", "acquired_at"}
+        assert set(pk["constrained_columns"]) == {"player_id", "scroll_id"}
         # FK на users.id с каскадом.
         assert any(
             fk["referred_table"] == "users"

@@ -37,6 +37,9 @@ from pipirik_wars.infrastructure.db.repositories.daily_head import (
 from pipirik_wars.infrastructure.db.repositories.dungeon_run import (
     SqlAlchemyDungeonRunRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.enchant_history import (
+    SqlAlchemyEnchantHistoryReader,
+)
 from pipirik_wars.infrastructure.db.repositories.forest_run import (
     SqlAlchemyForestRunRepository,
 )
@@ -64,6 +67,9 @@ from pipirik_wars.infrastructure.db.repositories.pvp_mass_duel import (
 from pipirik_wars.infrastructure.db.repositories.referral import (
     SqlAlchemyReferralRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.scrolls import (
+    SqlAlchemyScrollRepository,
+)
 from pipirik_wars.infrastructure.db.repositories.signup_queue import (
     SqlAlchemySignupQueueRepository,
 )
@@ -83,6 +89,7 @@ __all__ = [
     "SqlAlchemyDailyHeadRepository",
     "SqlAlchemyDuelRepository",
     "SqlAlchemyDungeonRunRepository",
+    "SqlAlchemyEnchantHistoryReader",
     "SqlAlchemyForestRunRepository",
     "SqlAlchemyGlobalLobbyRepository",
     "SqlAlchemyItemRepository",
@@ -91,5 +98,6 @@ __all__ = [
     "SqlAlchemyOracleHistoryRepository",
     "SqlAlchemyPlayerRepository",
     "SqlAlchemyReferralRepository",
+    "SqlAlchemyScrollRepository",
     "SqlAlchemySignupQueueRepository",
 ]

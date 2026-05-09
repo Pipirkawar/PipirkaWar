@@ -101,6 +101,19 @@ class AuditAction(str, enum.Enum):
     # из Спринта 3.1-D. После 3.4 этот же event начнёт сопровождаться
     # реальной записью в `inventory.scrolls`.
     SCROLL_DROP = "scroll_drop"
+    # ── Спринт 3.4-C (заточка предметов, ГДД §2.8) ──
+    # Каждая попытка заточки `EnchantItem`-use-case-а (даже неуспешная)
+    # пишется как audit-event с фиксацией исхода (`success` / `no_effect`
+    # / `drop` / `destroy` / blessed-варианты) и `delta` уровня. `delta_cm`
+    # не заполняется (заточка не меняет длину; sink происходит через
+    # потерю скролла-стэка). Используется bot-handler-ом 3.4-D и
+    # admin-просмотром истории заточек.
+    ITEM_ENCHANT_ATTEMPT = "item_enchant_attempt"
+    # Trip-wire анти-чита (Спринт 3.4-C / C.5; ГДД §2.8 + §3.3.4).
+    # Пишется при детекции аномальной серии успехов на высоких тирах
+    # (`+18 → +25`): rolling-window последних 10 попыток на этих тирах,
+    # все 10 — `success`. Для admin-alert. Per-player target_id.
+    ENCHANT_ANOMALY = "enchant_anomaly"
 
 
 class AuditSource(str, enum.Enum):

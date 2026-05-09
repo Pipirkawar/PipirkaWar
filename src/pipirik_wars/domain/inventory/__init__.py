@@ -44,15 +44,23 @@ from pipirik_wars.domain.inventory.errors import (
     ItemDestroyedError,
     ItemNotFoundError,
     MaxLevelReachedError,
+    ScrollNotFoundError,
+    ScrollOutOfStockError,
     WrongScrollCategoryError,
 )
-from pipirik_wars.domain.inventory.ports import IItemRepository
+from pipirik_wars.domain.inventory.ports import (
+    IEnchantHistoryReader,
+    IItemRepository,
+    IScrollRepository,
+)
 from pipirik_wars.domain.inventory.services import pick_enchant_outcome
 
 __all__ = [
     "BlessedEnchantOutcome",
     "EnchantOutcome",
+    "IEnchantHistoryReader",
     "IItemRepository",
+    "IScrollRepository",
     "InventoryDomainError",
     "Item",
     "ItemCategory",
@@ -60,6 +68,8 @@ __all__ = [
     "ItemNotFoundError",
     "MaxLevelReachedError",
     "RegularEnchantOutcome",
+    "ScrollNotFoundError",
+    "ScrollOutOfStockError",
     "WrongScrollCategoryError",
     "pick_enchant_outcome",
 ]

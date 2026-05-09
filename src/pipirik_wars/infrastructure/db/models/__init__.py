@@ -42,6 +42,9 @@ PvP массовый клан×клан (Спринт 2.2.D):
 
 Инвентарь (Спринт 3.4.B):
 - `ItemORM` — таблица `items`.
+
+Инвентарь — скроллы (Спринт 3.4.C):
+- `ScrollORM` — таблица `scrolls` (стэкабельный `qty`).
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
@@ -74,6 +77,7 @@ from pipirik_wars.infrastructure.db.models.pvp import (
     PvpMassDuelORM,
 )
 from pipirik_wars.infrastructure.db.models.referral import ReferralORM
+from pipirik_wars.infrastructure.db.models.scrolls import ScrollORM
 from pipirik_wars.infrastructure.db.models.security import (
     ActivityLockORM,
     AuditLogORM,
@@ -107,6 +111,7 @@ __all__ = [
     "PvpMassDuelDamageEntryORM",
     "PvpMassDuelORM",
     "ReferralORM",
+    "ScrollORM",
     "SignupQueueORM",
     "UserORM",
 ]
