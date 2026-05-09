@@ -36,7 +36,7 @@ Whitelist ролей (`AdminRole`):
 | Роль | Что может |
 |---|---|
 | `read_only` | Только read-side: `/find_player`, `/player`, `/clan`, `/clan_daily_head_history`, `/balance_get`, `/audit`, `/admin_stats`. Никаких мутаций. |
-| `support` | Всё из `read_only` + операционка над игроками/кланами: `/freeze`, `/unfreeze`, `/freeze_clan`, `/unfreeze_clan`, `/ban` (TOTP). Не имеет прав на правки баланса. |
+| `support` | Всё из `read_only` + операционка над игроками/племенами: `/freeze`, `/unfreeze`, `/freeze_clan`, `/unfreeze_clan`, `/ban` (TOTP). Не имеет прав на правки баланса. |
 | `economist` | Всё из `read_only` + правки баланса: `/grant_length` (TOTP), `/grant_thickness` (TOTP), `/balance_set` (TOTP), `/balance_reload`. **НЕ** имеет прав на freeze/ban игроков (это саппорт-функция). |
 | `super_admin` | Всё. Плюс уникальные `super-admin-only`: `/anticheat_unban`, `/set_max_dau`, `/announce` (TOTP), `/admin_setup_totp`. |
 
@@ -57,8 +57,8 @@ Whitelist ролей (`AdminRole`):
 | `/admin_stats` | DAU/MAX_DAU и размер очереди регистраций. | нет |
 | `/find_player <tg_id\|@username\|часть_имени>` | Поиск игрока по идентификатору или имени; краткая карточка. | нет |
 | `/player <tg_id>` | Полная карточка игрока (длина/толщина/титул/экипировка/последние события). | нет |
-| `/clan <chat_id\|часть_названия>` | Карточка клана. | нет |
-| `/clan_daily_head_history <chat_id>` | История «Главы клана дня» по клану. | нет |
+| `/clan <chat_id\|часть_названия>` | Карточка племени. | нет |
+| `/clan_daily_head_history <chat_id>` | История «Главы племени дня» по племени. | нет |
 | `/balance_get <key>` | Прочитать значение балансового ключа из `config/balance.yaml`. | нет |
 | `/audit [tg_id\|-] [action\|-] [limit]` | Листинг `admin_audit_log` (см. §7). | нет |
 
@@ -70,12 +70,12 @@ Whitelist ролей (`AdminRole`):
 | `/unfreeze <tg_id> <reason>` | Разморозить. | нет |
 | `/ban <tg_id> <reason>` | Постоянный бан. | **да** |
 
-### 2.3 Поддержка кланов (`support+`)
+### 2.3 Поддержка племён (`support+`)
 
 | Команда | Что делает | TOTP |
 |---|---|---|
-| `/freeze_clan <chat_id> <reason>` | Ручная заморозка клана (отличается от автоматической: пишется в admin-аудит и привязана к админу). | нет |
-| `/unfreeze_clan <chat_id> <reason>` | Ручная разморозка клана. | нет |
+| `/freeze_clan <chat_id> <reason>` | Ручная заморозка племени (отличается от автоматической: пишется в admin-аудит и привязана к админу). | нет |
+| `/unfreeze_clan <chat_id> <reason>` | Ручная разморозка племени. | нет |
 
 ### 2.4 Экономика (`economist+`)
 
