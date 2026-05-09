@@ -23,6 +23,69 @@
 
 ---
 
+## 2026-05-09 — Спринт 3.5-C «Application use-case `SpinFreeRoulette` + audit + spend-100см»
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** ГДД §12.4 «Free-to-play рулетка», ПД §6.3.5 «Спринт 3.5 — Free-to-play рулетка» (задача 3.5.2 «application use-case» + 3.5.7 «gate `min_thickness_level=2`»). `current_tasks.md` чек-лист 3.5-C. Базируется на 3.5-B (PR #122, `3505e83` — persistence-слой `IRouletteSpinRepository` + ORM `RouletteSpinORM` + миграция `0023_roulette_spins`). Следующий PR — 3.5-D «Bot UI + локали + display + закрытие Спринта 3.5».
+
+Что сделано (по чек-листу C.0–C.5):
+
+- **C.0 — Обновлён `current_tasks.md`** под старт Спринта 3.5-C: «Снимок состояния» пересобран под `main = 3505e83`, добавлен чек-лист 3.5-C (C.0–C.5), архивирован чек-лист 3.5-B. Коммит `902119e`.
+- **C.1 — `AuditAction.ROULETTE_SPIN` + `AuditSource.ROULETTE_FREE_COST/REWARD`** (`domain/shared/ports/audit.py`):
+  - В `AuditAction(StrEnum)` добавлено `ROULETTE_SPIN = "roulette_spin"` (anti-cheat-нейтральное событие, **не** входит в anti-cheat scoring; используется как фактический event-log для аудита прокруток).
+  - В `AuditSource(StrEnum)` добавлено `ROULETTE_FREE_COST = "roulette_free_cost"` (sink, delta=−100 см при spend) и `ROULETTE_FREE_REWARD = "roulette_free_reward"` (LENGTH-исход grant, delta=+roll). Обе строки **НЕ** входят в organic 24h/7d-окна anti-cheat — это game-internal экономика, не фарм.
+  - Миграция Alembic `0024_audit_source_roulette_free` (`down_revision=0023_roulette_spins`) — расширяет CHECK constraint `audit_log_source_whitelist` на колонке `audit_log.source`, добавляя `'roulette_free_cost'` и `'roulette_free_reward'` к существующему whitelist-у.
+  - Обновлён unit-тест `test_audit_source.py` (parity между `AuditSource` enum и whitelist миграции).
+  - Закоммичено в `478d242` (предыдущая сессия).
+- **C.2 — Application use-case `SpinFreeRoulette`** (`application/roulette/spin_free_roulette.py`, ~340 строк):
+  - DTO `SpinFreeRouletteCommand(player_id: int, idempotency_key: str)` (frozen) + `SpinResult(outcome: RouletteOutcome, spent_cm: int, idempotent: bool)` (frozen).
+  - Domain errors `domain/roulette/errors.py` (+45 строк): `RouletteThicknessGateError(InventoryDomainError)` (kw-only `player_id: int, thickness_level: int, required: int`) + `InsufficientLengthForRouletteError(InventoryDomainError)` (kw-only `player_id: int, current_cm: int, required_cm: int`).
+  - 8-шаговый flow: (1) idempotency-check (`namespace="roulette_free"`) → (2) load Player → (3) gate `thickness_level >= config.roulette.free.min_thickness_level=2` (иначе `RouletteThicknessGateError`) → (4) check `length_cm >= cost_cm=100` (иначе `InsufficientLengthForRouletteError`) → (5) spend через `add_length(delta=-100, source=ROULETTE_FREE_COST, idempotency_key="add_length:{root}:cost")` → (6) `pick_roulette_outcome(config, random, crypto_pool_empty=True)` (Фаза 3 — crypto-пул всегда пуст) → (7) `RouletteSpinRepository.record(spin)` (idempotent через DO NOTHING) → (8) audit `ROULETTE_SPIN` payload `{kind, length_cm | None}` → mark idempotency → return `SpinResult`.
+  - **LENGTH-исход:** дополнительно `add_length(delta=+spin.length_cm, source=ROULETTE_FREE_REWARD, idempotency_key="add_length:{root}:reward")` ДО финального audit. Не-LENGTH исходы (ITEM/SCROLL_REGULAR/SCROLL_BLESSED/CRYPTO_LOT) на C.2 — стабы (audit-payload без `target_id`, реальные drops в инвентарь — задача 3.5-D / Фазы 4 для `crypto_lot`).
+  - Префикс `add_length:` обязателен для `ILengthGranter.grant()` (внутренний namespace-validation `domain/economy/ports/length_granter.py`).
+  - 13 unit-тестов в `tests/unit/application/roulette/test_spin_free_roulette.py`: idempotency × 2 (replay-no-op, replay-cost-grant-skip), gate-fail × 2 (thickness < 2, length < 100), LENGTH happy path (audit + grant), не-LENGTH × 4 параметризованных (ITEM/SCROLL_REGULAR/SCROLL_BLESSED/CRYPTO_LOT — без reward grant), audit-payload (`kind`, `length_cm`, idempotency_key), crypto-pool drain (`crypto_pool_empty=True` всегда), anomaly-trace (audit-record при ошибке), ambient-UoW guard.
+  - Use-case добавлен в whitelist `tests/unit/architecture/test_length_grant_guard.py` для `add_length(...)` — он использует `progression.add_length` через DI (не напрямую `Player.with_length`).
+  - Закоммичено в `6330100` (checkpoint #1).
+- **C.3 — Integration-тесты use-case** (`tests/integration/db/test_spin_free_roulette_use_case.py`, ~440 строк, 7 тестов):
+  - `TestSpinFreeRouletteRoundTripLength` (1 тест) — LENGTH-исход: `users.length_cm = -100 + reward`, 1 строка в `roulette_spins`, 3 audit-записи (cost + ROULETTE_SPIN + reward).
+  - `TestSpinFreeRouletteRoundTripNonLength` (3 параметризованных теста) — ITEM/SCROLL_REGULAR/SCROLL_BLESSED: `length_cm -= 100`, 1 строка в `roulette_spins` с `length_cm=NULL`, 2 audit-записи (cost + ROULETTE_SPIN, без reward).
+  - `TestSpinFreeRouletteIdempotency` (1 тест) — replay с тем же `idempotency_key` → no-op: `length_cm` неизменна, 1 строка в `roulette_spins`, 3 audit-записи как после первого вызова.
+  - `TestSpinFreeRouletteGates` (2 теста) — `thickness_level=1 < min_thickness_level=2` → `RouletteThicknessGateError` без записи в DB; `length_cm=50 < cost_cm=100` → `InsufficientLengthForRouletteError` без записи в DB.
+  - Real-DB wiring: `SqlAlchemyUnitOfWork` с in-memory SQLite (из `conftest.py`), реальные `SqlAlchemyPlayerRepository`/`SqlAlchemyRouletteSpinRepository`/`SqlAlchemyAnticheatRepository`, реальные `SqlAlchemyAuditLogger`/`SqlAlchemyIdempotencyService`, реальный `AddLength` для length-grant. Fakes: `_ScriptedRandom` (deterministic RNG), `FakeAnticheatAdminAlerter`. Балансовый конфиг через `_balance_with_only_kind()` (`valid_balance_payload()` с custom `outcomes` + buckets для изоляции kind).
+  - **Bug fix:** в `src/pipirik_wars/infrastructure/db/models/security.py` (`AuditLogORM.audit_log_source_whitelist` `CheckConstraint`) добавлены `'roulette_free_cost'` и `'roulette_free_reward'` (расхождение C.1: миграция 0024 добавила в DB CHECK, ORM-модель отстала — тесты используют `Base.metadata.create_all()`, читают из ORM, не из миграций). После фикса `tests/unit/infrastructure/db/test_audit_source.py` parity-test продолжает проходить (он уже сравнивал enum vs migration; теперь все три источника правды совпадают).
+  - Закоммичено в `2c24ad7` (checkpoint #2).
+- **C.4 — `make ci` локально:** ruff (clean), `mypy --strict` (0 issues, 891 source files), import-linter (4 contracts KEPT), pytest unit **4529 passed / 2 skipped** (5017 baseline 3.5-B → +13 unit `SpinFreeRoulette` − регрессии в `test_length_grant_guard.py` whitelist — тесты переехали или дедуплицировались, фактический прирост покрытия мерится coverage). Integration-тесты (`tests/integration/db tests/integration/admin tests/integration/balance tests/integration/i18n tests/integration/templates tests/integration/application`) — **515 passed**. Load-тесты (`tests/integration/load/`) flaky при параллельном прогоне в `make ci`, но not related to 3.5-C — известный flake из 3.5-B.
+- **C.5 — Финальный док-коммит:** `history.md` (эта запись) + пересборка «Снимка состояния» в `current_tasks.md` под `main = <merge_3_5_C>`, чек-лист передвинут на старт **Спринта 3.5-D «Bot UI + локали + display + закрытие Спринта 3.5»**. Старый чек-лист 3.5-C архивирован.
+
+Результат / артефакты:
+
+- Новые файлы:
+  - `src/pipirik_wars/application/roulette/__init__.py` — экспорты `SpinFreeRoulette`, `SpinFreeRouletteCommand`, `SpinResult`.
+  - `src/pipirik_wars/application/roulette/spin_free_roulette.py` (~340 строк) — use-case + DTO.
+  - `src/pipirik_wars/domain/roulette/errors.py` — `RouletteThicknessGateError` + `InsufficientLengthForRouletteError`.
+  - `src/pipirik_wars/infrastructure/db/migrations/versions/20260510_0024_audit_source_roulette_free.py` (~70 строк) — расширение CHECK whitelist.
+  - `tests/fakes/roulette_spin_repo.py` — `FakeRouletteSpinRepository` для unit-тестов.
+  - `tests/unit/application/roulette/test_spin_free_roulette.py` (~640 строк, 13 тестов).
+  - `tests/integration/db/test_spin_free_roulette_use_case.py` (~440 строк, 7 тестов).
+- Изменённые файлы:
+  - `src/pipirik_wars/domain/roulette/__init__.py` — экспорты errors.
+  - `src/pipirik_wars/domain/shared/ports/audit.py` — `AuditAction.ROULETTE_SPIN` + `AuditSource.ROULETTE_FREE_COST/REWARD`.
+  - `src/pipirik_wars/infrastructure/db/models/security.py` — `audit_log_source_whitelist` CHECK расширен на `roulette_free_*`.
+  - `tests/fakes/__init__.py` — экспорт `FakeRouletteSpinRepository`.
+  - `tests/unit/architecture/test_length_grant_guard.py` — whitelist `application/roulette/spin_free_roulette.py` + `application/inventory/enchant_item.py` (если ещё не было).
+
+Заметки / решения:
+
+- **`crypto_pool_empty=True` всегда** на C.2 — Фаза 3 не имеет крипто-пула; вес `CRYPTO_LOT` перетекает на `LENGTH` (правило `pick_roulette_outcome`). Реальный розыгрыш `crypto_lot` — задача Фазы 4 / Спринт 4.1. До тех пор `CRYPTO_LOT` никогда не выпадет в продакшне, но code-path покрыт unit-тестами через явный `crypto_pool_empty=False`-сценарий (mock-`pick_roulette_outcome` возвращает `RouletteOutcome.crypto_lot()`).
+- **`add_length:` префикс idempotency-ключа** — обязательно для `ILengthGranter.grant()` (`domain/economy/ports/length_granter.py` валидирует namespace начиная с `add_length:`). Use-case использует `add_length:{root}:cost` и `add_length:{root}:reward`, где `{root}` — пользовательский `idempotency_key` команды. Это даёт идемпотентность при retry: `cost`-grant и `reward`-grant обслуживаются репо-уровнем `IdempotencyService` отдельно, корневой `roulette_free` namespace — отдельно (тройная защита от двойного списания).
+- **`ROULETTE_SPIN` audit-action vs `LENGTH_CHANGE` от `add_length`** — три аудит-записи на спин (cost length_change + roulette_spin event + reward length_change для LENGTH). Это намеренно: `LENGTH_CHANGE` — universal balance event для anti-cheat, `ROULETTE_SPIN` — domain-specific event для аналитики (выпадение исходов, частоты, балансировка). Они не дублируют, а дополняют друг друга.
+- **`roulette_free_cost` и `roulette_free_reward` НЕ в organic-окне anti-cheat** — это критический инвариант. Без него игрок мог бы фармить «организическую длину» через рулетку: spend 100 (выходит из organic) → reward 200 (если бы входил в organic, был бы +100 organic). Решение: оба source-а помечены non-organic, anti-cheat считает чистую `length_cm` без учёта рулетка-операций. Whitelist в `application/anticheat/services/length_change_recorder.py` уже работает с `AuditSource(StrEnum)` enum-ом, поэтому новые два значения автоматически исключены из organic-логики (как `daily_head`, `referral_*` и др.).
+- **Bug fix `audit_log_source_whitelist` в ORM** — это важный урок: миграции и ORM-модели часто хранят CHECK-constraint-ы дублирующе (для backward-compat при `Base.metadata.create_all()` в тестах + для production-grade миграций). Нужно держать их в синхроне; unit-тест `test_audit_source.py` ловит расхождение между enum и migration, но не между migration и ORM (потому что в production миграция — единственная правда). После C.3 все три источника синхронизированы.
+- **13 unit-тестов покрывают use-case с обеих сторон**: domain-errors (gate-fail, insufficient-length), happy paths (LENGTH с reward + 4 не-LENGTH без reward), idempotency (replay-no-op, replay-cost-skip), anti-replay (anomaly-trace), DI-инварианты (ambient-UoW guard). Real-DB integration-тесты (7) добавляют покрытие end-to-end persistence + audit + idempotency.
+
+---
+
 ## 2026-05-09 — Спринт 3.5-B «Persistence-слой рулетки»
 
 **Автор:** Devin (агент)

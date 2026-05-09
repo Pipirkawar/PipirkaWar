@@ -114,6 +114,16 @@ class AuditAction(str, enum.Enum):
     # (`+18 → +25`): rolling-window последних 10 попыток на этих тирах,
     # все 10 — `success`. Для admin-alert. Per-player target_id.
     ENCHANT_ANOMALY = "enchant_anomaly"
+    # ── Спринт 3.5-C (free-to-play рулетка, ГДД §12.4) ──
+    # Каждая прокрутка use-case-а `SpinFreeRoulette` пишется как audit-event
+    # с `kind` исхода (`length` / `item` / `scroll_regular` / `scroll_blessed`
+    # / `crypto_lot`) и `length_cm` для LENGTH-исхода. Сопровождается двумя
+    # `LENGTH_GRANT`-ами c источниками `ROULETTE_FREE_COST` (delta=-100,
+    # списание стоимости прокрутки) и (только для LENGTH-исхода)
+    # `ROULETTE_FREE_REWARD` (delta=+roll, выдача награды). Оба length-source
+    # **НЕ** входят в `anticheat.organic_sources` — рулетка не учитывается
+    # в anti-cheat 24h/7d-окнах (это zero-sum/audit-only sink/source).
+    ROULETTE_SPIN = "roulette_spin"
 
 
 class AuditSource(str, enum.Enum):
@@ -147,6 +157,18 @@ class AuditSource(str, enum.Enum):
     USDT_PAYMENT = "usdt_payment"
     # ── Спринт 2.3 (Глава клана дня, ГДД §6.1) ──
     DAILY_HEAD = "daily_head"
+    # ── Спринт 3.5-C (free-to-play рулетка, ГДД §12.4) ──
+    # `ROULETTE_FREE_COST` (delta=-100) — списание стоимости прокрутки
+    # рулетки игроку. `ROULETTE_FREE_REWARD` (delta=+roll) — выдача
+    # length-награды (только при LENGTH-исходе). Оба источника
+    # **НЕ** входят в `anticheat.organic_sources` (audit-only sink/source):
+    # они пишутся в `audit_log` для целей аудита и админ-просмотра, но
+    # не учитываются в rolling-окнах (24 ч / 7 дн) anti-cheat-хардкапа.
+    # Семантически эта пара zero-sum-нейтральна (cost+reward для LENGTH-
+    # исхода; cost-only для остальных), не должна влиять на органический
+    # прирост длины.
+    ROULETTE_FREE_COST = "roulette_free_cost"
+    ROULETTE_FREE_REWARD = "roulette_free_reward"
     UNKNOWN = "unknown"
 
 

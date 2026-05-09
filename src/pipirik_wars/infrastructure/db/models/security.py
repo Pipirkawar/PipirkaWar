@@ -113,12 +113,13 @@ class AuditLogORM(Base):
         CheckConstraint(
             # Полный whitelist `audit_log.source` — должен совпадать с
             # `pipirik_wars.domain.shared.ports.audit.AuditSource` и с
-            # whitelist-ом из последней расширяющей миграции (0018, 3.1-B).
+            # whitelist-ом из последней расширяющей миграции (0024, 3.5-C).
             # Расхождение ловит unit-тест `test_audit_source.py`.
             "source IN ('forest', 'mountains', 'dungeon', 'oracle', 'referral_signup', "
             "'referral_thickness', 'pvp_reward', 'caravan_reward', 'raid_reward', "
             "'admin_grant', 'admin_refund', 'stars_payment', 'ton_payment', "
-            "'usdt_payment', 'daily_head', 'unknown')",
+            "'usdt_payment', 'daily_head', 'roulette_free_cost', "
+            "'roulette_free_reward', 'unknown')",
             name="audit_log_source_whitelist",
         ),
     )

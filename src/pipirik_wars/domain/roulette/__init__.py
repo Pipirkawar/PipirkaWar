@@ -11,20 +11,26 @@ from __future__ import annotations
 
 from pipirik_wars.domain.roulette.entities import (
     RouletteOutcome,
+    RouletteOutcomeKind,
     RouletteSpin,
 )
 from pipirik_wars.domain.roulette.errors import (
+    InsufficientLengthForRouletteError,
     InvalidRouletteConfigError,
     RouletteDomainError,
+    RouletteThicknessGateError,
 )
 from pipirik_wars.domain.roulette.ports import IRouletteSpinRepository
 from pipirik_wars.domain.roulette.services import pick_roulette_outcome
 
 __all__ = [
     "IRouletteSpinRepository",
+    "InsufficientLengthForRouletteError",
     "InvalidRouletteConfigError",
     "RouletteDomainError",
     "RouletteOutcome",
+    "RouletteOutcomeKind",
     "RouletteSpin",
+    "RouletteThicknessGateError",
     "pick_roulette_outcome",
 ]

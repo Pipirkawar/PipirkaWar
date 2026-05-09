@@ -78,6 +78,14 @@ _ALLOWED_FILES: frozenset[Path] = frozenset(
         # cap-ы 1.6 к вычетам неприменимы — см. `pvp/apply_mass_outcome.py`,
         # `caravans/finish_caravan_battle.py`).
         _SRC_ROOT / "application" / "bosses" / "finish_boss_fight.py",
+        # Approved-use-case: списание стоимости free-рулетки (-100 см)
+        # (Спринт 3.5-C, ГДД §12.4). Источник `ROULETTE_FREE_COST` НЕ
+        # `organic` (рулетка не учитывается в anti-cheat 24h/7d-окнах);
+        # reward (LENGTH-исход) идёт через `ILengthGranter.grant(source=
+        # ROULETTE_FREE_REWARD)` — это approved-путь. Прямой `with_length`
+        # здесь — только для cost-вычета, симметрично loss-веткам
+        # `mountains/finish_run.py` / `dungeon/finish_run.py`.
+        _SRC_ROOT / "application" / "roulette" / "spin_free_roulette.py",
     }
 )
 
