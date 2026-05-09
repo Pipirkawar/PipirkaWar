@@ -108,7 +108,7 @@ def _make_tier(
     return EnchantmentTier(
         name=name,
         from_level=from_level,  # type: ignore[call-arg]
-        to_level=to_level,  # type: ignore[call-arg]
+        to_level=to_level,
         description_key=description_key,
         emoji=emoji,
     )
