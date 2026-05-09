@@ -17,9 +17,9 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный PR — **3.4-B** (PR `<pending>`, `<merge_commit>`) — persistence-слой инвентаря: новая таблица `items` (`player_id` BIGINT FK→users.id CASCADE, `item_id` VARCHAR(64), `enchant_level` INT default 0, `acquired_at` TIMESTAMPTZ; composite PK `(player_id, item_id)`); миграция `0021_items` (up/down round-trip); ORM `ItemORM` + порт `IItemRepository(Protocol)` + `ItemNotFoundError(InventoryDomainError)` + `ItemCategory.from_slot(Slot)` (ГДД §2.6/§2.8.1: 8 слотов → 3 категории); `SqlAlchemyItemRepository` (get/add/update_enchant_level) с `_category_for_item_id(...)` lookup-ом из `IBalanceConfig.items_catalog` (категория не хранится в БД). 24 новых теста (5 миграционных + 17 репо + 4 unit-теста на `from_slot`/`ItemNotFoundError`); local `make ci`: **4664 passed / 2 skipped, coverage 95.47%**. Перед ним — **3.4-A** (PR #117, `5c21d4e`) — каркас доменов «Заточка»: пакет `domain/inventory/` (`Item` / `ItemCategory` / `pick_enchant_outcome`) + pydantic `EnchantmentConfig` + секция `enchantment` в `balance.yaml`. Перед ним — **3.6 design doc** (PR #116, `f7d671f`) — docs-only. Перед ним — **3.3-D** (PR #115, `5d6c9a3`) — финальный PR Спринта 3.3 «Рейд-боссы». **Закрыт Спринт 3.3 «Рейд-боссы»**, **активен Спринт 3.4 «Заточка предметов»** (закрыты 3.4-A и 3.4-B; в работе **3.4-C**).
+**На `main`:** последний смерженный PR — **3.4-B** (PR #118, `7259fad`) — persistence-слой инвентаря: новая таблица `items` (`player_id` BIGINT FK→users.id CASCADE, `item_id` VARCHAR(64), `enchant_level` INT default 0, `acquired_at` TIMESTAMPTZ; composite PK `(player_id, item_id)`); миграция `0021_items` (up/down round-trip); ORM `ItemORM` + порт `IItemRepository(Protocol)` + `ItemNotFoundError(InventoryDomainError)` + `ItemCategory.from_slot(Slot)` (ГДД §2.6/§2.8.1: 8 слотов → 3 категории); `SqlAlchemyItemRepository` (get/add/update_enchant_level) с `_category_for_item_id(...)` lookup-ом из `IBalanceConfig.items_catalog` (категория не хранится в БД). 24 новых теста (5 миграционных + 17 репо + 4 unit-теста на `from_slot`/`ItemNotFoundError`); local `make ci`: **4664 passed / 2 skipped, coverage 95.47%**. Перед ним — **3.4-A** (PR #117, `5c21d4e`) — каркас доменов «Заточка»: пакет `domain/inventory/` (`Item` / `ItemCategory` / `pick_enchant_outcome`) + pydantic `EnchantmentConfig` + секция `enchantment` в `balance.yaml`. Перед ним — **3.6 design doc** (PR #116, `f7d671f`) — docs-only. Перед ним — **3.3-D** (PR #115, `5d6c9a3`) — финальный PR Спринта 3.3 «Рейд-боссы». **Закрыт Спринт 3.3 «Рейд-боссы»**, **активен Спринт 3.4 «Заточка предметов»** (закрыты 3.4-A и 3.4-B; в работе **3.4-C**).
 
-**Текущая ветка** — `devin/<timestamp>-sprint-3-4-C-enchant-use-case` от `main = <merge_commit_3.4-B>`, **текущий feature-PR** Спринта 3.4-C «Application use-case `EnchantItem` + audit + анти-чит trip-wire + `ScrollORM`/миграция `0022_scrolls`».
+**Текущая ветка** — `devin/1778313165-sprint-3-4-C-enchant-use-case` от `main = 7259fad`, **текущий feature-PR** Спринта 3.4-C «Application use-case `EnchantItem` + audit + анти-чит trip-wire + `ScrollORM`/миграция `0022_scrolls`».
 
 Перед `3.4-A` (PR #117): **3.6 design doc** (PR #116, `f7d671f`) — docs-only. Перед ним: **3.3-D** (PR #115, `5d6c9a3`) — bot-handler `/boss` + lobby-UI + локали + APScheduler-фабрики + 3 нотификатора + use-case `CancelBossFight` + raider-loss length-вычеты + integration-тест scroll-drop частот. Перед ним: **3.3-C** (PR #114, `d08985e`) — доменный сервис `boss_round_resolution` + use-case-ы `RunBossRound` / `FinishBossFight`. Перед ним: **3.3-B** (PR #113, `9c859b7`), **3.3-A** (PR #112, `dbb9b1c`); **3.2-D** (PR #111, `89e4f0a`), **3.2-C** (PR #110, `2333297`), **3.2-B** (PR #109, `e27968b`), **3.2-A** (PR #108, `fe959c6`); **3.1-E** (PR #107, `5c1b26f`) и PR-ы Спринтов 3.1 (#99–#106) и 2.5 (#79–#97).
 
@@ -63,10 +63,10 @@
 
 > Этот PR — третий PR Спринта 3.4. Поднимает application-слой заточки поверх persistence-а 3.4-B: use-case `EnchantItem(*, player_id, item_id, scroll_id) -> EnchantOutcome` (load Item + load Scroll + check category + roll исход через `IRandom` + audit + idempotency), плюс `ScrollORM` + миграция `0022_scrolls` (стэкаемые скроллы — `(player_id, scroll_id)` PK + `qty INT`), плюс анти-чит trip-wire `ENCHANT_ANOMALY` (10 подряд успехов на тирах `+18→+25` → admin alert). Без bot-UI (3.4-D). Покрывает задачи плана **3.4.3, 3.4.9** + миграцию для `Scroll`-агрегата.
 
-- [ ] Дождаться мерджа `3.4-B` в `main` (этот PR).
-- [ ] `git fetch && git checkout main && git pull`.
-- [ ] Создать ветку `devin/<timestamp>-sprint-3-4-C-enchant-use-case` от `main`.
-- [ ] **C.0 — Обновить `current_tasks.md`** под старт Спринта 3.4-C: пересобрать «Снимок состояния» под `main = <merge_commit_3.4-B>`, перенести чек-лист на C.1–C.X.
+- [x] Дождаться мерджа `3.4-B` в `main` (PR #118, `7259fad`).
+- [x] `git fetch && git checkout main && git pull`.
+- [x] Создать ветку `devin/1778313165-sprint-3-4-C-enchant-use-case` от `main`.
+- [x] **C.0 — Обновить `current_tasks.md`** под старт Спринта 3.4-C: пересобрать «Снимок состояния» под `main = 7259fad`, перенести чек-лист на C.1–C.9.
 - [ ] **C.1 — Доменный VO `Scroll(category, blessed: bool)`** (если ещё не в `domain/inventory/entities.py` после 3.4-A) + `IScrollRepository(Protocol)` (`get(player_id, scroll_id) -> Scroll`, `consume(player_id, scroll_id, qty=1) -> None` (атомарный декремент), `add(player_id, scroll_id, qty, now)`). `ScrollNotFoundError(InventoryDomainError)` + `ScrollOutOfStockError(InventoryDomainError)`.
 - [ ] **C.2 — ORM `ScrollORM` + миграция Alembic `0022_scrolls`**: `(player_id BIGINT FK→users.id, scroll_id VARCHAR(64), qty INT NOT NULL CHECK qty >= 0, acquired_at TIMESTAMPTZ)`, composite PK `(player_id, scroll_id)`. `qty=0`-строки можно удалять или оставлять (компромисс на проектирование). Зарегистрировать в `models/__init__.py` + `tests/integration/db/conftest.py`.
 - [ ] **C.3 — `SqlAlchemyScrollRepository`**: `get / consume(qty) / add(qty)`. `consume` — `UPDATE qty = qty - :n WHERE player_id = :p AND scroll_id = :s AND qty >= :n`, `rowcount == 0 → ScrollOutOfStockError` (отличает от `NotFound` через предварительный `SELECT EXISTS`).
@@ -125,9 +125,10 @@
 
 > Сюда пиши **дельту** к плану: что именно меняешь, какие use-cases / порты / handler-ы / тесты затронуты.
 
-**Текущий PR — 3.4-B «Persistence-слой инвентаря (создание `items`-таблицы)» — в ревью** (ждёт зелёный GitHub CI и мердж).
-- **Сделано:** доменный порт `IItemRepository` + `ItemNotFoundError` + `ItemCategory.from_slot`; ORM `ItemORM` + миграция `0021_items`; `SqlAlchemyItemRepository` (get/add/update_enchant_level); 24 новых теста. Локальный `make ci`: 4664 passed / 2 skipped, coverage 95.47%.
-- **Следующий шаг:** ждём зелёный GitHub CI и мердж. После слияния — старт ветки `devin/<timestamp>-sprint-3-4-C-enchant-use-case` от `main`, C.0–C.9 по чек-листу выше.
+**Текущий PR — 3.4-C «Application use-case `EnchantItem` + audit + анти-чит trip-wire + `ScrollORM`»** — в работе.
+- **На `main`:** 3.4-B смержен (PR #118, `7259fad`). 3.4-C открыт от фреш-`main`.
+- **Разведка (важно):** VO `Scroll` уже живёт в `pipirik_wars.domain.enchantment.entities` (Спринт 3.1-D), со своим `ScrollCategory(StrEnum)` и вроде `ScrollCategory.WEAPON.value == "weapon_scroll"` (отличается от `ItemCategory.WEAPON.value == "weapon"` ­— это by design, см. `domain/inventory/__init__.py` docstring). `Item.matches_scroll(scroll)` сравнивает по `Enum.name`. `IItemRepository` + `ItemORM` + `SqlAlchemyItemRepository` уже есть.
+- **Надо добавить:** порт `IScrollRepository` + 2 ошибки (`ScrollNotFoundError` / `ScrollOutOfStockError`); стабильный string-id для `Scroll` в persistence (`Scroll.scroll_id` property + classmethod `Scroll.from_scroll_id(...)` — формат `«или weapon_scroll:regular, или armor_scroll:blessed»`); ORM `ScrollORM` + миграцию `0022_scrolls` (`(player_id, scroll_id)` PK, `qty INT CHECK qty >= 0`); `SqlAlchemyScrollRepository` (get/consume/add); 2 новых audit-action (`ITEM_ENCHANT_ATTEMPT`, `ENCHANT_ANOMALY`); use-case `EnchantItem`; trip-wire `ENCHANT_ANOMALY` поиск (в `application/inventory/anti_cheat.py`).
 - **Открытые блокеры:** нет.
 
 ---
@@ -144,4 +145,4 @@
 
 > Обновляется автоматически перед каждым `git push`. После `git log --oneline -1` — short sha + subject.
 
-`99dc9b1` — `feat(3.4-B): B.3+B.4 — SqlAlchemyItemRepository + 17 integration tests`. Следующий коммит — B.6 (финальный docs-коммит этой правки), после — PR в `main`.
+`7259fad` (на `main`) — мердж PR #118. Следующий коммит на ветке 3.4-C — C.0 (этот docs-snapshot), потом C.1 (`IScrollRepository` + `ScrollNotFoundError` + `ScrollOutOfStockError` + `Scroll.scroll_id`).
