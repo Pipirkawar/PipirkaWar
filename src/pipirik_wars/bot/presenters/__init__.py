@@ -82,6 +82,14 @@ from pipirik_wars.bot.presenters.referral_share import (
     parse_referral_share_callback_data,
     referral_share_callback_data,
 )
+from pipirik_wars.bot.presenters.roulette import (
+    RouletteCallbackAction,
+    RouletteCallbackData,
+    RoulettePresenter,
+    is_roulette_callback,
+    parse_roulette_callback_data,
+    roulette_callback_data,
+)
 from pipirik_wars.bot.presenters.top import TopPresenter
 from pipirik_wars.bot.presenters.upgrade import (
     UpgradeCallbackAction,
@@ -121,6 +129,9 @@ __all__ = [
     "ReferralShareCallbackData",
     "ReferralSharePresenter",
     "RejectCallbackData",
+    "RouletteCallbackAction",
+    "RouletteCallbackData",
+    "RoulettePresenter",
     "ShareCallbackData",
     "ShareKind",
     "TopPresenter",
@@ -136,6 +147,7 @@ __all__ = [
     "is_boss_callback",
     "is_caravan_callback",
     "is_pve_callback",
+    "is_roulette_callback",
     "mass_attack_callback_data",
     "mass_block_callback_data",
     "parse_accept_callback_data",
@@ -149,11 +161,13 @@ __all__ = [
     "parse_pve_callback_data",
     "parse_referral_share_callback_data",
     "parse_reject_callback_data",
+    "parse_roulette_callback_data",
     "parse_share_callback_data",
     "parse_upgrade_callback_data",
     "pve_callback_data",
     "referral_share_callback_data",
     "reject_callback_data",
+    "roulette_callback_data",
     "share_callback_data",
     "upgrade_callback_data",
 ]
