@@ -19,6 +19,8 @@ __all__ = [
     "ItemDestroyedError",
     "ItemNotFoundError",
     "MaxLevelReachedError",
+    "ScrollNotFoundError",
+    "ScrollOutOfStockError",
     "WrongScrollCategoryError",
 ]
 
@@ -122,4 +124,67 @@ class ItemNotFoundError(InventoryDomainError):
         self.item_id = item_id
         super().__init__(
             f"item {item_id!r} not found in inventory of player {player_id}",
+        )
+
+
+class ScrollNotFoundError(InventoryDomainError):
+    """Скролл с заданным `(player_id, scroll_id)` не найден в инвентаре игрока.
+
+    Бросается репозиторием `IScrollRepository` в `get(...)` и
+    `consume(...)`, когда соответствующая строка в таблице `scrolls`
+    отсутствует. Use-case `EnchantItem` (3.4-C) ловит эту ошибку и
+    преобразует в audit-событие `ITEM_ENCHANT_ATTEMPT` с
+    `outcome="scroll_missing"` + локаль `enchant-scroll-not-found`
+    в bot-handler-е (3.4-D).
+
+    Атрибуты:
+    - `player_id: int` — владелец инвентаря.
+    - `scroll_id: str` — стабильный id скролла (`{category}:{regular|blessed}`,
+      см. `Scroll.scroll_id`).
+    """
+
+    def __init__(self, *, player_id: int, scroll_id: str) -> None:
+        self.player_id = player_id
+        self.scroll_id = scroll_id
+        super().__init__(
+            f"scroll {scroll_id!r} not found in inventory of player {player_id}",
+        )
+
+
+class ScrollOutOfStockError(InventoryDomainError):
+    """Попытка списать `qty` скроллов, которых нет в нужном количестве (ГДД §2.8).
+
+    Бросается репозиторием `IScrollRepository.consume(...)`, когда у
+    игрока есть запись `(player_id, scroll_id)`, но `qty < requested`.
+    Use-case `EnchantItem` (3.4-C) ловит эту ошибку, отменяет всю
+    транзакцию (скролл не списывается, audit пишется как
+    `ITEM_ENCHANT_ATTEMPT` с `outcome="scroll_out_of_stock"`) и
+    показывает игроку локаль `enchant-scroll-out-of-stock`.
+
+    Отличие от `ScrollNotFoundError`: запись в БД есть, но `qty`
+    недостаточно. Это — ожидаемая бизнес-ошибка (игрок может зайти
+    в `/enchant` после полного расходования стэка), а не баг.
+
+    Атрибуты:
+    - `player_id: int` — владелец инвентаря.
+    - `scroll_id: str` — id скролла.
+    - `requested_qty: int` — сколько хотели списать.
+    - `available_qty: int` — сколько фактически было в стэке.
+    """
+
+    def __init__(
+        self,
+        *,
+        player_id: int,
+        scroll_id: str,
+        requested_qty: int,
+        available_qty: int,
+    ) -> None:
+        self.player_id = player_id
+        self.scroll_id = scroll_id
+        self.requested_qty = requested_qty
+        self.available_qty = available_qty
+        super().__init__(
+            f"scroll {scroll_id!r} of player {player_id}: "
+            f"requested qty={requested_qty}, available={available_qty}",
         )

@@ -58,5 +58,59 @@ class Scroll:
     category: ScrollCategory
     blessed: bool
 
+    @property
+    def scroll_id(self) -> str:
+        """Стабильный машинный id для persistence-слоя (Спринт 3.4-C).
+
+        Формат: ``{category.value}:{regular|blessed}``. Примеры:
+
+        - `weapon_scroll:regular`
+        - `weapon_scroll:blessed`
+        - `armor_scroll:regular`
+        - `jewelry_scroll:blessed`
+
+        Этот id попадает в колонку `scrolls.scroll_id` (VARCHAR(64)) —
+        composite-PK `(player_id, scroll_id)` гарантирует, что у
+        игрока на каждую (категория, blessed)-комбинацию ровно одна
+        строка с `qty INT` (стэкабельный счётчик).
+
+        Заодно используется как `target_id` в `audit_log` для
+        action-ов `ITEM_ENCHANT_ATTEMPT` / `ENCHANT_ANOMALY`
+        (Спринт 3.4-C). Стабильность важна — не менять без миграции.
+        """
+        return f"{self.category.value}:{'blessed' if self.blessed else 'regular'}"
+
+    @classmethod
+    def from_scroll_id(cls, scroll_id: str) -> Scroll:
+        """Обратная функция к `scroll_id`-property (round-trip identity).
+
+        Pre: `scroll_id` имеет формат `{category.value}:{regular|blessed}`,
+        иначе `ValueError`.
+
+        Используется persistence-слоем (`SqlAlchemyScrollRepository`,
+        Спринт 3.4-C) для восстановления `Scroll`-VO из ORM-строки.
+        """
+        try:
+            category_value, kind = scroll_id.split(":", maxsplit=1)
+        except ValueError as exc:
+            raise ValueError(
+                f"scroll_id must be 'category:regular|blessed', got {scroll_id!r}",
+            ) from exc
+
+        if kind not in ("regular", "blessed"):
+            raise ValueError(
+                f"scroll_id kind must be 'regular' or 'blessed', got {kind!r} "
+                f"(scroll_id={scroll_id!r})",
+            )
+
+        try:
+            category = ScrollCategory(category_value)
+        except ValueError as exc:
+            raise ValueError(
+                f"unknown scroll category {category_value!r} in scroll_id={scroll_id!r}",
+            ) from exc
+
+        return cls(category=category, blessed=(kind == "blessed"))
+
 
 __all__ = ["Scroll", "ScrollCategory"]

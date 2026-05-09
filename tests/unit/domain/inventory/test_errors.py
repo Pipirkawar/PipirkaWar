@@ -21,6 +21,8 @@ from pipirik_wars.domain.inventory import (
     ItemDestroyedError,
     ItemNotFoundError,
     MaxLevelReachedError,
+    ScrollNotFoundError,
+    ScrollOutOfStockError,
     WrongScrollCategoryError,
 )
 from pipirik_wars.shared.errors import DomainError, PipirikError
@@ -35,6 +37,8 @@ class TestInheritanceChain:
             MaxLevelReachedError,
             ItemDestroyedError,
             ItemNotFoundError,
+            ScrollNotFoundError,
+            ScrollOutOfStockError,
         ],
     )
     def test_inherits_domain_error(self, exc_cls: type[Exception]) -> None:
@@ -48,6 +52,8 @@ class TestInheritanceChain:
             MaxLevelReachedError,
             ItemDestroyedError,
             ItemNotFoundError,
+            ScrollNotFoundError,
+            ScrollOutOfStockError,
         ],
     )
     def test_inherits_inventory_domain_error(self, exc_cls: type[Exception]) -> None:
@@ -149,6 +155,79 @@ class TestItemNotFoundError:
     def test_caught_by_inventory_domain_error(self) -> None:
         with pytest.raises(InventoryDomainError):
             raise ItemNotFoundError(player_id=1, item_id="x")
+
+
+class TestScrollNotFoundError:
+    def test_keyword_only_args(self) -> None:
+        with pytest.raises(TypeError):
+            ScrollNotFoundError(42, "weapon_scroll:regular")
+
+    def test_attributes(self) -> None:
+        exc = ScrollNotFoundError(player_id=42, scroll_id="weapon_scroll:blessed")
+        assert exc.player_id == 42
+        assert exc.scroll_id == "weapon_scroll:blessed"
+
+    def test_message_contains_player_and_scroll(self) -> None:
+        exc = ScrollNotFoundError(player_id=7, scroll_id="armor_scroll:regular")
+        msg = str(exc)
+        assert "armor_scroll:regular" in msg
+        assert "7" in msg
+
+    def test_caught_by_inventory_domain_error(self) -> None:
+        with pytest.raises(InventoryDomainError):
+            raise ScrollNotFoundError(player_id=1, scroll_id="x:regular")
+
+
+class TestScrollOutOfStockError:
+    def test_keyword_only_args(self) -> None:
+        with pytest.raises(TypeError):
+            ScrollOutOfStockError(1, "weapon_scroll:regular", 5, 2)
+
+    def test_attributes(self) -> None:
+        exc = ScrollOutOfStockError(
+            player_id=42,
+            scroll_id="weapon_scroll:blessed",
+            requested_qty=5,
+            available_qty=2,
+        )
+        assert exc.player_id == 42
+        assert exc.scroll_id == "weapon_scroll:blessed"
+        assert exc.requested_qty == 5
+        assert exc.available_qty == 2
+
+    def test_message_contains_qty(self) -> None:
+        exc = ScrollOutOfStockError(
+            player_id=7,
+            scroll_id="weapon_scroll:regular",
+            requested_qty=10,
+            available_qty=3,
+        )
+        msg = str(exc)
+        assert "10" in msg
+        assert "3" in msg
+        assert "weapon_scroll:regular" in msg
+
+    def test_caught_by_inventory_domain_error(self) -> None:
+        with pytest.raises(InventoryDomainError):
+            raise ScrollOutOfStockError(
+                player_id=1,
+                scroll_id="x:regular",
+                requested_qty=5,
+                available_qty=2,
+            )
+
+    def test_distinct_from_scroll_not_found(self) -> None:
+        try:
+            raise ScrollOutOfStockError(
+                player_id=1,
+                scroll_id="x:regular",
+                requested_qty=5,
+                available_qty=2,
+            )
+        except ScrollNotFoundError:
+            pytest.fail("ScrollOutOfStockError caught as ScrollNotFoundError")
+        except ScrollOutOfStockError:
+            pass
 
 
 class TestErrorsAreDistinct:

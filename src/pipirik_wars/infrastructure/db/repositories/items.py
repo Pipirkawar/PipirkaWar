@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError as SqlAlchemyIntegrityError
 
@@ -135,3 +135,14 @@ class SqlAlchemyItemRepository(IItemRepository):
         # re-get, чтобы вернуть актуальный агрегат — `enchant_level` известен,
         # но `category` всё равно требует каталог-lookup.
         return await self.get(player_id=player_id, item_id=item_id)
+
+    async def delete(self, *, player_id: int, item_id: str) -> None:
+        stmt = delete(ItemORM).where(
+            ItemORM.player_id == player_id,
+            ItemORM.item_id == item_id,
+        )
+        result = await self._uow.session.execute(stmt)
+        if not isinstance(result, CursorResult):  # pragma: no cover  (защита от изменений API)
+            raise RuntimeError("DELETE must return CursorResult")
+        if not (result.rowcount and result.rowcount > 0):
+            raise ItemNotFoundError(player_id=player_id, item_id=item_id)
