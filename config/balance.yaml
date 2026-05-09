@@ -522,3 +522,104 @@ names_catalog:
   - "Чугун"
   - "Тапок"
   - "Балабол"
+
+# --------------------------------------------------------------------------- #
+# Заточка предметов (ГДД §2.8, Спринт 3.4-A)
+# --------------------------------------------------------------------------- #
+# Полные стартовые дефолты для всех уровней 0..29 (ГДД §2.8.6). Веса
+# проверяются pydantic-валидатором EnchantmentConfig: сумма по строке
+# == 1.0 ± ε; safe-zone (level < 3) → drop/destroy = 0; blessed на +29
+# → success_2 = 0; тиры покрывают [0, 30] без дыр.
+enchantment:
+  max_level: 30
+  safe_zone_max_level: 3       # до +3 разрушений и падений нет
+
+  # Тиры сложности (для группировки в UI и log-сообщениях)
+  tiers:
+    - { name: "safe",              from: 0,  to: 3,  description_key: "tier-safe",       emoji: "🟢" }
+    - { name: "easy",              from: 3,  to: 7,  description_key: "tier-easy",       emoji: "🟢" }
+    - { name: "hard",              from: 7,  to: 12, description_key: "tier-hard",       emoji: "🟡" }
+    - { name: "very_hard",         from: 12, to: 18, description_key: "tier-very-hard",  emoji: "🟠" }
+    - { name: "extreme",           from: 18, to: 25, description_key: "tier-extreme",    emoji: "🔴" }
+    - { name: "almost_impossible", from: 25, to: 30, description_key: "tier-impossible", emoji: "⚫" }
+
+  # Веса исходов обычной заточки на каждом уровне.
+  # Сумма по строке всегда == 1.0. Уровни 0/1/2 (safe-zone) — гарантированный успех.
+  regular_outcomes_per_level:
+    # safe (0..3)
+    "0":  { success: 1.000, no_effect: 0.000, drop: 0.000, destroy: 0.000 }
+    "1":  { success: 1.000, no_effect: 0.000, drop: 0.000, destroy: 0.000 }
+    "2":  { success: 1.000, no_effect: 0.000, drop: 0.000, destroy: 0.000 }
+    # easy (3..7)
+    "3":  { success: 0.850, no_effect: 0.100, drop: 0.040, destroy: 0.010 }
+    "4":  { success: 0.820, no_effect: 0.110, drop: 0.050, destroy: 0.020 }
+    "5":  { success: 0.800, no_effect: 0.120, drop: 0.055, destroy: 0.025 }
+    "6":  { success: 0.770, no_effect: 0.130, drop: 0.065, destroy: 0.035 }
+    # hard (7..12)
+    "7":  { success: 0.600, no_effect: 0.200, drop: 0.150, destroy: 0.050 }
+    "8":  { success: 0.550, no_effect: 0.200, drop: 0.180, destroy: 0.070 }
+    "9":  { success: 0.500, no_effect: 0.200, drop: 0.210, destroy: 0.090 }
+    "10": { success: 0.470, no_effect: 0.200, drop: 0.230, destroy: 0.100 }
+    "11": { success: 0.420, no_effect: 0.200, drop: 0.260, destroy: 0.120 }
+    # very_hard (12..18)
+    "12": { success: 0.300, no_effect: 0.200, drop: 0.350, destroy: 0.150 }
+    "13": { success: 0.270, no_effect: 0.200, drop: 0.370, destroy: 0.160 }
+    "14": { success: 0.250, no_effect: 0.200, drop: 0.380, destroy: 0.170 }
+    "15": { success: 0.220, no_effect: 0.200, drop: 0.390, destroy: 0.190 }
+    "16": { success: 0.190, no_effect: 0.200, drop: 0.400, destroy: 0.210 }
+    "17": { success: 0.170, no_effect: 0.200, drop: 0.400, destroy: 0.230 }
+    # extreme (18..25)
+    "18": { success: 0.120, no_effect: 0.180, drop: 0.420, destroy: 0.280 }
+    "19": { success: 0.100, no_effect: 0.180, drop: 0.430, destroy: 0.290 }
+    "20": { success: 0.090, no_effect: 0.180, drop: 0.430, destroy: 0.300 }
+    "21": { success: 0.080, no_effect: 0.180, drop: 0.430, destroy: 0.310 }
+    "22": { success: 0.070, no_effect: 0.180, drop: 0.430, destroy: 0.320 }
+    "23": { success: 0.060, no_effect: 0.180, drop: 0.430, destroy: 0.330 }
+    "24": { success: 0.050, no_effect: 0.180, drop: 0.430, destroy: 0.340 }
+    # almost_impossible (25..30)
+    "25": { success: 0.030, no_effect: 0.150, drop: 0.420, destroy: 0.400 }
+    "26": { success: 0.025, no_effect: 0.150, drop: 0.420, destroy: 0.405 }
+    "27": { success: 0.020, no_effect: 0.150, drop: 0.420, destroy: 0.410 }
+    "28": { success: 0.015, no_effect: 0.150, drop: 0.420, destroy: 0.415 }
+    "29": { success: 0.010, no_effect: 0.150, drop: 0.420, destroy: 0.420 }
+
+  # Веса исходов blessed-заточки. Сумма по строке == 1.0.
+  # На +29 success_2 ОБЯЗАН быть 0.0 (не выпускать за max_level=30, см. §2.8.4).
+  blessed_outcomes_per_level:
+    # safe (0..3) — всегда успех малый (тире 0..2)
+    "0":  { success_1: 1.000, success_2: 0.000, no_effect: 0.000, drop_1: 0.000, drop_2: 0.000 }
+    "1":  { success_1: 1.000, success_2: 0.000, no_effect: 0.000, drop_1: 0.000, drop_2: 0.000 }
+    "2":  { success_1: 0.950, success_2: 0.050, no_effect: 0.000, drop_1: 0.000, drop_2: 0.000 }
+    # easy (3..7)
+    "3":  { success_1: 0.650, success_2: 0.200, no_effect: 0.100, drop_1: 0.040, drop_2: 0.010 }
+    "4":  { success_1: 0.620, success_2: 0.180, no_effect: 0.110, drop_1: 0.060, drop_2: 0.030 }
+    "5":  { success_1: 0.580, success_2: 0.170, no_effect: 0.120, drop_1: 0.080, drop_2: 0.050 }
+    "6":  { success_1: 0.540, success_2: 0.160, no_effect: 0.130, drop_1: 0.110, drop_2: 0.060 }
+    # hard (7..12)
+    "7":  { success_1: 0.400, success_2: 0.150, no_effect: 0.180, drop_1: 0.170, drop_2: 0.100 }
+    "8":  { success_1: 0.380, success_2: 0.130, no_effect: 0.190, drop_1: 0.180, drop_2: 0.120 }
+    "9":  { success_1: 0.340, success_2: 0.120, no_effect: 0.200, drop_1: 0.210, drop_2: 0.130 }
+    "10": { success_1: 0.310, success_2: 0.100, no_effect: 0.200, drop_1: 0.250, drop_2: 0.140 }
+    "11": { success_1: 0.290, success_2: 0.080, no_effect: 0.200, drop_1: 0.270, drop_2: 0.160 }
+    # very_hard (12..18)
+    "12": { success_1: 0.220, success_2: 0.050, no_effect: 0.200, drop_1: 0.330, drop_2: 0.200 }
+    "13": { success_1: 0.200, success_2: 0.045, no_effect: 0.200, drop_1: 0.335, drop_2: 0.220 }
+    "14": { success_1: 0.180, success_2: 0.040, no_effect: 0.200, drop_1: 0.340, drop_2: 0.240 }
+    "15": { success_1: 0.160, success_2: 0.035, no_effect: 0.200, drop_1: 0.345, drop_2: 0.260 }
+    "16": { success_1: 0.150, success_2: 0.030, no_effect: 0.180, drop_1: 0.360, drop_2: 0.280 }
+    "17": { success_1: 0.130, success_2: 0.025, no_effect: 0.180, drop_1: 0.365, drop_2: 0.300 }
+    # extreme (18..25)
+    "18": { success_1: 0.100, success_2: 0.020, no_effect: 0.180, drop_1: 0.380, drop_2: 0.320 }
+    "19": { success_1: 0.090, success_2: 0.018, no_effect: 0.180, drop_1: 0.390, drop_2: 0.322 }
+    "20": { success_1: 0.080, success_2: 0.015, no_effect: 0.180, drop_1: 0.395, drop_2: 0.330 }
+    "21": { success_1: 0.070, success_2: 0.012, no_effect: 0.180, drop_1: 0.400, drop_2: 0.338 }
+    "22": { success_1: 0.060, success_2: 0.010, no_effect: 0.180, drop_1: 0.400, drop_2: 0.350 }
+    "23": { success_1: 0.050, success_2: 0.008, no_effect: 0.180, drop_1: 0.400, drop_2: 0.362 }
+    "24": { success_1: 0.040, success_2: 0.005, no_effect: 0.175, drop_1: 0.420, drop_2: 0.360 }
+    # almost_impossible (25..30)
+    "25": { success_1: 0.025, success_2: 0.005, no_effect: 0.170, drop_1: 0.420, drop_2: 0.380 }
+    "26": { success_1: 0.020, success_2: 0.004, no_effect: 0.170, drop_1: 0.421, drop_2: 0.385 }
+    "27": { success_1: 0.015, success_2: 0.003, no_effect: 0.170, drop_1: 0.422, drop_2: 0.390 }
+    "28": { success_1: 0.012, success_2: 0.002, no_effect: 0.170, drop_1: 0.421, drop_2: 0.395 }
+    # +29 — success_2 ЖЁСТКО 0.0 (см. §2.8.4); масса перенесена на success_1
+    "29": { success_1: 0.012, success_2: 0.000, no_effect: 0.170, drop_1: 0.418, drop_2: 0.400 }
