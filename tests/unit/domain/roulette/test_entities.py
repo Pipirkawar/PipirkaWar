@@ -77,7 +77,7 @@ class TestRouletteOutcomeImmutability:
     def test_outcome_is_frozen(self) -> None:
         outcome = RouletteOutcome(kind=RouletteOutcomeKind.ITEM)
         with pytest.raises(dataclasses.FrozenInstanceError):
-            outcome.length_cm = 5  # type: ignore[misc]
+            outcome.length_cm = 5
 
     def test_outcomes_with_same_fields_compare_equal(self) -> None:
         a = RouletteOutcome(kind=RouletteOutcomeKind.LENGTH, length_cm=42)
