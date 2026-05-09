@@ -1094,6 +1094,7 @@ class BalanceConfig(_Frozen):
     anticheat: AnticheatConfig
     pvp: PvpConfig
     content_policy: ContentPolicy
+    enchantment: EnchantmentConfig
     items_catalog: tuple[ItemEntry, ...] = Field(min_length=_MIN_ITEMS_CATALOG_SIZE)
     names_catalog: tuple[str, ...] = Field(min_length=_MIN_NAMES_CATALOG_SIZE)
 

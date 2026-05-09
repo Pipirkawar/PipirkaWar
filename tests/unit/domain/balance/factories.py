@@ -7,7 +7,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 from pipirik_wars.domain.balance.config import BalanceConfig
 
@@ -35,6 +38,22 @@ def _build_valid_items_catalog() -> list[dict[str, Any]]:
 
 def _build_valid_names_catalog() -> list[str]:
     return [f"ИмяТест-{i:02d}" for i in range(1, 31)]
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_BALANCE_YAML_PATH = _REPO_ROOT / "config" / "balance.yaml"
+
+
+def _build_valid_enchantment() -> dict[str, Any]:
+    """Нагружает `enchantment`-блок из `config/balance.yaml`.
+
+    Источник дефолтов — ГДД §2.8.6 (30 уровней × regular+blessed исходы);
+    хранить их копией в фабрике было бы shum на ~150 строк, поэтому явно ссылаемся
+    на живой баланс — и в тестах баланса же есть отдельный integration-тест на
+    реальный yaml.
+    """
+    raw: dict[str, Any] = yaml.safe_load(_BALANCE_YAML_PATH.read_text(encoding="utf-8"))
+    return dict(raw["enchantment"])
 
 
 def valid_balance_payload() -> dict[str, Any]:
@@ -258,6 +277,7 @@ def valid_balance_payload() -> dict[str, Any]:
                 "sexual_explicit": False,
             }
         },
+        "enchantment": _build_valid_enchantment(),
         "items_catalog": _build_valid_items_catalog(),
         "names_catalog": _build_valid_names_catalog(),
     }
