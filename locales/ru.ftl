@@ -1069,3 +1069,164 @@ bosses-callback-toast-requirement-length = Нужна длина ≥ { NUMBER($r
 bosses-leave-toast-success = Ты вышел из лобби рейда
 bosses-leave-toast-not-a-participant = Ты не участник этого рейда
 bosses-leave-toast-summoner-leaves = Саммонер не может выйти — нажми «Отменить рейд».
+
+## /inventory + /enchant (Спринт 3.4-D)
+
+# --- /inventory ---
+
+inventory-group = 🎒 Команда /inventory работает только в личке бота. Откройте чат с ботом и попробуйте снова.
+
+inventory-other = 🎒 Команда /inventory работает только в личке бота.
+
+inventory-not-registered = 🎒 Похоже, вы ещё не зарегистрированы. Нажмите /start в этом чате — тогда сможете посмотреть инвентарь.
+
+inventory-empty = 🎒 Ваш инвентарь пуст.\nСходите в /forest, /mountains, на /boss или в /caravan — там можно получить предметы и свитки.
+
+# Карточка инвентаря. Параметры:
+# - `$items_count` — общее количество предметов.
+# - `$scrolls_count` — общее количество стэков свитков.
+inventory-card =
+    🎒 Инвентарь
+    Предметов: { NUMBER($items_count, useGrouping: 0) }
+    Стэков свитков: { NUMBER($scrolls_count, useGrouping: 0) }
+
+# Строка одного предмета. Параметры:
+# - `$display_name` — каталожное имя (например, «Шапка воеводы»).
+# - `$enchant_suffix` — преформатированный суффикс «+N» (или пусто при +0).
+# - `$slot_label` — локализованное имя слота.
+# - `$rarity_label` — локализованное имя редкости.
+inventory-item-line = • <b>{ $display_name }{ $enchant_suffix }</b> [{ $slot_label }, { $rarity_label }]
+
+# Строка одного стэка свитков. Параметры:
+# - `$scroll_label` — локализованное имя свитка.
+# - `$qty` — количество.
+inventory-scroll-line = • { $scroll_label } × { NUMBER($qty, useGrouping: 0) }
+
+inventory-section-items = 📦 Предметы:
+inventory-section-scrolls = 📜 Свитки:
+
+# Inline-кнопка «Заточить» в карточке предмета.
+inventory-button-enchant = ⚒ Заточить
+
+# Тост, когда нет подходящих свитков для предмета.
+inventory-toast-no-scroll = Нет подходящих свитков для этого предмета.
+
+# Имена слотов (8 слотов, ГДД §2.6).
+inventory-slot-hat = голова
+inventory-slot-body = тело
+inventory-slot-legs = ноги
+inventory-slot-boots = обувь
+inventory-slot-ring = кольцо
+inventory-slot-chain = цепочка
+inventory-slot-right-hand = правая рука
+inventory-slot-left-hand = левая рука
+
+# Имена редкостей (ГДД §2.5).
+inventory-rarity-common = обычное
+inventory-rarity-uncommon = необычное
+inventory-rarity-rare = редкое
+inventory-rarity-epic = эпическое
+inventory-rarity-legendary = легендарное
+
+# Имена свитков.
+# `$category_label` — одно из inventory-scroll-category-*.
+inventory-scroll-display-regular = свиток на { $category_label }
+inventory-scroll-display-blessed = благословлённый свиток на { $category_label }
+
+inventory-scroll-category-weapon = оружие
+inventory-scroll-category-armor = броню
+inventory-scroll-category-jewelry = украшение
+
+# --- /enchant ---
+
+enchant-group = ⚒ Команда /enchant работает только в личке бота. Откройте чат с ботом и попробуйте снова.
+
+enchant-other = ⚒ Команда /enchant работает только в личке бота.
+
+enchant-not-registered = ⚒ Похоже, вы ещё не зарегистрированы. Нажмите /start в этом чате — тогда сможете точить.
+
+enchant-usage = Использование: <code>/enchant &lt;item_id&gt; &lt;scroll_id&gt;</code>\n\nПример: <code>/enchant item.right_hand.test_1 weapon_scroll:regular</code>\n\nИли откройте /inventory и нажмите кнопку ⚒ Заточить на карточке предмета.
+
+# Карточка-предупреждение перед подтверждением. Параметры:
+# - `$item_display` — полное красивое имя с +N (например, «Меч +5»).
+# - `$scroll_display` — красивое имя свитка.
+# - `$tier_label` — локализованный тир (safe / easy / hard / very-hard / extreme / impossible).
+# - `$tier_emoji` — эмодзи тира.
+enchant-warning-regular =
+    ⚒ Попытка заточки
+    Предмет: <b>{ $item_display }</b>
+    Свиток: { $scroll_display }
+    Тир: { $tier_emoji } { $tier_label }
+
+    Возможные исходы:
+    • Успех (+1)
+    • Без эффекта
+    • Падение (-1)
+    • <b>Уничтожение</b> (предмет потерян безвозвратно)
+
+enchant-warning-blessed =
+    ⚒ Благословлённая заточка
+    Предмет: <b>{ $item_display }</b>
+    Свиток: { $scroll_display }
+    Тир: { $tier_emoji } { $tier_label }
+
+    Возможные исходы:
+    • Большой успех (+2)
+    • Успех (+1)
+    • Без эффекта
+    • Падение (-1)
+    • Большое падение (-2)
+
+    Благословлённый свиток никогда не уничтожает предмет.
+
+# Inline-кнопки для подтверждения/отмены.
+enchant-button-confirm = Подтвердить
+enchant-button-cancel = Отмена
+
+# Результат. Параметры в каждом:
+# - `$item_display` — полное красивое имя с новым +N (после).
+# - `$old_level` — уровень до попытки.
+# - `$new_level` — уровень после попытки.
+enchant-success =
+    ✅ Успех! { $item_display }
+    Уровень: +{ NUMBER($old_level, useGrouping: 0) } → +{ NUMBER($new_level, useGrouping: 0) }
+
+enchant-no-effect =
+    ⚪ Без эффекта.
+    Предмет: <b>{ $item_display }</b>
+    Уровень не изменился: +{ NUMBER($old_level, useGrouping: 0) }
+    Свиток израсходован.
+
+enchant-drop =
+    🔻 Падение.
+    Предмет: <b>{ $item_display }</b>
+    Уровень: +{ NUMBER($old_level, useGrouping: 0) } → +{ NUMBER($new_level, useGrouping: 0) }
+
+enchant-destroy =
+    💥 Предмет уничтожен!
+    <b>{ $item_display }</b> потерян безвозвратно.
+
+enchant-cancelled = Заточка отменена.
+
+enchant-idempotent = ℹ Эта попытка уже обработана. Откройте /inventory, чтобы увидеть актуальное состояние.
+
+# Имена тиров + эмодзи (ГДД §2.8.5).
+enchant-tier-safe = безопасный
+enchant-tier-easy = лёгкий
+enchant-tier-hard = сложный
+enchant-tier-very-hard = очень сложный
+enchant-tier-extreme = экстремальный
+enchant-tier-impossible = невозможный
+
+# Сообщения об ошибках.
+enchant-error-wrong-category = ⚠ Этим свитком нельзя заточить этот предмет: не совпадает категория.
+enchant-error-item-not-found = ⚠ Предмет не найден в инвентаре.
+enchant-error-scroll-not-found = ⚠ У вас нет такого свитка.
+enchant-error-out-of-stock = ⚠ Свитки закончились.
+enchant-error-bad-args = ⚠ Неверные аргументы. См. /enchant.
+
+# Тосты для callback-ответов (лимит Telegram ≤ 200 символов).
+enchant-toast-confirmed = Заточка завершена.
+enchant-toast-cancelled = Заточка отменена.
+enchant-toast-already-processed = Уже обработано.
+enchant-toast-error = Что-то пошло не так.
