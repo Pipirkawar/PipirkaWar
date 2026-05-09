@@ -32,7 +32,7 @@ from typing import Protocol
 from pipirik_wars.domain.enchantment.entities import Scroll
 from pipirik_wars.domain.inventory.entities import Item
 
-__all__ = ["IItemRepository", "IScrollRepository"]
+__all__ = ["IEnchantHistoryReader", "IItemRepository", "IScrollRepository"]
 
 
 class IItemRepository(Protocol):
@@ -173,5 +173,46 @@ class IScrollRepository(Protocol):
         `rowcount == 0` означает, что либо нет записи, либо
         `qty < n` (различие выявляется отдельным `SELECT`-ом перед
         падением, чтобы дать точную ошибку).
+        """
+        ...
+
+
+class IEnchantHistoryReader(Protocol):
+    """Чтение истории попыток заточки игрока (Спринт 3.4-C, C.5).
+
+    Используется trip-wire-ом анти-чита `EnchantItem`-use-case-а
+    для детекции аномальных серий успехов на высоких тирах
+    (`+18 → +25`, ГДД §2.8 + §3.3.4).
+
+    Имплементация — поверх таблицы `audit_log`, чтение событий
+    `ITEM_ENCHANT_ATTEMPT` отфильтрованных по `target_id=player_id`.
+    Источник правды — те же audit-записи, что use-case **сам** пишет
+    после каждой попытки; это значит, для актуальности
+    последнего события нужно вызывать `get_recent_high_tier_outcomes`
+    **после** `audit.record(...)` + `flush()` текущей попытки.
+
+    Все методы — асинхронные, в открытой `IUnitOfWork`-сессии.
+    """
+
+    async def get_recent_high_tier_outcomes(
+        self,
+        *,
+        player_id: int,
+        tier_min: int,
+        tier_max: int,
+        limit: int,
+    ) -> tuple[bool, ...]:
+        """Получить успех/неуспех последних `limit` попыток заточки
+        игрока на тирах `[tier_min, tier_max]` (по `enchant_level`-у
+        **до** попытки).
+
+        Возвращает кортеж длины `<= limit` с success-флагами в DESC-порядке
+        (самая свежая попытка — первая). `success` / `success_1` /
+        `success_2` → True; всё остальное (`no_effect` / `drop` /
+        `drop_1` / `drop_2` / `destroy`) → False.
+
+        Если у игрока меньше `limit` попыток на этих тирах — возвращается
+        кортеж длины `< limit` (анти-чит сам решит, считать ли это
+        достаточным для алерта).
         """
         ...

@@ -37,6 +37,9 @@ from pipirik_wars.infrastructure.db.repositories.daily_head import (
 from pipirik_wars.infrastructure.db.repositories.dungeon_run import (
     SqlAlchemyDungeonRunRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.enchant_history import (
+    SqlAlchemyEnchantHistoryReader,
+)
 from pipirik_wars.infrastructure.db.repositories.forest_run import (
     SqlAlchemyForestRunRepository,
 )
@@ -86,6 +89,7 @@ __all__ = [
     "SqlAlchemyDailyHeadRepository",
     "SqlAlchemyDuelRepository",
     "SqlAlchemyDungeonRunRepository",
+    "SqlAlchemyEnchantHistoryReader",
     "SqlAlchemyForestRunRepository",
     "SqlAlchemyGlobalLobbyRepository",
     "SqlAlchemyItemRepository",
