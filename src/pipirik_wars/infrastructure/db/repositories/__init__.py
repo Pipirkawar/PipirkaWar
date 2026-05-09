@@ -67,6 +67,9 @@ from pipirik_wars.infrastructure.db.repositories.pvp_mass_duel import (
 from pipirik_wars.infrastructure.db.repositories.referral import (
     SqlAlchemyReferralRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.roulette import (
+    SqlAlchemyRouletteSpinRepository,
+)
 from pipirik_wars.infrastructure.db.repositories.scrolls import (
     SqlAlchemyScrollRepository,
 )
@@ -98,6 +101,7 @@ __all__ = [
     "SqlAlchemyOracleHistoryRepository",
     "SqlAlchemyPlayerRepository",
     "SqlAlchemyReferralRepository",
+    "SqlAlchemyRouletteSpinRepository",
     "SqlAlchemyScrollRepository",
     "SqlAlchemySignupQueueRepository",
 ]
