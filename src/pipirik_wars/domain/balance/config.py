@@ -940,6 +940,175 @@ class EnchantmentConfig(_Frozen):
         return self
 
 
+# --------------------------------------------------------------------------- #
+# Free-to-play рулетка (ГДД §12.4, Спринт 3.5-A)
+# --------------------------------------------------------------------------- #
+
+
+# Эпсилон для проверки «сумма весов исходов рулетки == 1.0».
+# Веса в ГДД §12.4.2 заданы с тремя знаками после запятой; FP-погрешность
+# сложения не должна превышать `1e-6`. Идентично подходу
+# `_ENCHANT_WEIGHT_SUM_EPSILON` (Спринт 3.4-A).
+_ROULETTE_WEIGHT_SUM_EPSILON: float = 1e-6
+
+
+class RouletteOutcomeKind(StrEnum):
+    """5 типов исхода одного спина free-рулетки (ГДД §12.4.2).
+
+    Дублируется машинными значениями в
+    `domain/roulette/entities.py::RouletteOutcomeKind` (defence-in-depth:
+    pydantic-конфиг и доменные сущности используют один и тот же enum,
+    но импорт из `domain/roulette/` сюда невозможен — было бы
+    `balance` → `roulette` зависимость, нарушающая текущий слой
+    `domain.balance` ↔ доменные пакеты). Тест в
+    `tests/unit/domain/roulette/test_kind_enum_parity.py` гарантирует
+    соответствие значений.
+
+    Стабильные машинные id, попадают в `audit_log.target_id`
+    (Спринт 3.5-C). Не менять без миграции.
+    """
+
+    LENGTH = "length"
+    ITEM = "item"
+    SCROLL_REGULAR = "scroll_regular"
+    SCROLL_BLESSED = "scroll_blessed"
+    CRYPTO_LOT = "crypto_lot"
+
+
+class RouletteOutcomeWeight(_Frozen):
+    """Один тип исхода + его вес в free-рулетке (ГДД §12.4.2).
+
+    Сумма всех `weight`-ов в `RouletteFreeConfig.outcomes` должна быть
+    равна `1.0 ± ε` (см. `RouletteFreeConfig._validate_outcome_weights_sum_to_one`).
+    Дубли по `kind` запрещены (см. `_validate_outcome_kinds_unique`).
+    """
+
+    kind: RouletteOutcomeKind
+    weight: float = Field(ge=0.0, le=1.0)
+
+
+class RouletteLengthBucket(_Frozen):
+    """Один бакет длины для исхода `LENGTH` (ГДД §12.4.2, дефолт 4 бакета).
+
+    Бакеты задают пары `(min_cm, max_cm)` — после выбора `kind == LENGTH`
+    picker выбирает один бакет по весу, затем `IRandom.randint(min_cm,
+    max_cm)` даёт конкретное число сантиметров.
+
+    Сумма всех `weight`-ов в `RouletteFreeConfig.length_buckets` должна
+    быть `1.0 ± ε` (см. `RouletteFreeConfig._validate_bucket_weights_sum_to_one`).
+    """
+
+    name: str = Field(min_length=1, max_length=32)
+    min_cm: int = Field(ge=1, le=100_000)
+    max_cm: int = Field(ge=1, le=100_000)
+    weight: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _validate_min_max(self) -> RouletteLengthBucket:
+        if self.min_cm > self.max_cm:
+            raise ValueError(
+                f"roulette length bucket {self.name!r}: min_cm ({self.min_cm}) "
+                f"must be <= max_cm ({self.max_cm})",
+            )
+        return self
+
+
+class RouletteFreeConfig(_Frozen):
+    """Конфиг free-рулетки (ГДД §12.4.2, Спринт 3.5-A).
+
+    Поля:
+    - `cost_cm` — стоимость одного спина в сантиметрах (sink-механизм;
+      см. ГДД §12.4.2: «100 cm на старте»).
+    - `min_thickness_level` — минимальный уровень толщины игрока для
+      доступа к рулетке (ГДД §12.4.2: «доступ с уровня 2»). Use-case
+      `SpinFreeRoulette` (Спринт 3.5-C) валидирует этот порог.
+    - `outcomes` — 5 веток исходов с весами; сумма == 1.0 ± ε.
+    - `length_buckets` — 4 бакета длины с весами; сумма == 1.0 ± ε.
+
+    Pydantic-инварианты:
+    - сумма весов `outcomes` == 1.0 ± ε;
+    - сумма весов `length_buckets` == 1.0 ± ε;
+    - `kind`-ы в `outcomes` уникальны;
+    - все 5 значений `RouletteOutcomeKind` представлены ровно один раз
+      (для `crypto_lot` это нужно, чтобы `pick_roulette_outcome` мог
+      перетекать его вес на `length` при пустом крипто-пуле; для
+      остальных — чтобы дефолты оставались полными).
+
+    После валидации `RouletteFreeConfig` неизменяем. Hot-reload в
+    `YamlBalanceLoader.reload()` атомарно создаёт новый объект.
+    """
+
+    cost_cm: int = Field(ge=1, le=10_000)
+    min_thickness_level: int = Field(ge=1, le=30)
+    outcomes: tuple[RouletteOutcomeWeight, ...] = Field(min_length=1)
+    length_buckets: tuple[RouletteLengthBucket, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_outcome_weights_sum_to_one(self) -> RouletteFreeConfig:
+        total = sum(o.weight for o in self.outcomes)
+        if abs(total - 1.0) > _ROULETTE_WEIGHT_SUM_EPSILON:
+            raise ValueError(
+                f"roulette.free.outcomes weights must sum to 1.0, got {total} "
+                f"(entries: {[(o.kind.value, o.weight) for o in self.outcomes]})",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_outcome_kinds_unique(self) -> RouletteFreeConfig:
+        kinds = [o.kind for o in self.outcomes]
+        if len(set(kinds)) != len(kinds):
+            duplicates = sorted({k.value for k in kinds if kinds.count(k) > 1})
+            raise ValueError(
+                f"roulette.free.outcomes: duplicate kinds: {duplicates}",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_outcome_kinds_full(self) -> RouletteFreeConfig:
+        present: set[RouletteOutcomeKind] = {o.kind for o in self.outcomes}
+        expected: set[RouletteOutcomeKind] = set(RouletteOutcomeKind)
+        missing = expected - present
+        if missing:
+            raise ValueError(
+                "roulette.free.outcomes must list all 5 RouletteOutcomeKind "
+                f"values (missing: {sorted(k.value for k in missing)})",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_bucket_weights_sum_to_one(self) -> RouletteFreeConfig:
+        total = sum(b.weight for b in self.length_buckets)
+        if abs(total - 1.0) > _ROULETTE_WEIGHT_SUM_EPSILON:
+            raise ValueError(
+                f"roulette.free.length_buckets weights must sum to 1.0, "
+                f"got {total} (entries: "
+                f"{[(b.name, b.weight) for b in self.length_buckets]})",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_bucket_names_unique(self) -> RouletteFreeConfig:
+        names = [b.name for b in self.length_buckets]
+        if len(set(names)) != len(names):
+            duplicates = sorted({n for n in names if names.count(n) > 1})
+            raise ValueError(
+                f"roulette.free.length_buckets: duplicate names: {duplicates}",
+            )
+        return self
+
+
+class RouletteConfig(_Frozen):
+    """Корневой конфиг рулеток (ГДД §12.4, Спринт 3.5-A).
+
+    На 3.5-A определена только free-рулетка (`free: RouletteFreeConfig`).
+    Платная рулетка / VIP-варианты — задел на будущие спринты;
+    добавление новых полей не сломает обратную совместимость
+    (pydantic с `extra="forbid"` отловит опечатки).
+    """
+
+    free: RouletteFreeConfig
+
+
 class PvpDuel1v1Config(_Frozen):
     """Конфиг боя PvP 1×1 (ГДД §7.1, Спринт 2.1.A).
 
@@ -1095,6 +1264,7 @@ class BalanceConfig(_Frozen):
     pvp: PvpConfig
     content_policy: ContentPolicy
     enchantment: EnchantmentConfig
+    roulette: RouletteConfig
     items_catalog: tuple[ItemEntry, ...] = Field(min_length=_MIN_ITEMS_CATALOG_SIZE)
     names_catalog: tuple[str, ...] = Field(min_length=_MIN_NAMES_CATALOG_SIZE)
 

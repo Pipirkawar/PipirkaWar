@@ -623,3 +623,29 @@ enchantment:
     "28": { success_1: 0.012, success_2: 0.002, no_effect: 0.170, drop_1: 0.421, drop_2: 0.395 }
     # +29 — success_2 ЖЁСТКО 0.0 (см. §2.8.4); масса перенесена на success_1
     "29": { success_1: 0.012, success_2: 0.000, no_effect: 0.170, drop_1: 0.418, drop_2: 0.400 }
+
+# =============================================================================
+# Free-to-play рулетка (ГДД §12.4, Спринт 3.5-A)
+# =============================================================================
+# 5 типов исхода (kind) разыгрываются weighted_choice-ом по `outcomes[].weight`.
+# Сумма весов выходов == 1.0. Дубли по kind запрещены, все 5 значений обязаны
+# присутствовать (даже crypto_lot — он перетекает на length при пустом пуле,
+# см. picker `pick_roulette_outcome(crypto_pool_empty=...)`).
+#
+# Если выпал kind=length — затем weighted_choice по length_buckets, и наконец
+# IRandom.randint(min_cm, max_cm) даёт конкретное число сантиметров.
+roulette:
+  free:
+    cost_cm: 100              # стоимость одного спина (sink-механизм, ГДД §12.4.2)
+    min_thickness_level: 2    # доступ с уровня 2 (use-case-валидация в 3.5-C)
+    outcomes:
+      - { kind: "length",         weight: 0.850 }
+      - { kind: "item",           weight: 0.100 }
+      - { kind: "scroll_regular", weight: 0.040 }
+      - { kind: "scroll_blessed", weight: 0.005 }
+      - { kind: "crypto_lot",     weight: 0.005 }
+    length_buckets:
+      - { name: "small",  min_cm: 10,  max_cm: 50,  weight: 0.700 }
+      - { name: "medium", min_cm: 50,  max_cm: 150, weight: 0.250 }
+      - { name: "good",   min_cm: 150, max_cm: 300, weight: 0.040 }
+      - { name: "big",    min_cm: 300, max_cm: 500, weight: 0.010 }
