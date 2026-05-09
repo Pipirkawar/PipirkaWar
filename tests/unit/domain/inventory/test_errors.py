@@ -54,7 +54,7 @@ class TestInheritanceChain:
 class TestWrongScrollCategoryError:
     def test_keyword_only_args(self) -> None:
         with pytest.raises(TypeError):
-            WrongScrollCategoryError(  # type: ignore[misc]
+            WrongScrollCategoryError(
                 ScrollCategory.WEAPON,
                 ItemCategory.ARMOR,
             )
@@ -87,7 +87,7 @@ class TestWrongScrollCategoryError:
 class TestMaxLevelReachedError:
     def test_keyword_only_args(self) -> None:
         with pytest.raises(TypeError):
-            MaxLevelReachedError("item.x", 31)  # type: ignore[misc]
+            MaxLevelReachedError("item.x", 31)
 
     def test_attributes(self) -> None:
         exc = MaxLevelReachedError(item_id="item.weapon.sword", current_level=31)
@@ -112,7 +112,7 @@ class TestMaxLevelReachedError:
 class TestItemDestroyedError:
     def test_keyword_only_args(self) -> None:
         with pytest.raises(TypeError):
-            ItemDestroyedError("item.x")  # type: ignore[misc]
+            ItemDestroyedError("item.x")
 
     def test_attribute(self) -> None:
         exc = ItemDestroyedError(item_id="item.armor.cloak")

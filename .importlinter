@@ -66,3 +66,28 @@ forbidden_modules =
     asyncpg
     httpx
 ignore_imports =
+
+# -----------------------------------------------------------------------------
+# Sprint 3.4-A: однонаправленная зависимость inventory → balance (не наоборот).
+#
+# Логика: `EnchantmentConfig` (и его подмодели `RegularLevelWeights` /
+# `BlessedLevelWeights` / `EnchantmentTier`) живут в `domain.balance.config`
+# вместе с другими балансовыми сущностями (PvE / Bosses / PvP / ...). Их
+# импортирует picker `domain.inventory.services.pick_enchant_outcome` —
+# это нормально (inventory читает балансовые типы).
+#
+# Обратная зависимость (`domain/balance/` → `domain/inventory/`) была бы
+# архитектурным запахом: balance — нижний слой настроек, не должен знать
+# про domain-объекты конкретных под-доменов (`Item`, `Scroll`, ...). Этот
+# контракт ловит регрессию в будущих спринтах (3.4-B/C/D и далее), если
+# кто-то по ошибке потянет `Item` или `EnchantOutcome` в `domain.balance`.
+# -----------------------------------------------------------------------------
+
+[importlinter:contract:balance-not-depending-on-inventory]
+name = balance_must_not_import_inventory
+type = forbidden
+source_modules =
+    pipirik_wars.domain.balance
+forbidden_modules =
+    pipirik_wars.domain.inventory
+ignore_imports =

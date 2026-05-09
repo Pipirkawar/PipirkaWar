@@ -61,7 +61,7 @@ class TestItemConstruction:
     def test_item_is_frozen(self) -> None:
         item = Item(id="item.hat.steel", category=ItemCategory.ARMOR)
         with pytest.raises(FrozenInstanceError):
-            item.enchant_level = 5  # type: ignore[misc]
+            item.enchant_level = 5
 
     def test_equality_by_value(self) -> None:
         a = Item(id="x", category=ItemCategory.WEAPON, enchant_level=4)
@@ -161,9 +161,14 @@ class TestItemCategoryEnum:
         """`Item.matches_scroll` строится на синхронности `name`-ов."""
         assert {c.name for c in ItemCategory} == {c.name for c in ScrollCategory}
 
-    def test_is_str_enum(self) -> None:
-        """`StrEnum`-семантика: `ItemCategory.WEAPON == 'weapon'`."""
-        assert ItemCategory.WEAPON == "weapon"
+    def test_is_str_subclass(self) -> None:
+        """`(str, enum.Enum)`-mixin: `ItemCategory.X` — `str`-инстанс по value.
+
+        Используется в `audit_log.target_id` (стабильное машинное значение)
+        и в `eq` со строками из БД через `.value`.
+        """
+        assert isinstance(ItemCategory.WEAPON, str)
+        assert ItemCategory.WEAPON.value == "weapon"
 
 
 class TestMaxEnchantLevelMatchesBalance:

@@ -62,10 +62,8 @@ def _bernoulli_bounds(p: float, *, n: int = _ROLLS) -> tuple[float, float]:
     return expected - delta, expected + delta
 
 
-def _enchantment(cfg_root: object | None = None) -> EnchantmentConfig:
-    balance = build_valid_balance() if cfg_root is None else cfg_root
-    assert hasattr(balance, "enchantment")
-    return balance.enchantment
+def _enchantment() -> EnchantmentConfig:
+    return build_valid_balance().enchantment
 
 
 # --------------------------------------------------------------------------- #
