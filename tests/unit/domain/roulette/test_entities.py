@@ -170,7 +170,7 @@ class TestRouletteSpinImmutability:
     def test_spin_is_frozen(self) -> None:
         spin = self._make()
         with pytest.raises(dataclasses.FrozenInstanceError):
-            spin.idempotency_key = "other"  # type: ignore[misc]
+            spin.idempotency_key = "other"
 
     def test_spins_with_same_fields_compare_equal(self) -> None:
         a = self._make()
