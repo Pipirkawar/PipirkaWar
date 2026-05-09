@@ -146,3 +146,16 @@ class SqlAlchemyItemRepository(IItemRepository):
             raise RuntimeError("DELETE must return CursorResult")
         if not (result.rowcount and result.rowcount > 0):
             raise ItemNotFoundError(player_id=player_id, item_id=item_id)
+
+    async def list_by_player(self, *, player_id: int) -> tuple[Item, ...]:
+        # Сортировка `acquired_at ASC, item_id ASC` — детерминированный
+        # порядок для стабильности snapshot-тестов и предсказуемого
+        # UI («сверху — что первее всего получил»).
+        stmt = (
+            select(ItemORM)
+            .where(ItemORM.player_id == player_id)
+            .order_by(ItemORM.acquired_at.asc(), ItemORM.item_id.asc())
+        )
+        result = await self._uow.session.execute(stmt)
+        rows = result.scalars().all()
+        return tuple(_row_to_entity(row, balance=self._balance) for row in rows)

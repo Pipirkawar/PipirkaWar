@@ -52,6 +52,7 @@ from pipirik_wars.domain.inventory.ports import (
     IEnchantHistoryReader,
     IItemRepository,
     IScrollRepository,
+    ScrollStack,
 )
 from pipirik_wars.domain.inventory.services import pick_enchant_outcome
 
@@ -70,6 +71,7 @@ __all__ = [
     "RegularEnchantOutcome",
     "ScrollNotFoundError",
     "ScrollOutOfStockError",
+    "ScrollStack",
     "WrongScrollCategoryError",
     "pick_enchant_outcome",
 ]
