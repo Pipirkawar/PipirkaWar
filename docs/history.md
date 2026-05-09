@@ -23,6 +23,50 @@
 
 ---
 
+## 2026-05-09 — Спринт 3.4-B «Persistence-слой инвентаря (создание `items`-таблицы)»
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** ГДД §2.6 «Экипировка», §2.8.1 «Что точится», ПД §6.3.4 «Спринт 3.4 — Заточка предметов», `current_tasks.md` чек-лист 3.4-B. Базируется на 3.4-A (PR #117, `5c21d4e` — каркас доменов и балансовый конфиг). Подготавливает 3.4-C (use-case `EnchantItem` + audit + анти-чит trip-wire) и 3.4-D (bot UI + локали + display).
+
+**Корректировка скоупа на старте 3.4-B:** план §3.4.2 говорил «миграция `add_enchant_level_to_items`» — подразумевалось, что таблица `items` уже существует. Реальность (на `main = 5c21d4e`): **таблицы `items` нет**, последняя миграция — `0020_boss_fights.py`; в `application/bosses/finish_boss_fight.py:35` явный комментарий «реальная инвентарная инфраструктура — 3.4-B и далее». Поэтому 3.4-B **создаёт** таблицу `items` с нуля. После согласования с владельцем выбран **Вариант 2** (только `items` сейчас, `scrolls` откладываются в 3.4-C — ровно перед use-case-ом, чтобы 3.4-B не вышел «огрызком», а 3.4-C получил персистенс ровно тогда, когда он нужен).
+
+Что сделано:
+- **Доменный порт `IItemRepository`** (`src/pipirik_wars/domain/inventory/ports.py`, новый ~50 строк) — `Protocol` с тремя async-методами: `get(*, player_id, item_id) -> Item` / `add(*, player_id, item_id, now) -> Item` / `update_enchant_level(*, player_id, item_id, new_level) -> Item`. Контракт чистый: репозиторий **не** видит ORM, не видит SQL. Все аргументы kw-only.
+- **`ItemNotFoundError(InventoryDomainError)`** (`src/pipirik_wars/domain/inventory/errors.py`) — `__init__(*, player_id: int, item_id: str)`, str-репр содержит оба поля. Бросается в `get(...)` и `update_enchant_level(...)` при 0 строк.
+- **`ItemCategory.from_slot(slot: Slot) -> ItemCategory`** (`src/pipirik_wars/domain/inventory/entities.py`) — маппинг 8 слотов на 3 категории по ГДД §2.6/§2.8.1: `right_hand|left_hand → WEAPON`, `hat|body|legs|boots → ARMOR`, `ring|chain → JEWELRY`. Используется репо для восстановления `Item.category` из строки таблицы — категория **не** хранится в БД, выводится из `Slot` каталожной записи (один источник правды = `IBalanceConfig.items_catalog`).
+- **ORM-модель `ItemORM`** (`src/pipirik_wars/infrastructure/db/models/items.py`, новый ~70 строк) — `__tablename__ = "items"`. Колонки: `player_id BIGINT FK→users.id ondelete=CASCADE` (PK#1), `item_id VARCHAR(64)` (PK#2), `enchant_level INT NOT NULL server_default text("0")`, `acquired_at TIMESTAMP(timezone=True) NOT NULL`. CheckConstraint `enchant_level >= 0 AND enchant_level <= 30` (`ck_items_enchant_level_range`). Composite PK `pk_items` `(player_id, item_id)` — каждый каталожный предмет существует в инвентаре игрока в единственном экземпляре (ГДД §2.6 «не копится: надеть или выбросить»).
+- **Миграция Alembic `0021_items`** (`src/pipirik_wars/infrastructure/db/migrations/versions/20260509_0021_items.py`, новый) — `revision="0021_items"`, `down_revision="0020_boss_fights"`. `op.create_table(...)` зеркалит ORM. `downgrade()` — `op.drop_table("items")`. `server_default=sa.text("0")` для backfill при `INSERT`-ах в обход ORM.
+- **`SqlAlchemyItemRepository`** (`src/pipirik_wars/infrastructure/db/repositories/items.py`, новый ~135 строк) — реализация порта поверх `items`-таблицы. Зависимости: `uow: SqlAlchemyUnitOfWork`, `balance: IBalanceConfig`. Хелпер `_category_for_item_id(item_id, *, balance)` lookup-ит `item_id` в `items_catalog` и возвращает `ItemCategory.from_slot(entry.slot)`; если `item_id` нет в каталоге — `DomainIntegrityError("items row references unknown item id=...")`. Хелпер `_row_to_entity(row, *, balance)` собирает `Item` из ORM-строки + категории из каталога. Методы:
+  - `get(...)` — `SELECT WHERE`, 0 строк → `ItemNotFoundError`;
+  - `add(...)` — валидирует `item_id` в каталоге заранее (иначе `DomainIntegrityError`), `INSERT` через `session.add()` + `flush()` (PK conflict → `DomainIntegrityError`);
+  - `update_enchant_level(...)` — `UPDATE ... SET enchant_level`, `result.rowcount == 0` → `ItemNotFoundError`, иначе `re-get(...)`. Защита `isinstance(result, CursorResult)` — last-line of mypy-defense (как в `activity_lock` / `admin` репо).
+- **Регистрации:** `ItemORM` в `infrastructure/db/models/__init__.py` (`__all__`) и `tests/integration/db/conftest.py` (для `Base.metadata.create_all`); `SqlAlchemyItemRepository` в `infrastructure/db/repositories/__init__.py`.
+- **Тесты** (24 новых):
+  - `tests/integration/db/test_migrations.py` (+5 тестов) — `0021_items` revision exists; `0021 → 0020` chain; файл `20260509_0021_items.py` в whitelist; `items` в `expected`-наборе всех таблиц после `upgrade head`; `test_0021_creates_items_table` инспектит схему: 4 колонки `{player_id, item_id, enchant_level, acquired_at}`, composite PK на `(player_id, item_id)`, FK `items.player_id → users.id` с `ondelete=CASCADE`.
+  - `tests/integration/db/test_item_repository.py` (новый файл, 17 тестов в 5 классах):
+    - `TestSqlAlchemyItemRepositoryRoundTrip` (9 тестов) — `add → get` для всех 8 слотов (`@pytest.mark.parametrize` с проверкой соответствия `slot → category`) + дефолт `enchant_level=0`;
+    - `TestSqlAlchemyItemRepositoryUpdate` (3 теста) — `update_enchant_level` персистится; `update × 2` идемпотентен; `update(missing)` → `ItemNotFoundError(player_id, item_id)`;
+    - `TestSqlAlchemyItemRepositoryGetMiss` (2 теста) — `get(missing)` → `ItemNotFoundError`; изоляция между игроками A/B (предмет A не виден B);
+    - `TestSqlAlchemyItemRepositoryAddErrors` (2 теста) — `add(unknown_item_id)` → `DomainIntegrityError`; повторный `add` той же `(player_id, item_id)` → `DomainIntegrityError` (composite PK conflict);
+    - `TestSqlAlchemyItemRepositoryServerDefault` (1 тест) — прямой SQL `INSERT INTO items (player_id, item_id, acquired_at) VALUES (...)` без `enchant_level` → `get(...).enchant_level == 0` (доказывает `server_default`-backfill).
+- **Финальный `make ci` локально:** **4664 passed / 2 skipped, coverage 95.47%** (от baseline 95.46% Спринта 3.4-A — небольшой прирост за счёт нового репо-кода + 24 тестов). `mypy --strict` 0 issues на 854 source files. 4 import-linter contracts kept.
+
+Результат / артефакты:
+- Доменный слой: <ref_file file="/home/ubuntu/repos/PipirkaWar/src/pipirik_wars/domain/inventory/ports.py" />, <ref_file file="/home/ubuntu/repos/PipirkaWar/src/pipirik_wars/domain/inventory/errors.py" />, <ref_file file="/home/ubuntu/repos/PipirkaWar/src/pipirik_wars/domain/inventory/entities.py" />.
+- Persistence: <ref_file file="/home/ubuntu/repos/PipirkaWar/src/pipirik_wars/infrastructure/db/models/items.py" />, <ref_file file="/home/ubuntu/repos/PipirkaWar/src/pipirik_wars/infrastructure/db/migrations/versions/20260509_0021_items.py" />, <ref_file file="/home/ubuntu/repos/PipirkaWar/src/pipirik_wars/infrastructure/db/repositories/items.py" />.
+- Тесты: <ref_file file="/home/ubuntu/repos/PipirkaWar/tests/integration/db/test_item_repository.py" />, <ref_file file="/home/ubuntu/repos/PipirkaWar/tests/unit/domain/inventory/test_ports.py" />, изменённые `tests/unit/domain/inventory/test_errors.py` и `tests/unit/domain/inventory/test_item.py`.
+- Коммиты: `255f4ce` (B.0 docs), `1f63d03` (B.1 domain), `bfc48f0` (B.2 ORM + миграция), `99dc9b1` (B.3 + B.4 репо + тесты), `<final>` (B.6 docs).
+
+Заметки / решения:
+- **Категория не дублируется в БД.** Хранить `category VARCHAR(16)` рядом с `item_id` было бы денормализацией: `category` функционально определяется через `Slot` каталожной записи (`balance.yaml/items_catalog`). Лишняя колонка плохо переживает админ-правки (если кто-то поменяет `slot` предмета в YAML, БД-копия `category` устареет). Поэтому повторили приём `forest_run`-репо: ORM хранит минимум, домен дополняет из `IBalanceConfig` на каждом `_row_to_entity`.
+- **Composite PK `(player_id, item_id)` вместо surrogate-`id BIGSERIAL`.** ГДД §2.6 фиксирует «не копится: надеть или выбросить» — каждый каталожный предмет имеет ровно одну инстанцию на игрока. Composite PK делает этот инвариант жёстким на БД-уровне (повторный `add` уронится в `DomainIntegrityError`), а не вычислимым через `UNIQUE`-индекс поверх surrogate-id. Equipment-state (надет/в инвентаре) и сам факт «надеть один — выбросить старый» — отдельные концерны для 3.4-D / следующих спринтов.
+- **`server_default=sa.text("0")` обязателен для legacy-предметов.** Если потом мы добавим в БД предметы прямым SQL-ом (например, через админский bulk-INSERT для тестового наполнения), `enchant_level` без `server_default` упрётся в `NOT NULL` без значения. Это покрыто отдельным тестом `test_legacy_record_without_enchant_level_reads_zero`.
+- **Скроллы в 3.4-C, не в 3.4-B.** При обнаружении расхождения скоупа презентовали 3 варианта: (1) и `items`, и `scrolls` сразу, (2) только `items` сейчас + `scrolls` в 3.4-C перед use-case-ом, (3) минимальный «огрызок» `items(id, owner_id, enchant_level)`. Владелец выбрал Вариант 2 — он минимизирует мутность 3.4-C (там и так нужно загружать скроллы для use-case-а), не делает «огрызка», и 3.4-B остаётся по объёму ≈350 строк (а не ~600). `ScrollORM` + миграция `0022_scrolls` переезжают в чек-лист 3.4-C.
+- **`async with uow, pytest.raises(...):` не работает.** При написании integration-тестов сначала использовал композитный async-контекст `async with uow, pytest.raises(ItemNotFoundError):` — он падает в pytest 9.x с `TypeError: 'RaisesExc' object does not support the asynchronous context manager protocol`. Развернул в стандартное `with pytest.raises(...): \n  async with uow: ...`. Урок зафиксирован для следующих агентов.
+
+---
+
 ## 2026-05-09 — Спринт 3.4-A «Каркас доменов «Заточка» + балансовый конфиг»
 
 **Автор:** Devin (агент)
