@@ -66,6 +66,10 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0015_referrals" in revisions
         assert "0016_admin_audit_log" in revisions
         assert "0017_admins_totp_secret" in revisions
+        assert "0018_pve_runs" in revisions
+        assert "0019_caravans" in revisions
+        assert "0020_boss_fights" in revisions
+        assert "0021_items" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -193,6 +197,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0020 is not None
         assert rev_0020.down_revision == "0019_caravans"
 
+    def test_0021_descends_from_0020(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0021 = script.get_revision("0021_items")
+        assert rev_0021 is not None
+        assert rev_0021.down_revision == "0020_boss_fights"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -217,6 +228,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260507_0018_pve_runs.py",
             "20260508_0019_caravans.py",
             "20260508_0020_boss_fights.py",
+            "20260509_0021_items.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -270,6 +282,7 @@ class TestAlembicMigrationsApplyCleanly:
             "daily_active",
             "referrals",
             "admin_audit_log",
+            "items",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 
@@ -323,6 +336,39 @@ class TestAlembicMigrationsApplyCleanly:
 
         assert "delta_cm" in audit_cols
         assert "ix_audit_log_target_source_occurred" in index_names
+
+    def test_0021_creates_items_table(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Спринт 3.4-B: миграция создаёт `items`-таблицу с PK + CHECK."""
+        db_path = tmp_path / "alembic_0021.sqlite"
+        async_url = f"sqlite+aiosqlite:///{db_path}"
+        monkeypatch.setenv("DATABASE_URL", async_url)
+
+        cfg = _alembic_config(async_url)
+        command.upgrade(cfg, "head")
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                inspector = inspect(conn)
+                items_cols = {c["name"] for c in inspector.get_columns("items")}
+                pk = inspector.get_pk_constraint("items")
+                fks = inspector.get_foreign_keys("items")
+        finally:
+            engine.dispose()
+
+        assert items_cols == {"player_id", "item_id", "enchant_level", "acquired_at"}
+        assert set(pk["constrained_columns"]) == {"player_id", "item_id"}
+        # FK на users.id с каскадом.
+        assert any(
+            fk["referred_table"] == "users"
+            and fk["constrained_columns"] == ["player_id"]
+            and fk["options"].get("ondelete", "").upper() == "CASCADE"
+            for fk in fks
+        )
 
     def test_downgrade_then_upgrade_round_trips(
         self,

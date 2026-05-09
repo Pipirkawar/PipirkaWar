@@ -39,6 +39,9 @@ PvP массовый клан×клан (Спринт 2.2.D):
 
 Реферальная система (Спринт 2.4.B):
 - `ReferralORM` — таблица `referrals`.
+
+Инвентарь (Спринт 3.4.B):
+- `ItemORM` — таблица `items`.
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
@@ -55,6 +58,7 @@ from pipirik_wars.infrastructure.db.models.clan import ClanMemberORM, ClanORM
 from pipirik_wars.infrastructure.db.models.daily_active import DailyActiveORM
 from pipirik_wars.infrastructure.db.models.daily_head import DailyHeadAssignmentORM
 from pipirik_wars.infrastructure.db.models.forest import ForestRunORM
+from pipirik_wars.infrastructure.db.models.items import ItemORM
 from pipirik_wars.infrastructure.db.models.oracle import OracleInvocationORM
 from pipirik_wars.infrastructure.db.models.player import UserORM
 from pipirik_wars.infrastructure.db.models.pve_runs import (
@@ -93,6 +97,7 @@ __all__ = [
     "DungeonRunORM",
     "ForestRunORM",
     "IdempotencyKeyORM",
+    "ItemORM",
     "MountainRunORM",
     "OracleInvocationORM",
     "PvpDuelORM",
