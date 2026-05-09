@@ -12,8 +12,9 @@
   `BOSS_FIGHT_FINISHED + BOSS_REWARDS_GRANTED` + per-scroll `SCROLL_DROP`;
 * happy-path **поражение рейдеров** (`current_boss_length_cm >= victory_threshold_cm`):
   босс получает `+sum(length_at_join_cm)` через `ILengthGranter`;
-  рейдер-вычеты отсутствуют (вынесено в 3.3-D, см. docstring модуля);
-  `LENGTH_REVOKE` НЕ пишется; `SCROLL_DROP` НЕ пишется;
+  каждый живой рейдер теряет `Δ = max(0, length_at_join_cm - current_length_cm)`
+  через прямой `Player.with_length(...)` + audit `LENGTH_REVOKE` (Спринт 3.3-D,
+  ГДД §10.5); `SCROLL_DROP` НЕ пишется;
 * идемпотентность: повторный вызов на `FINISHED`/`CANCELLED` —
   no-op (`was_already_finished=True`), audit/grant НЕ пишутся;
 * инвариант `LOBBY` → `InvalidBossFightStateError`;
@@ -630,6 +631,8 @@ class TestRaidersDefeat:
         # 2 рейдера × 100 см на момент joined = 200.
         assert result.total_granted_cm == 200
         assert result.boss_revoked_cm == 0
+        # Σ(max(0, length_at_join - current)) = (100-70) + (100-80) = 50.
+        assert result.raiders_revoked_cm == 50
         assert result.scroll_drops == ()
 
         # Босс длиной получил +200.
@@ -637,12 +640,13 @@ class TestRaidersDefeat:
         assert boss_after is not None
         assert boss_after.length.cm == boss.length.cm + 200
 
-        # Рейдеры — длина не меняется (raider-loss-вычеты вынесены в 3.3-D).
+        # Рейдеры теряют Δ = max(0, length_at_join - current):
+        # summoner Δ=30 → 70-30=40; raider2 Δ=20 → 80-20=60.
         s_after = await s.players.get_by_id(player_id=summoner.id)
         r2_after = await s.players.get_by_id(player_id=raider2.id)
         assert s_after is not None and r2_after is not None
-        assert s_after.length.cm == 70
-        assert r2_after.length.cm == 80
+        assert s_after.length.cm == 40
+        assert r2_after.length.cm == 60
 
         # Locks сняты.
         for pid in (summoner.id, raider2.id, boss.id):
@@ -651,11 +655,11 @@ class TestRaidersDefeat:
         assert s.uow.commits == 1
         assert s.uow.rollbacks == 0
 
-        # Audit: ровно 1 LENGTH_GRANT (босс) + 1 BOSS_FIGHT_FINISHED + 1 BOSS_REWARDS_GRANTED.
-        # LENGTH_REVOKE и SCROLL_DROP — НЕТ.
+        # Audit: ровно 1 LENGTH_GRANT (босс) + 2 LENGTH_REVOKE (рейдеры с Δ>0)
+        # + 1 BOSS_FIGHT_FINISHED + 1 BOSS_REWARDS_GRANTED. SCROLL_DROP — НЕТ.
         actions = [e.action for e in s.audit.entries]
         assert actions.count(AuditAction.LENGTH_GRANT) == 1
-        assert AuditAction.LENGTH_REVOKE not in actions
+        assert actions.count(AuditAction.LENGTH_REVOKE) == 2
         assert AuditAction.SCROLL_DROP not in actions
         assert actions.count(AuditAction.BOSS_FIGHT_FINISHED) == 1
         assert actions.count(AuditAction.BOSS_REWARDS_GRANTED) == 1
@@ -673,6 +677,7 @@ class TestRaidersDefeat:
         assert rewards_entry.after["raiders_won"] is False
         assert rewards_entry.after["total_granted_cm"] == 200
         assert rewards_entry.after["boss_revoked_cm"] == 0
+        assert rewards_entry.after["raiders_revoked_cm"] == 50
         assert rewards_entry.after["scroll_drops_regular"] == 0
         assert rewards_entry.after["scroll_drops_blessed"] == 0
 
@@ -705,6 +710,240 @@ class TestRaidersDefeat:
         assert grant_entry.source is AuditSource.RAID_REWARD
         assert grant_entry.delta_cm == 42
         assert grant_entry.idempotency_key == f"add_length:boss_loss_grant:{fight.id}"
+
+
+# ---------- Raider-loss deductions (Спринт 3.3-D, D.2) ----------
+
+
+class TestRaiderLossDeductions:
+    """`Δ = max(0, length_at_join_cm - current_length_cm)` при поражении.
+
+    Поведение раздельных списаний для каждого живого рейдера:
+    `Player.with_length(current - Δ)` + audit `LENGTH_REVOKE(source=RAID_REWARD)`
+    с idempotency-key `boss_fight_raider_loss:{id}:{player_id}`. У рейдеров
+    без урона `Δ=0` — пропускаем без mutate-а Player-а и без audit-записи.
+    """
+
+    @pytest.mark.asyncio
+    async def test_no_damage_no_revoke(self) -> None:
+        """Рейдер без урона (length == length_at_join) — Δ=0, никакой записи."""
+        s = _build_setup(seed=1)
+
+        summoner = await _seed_player(
+            s.players, tg_id=_SUMMONER_TG, username="summoner", length_cm=100
+        )
+        boss = await _seed_player(s.players, tg_id=_BOSS_TG, username="boss", length_cm=200)
+        assert summoner.id is not None and boss.id is not None
+        fight = await _seed_boss_fight(
+            boss_fights=s.boss_fights,
+            boss_participants=s.boss_participants,
+            summoner_player_id=summoner.id,
+            boss_player_id=boss.id,
+            raider_player_ids=(summoner.id,),
+            current_boss_length_cm=_VICTORY_THRESHOLD_CM + 50,
+            raider_length_at_join_cm=100,
+        )
+        assert fight.id is not None
+
+        result = await s.use_case.execute(FinishBossFightInput(boss_fight_id=fight.id))
+
+        assert result.raiders_won is False
+        assert result.raiders_revoked_cm == 0
+
+        # Длина саммонера не изменилась.
+        s_after = await s.players.get_by_id(player_id=summoner.id)
+        assert s_after is not None
+        assert s_after.length.cm == 100
+
+        # Никаких LENGTH_REVOKE (только LENGTH_GRANT босса).
+        actions = [e.action for e in s.audit.entries]
+        assert AuditAction.LENGTH_REVOKE not in actions
+
+    @pytest.mark.asyncio
+    async def test_partial_damage_revoke_delta(self) -> None:
+        """Рейдер с урон-потерей `Δ>0` — Player.length-=Δ, audit LENGTH_REVOKE."""
+        s = _build_setup(seed=1)
+
+        # length_at_join=100, current=70 → Δ=30; новая длина = 40.
+        summoner = await _seed_player(
+            s.players, tg_id=_SUMMONER_TG, username="summoner", length_cm=70
+        )
+        boss = await _seed_player(s.players, tg_id=_BOSS_TG, username="boss", length_cm=200)
+        assert summoner.id is not None and boss.id is not None
+        fight = await _seed_boss_fight(
+            boss_fights=s.boss_fights,
+            boss_participants=s.boss_participants,
+            summoner_player_id=summoner.id,
+            boss_player_id=boss.id,
+            raider_player_ids=(summoner.id,),
+            current_boss_length_cm=_VICTORY_THRESHOLD_CM + 50,
+            raider_length_at_join_cm=100,
+        )
+        assert fight.id is not None
+
+        result = await s.use_case.execute(FinishBossFightInput(boss_fight_id=fight.id))
+
+        assert result.raiders_revoked_cm == 30
+        s_after = await s.players.get_by_id(player_id=summoner.id)
+        assert s_after is not None
+        assert s_after.length.cm == 40
+
+        revoke_entry = next(e for e in s.audit.entries if e.action is AuditAction.LENGTH_REVOKE)
+        assert revoke_entry.source is AuditSource.RAID_REWARD
+        assert revoke_entry.delta_cm == -30
+        assert revoke_entry.target_kind == "player"
+        assert revoke_entry.target_id == str(summoner.id)
+        assert revoke_entry.actor_id == _SUMMONER_TG
+        assert revoke_entry.before == {"length_cm": 70}
+        assert revoke_entry.after == {"length_cm": 40}
+        assert revoke_entry.reason == "boss_fight_raider_loss"
+        assert revoke_entry.idempotency_key == (f"boss_fight_raider_loss:{fight.id}:{summoner.id}")
+
+    @pytest.mark.asyncio
+    async def test_grew_during_raid_clamped_to_zero(self) -> None:
+        """Рейдер вырос за время боя (length > length_at_join) — Δ=0."""
+        s = _build_setup(seed=1)
+
+        # length_at_join=100, current=120 → Δ = max(0, 100-120) = 0.
+        summoner = await _seed_player(
+            s.players, tg_id=_SUMMONER_TG, username="summoner", length_cm=120
+        )
+        boss = await _seed_player(s.players, tg_id=_BOSS_TG, username="boss", length_cm=200)
+        assert summoner.id is not None and boss.id is not None
+        fight = await _seed_boss_fight(
+            boss_fights=s.boss_fights,
+            boss_participants=s.boss_participants,
+            summoner_player_id=summoner.id,
+            boss_player_id=boss.id,
+            raider_player_ids=(summoner.id,),
+            current_boss_length_cm=_VICTORY_THRESHOLD_CM + 50,
+            raider_length_at_join_cm=100,
+        )
+        assert fight.id is not None
+
+        result = await s.use_case.execute(FinishBossFightInput(boss_fight_id=fight.id))
+
+        assert result.raiders_revoked_cm == 0
+        s_after = await s.players.get_by_id(player_id=summoner.id)
+        assert s_after is not None
+        assert s_after.length.cm == 120  # длина не уменьшилась
+        actions = [e.action for e in s.audit.entries]
+        assert AuditAction.LENGTH_REVOKE not in actions
+
+    @pytest.mark.asyncio
+    async def test_mixed_damaged_and_undamaged_raiders(self) -> None:
+        """Смешанная группа: один с уроном, другой без."""
+        s = _build_setup(seed=1)
+
+        # Раздер 1: length_at_join=100, current=80 → Δ=20.
+        # Рейдер 2: length_at_join=100, current=100 → Δ=0 (без урона).
+        summoner = await _seed_player(
+            s.players, tg_id=_SUMMONER_TG, username="summoner", length_cm=80
+        )
+        raider2 = await _seed_player(
+            s.players, tg_id=_RAIDER_2_TG, username="raider2", length_cm=100
+        )
+        boss = await _seed_player(s.players, tg_id=_BOSS_TG, username="boss", length_cm=200)
+        assert summoner.id is not None and raider2.id is not None and boss.id is not None
+        fight = await _seed_boss_fight(
+            boss_fights=s.boss_fights,
+            boss_participants=s.boss_participants,
+            summoner_player_id=summoner.id,
+            boss_player_id=boss.id,
+            raider_player_ids=(summoner.id, raider2.id),
+            current_boss_length_cm=_VICTORY_THRESHOLD_CM + 50,
+            raider_length_at_join_cm=100,
+        )
+        assert fight.id is not None
+
+        result = await s.use_case.execute(FinishBossFightInput(boss_fight_id=fight.id))
+
+        assert result.raiders_revoked_cm == 20
+
+        s_after = await s.players.get_by_id(player_id=summoner.id)
+        r2_after = await s.players.get_by_id(player_id=raider2.id)
+        assert s_after is not None and r2_after is not None
+        assert s_after.length.cm == 60  # 80 - 20
+        assert r2_after.length.cm == 100  # без изменений
+
+        # Ровно одна LENGTH_REVOKE-запись (только саммонер).
+        revoke_entries = [e for e in s.audit.entries if e.action is AuditAction.LENGTH_REVOKE]
+        assert len(revoke_entries) == 1
+        assert revoke_entries[0].target_id == str(summoner.id)
+
+    @pytest.mark.asyncio
+    async def test_raider_loss_idempotency_key_per_player(self) -> None:
+        """Idempotency-key уникален для каждого рейдера."""
+        s = _build_setup(seed=1)
+
+        summoner = await _seed_player(
+            s.players, tg_id=_SUMMONER_TG, username="summoner", length_cm=70
+        )
+        raider2 = await _seed_player(
+            s.players, tg_id=_RAIDER_2_TG, username="raider2", length_cm=80
+        )
+        boss = await _seed_player(s.players, tg_id=_BOSS_TG, username="boss", length_cm=200)
+        assert summoner.id is not None and raider2.id is not None and boss.id is not None
+        fight = await _seed_boss_fight(
+            boss_fights=s.boss_fights,
+            boss_participants=s.boss_participants,
+            summoner_player_id=summoner.id,
+            boss_player_id=boss.id,
+            raider_player_ids=(summoner.id, raider2.id),
+            current_boss_length_cm=_VICTORY_THRESHOLD_CM + 50,
+            raider_length_at_join_cm=100,
+        )
+        assert fight.id is not None
+
+        await s.use_case.execute(FinishBossFightInput(boss_fight_id=fight.id))
+
+        revoke_keys = {
+            e.idempotency_key for e in s.audit.entries if e.action is AuditAction.LENGTH_REVOKE
+        }
+        assert revoke_keys == {
+            f"boss_fight_raider_loss:{fight.id}:{summoner.id}",
+            f"boss_fight_raider_loss:{fight.id}:{raider2.id}",
+        }
+
+    @pytest.mark.asyncio
+    async def test_raider_loss_skipped_on_victory(self) -> None:
+        """При победе рейдеров raider-loss-вычеты НЕ применяются."""
+        s = _build_setup(seed=1)
+
+        # Рейдер с уроном (length < length_at_join), но рейдеры выигрывают.
+        summoner = await _seed_player(
+            s.players, tg_id=_SUMMONER_TG, username="summoner", length_cm=70
+        )
+        boss = await _seed_player(
+            s.players,
+            tg_id=_BOSS_TG,
+            username="boss",
+            length_cm=_INITIAL_BOSS_LENGTH_CM + 100,
+        )
+        assert summoner.id is not None and boss.id is not None
+        fight = await _seed_boss_fight(
+            boss_fights=s.boss_fights,
+            boss_participants=s.boss_participants,
+            summoner_player_id=summoner.id,
+            boss_player_id=boss.id,
+            raider_player_ids=(summoner.id,),
+            current_boss_length_cm=_VICTORY_THRESHOLD_CM - 1,
+            raider_length_at_join_cm=100,
+        )
+        assert fight.id is not None
+
+        result = await s.use_case.execute(FinishBossFightInput(boss_fight_id=fight.id))
+
+        assert result.raiders_won is True
+        assert result.raiders_revoked_cm == 0
+
+        # Никаких raider-loss audit-записей.
+        revoke_entries = [
+            e
+            for e in s.audit.entries
+            if e.action is AuditAction.LENGTH_REVOKE and e.reason == "boss_fight_raider_loss"
+        ]
+        assert revoke_entries == []
 
 
 # ---------- Corner case: empty raider list ----------

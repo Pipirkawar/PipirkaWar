@@ -964,3 +964,108 @@ caravans-join-success-caravaneer =
     🐪 Ты вступил в караван как караванщик!
     Взнос: { NUMBER($contribution_cm, useGrouping: 0) } см
 caravans-join-role-conflict-caravaneer = 🐪 Караванщиком может стать только член клана-отправителя.
+
+# ============================================================================
+# /boss (Спринт 3.3-D, ГДД §10). Рейд-боссы: саммонер вызывает
+# случайного игрока из топ-30 на бой, собирает лобби рейдеров,
+# группа сражается с боссом фиксированными по длительности раундами.
+# Команда работает в личке бота; объявление с кнопкой «Показать
+# лобби» уходит в тот же чат, откуда был вызван `/boss` (группа или личка).
+# ============================================================================
+
+bosses-not-registered = 👹 Похоже, ты ещё не зарегистрирован. Нажми /start в этом чате — и тогда сможешь призвать рейд-босса.
+bosses-usage = 👹 Чтобы призвать рейд-босса, просто напиши <code>/boss</code> — случайный игрок из топ-{ NUMBER($top_n_pool, useGrouping: 0) } станет боссом.
+bosses-cooldown = 👹 Глобальный кулдаун рейд-боссов ещё не истёк. Попробуй через { NUMBER($remaining_minutes, useGrouping: 0) } мин.
+bosses-already-in = 👹 Ты уже участвуешь в активном рейде — дождись его завершения или сначала покинь лобби.
+bosses-requirement-thickness = 👹 Чтобы призвать рейд-босса, нужна толщина ≥ { NUMBER($required, useGrouping: 0) }. У тебя сейчас { NUMBER($actual, useGrouping: 0) }. Прокачай /upgrade.
+bosses-requirement-length = 👹 Чтобы призвать рейд-босса, нужна длина ≥ { NUMBER($required_cm, useGrouping: 0) } см. У тебя { NUMBER($actual_cm, useGrouping: 0) } см.
+bosses-player-frozen = 👹 Твой профиль заморожен — призвать рейд-босса нельзя.
+bosses-pool-empty = 👹 Подходящих кандидатов в боссы сейчас нет — попробуй позже.
+
+bosses-summoned-private =
+    👹 Рейд-босс призван!
+    Босс: <b>{ $boss_nick }</b> ({ NUMBER($boss_length_cm, useGrouping: 0) } см)
+    Лобби открыто на { NUMBER($lobby_minutes, useGrouping: 0) } мин — объявление ушло в чат.
+bosses-summoned-announcement =
+    👹 <b>{ $summoner_nick }</b> бросает вызов <b>{ $boss_nick }</b>!
+    Длина босса: { NUMBER($boss_length_cm, useGrouping: 0) } см
+    Лобби открыто на { NUMBER($lobby_minutes, useGrouping: 0) } мин — успей вступить.
+bosses-button-show-lobby = Показать лобби
+bosses-button-cancel = Отменить рейд
+
+# --- Callback `boss:show_lobby:<id>` (Спринт 3.3-D, D.4) ---
+
+bosses-lobby-state =
+    👹 <b>{ $summoner_nick }</b> рейдит <b>{ $boss_nick }</b>
+    Лобби { $lobby_status }.
+
+    Длина босса: { NUMBER($boss_length_cm, useGrouping: 0) } см
+    Рейдеры: { NUMBER($raiders_count, useGrouping: 0) }
+bosses-lobby-status-open = закроется через { NUMBER($remaining_minutes, useGrouping: 0) } мин
+bosses-lobby-status-closing = закрывается
+bosses-button-join = Вступить в рейд
+bosses-button-leave = Покинуть
+
+# --- Старт боя / тик раунда / финиш боя (Спринт 3.3-D, D.7) ---
+# Публикуются APScheduler-callback-ами в чат, откуда был вызван `/boss`,
+# сразу после `LOBBY → IN_BATTLE`, после каждого раунда и на
+# `IN_BATTLE → FINISHED`.
+
+bosses-battle-started =
+    👹 Рейд против <b>{ $boss_nick }</b> начался!
+
+    Саммонер: <b>{ $summoner_nick }</b>
+    Рейдеры: { NUMBER($raiders_count, useGrouping: 0) }
+    Длина босса: { NUMBER($boss_length_cm, useGrouping: 0) } см
+
+    ⚔️ Босс бьёт раз в { NUMBER($round_seconds, useGrouping: 0) } сек.
+bosses-round-tick =
+    ⚔️ Раунд { NUMBER($round_number, useGrouping: 0) } — босс <b>{ $boss_nick }</b>
+
+    Урон по боссу: { NUMBER($boss_damage_cm, useGrouping: 0) } см (осталось { NUMBER($boss_length_cm, useGrouping: 0) } см)
+    Выбыло: { NUMBER($eliminated_count, useGrouping: 0) }
+    Рейдеров осталось: { NUMBER($raiders_alive, useGrouping: 0) }
+bosses-battle-finished-victory =
+    🏆 Рейдеры одолели <b>{ $boss_nick }</b>!
+
+    Саммонер: <b>{ $summoner_nick }</b>
+    Рейдеров выжило: { NUMBER($raiders_alive, useGrouping: 0) }
+
+    🎁 Каждый выживший рейдер получает +{ NUMBER($per_raider_grant_cm, useGrouping: 0) } см.
+bosses-battle-finished-defeat =
+    ☠️ Рейд против <b>{ $boss_nick }</b> провален!
+
+    Саммонер: <b>{ $summoner_nick }</b>
+    Рейдеров выжило: { NUMBER($raiders_alive, useGrouping: 0) }
+
+    Босс забирает { NUMBER($total_granted_cm, useGrouping: 0) } см длины.
+
+# --- Callback `boss:cancel:<id>` (Спринт 3.3-D, D.4) ---
+
+bosses-cancel-message = 👹 Рейд отменён саммонером.
+bosses-cancel-toast-success = Рейд отменён
+bosses-cancel-toast-already-cancelled = Рейд уже был отменён ранее
+
+# --- Общие callback-toast-ы рейд-босса (Спринт 3.3-D, D.4) ---
+
+bosses-callback-toast-fight-not-found = Рейд не найден
+bosses-callback-toast-invalid-state = Рейд больше не в лобби
+bosses-callback-toast-not-summoner = Только саммонер может отменить рейд
+bosses-callback-toast-player-not-found = Сначала нажми /start в личке бота
+bosses-callback-toast-player-frozen = Твой профиль заморожен
+bosses-callback-toast-generic-error = Что-то пошло не так. Попробуй ещё раз.
+
+# --- Callback `boss:join:<id>` (Спринт 3.3-D, D.4) ---
+
+bosses-join-toast-success = Ты вступил в рейд
+bosses-callback-toast-lobby-closed = Лобби рейда уже закрыто
+bosses-callback-toast-already-in-fight = Ты уже участвуешь в этом рейде
+bosses-callback-toast-cannot-join-as-boss = Вступить рейдером нельзя — ты сам босс
+bosses-callback-toast-requirement-thickness = Нужна толщина ≥ { NUMBER($required, useGrouping: 0) }. У тебя { NUMBER($actual, useGrouping: 0) }.
+bosses-callback-toast-requirement-length = Нужна длина ≥ { NUMBER($required_cm, useGrouping: 0) } см. У тебя { NUMBER($actual_cm, useGrouping: 0) } см.
+
+# --- Callback `boss:leave:<id>` (Спринт 3.3-D, D.4) ---
+
+bosses-leave-toast-success = Ты вышел из лобби рейда
+bosses-leave-toast-not-a-participant = Ты не участник этого рейда
+bosses-leave-toast-summoner-leaves = Саммонер не может выйти — нажми «Отменить рейд».

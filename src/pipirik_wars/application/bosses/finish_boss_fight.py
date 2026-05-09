@@ -43,12 +43,20 @@
      refund к самому себе через own-length-recompute, не подпадающий
      под anti-cheat hardcap.
 6. **Поражение рейдеров** (ГДД §10.5):
-   * Каждый живой рейдер теряет фиксированную сумму, накопленную
-     им за раунды (`base_damage_cm` × число «отбитых блоков»). По
-     решению cyan91 на 3.3-C — raider-loss-вычеты выносим в Спринт
-     3.3-D (вместе с UI «вы проиграли»). Здесь — только length-grant
-     боссу: `+sum(length_at_join_cm)` всех живых рейдеров (реалистичный
-     «он съел всех»; снапшот длин на момент joined — стабилен) через
+   * Каждый живой рейдер теряет «реально выеденную в бою» часть
+     длины: `Δ = max(0, length_at_join_cm - current_length_cm)`
+     (Спринт 3.3-D, согласовано с cyan91). У рейдеров без урона
+     `Δ=0` — «выжил, но потерял время, не потерял по длине». Списание
+     прямым `Player.with_length(current - Δ)` + audit
+     `LENGTH_REVOKE(source=RAID_REWARD, delta_cm=-Δ)` с
+     idempotency-key `boss_fight_raider_loss:{id}:{player_id}`.
+     Это refund-к-самому-себе из «банка пользователя» (не grant) —
+     anti-cheat hardcap не применяется (см. также `_revoke_boss_length`).
+   * Босс получает length-grant `+sum(length_at_join_cm)` всех живых
+     рейдеров (реалистичный «он съел всех»; снапшот длин на момент
+     joined — стабилен; асимметрия с raider-loss-Δ намеренна — система
+     не претендует на снятие длины, которой у рейдера уже нет, но
+     боссу её «учитывает» из мирового банка) через
      `ILengthGranter.grant(source=RAID_REWARD)` с idempotency-key
      `add_length:boss_loss_grant:{boss_fight_id}`.
 7. Снимает `activity_lock(player, *)` для всех живых рейдеров +
@@ -132,6 +140,9 @@ class BossFightFinished:
       (победа) либо боссу (поражение).
     - `boss_revoked_cm` — сколько списано с босса (только победа,
       иначе `0`).
+    - `raiders_revoked_cm` — сколько суммарно списано с живых рейдеров
+      при поражении (= `sum(max(0, length_at_join_cm - current_length_cm))`,
+      Спринт 3.3-D). При победе и при no-op-е — `0`.
     - `scroll_drops` — список выданных per-player-скроллов (только при
       победе и только для попавших в ролл; пуст в остальных случаях).
     - `was_already_finished` — `True` при идемпотентном no-op-е.
@@ -141,6 +152,7 @@ class BossFightFinished:
     raiders_won: bool | None
     total_granted_cm: int
     boss_revoked_cm: int
+    raiders_revoked_cm: int
     scroll_drops: tuple[BossScrollDrop, ...]
     was_already_finished: bool
 
@@ -207,6 +219,7 @@ class FinishBossFight:
                     raiders_won=None,
                     total_granted_cm=0,
                     boss_revoked_cm=0,
+                    raiders_revoked_cm=0,
                     scroll_drops=(),
                     was_already_finished=True,
                 )
@@ -229,6 +242,7 @@ class FinishBossFight:
 
             total_granted_cm = 0
             boss_revoked_cm = 0
+            raiders_revoked_cm = 0
             scroll_drops: list[BossScrollDrop] = []
 
             if raiders_won:
@@ -264,6 +278,14 @@ class FinishBossFight:
                 total_granted_cm = await self._grant_boss_loss_reward(
                     boss_fight=boss_fight,
                     alive_raiders=alive_raiders,
+                )
+                # Каждый живой рейдер «отдаёт» только реально потерянную в
+                # бою часть длины (Δ = max(0, length_at_join - current));
+                # рейдеры без урона теряют 0 (см. docstring модуля §6).
+                raiders_revoked_cm = await self._revoke_raider_losses(
+                    boss_fight=boss_fight,
+                    alive_raiders=alive_raiders,
+                    now=now,
                 )
 
             # 4. Снимаем activity-lock-и всех живых рейдеров + босса.
@@ -317,6 +339,7 @@ class FinishBossFight:
                         "raiders_won": raiders_won,
                         "total_granted_cm": total_granted_cm,
                         "boss_revoked_cm": boss_revoked_cm,
+                        "raiders_revoked_cm": raiders_revoked_cm,
                         "scroll_drops_regular": sum(1 for d in scroll_drops if not d.blessed),
                         "scroll_drops_blessed": sum(1 for d in scroll_drops if d.blessed),
                         "alive_raiders": len(alive_raiders),
@@ -332,6 +355,7 @@ class FinishBossFight:
             raiders_won=raiders_won,
             total_granted_cm=total_granted_cm,
             boss_revoked_cm=boss_revoked_cm,
+            raiders_revoked_cm=raiders_revoked_cm,
             scroll_drops=tuple(scroll_drops),
             was_already_finished=False,
         )
@@ -470,6 +494,61 @@ class FinishBossFight:
             )
         )
         return revoked_cm
+
+    async def _revoke_raider_losses(
+        self,
+        *,
+        boss_fight: BossFight,
+        alive_raiders: tuple[BossParticipant, ...],
+        now: datetime,
+    ) -> int:
+        """При поражении рейдеров — списать у каждого `Δ = max(0, length_at_join - current)` см.
+
+        Это «реально выеденная» в бою часть длины (Спринт 3.3-D, ГДД §10.5).
+        У рейдеров без урона `Δ=0` — пропускаем без аудита и без mutate-а
+        Player-а. Списание прямым `Player.with_length(current - Δ)` +
+        audit `LENGTH_REVOKE(source=RAID_REWARD, delta_cm=-Δ)` — refund-к-самому-себе,
+        anti-cheat hardcap не применяется (см. также `_revoke_boss_length`).
+
+        Idempotency-key per-player: `boss_fight_raider_loss:{id}:{player_id}`.
+
+        Возвращает суммарную списанную дельту (>= 0).
+        :raises PlayerNotFoundError: если у живого рейдера нет Player-а
+            (инвариантно нарушено — рейд-репо ссылается на отсутствующий
+            `players.id`; ретрай не поможет).
+        """
+        assert boss_fight.id is not None
+        if not alive_raiders:
+            return 0
+        total = 0
+        for raider in alive_raiders:
+            player = await self._players.get_by_id(player_id=raider.player_id)
+            if player is None:
+                raise PlayerNotFoundError(tg_id=raider.player_id)
+            assert player.id is not None
+            delta_cm = max(0, raider.length_at_join_cm - player.length.cm)
+            if delta_cm == 0:
+                continue
+            new_length = Length(cm=player.length.cm - delta_cm)
+            after = player.with_length(new_length, now=now)
+            saved = await self._players.save(after)
+            await self._audit.record(
+                AuditEntry(
+                    action=AuditAction.LENGTH_REVOKE,
+                    actor_id=player.tg_id,
+                    target_kind="player",
+                    target_id=str(player.id),
+                    before={"length_cm": player.length.cm},
+                    after={"length_cm": saved.length.cm},
+                    reason="boss_fight_raider_loss",
+                    idempotency_key=(f"boss_fight_raider_loss:{boss_fight.id}:{raider.player_id}"),
+                    occurred_at=now,
+                    source=AuditSource.RAID_REWARD,
+                    delta_cm=-delta_cm,
+                )
+            )
+            total += delta_cm
+        return total
 
     async def _grant_boss_loss_reward(
         self,

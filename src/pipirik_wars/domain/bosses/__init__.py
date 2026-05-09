@@ -15,6 +15,7 @@ from pipirik_wars.domain.bosses.errors import (
     BossPlayerPoolEmptyError,
     BossSummonOnGlobalCooldownError,
     InvalidBossFightStateError,
+    NotAuthorizedToCancelBossError,
     NotInBossFightError,
 )
 from pipirik_wars.domain.bosses.repositories import (
@@ -50,6 +51,7 @@ __all__ = [
     "IBossFightRepository",
     "IBossParticipantRepository",
     "InvalidBossFightStateError",
+    "NotAuthorizedToCancelBossError",
     "NotInBossFightError",
     "resolve_boss_round",
 ]

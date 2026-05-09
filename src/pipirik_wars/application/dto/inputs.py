@@ -1082,3 +1082,42 @@ class FinishBossFightInput(_StrictBase):
     """
 
     boss_fight_id: int = Field(gt=0, description="boss_fights.id")
+
+
+# ── Спринт 3.3-D (рейд-боссы — UI / handler / cancel) ──
+
+
+class CancelBossFightInput(_StrictBase):
+    """Отмена рейд-боя саммонером из лобби (Спринт 3.3-D, ГДД §10.3).
+
+    Саммонер (тот, кто кинул вызов через `/boss`, см. `SummonBoss`)
+    жмёт «Отменить рейд» в лобби. Use-case `CancelBossFight`:
+
+    - Резолвит рейд-бой (`status == LOBBY`); из `IN_BATTLE`/`FINISHED`
+      бросает `InvalidBossFightStateError`. Из уже-`CANCELLED` —
+      идемпотентный no-op (`was_already_cancelled=True`).
+    - Сверяет, что `tg_id` == саммонер рейд-боя; иначе
+      `NotAuthorizedToCancelBossError`. Обычные рейдеры могут только
+      выйти из лобби (`LeaveBossLobby`), но не отменить весь рейд.
+    - Переводит `LOBBY → CANCELLED` (`BossFight.mark_cancelled`).
+    - Снимает `activity_lock(player, *)` для саммонера + всех рейдеров
+      (включая босса как игрока, если он в локе под `RAID`-reason).
+      NO-OP, если лок уже снят.
+    - Отзывает запланированные APScheduler-job-ы:
+      `cancel_boss_lobby_close(boss_fight_id)` (round-tick + finish-job
+      ещё не запланированы — они ставятся `CloseBossLobby` при переходе
+      `LOBBY → IN_BATTLE`; cancel-ы round-tick / finish — best-effort
+      на случай race-а с lobby-close-callback).
+    - Audit `BOSS_FIGHT_CANCELLED` с idempotency-key
+      `boss_fight_cancelled:{boss_fight_id}`.
+
+    Длины игроков НЕ восстанавливаются — на этапе лобби они и не
+    списывались (списание только в `FinishBossFight`, Спринт 3.3-C
+    + raider-loss в 3.3-D D.2).
+    """
+
+    boss_fight_id: int = Field(gt=0, description="boss_fights.id")
+    tg_id: PositiveTgId = Field(
+        gt=0,
+        description="Telegram user_id саммонера-инициатора отмены",
+    )

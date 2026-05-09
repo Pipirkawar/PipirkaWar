@@ -960,3 +960,109 @@ caravans-join-success-caravaneer =
     🐪 You joined the caravan as a caravaneer!
     Contribution: { NUMBER($contribution_cm, useGrouping: 0) } cm
 caravans-join-role-conflict-caravaneer = 🐪 Only members of the sender clan can join as a caravaneer.
+
+# ============================================================================
+# /boss (Sprint 3.3-D, GDD §10). Raid bosses: a summoner challenges a
+# random top-30 player to a raid, gathers a lobby of raiders, and the
+# group fights the boss in fixed-duration rounds. The command runs in
+# DM (private chat with the bot); the lobby announcement with a
+# "Show lobby" button is posted to the same chat where /boss was sent
+# (group or DM).
+# ============================================================================
+
+bosses-not-registered = 👹 Looks like you're not registered yet. Tap /start in this chat — then you'll be able to summon a raid boss.
+bosses-usage = 👹 To summon a raid boss, just type <code>/boss</code> — a random top-{ NUMBER($top_n_pool, useGrouping: 0) } player will be picked as the boss.
+bosses-cooldown = 👹 The global raid-boss cooldown hasn't expired yet. Try again in { NUMBER($remaining_minutes, useGrouping: 0) } min.
+bosses-already-in = 👹 You're already engaged in an active raid — wait for it to finish or leave the lobby first.
+bosses-requirement-thickness = 👹 Summoning a raid boss requires thickness ≥ { NUMBER($required, useGrouping: 0) }. You're at { NUMBER($actual, useGrouping: 0) }. Train via /upgrade.
+bosses-requirement-length = 👹 You need length ≥ { NUMBER($required_cm, useGrouping: 0) } cm to summon a raid. You have { NUMBER($actual_cm, useGrouping: 0) } cm.
+bosses-player-frozen = 👹 Your profile is frozen — you can't summon a raid boss.
+bosses-pool-empty = 👹 No eligible boss candidates right now — try again later.
+
+bosses-summoned-private =
+    👹 Raid boss summoned!
+    Boss: <b>{ $boss_nick }</b> ({ NUMBER($boss_length_cm, useGrouping: 0) } cm)
+    Lobby is open for { NUMBER($lobby_minutes, useGrouping: 0) } min — the announcement has been posted to the chat.
+bosses-summoned-announcement =
+    👹 <b>{ $summoner_nick }</b> challenges <b>{ $boss_nick }</b> to a raid!
+    Boss length: { NUMBER($boss_length_cm, useGrouping: 0) } cm
+    Lobby is open for { NUMBER($lobby_minutes, useGrouping: 0) } min — join while you can.
+bosses-button-show-lobby = Show lobby
+bosses-button-cancel = Cancel raid
+
+# --- Callback `boss:show_lobby:<id>` (Sprint 3.3-D, D.4) ---
+
+bosses-lobby-state =
+    👹 <b>{ $summoner_nick }</b> raids <b>{ $boss_nick }</b>
+    Lobby { $lobby_status }.
+
+    Boss length: { NUMBER($boss_length_cm, useGrouping: 0) } cm
+    Raiders: { NUMBER($raiders_count, useGrouping: 0) }
+bosses-lobby-status-open = closes in { NUMBER($remaining_minutes, useGrouping: 0) } min
+bosses-lobby-status-closing = closing
+bosses-button-join = Join the raid
+bosses-button-leave = Leave
+
+# --- Battle started / round tick / battle finished (Sprint 3.3-D, D.7) ---
+# Published by APScheduler callbacks to the chat where /boss was sent
+# right after `LOBBY → IN_BATTLE`, after each round, and on `IN_BATTLE
+# → FINISHED`.
+
+bosses-battle-started =
+    👹 The raid against <b>{ $boss_nick }</b> has begun!
+
+    Summoner: <b>{ $summoner_nick }</b>
+    Raiders: { NUMBER($raiders_count, useGrouping: 0) }
+    Boss length: { NUMBER($boss_length_cm, useGrouping: 0) } cm
+
+    ⚔️ The boss strikes every { NUMBER($round_seconds, useGrouping: 0) } sec.
+bosses-round-tick =
+    ⚔️ Round { NUMBER($round_number, useGrouping: 0) } — boss <b>{ $boss_nick }</b>
+
+    Damage to boss: { NUMBER($boss_damage_cm, useGrouping: 0) } cm (now { NUMBER($boss_length_cm, useGrouping: 0) } cm)
+    Eliminated: { NUMBER($eliminated_count, useGrouping: 0) }
+    Raiders left: { NUMBER($raiders_alive, useGrouping: 0) }
+bosses-battle-finished-victory =
+    🏆 The raiders defeated <b>{ $boss_nick }</b>!
+
+    Summoner: <b>{ $summoner_nick }</b>
+    Raiders alive: { NUMBER($raiders_alive, useGrouping: 0) }
+
+    🎁 Each surviving raider gets +{ NUMBER($per_raider_grant_cm, useGrouping: 0) } cm.
+bosses-battle-finished-defeat =
+    ☠️ The raid against <b>{ $boss_nick }</b> failed!
+
+    Summoner: <b>{ $summoner_nick }</b>
+    Raiders alive: { NUMBER($raiders_alive, useGrouping: 0) }
+
+    The boss claims { NUMBER($total_granted_cm, useGrouping: 0) } cm of length.
+
+# --- Callback `boss:cancel:<id>` (Sprint 3.3-D, D.4) ---
+
+bosses-cancel-message = 👹 Raid cancelled by the summoner.
+bosses-cancel-toast-success = Raid cancelled
+bosses-cancel-toast-already-cancelled = Raid was already cancelled
+
+# --- Common boss callback toasts (Sprint 3.3-D, D.4) ---
+
+bosses-callback-toast-fight-not-found = Raid not found
+bosses-callback-toast-invalid-state = Raid is no longer in the lobby
+bosses-callback-toast-not-summoner = Only the summoner can cancel the raid
+bosses-callback-toast-player-not-found = Press /start in the bot's private chat first
+bosses-callback-toast-player-frozen = Your profile is frozen
+bosses-callback-toast-generic-error = Something went wrong. Please try again.
+
+# --- Callback `boss:join:<id>` (Sprint 3.3-D, D.4) ---
+
+bosses-join-toast-success = You joined the raid
+bosses-callback-toast-lobby-closed = The raid lobby is already closed
+bosses-callback-toast-already-in-fight = You're already a participant in this raid
+bosses-callback-toast-cannot-join-as-boss = You can't join as a raider — you are the boss
+bosses-callback-toast-requirement-thickness = Requires thickness ≥ { NUMBER($required, useGrouping: 0) }. You're at { NUMBER($actual, useGrouping: 0) }.
+bosses-callback-toast-requirement-length = Requires length ≥ { NUMBER($required_cm, useGrouping: 0) } cm. You have { NUMBER($actual_cm, useGrouping: 0) } cm.
+
+# --- Callback `boss:leave:<id>` (Sprint 3.3-D, D.4) ---
+
+bosses-leave-toast-success = You left the raid lobby
+bosses-leave-toast-not-a-participant = You are not a participant of this raid
+bosses-leave-toast-summoner-leaves = Summoner can't leave — use "Cancel raid" instead.
