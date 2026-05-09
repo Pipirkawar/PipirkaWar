@@ -14,6 +14,17 @@
 Под нагрузкой SQLite сериализует пишущие транзакции через файловый
 лок; aiosqlite ретраит при `SQLITE_BUSY` сам, поэтому увеличиваем
 `timeout`.
+
+`poolclass=NullPool` — в нагрузочных тестах 100 параллельных корутин
+конкурируют за connection, а дефолтный `AsyncAdaptedQueuePool`
+(`pool_size=5 + max_overflow=10 = 15` connections) на медленных
+CI-раннерах выдаёт `QueuePool limit reached, connection timed out`
+раньше, чем aiosqlite успевает обработать BUSY-lock-ретраи. NullPool
+выдаёт по одному соединению на каждую сессию (без shared pool) —
+SQLite-уровневый file lock + aiosqlite-`timeout=30s` остаётся
+единственным узким местом, что и есть «честный» сценарий нагрузки.
+Это стандартная SQLAlchemy-рекомендация для async + concurrent
+тестов, не меняет семантику теста («100 truly parallel corutines»).
 """
 
 from __future__ import annotations
@@ -28,6 +39,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from pipirik_wars.infrastructure.db.base import Base
 from pipirik_wars.infrastructure.db.models import (  # noqa: F401  (регистрация моделей)
@@ -52,6 +64,7 @@ async def shared_engine(tmp_path: Path) -> AsyncIterator[AsyncEngine]:
         f"sqlite+aiosqlite:///{db_path}",
         echo=False,
         connect_args={"timeout": 30.0},
+        poolclass=NullPool,
     )
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
