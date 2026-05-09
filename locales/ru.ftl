@@ -1111,6 +1111,24 @@ inventory-button-enchant = ⚒ Заточить
 # Тост, когда нет подходящих свитков для предмета.
 inventory-toast-no-scroll = Нет подходящих свитков для этого предмета.
 
+# Picker-карточка выбора свитка (regular vs blessed) — D.1d.
+# Параметры:
+# - `$item_display` — полное красивое имя предмета с +N (например, «Меч +5»).
+inventory-picker-card =
+    ⚒ Заточка предмета
+    Предмет: <b>{ $item_display }</b>
+
+    Выберите свиток для заточки.
+
+inventory-picker-button-regular = Обычный свиток
+inventory-picker-button-blessed = Благословлённый свиток
+inventory-picker-button-cancel = Отмена
+
+inventory-picker-cancelled = Заточка отменена.
+
+# Toast после нажатия «Отмена» в picker-е (Telegram-лимит ≤ 200 символов).
+inventory-picker-toast-cancelled = Отменено.
+
 # Имена слотов (8 слотов, ГДД §2.6).
 inventory-slot-hat = голова
 inventory-slot-body = тело

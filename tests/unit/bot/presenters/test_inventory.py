@@ -306,9 +306,34 @@ class TestInventoryCallbackData:
     def test_round_trip_serialize_parse(self) -> None:
         data = inventory_callback_data(action="enchant", item_id="item.right_hand.test_1")
         assert data == "inv:enchant:item.right_hand.test_1"
-        action, item_id = parse_inventory_callback_data(data)
+        action, item_id, scroll_id = parse_inventory_callback_data(data)
         assert action == "enchant"
         assert item_id == "item.right_hand.test_1"
+        # Для `enchant`-action `scroll_id` — `None` (скролл выбирается позже).
+        assert scroll_id is None
+
+    def test_round_trip_pick_includes_scroll_id(self) -> None:
+        data = inventory_callback_data(
+            action="pick",
+            item_id="item.right_hand.test_1",
+            scroll_id="weapon_scroll:blessed",
+        )
+        assert data == "inv:pick:item.right_hand.test_1:weapon_scroll:blessed"
+        action, item_id, scroll_id = parse_inventory_callback_data(data)
+        assert action == "pick"
+        assert item_id == "item.right_hand.test_1"
+        assert scroll_id == "weapon_scroll:blessed"
+
+    def test_round_trip_pickcancel_returns_no_scroll_id(self) -> None:
+        data = inventory_callback_data(
+            action="pickcancel",
+            item_id="item.right_hand.test_1",
+        )
+        assert data == "inv:pickcancel:item.right_hand.test_1"
+        action, item_id, scroll_id = parse_inventory_callback_data(data)
+        assert action == "pickcancel"
+        assert item_id == "item.right_hand.test_1"
+        assert scroll_id is None
 
     def test_serialize_rejects_empty_item_id(self) -> None:
         with pytest.raises(ValueError, match="item_id must be non-empty"):
@@ -329,7 +354,7 @@ class TestInventoryCallbackData:
             inventory_callback_data(action="zoo", item_id="x")  # type: ignore[arg-type]
 
     def test_parse_rejects_wrong_prefix(self) -> None:
-        with pytest.raises(ValueError, match="must be 'inv"):
+        with pytest.raises(ValueError, match="must start with 'inv:'"):
             parse_inventory_callback_data("caravan:enchant:item.x")
 
     def test_parse_rejects_unknown_action(self) -> None:
@@ -337,14 +362,24 @@ class TestInventoryCallbackData:
             parse_inventory_callback_data("inv:zap:item.x")
 
     def test_parse_rejects_empty_item_id(self) -> None:
-        with pytest.raises(ValueError, match="item_id must be non-empty"):
+        with pytest.raises(ValueError, match="must be 'inv:enchant:<item_id>'"):
             parse_inventory_callback_data("inv:enchant:")
 
+    def test_parse_rejects_pick_without_scroll_id(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match="must be 'inv:pick:<item_id>:<scroll_id>'",
+        ):
+            parse_inventory_callback_data("inv:pick:item.x")
+
     def test_parse_preserves_dots_in_item_id(self) -> None:
-        # `item.right_hand.test_1` содержит `.` — split(maxsplit=2) не должен ломаться.
-        action, item_id = parse_inventory_callback_data("inv:enchant:item.right_hand.test_1")
+        # `item.right_hand.test_1` содержит `.` — split(maxsplit=3) не должен ломаться.
+        action, item_id, scroll_id = parse_inventory_callback_data(
+            "inv:enchant:item.right_hand.test_1",
+        )
         assert action == "enchant"
         assert item_id == "item.right_hand.test_1"
+        assert scroll_id is None
 
 
 class TestIsInventoryCallback:

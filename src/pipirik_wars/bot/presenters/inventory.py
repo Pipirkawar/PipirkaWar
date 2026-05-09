@@ -30,8 +30,10 @@ from pipirik_wars.domain.balance.config import Rarity, Slot
 
 _INVENTORY_CALLBACK_PREFIX: Final[str] = "inv"
 
-InventoryCallbackAction = Literal["enchant"]
-_VALID_ACTIONS: Final[frozenset[InventoryCallbackAction]] = frozenset({"enchant"})
+InventoryCallbackAction = Literal["enchant", "pick", "pickcancel"]
+_VALID_ACTIONS: Final[frozenset[InventoryCallbackAction]] = frozenset(
+    {"enchant", "pick", "pickcancel"},
+)
 
 _KEY_GROUP: Final[MessageKey] = MessageKey("inventory-group")
 _KEY_OTHER: Final[MessageKey] = MessageKey("inventory-other")
@@ -45,14 +47,38 @@ _KEY_SCROLL_LINE: Final[MessageKey] = MessageKey("inventory-scroll-line")
 _KEY_BUTTON_ENCHANT: Final[MessageKey] = MessageKey("inventory-button-enchant")
 _KEY_SCROLL_REGULAR: Final[MessageKey] = MessageKey("inventory-scroll-display-regular")
 _KEY_SCROLL_BLESSED: Final[MessageKey] = MessageKey("inventory-scroll-display-blessed")
+_KEY_PICKER_CARD: Final[MessageKey] = MessageKey("inventory-picker-card")
+_KEY_PICKER_BUTTON_REGULAR: Final[MessageKey] = MessageKey("inventory-picker-button-regular")
+_KEY_PICKER_BUTTON_BLESSED: Final[MessageKey] = MessageKey("inventory-picker-button-blessed")
+_KEY_PICKER_BUTTON_CANCEL: Final[MessageKey] = MessageKey("inventory-picker-button-cancel")
+_KEY_PICKER_CANCELLED: Final[MessageKey] = MessageKey("inventory-picker-cancelled")
+_KEY_PICKER_TOAST_CANCELLED: Final[MessageKey] = MessageKey(
+    "inventory-picker-toast-cancelled",
+)
+_KEY_TOAST_NO_SCROLL: Final[MessageKey] = MessageKey("inventory-toast-no-scroll")
 
 
-def inventory_callback_data(*, action: InventoryCallbackAction, item_id: str) -> str:
+def inventory_callback_data(
+    *,
+    action: InventoryCallbackAction,
+    item_id: str,
+    scroll_id: str | None = None,
+) -> str:
     """Сериализовать `callback_data` инлайн-кнопки инвентаря.
 
-    Формат: `inv:<action>:<item_id>`. На запас в лимите 64 байт:
-    `inv:enchant:` = 12 байт; остальное — `item_id` (каталожные id
-    типа `item.right_hand.test_1` ~24 символа, влезает с большим запасом).
+    Форматы:
+
+    - `inv:enchant:<item_id>` — кнопка «Заточить» в карточке инвентаря
+      (handler сам определит, сколько подходящих свитков у игрока:
+      0/1/2 → toast / автозаточка / picker).
+    - `inv:pick:<item_id>:<scroll_id>` — кнопка picker-а («обычный» /
+      «благословлённый») когда у игрока есть оба варианта свитка.
+    - `inv:pickcancel:<item_id>` — кнопка «Отмена» picker-а (закрывает
+      picker-карточку без выбора свитка).
+
+    На запас в лимите 64 байт: `inv:pick:` = 9 байт, `<item_id>` ≤ 24
+    байт, `<scroll_id>` ≤ 21 байт (`weapon_scroll:blessed`) — итого
+    ≤ 55 байт, влезает с запасом.
     """
     if action not in _VALID_ACTIONS:
         raise ValueError(f"unknown inventory callback action: {action!r}")
@@ -60,7 +86,14 @@ def inventory_callback_data(*, action: InventoryCallbackAction, item_id: str) ->
         raise ValueError("item_id must be non-empty")
     if ":" in item_id:
         raise ValueError(f"item_id must not contain ':' (got {item_id!r})")
-    payload = f"{_INVENTORY_CALLBACK_PREFIX}:{action}:{item_id}"
+    if action == "pick":
+        if not scroll_id:
+            raise ValueError("scroll_id must be non-empty for action 'pick'")
+        payload = f"{_INVENTORY_CALLBACK_PREFIX}:pick:{item_id}:{scroll_id}"
+    else:
+        if scroll_id is not None:
+            raise ValueError(f"scroll_id must be omitted for action {action!r}")
+        payload = f"{_INVENTORY_CALLBACK_PREFIX}:{action}:{item_id}"
     if len(payload.encode("utf-8")) > 64:
         raise ValueError(
             f"callback_data exceeds 64-byte Telegram limit: {payload!r} "
@@ -69,22 +102,48 @@ def inventory_callback_data(*, action: InventoryCallbackAction, item_id: str) ->
     return payload
 
 
-def parse_inventory_callback_data(data: str) -> tuple[InventoryCallbackAction, str]:
+def parse_inventory_callback_data(
+    data: str,
+) -> tuple[InventoryCallbackAction, str, str | None]:
     """Распарсить `callback_data` инвентаря; на любой мусор — `ValueError`.
 
-    Возвращает кортеж `(action, item_id)`.
+    Возвращает кортеж `(action, item_id, scroll_id)`. Для действия
+    `enchant` `scroll_id` = `None`; для `pick` — непустая строка
+    (`scroll_id` сам содержит `:`, поэтому парсим через
+    `split(":", maxsplit=3)`).
     """
-    parts = data.split(":", maxsplit=2)
-    if len(parts) != 3 or parts[0] != _INVENTORY_CALLBACK_PREFIX:
-        raise ValueError(f"inventory callback_data must be 'inv:<action>:<item_id>', got {data!r}")
-    _, action_raw, item_id = parts
+    parts = data.split(":", maxsplit=3)
+    if not parts or parts[0] != _INVENTORY_CALLBACK_PREFIX:
+        raise ValueError(
+            "inventory callback_data must start with 'inv:', "
+            f"got {data!r}",
+        )
+    if len(parts) < 2:
+        raise ValueError(f"inventory callback_data missing action: {data!r}")
+    action_raw = parts[1]
     if action_raw == "enchant":
-        action: InventoryCallbackAction = "enchant"
-    else:
-        raise ValueError(f"unknown inventory action: {action_raw!r}")
-    if not item_id:
-        raise ValueError(f"item_id must be non-empty in inventory callback_data {data!r}")
-    return action, item_id
+        if len(parts) != 3 or not parts[2]:
+            raise ValueError(
+                "inventory callback_data must be 'inv:enchant:<item_id>', "
+                f"got {data!r}",
+            )
+        return "enchant", parts[2], None
+    if action_raw == "pick":
+        if len(parts) != 4 or not parts[2] or not parts[3]:
+            raise ValueError(
+                "inventory callback_data must be "
+                "'inv:pick:<item_id>:<scroll_id>', "
+                f"got {data!r}",
+            )
+        return "pick", parts[2], parts[3]
+    if action_raw == "pickcancel":
+        if len(parts) != 3 or not parts[2]:
+            raise ValueError(
+                "inventory callback_data must be 'inv:pickcancel:<item_id>', "
+                f"got {data!r}",
+            )
+        return "pickcancel", parts[2], None
+    raise ValueError(f"unknown inventory action: {action_raw!r}")
 
 
 def is_inventory_callback(data: str | None) -> bool:
@@ -233,6 +292,88 @@ class InventoryPresenter:
                 ],
             )
         return InlineKeyboardMarkup(inline_keyboard=rows)
+
+    # --- Picker свитка (regular vs blessed) для D.1d ---
+
+    def picker(self, *, item: ItemView, locale: Locale) -> str:
+        """Текст picker-карточки «выберите свиток для заточки».
+
+        Показывается, когда у игрока есть и обычный, и благословлённый
+        свитки нужной категории — handler не может однозначно выбрать
+        за игрока, потому что у этих свитков разные исходы (regular
+        может уничтожить и сбросить уровень предмета; blessed — нет).
+        """
+        item_display = f"{item.display_name}{enchant_suffix(item.enchant_level)}"
+        return self._bundle.format(
+            _KEY_PICKER_CARD,
+            locale=locale,
+            item_display=item_display,
+        )
+
+    def keyboard_picker(
+        self,
+        *,
+        item: ItemView,
+        locale: Locale,
+    ) -> InlineKeyboardMarkup:
+        """Inline-клавиатура picker-а (3 кнопки: обычный / благословлённый / отмена).
+
+        `scroll_id` для каждой кнопки строится из `item.category` —
+        категории `ItemCategory` и `ScrollCategory` имеют общие имена
+        (`WEAPON` / `ARMOR` / `JEWELRY`), а формат `scroll_id` —
+        `<category>_scroll:<regular|blessed>`.
+        """
+        regular_label = self._bundle.format(_KEY_PICKER_BUTTON_REGULAR, locale=locale)
+        blessed_label = self._bundle.format(_KEY_PICKER_BUTTON_BLESSED, locale=locale)
+        cancel_label = self._bundle.format(_KEY_PICKER_BUTTON_CANCEL, locale=locale)
+        regular_scroll_id = f"{item.category.value}_scroll:regular"
+        blessed_scroll_id = f"{item.category.value}_scroll:blessed"
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=regular_label,
+                        callback_data=inventory_callback_data(
+                            action="pick",
+                            item_id=item.item_id,
+                            scroll_id=regular_scroll_id,
+                        ),
+                    ),
+                    InlineKeyboardButton(
+                        text=blessed_label,
+                        callback_data=inventory_callback_data(
+                            action="pick",
+                            item_id=item.item_id,
+                            scroll_id=blessed_scroll_id,
+                        ),
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        text=cancel_label,
+                        callback_data=inventory_callback_data(
+                            action="pickcancel",
+                            item_id=item.item_id,
+                        ),
+                    ),
+                ],
+            ],
+        )
+
+    def picker_cancelled(self, *, locale: Locale) -> str:
+        """Текст в picker-сообщении после нажатия «Отмена»."""
+        return self._bundle.format(_KEY_PICKER_CANCELLED, locale=locale)
+
+    # --- Toasts (callback.answer(...)) для D.1d ---
+
+    def toast_no_scroll(self, *, locale: Locale) -> str:
+        """Toast «нет подходящих свитков» — нажата `/inventory`-кнопка
+        «Заточить» для предмета, к которому игроку нечем."""
+        return self._bundle.format(_KEY_TOAST_NO_SCROLL, locale=locale)
+
+    def toast_picker_cancelled(self, *, locale: Locale) -> str:
+        """Toast после отмены picker-а."""
+        return self._bundle.format(_KEY_PICKER_TOAST_CANCELLED, locale=locale)
 
     # --- Внутренние рендереры ---
 

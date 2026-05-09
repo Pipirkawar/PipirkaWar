@@ -16,6 +16,29 @@
 7. Локаль из middleware пробрасывается в bundle (RU vs EN дают разные
    маркерные строки от `FakeMessageBundle`).
 8. Без локали → fallback на `DEFAULT_LOCALE`.
+
+Плюс — `inv:`-callback handler (D.1d):
+
+9. `inv:enchant:<id>` с 0 свитками → toast `inventory-toast-no-scroll`,
+   `message.answer` НЕ зовётся.
+10. `inv:enchant:<id>` с 1 свитком → handler шлёт **новое** сообщение
+    с `enchant-warning-*` + confirm-keyboard (`enc:confirm:...`).
+11. `inv:enchant:<id>` с 2 свитками (regular + blessed) → handler шлёт
+    picker-сообщение `inventory-picker-card` + три кнопки
+    (`inv:pick:..:weapon_scroll:regular`, `inv:pick:..:..blessed`,
+    `inv:pickcancel:..`).
+12. `inv:pick:<id>:<scroll_id>` (валидный) → handler **редактирует**
+    picker-сообщение в warning-карточку + confirm-keyboard.
+13. `inv:pickcancel:<id>` → handler редактирует picker-сообщение в
+    `inventory-picker-cancelled` + toast `inventory-picker-toast-cancelled`.
+14. Невалидный `callback_data` → toast `enchant-toast-error`.
+15. Незарегистрированный игрок (для не-`pickcancel`) → toast
+    `inventory-not-registered`.
+16. `item_id`, которого нет в инвентаре → toast `enchant-error-item-not-found`.
+17. `inv:pick:<id>:<scroll_id>`, где scroll-stack `qty=0` → toast
+    `enchant-error-scroll-not-found` (защита от race с `enchant.py`).
+18. `inv:pick:<id>:<scroll_id>` с категорией скролла, не совпадающей
+    с предметом → toast `enchant-error-wrong-category`.
 """
 
 from __future__ import annotations
@@ -25,7 +48,7 @@ from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from aiogram.types import Chat, Message
+from aiogram.types import CallbackQuery, Chat, Message
 
 from pipirik_wars.application.i18n import IMessageBundle, Locale
 from pipirik_wars.application.inventory import (
@@ -35,9 +58,13 @@ from pipirik_wars.application.inventory import (
     ScrollView,
 )
 from pipirik_wars.application.player import GetProfile, ProfileView
-from pipirik_wars.bot.handlers.inventory import handle_inventory
+from pipirik_wars.bot.handlers.inventory import (
+    handle_inventory,
+    handle_inventory_callback,
+)
 from pipirik_wars.bot.middlewares.auth import TgIdentity
 from pipirik_wars.domain.balance.config import Rarity, Slot
+from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.inventory import ItemCategory
 from pipirik_wars.domain.player import (
     DisplayName,
@@ -48,7 +75,8 @@ from pipirik_wars.domain.player import (
     Title,
 )
 from pipirik_wars.domain.player.value_objects import Length, Username
-from tests.fakes import FakeMessageBundle
+from tests.fakes import FakeBalanceConfig, FakeMessageBundle
+from tests.unit.domain.balance.factories import build_valid_balance
 
 
 def _build_message_mock(chat_type: str = "private") -> MagicMock:
@@ -317,3 +345,461 @@ class TestHandleInventory:
         )
 
         msg.answer.assert_awaited_once_with("en:inventory-group")
+
+
+# ───────────────────── inv:-callback handler (D.1d) ─────────────────────
+
+
+_ITEM_ID = "item.right_hand.test_1"
+_REGULAR_SCROLL_ID = "weapon_scroll:regular"
+_BLESSED_SCROLL_ID = "weapon_scroll:blessed"
+
+
+def _build_callback_mock(
+    *,
+    data: str,
+    has_message: bool = True,
+) -> MagicMock:
+    """Стандартный mock `CallbackQuery` для inv:-callback handler-а.
+
+    `callback.message` имеет два AsyncMock-а: `answer` (отправка нового
+    сообщения, ветка `_handle_enchant_button`) и `edit_text` (редактирование
+    picker-а на месте, ветки `_handle_pick` и `_handle_pickcancel`).
+    """
+    callback = MagicMock(spec=CallbackQuery)
+    callback.data = data
+    callback.answer = AsyncMock()
+    if has_message:
+        msg = MagicMock(spec=Message)
+        msg.message_id = 12345
+        msg.chat = Chat(id=42, type="private")
+        msg.answer = AsyncMock()
+        msg.edit_text = AsyncMock()
+        callback.message = msg
+    else:
+        callback.message = None
+    return callback
+
+
+def _balance() -> IBalanceConfig:
+    """Реальный (валидный) `BalanceConfig` снимок, через factory."""
+    return cast(IBalanceConfig, FakeBalanceConfig(build_valid_balance()))
+
+
+def _inventory_with_scrolls(
+    *,
+    item: ItemView | None = None,
+    scrolls: tuple[ScrollView, ...] = (),
+) -> InventoryView:
+    if item is None:
+        item = _make_item(item_id=_ITEM_ID)
+    return InventoryView(items=(item,), scrolls=scrolls)
+
+
+def _scroll(scroll_id: str, *, qty: int = 1) -> ScrollView:
+    blessed = scroll_id.endswith(":blessed")
+    category = scroll_id.split(":", 1)[0]
+    return ScrollView(
+        scroll_id=scroll_id,
+        category=category,
+        blessed=blessed,
+        qty=qty,
+    )
+
+
+@pytest.mark.asyncio
+class TestHandleInventoryCallbackEnchant:
+    """`inv:enchant:<item_id>` — нажата «Заточить» в карточке `/inventory`."""
+
+    async def test_no_matching_scrolls_emits_toast_and_does_not_edit_message(
+        self,
+    ) -> None:
+        callback = _build_callback_mock(data=f"inv:enchant:{_ITEM_ID}")
+        get_profile = _stub_get_profile(player_id=7)
+        # У игрока нет нужных свитков (broker_scroll вместо weapon_scroll).
+        view = _inventory_with_scrolls(scrolls=(_scroll("broker_scroll:regular", qty=1),))
+        get_inventory = _stub_get_inventory(view=view)
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        callback.answer.assert_awaited_once_with(
+            "ru:inventory-toast-no-scroll",
+            show_alert=False,
+        )
+        callback.message.answer.assert_not_awaited()
+        callback.message.edit_text.assert_not_awaited()
+
+    async def test_one_scroll_sends_warning_card_with_confirm_keyboard(self) -> None:
+        callback = _build_callback_mock(data=f"inv:enchant:{_ITEM_ID}")
+        get_profile = _stub_get_profile(player_id=7)
+        view = _inventory_with_scrolls(scrolls=(_scroll(_REGULAR_SCROLL_ID, qty=2),))
+        get_inventory = _stub_get_inventory(view=view)
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        # callback.answer() без аргументов — empty toast (ack).
+        callback.answer.assert_awaited_once_with()
+        # Новое сообщение — warning-карточка + клавиатура confirm/cancel.
+        callback.message.answer.assert_awaited_once()
+        sent_text = callback.message.answer.await_args.args[0]
+        assert "ru:enchant-warning-regular[" in sent_text
+        kb = callback.message.answer.await_args.kwargs.get("reply_markup")
+        assert kb is not None
+        # Первый ряд — две кнопки: confirm + cancel.
+        confirm_btn, cancel_btn = kb.inline_keyboard[0]
+        assert confirm_btn.callback_data == f"enc:confirm:{_ITEM_ID}:{_REGULAR_SCROLL_ID}"
+        assert cancel_btn.callback_data == f"enc:cancel:{_ITEM_ID}:{_REGULAR_SCROLL_ID}"
+        # `edit_text` НЕ зовётся — карточка инвентаря живёт отдельно.
+        callback.message.edit_text.assert_not_awaited()
+
+    async def test_two_scrolls_send_picker_card_with_three_buttons(self) -> None:
+        callback = _build_callback_mock(data=f"inv:enchant:{_ITEM_ID}")
+        get_profile = _stub_get_profile(player_id=7)
+        view = _inventory_with_scrolls(
+            scrolls=(
+                _scroll(_REGULAR_SCROLL_ID, qty=1),
+                _scroll(_BLESSED_SCROLL_ID, qty=1),
+            ),
+        )
+        get_inventory = _stub_get_inventory(view=view)
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        callback.answer.assert_awaited_once_with()
+        callback.message.answer.assert_awaited_once()
+        sent_text = callback.message.answer.await_args.args[0]
+        assert "ru:inventory-picker-card[" in sent_text
+        kb = callback.message.answer.await_args.kwargs.get("reply_markup")
+        assert kb is not None
+        # Picker рендерит три кнопки (regular | blessed | cancel) — ряды
+        # упорядочены: первый — два варианта свитков, второй — «Отмена».
+        rows = kb.inline_keyboard
+        assert len(rows) == 2
+        assert len(rows[0]) == 2
+        assert len(rows[1]) == 1
+        regular_btn, blessed_btn = rows[0]
+        cancel_btn = rows[1][0]
+        assert regular_btn.callback_data == f"inv:pick:{_ITEM_ID}:{_REGULAR_SCROLL_ID}"
+        assert blessed_btn.callback_data == f"inv:pick:{_ITEM_ID}:{_BLESSED_SCROLL_ID}"
+        assert cancel_btn.callback_data == f"inv:pickcancel:{_ITEM_ID}"
+        callback.message.edit_text.assert_not_awaited()
+
+    async def test_unregistered_player_emits_not_registered_toast(self) -> None:
+        callback = _build_callback_mock(data=f"inv:enchant:{_ITEM_ID}")
+        get_profile = _stub_get_profile(found=False)
+        get_inventory = _stub_get_inventory()
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        callback.answer.assert_awaited_once_with(
+            "ru:inventory-not-registered",
+            show_alert=False,
+        )
+        get_inventory.assert_not_awaited()
+        callback.message.answer.assert_not_awaited()
+
+    async def test_item_not_in_inventory_emits_item_not_found_toast(self) -> None:
+        callback = _build_callback_mock(data="inv:enchant:item.right_hand.absent")
+        get_profile = _stub_get_profile(player_id=7)
+        view = _inventory_with_scrolls(scrolls=(_scroll(_REGULAR_SCROLL_ID, qty=1),))
+        get_inventory = _stub_get_inventory(view=view)
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        callback.answer.assert_awaited_once_with(
+            "ru:enchant-error-item-not-found",
+            show_alert=False,
+        )
+        callback.message.answer.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+class TestHandleInventoryCallbackPick:
+    """`inv:pick:<item_id>:<scroll_id>` — выбран свиток в picker-е."""
+
+    async def test_valid_pick_edits_picker_into_warning_card(self) -> None:
+        callback = _build_callback_mock(
+            data=f"inv:pick:{_ITEM_ID}:{_BLESSED_SCROLL_ID}",
+        )
+        get_profile = _stub_get_profile(player_id=7)
+        view = _inventory_with_scrolls(
+            scrolls=(
+                _scroll(_REGULAR_SCROLL_ID, qty=1),
+                _scroll(_BLESSED_SCROLL_ID, qty=1),
+            ),
+        )
+        get_inventory = _stub_get_inventory(view=view)
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        callback.answer.assert_awaited_once_with()
+        # Pick *редактирует* существующее picker-сообщение, а не шлёт новое.
+        callback.message.edit_text.assert_awaited_once()
+        edit_kwargs = callback.message.edit_text.await_args.kwargs
+        assert "ru:enchant-warning-blessed[" in edit_kwargs["text"]
+        kb = edit_kwargs["reply_markup"]
+        confirm_btn, cancel_btn = kb.inline_keyboard[0]
+        assert confirm_btn.callback_data == f"enc:confirm:{_ITEM_ID}:{_BLESSED_SCROLL_ID}"
+        assert cancel_btn.callback_data == f"enc:cancel:{_ITEM_ID}:{_BLESSED_SCROLL_ID}"
+        callback.message.answer.assert_not_awaited()
+
+    async def test_pick_with_zero_qty_emits_scroll_not_found_toast(self) -> None:
+        callback = _build_callback_mock(
+            data=f"inv:pick:{_ITEM_ID}:{_REGULAR_SCROLL_ID}",
+        )
+        get_profile = _stub_get_profile(player_id=7)
+        # qty=0 — стэк есть, но запас опустошён (race: игрок успел истратить
+        # свиток между показом picker-а и нажатием кнопки).
+        view = _inventory_with_scrolls(scrolls=(_scroll(_REGULAR_SCROLL_ID, qty=0),))
+        get_inventory = _stub_get_inventory(view=view)
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        callback.answer.assert_awaited_once_with(
+            "ru:enchant-error-scroll-not-found",
+            show_alert=False,
+        )
+        callback.message.edit_text.assert_not_awaited()
+
+    async def test_pick_with_wrong_category_emits_wrong_category_toast(self) -> None:
+        callback = _build_callback_mock(
+            data=f"inv:pick:{_ITEM_ID}:armor_scroll:regular",
+        )
+        get_profile = _stub_get_profile(player_id=7)
+        # У игрока ИСТЬ armor_scroll:regular в стэке (qty>0), но предмет —
+        # weapon-категории, поэтому handler ожидает weapon_scroll. Категории
+        # не совпадают → toast `enchant-error-wrong-category`.
+        view = _inventory_with_scrolls(
+            scrolls=(_scroll("armor_scroll:regular", qty=1),),
+        )
+        get_inventory = _stub_get_inventory(view=view)
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        callback.answer.assert_awaited_once_with(
+            "ru:enchant-error-wrong-category",
+            show_alert=False,
+        )
+        callback.message.edit_text.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+class TestHandleInventoryCallbackPickCancel:
+    """`inv:pickcancel:<item_id>` — нажата «Отмена» в picker-е."""
+
+    async def test_pickcancel_sends_toast_and_edits_message(self) -> None:
+        callback = _build_callback_mock(data=f"inv:pickcancel:{_ITEM_ID}")
+        # `_handle_pickcancel` НЕ зовёт ни get_profile, ни get_inventory —
+        # ему хватает callback.message; стабы должны остаться неиспользованными.
+        get_profile = _stub_get_profile()
+        get_inventory = _stub_get_inventory()
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        callback.answer.assert_awaited_once_with(
+            "ru:inventory-picker-toast-cancelled",
+            show_alert=False,
+        )
+        callback.message.edit_text.assert_awaited_once()
+        edit_kwargs = callback.message.edit_text.await_args.kwargs
+        assert edit_kwargs == {"text": "ru:inventory-picker-cancelled"}
+        get_profile.execute.assert_not_awaited()
+        get_inventory.assert_not_awaited()
+
+    async def test_pickcancel_without_message_just_acks_with_toast(self) -> None:
+        callback = _build_callback_mock(
+            data=f"inv:pickcancel:{_ITEM_ID}",
+            has_message=False,
+        )
+        get_profile = _stub_get_profile()
+        get_inventory = _stub_get_inventory()
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        callback.answer.assert_awaited_once_with(
+            "ru:inventory-picker-toast-cancelled",
+            show_alert=False,
+        )
+
+    async def test_pickcancel_swallows_telegram_error_on_edit_text(self) -> None:
+        callback = _build_callback_mock(data=f"inv:pickcancel:{_ITEM_ID}")
+        callback.message.edit_text.side_effect = RuntimeError("telegram down")
+        get_profile = _stub_get_profile()
+        get_inventory = _stub_get_inventory()
+
+        # Не должно поднять исключение наружу — handler best-effort редактит.
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        callback.answer.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+class TestHandleInventoryCallbackGuards:
+    """Граничные случаи (невалидный data / отсутствие identity)."""
+
+    async def test_invalid_callback_data_emits_toast_error(self) -> None:
+        callback = _build_callback_mock(data="inv:bogus:foo:bar:baz:qux")
+        get_profile = _stub_get_profile()
+        get_inventory = _stub_get_inventory()
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        callback.answer.assert_awaited_once_with(
+            "ru:enchant-toast-error",
+            show_alert=False,
+        )
+        get_profile.execute.assert_not_awaited()
+        get_inventory.assert_not_awaited()
+
+    async def test_no_identity_returns_silently(self) -> None:
+        callback = _build_callback_mock(data=f"inv:enchant:{_ITEM_ID}")
+        get_profile = _stub_get_profile()
+        get_inventory = _stub_get_inventory()
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            None,
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        callback.answer.assert_not_awaited()
+        get_profile.execute.assert_not_awaited()
+        get_inventory.assert_not_awaited()
+
+    async def test_no_data_returns_silently(self) -> None:
+        callback = _build_callback_mock(data=f"inv:enchant:{_ITEM_ID}")
+        callback.data = None
+        get_profile = _stub_get_profile()
+        get_inventory = _stub_get_inventory()
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            Locale("ru"),
+        )
+
+        callback.answer.assert_not_awaited()
+
+    async def test_no_locale_falls_back_to_default(self) -> None:
+        callback = _build_callback_mock(data=f"inv:pickcancel:{_ITEM_ID}")
+        get_profile = _stub_get_profile()
+        get_inventory = _stub_get_inventory()
+
+        await handle_inventory_callback(
+            cast(CallbackQuery, callback),
+            _identity(tg_user_id=100),
+            cast(GetInventory, get_inventory),
+            cast(GetProfile, get_profile),
+            _balance(),
+            cast(IMessageBundle, FakeMessageBundle()),
+            None,
+        )
+
+        callback.answer.assert_awaited_once_with(
+            "en:inventory-picker-toast-cancelled",
+            show_alert=False,
+        )

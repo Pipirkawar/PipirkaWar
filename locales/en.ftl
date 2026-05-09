@@ -1108,6 +1108,24 @@ inventory-button-enchant = ⚒ Enchant
 # Disabled hint when player has no matching scrolls for the item.
 inventory-toast-no-scroll = No matching scrolls for this item.
 
+# Picker card to choose between regular and blessed scrolls — D.1d.
+# Parameters:
+# - `$item_display` — full pretty item name with +N (e.g. "Sword +5").
+inventory-picker-card =
+    ⚒ Enchanting an item
+    Item: <b>{ $item_display }</b>
+
+    Choose a scroll to enchant with.
+
+inventory-picker-button-regular = Regular scroll
+inventory-picker-button-blessed = Blessed scroll
+inventory-picker-button-cancel = Cancel
+
+inventory-picker-cancelled = Enchant cancelled.
+
+# Toast after the picker "Cancel" button (Telegram limit ≤ 200 chars).
+inventory-picker-toast-cancelled = Cancelled.
+
 # Slot labels (8 slots, ГДД §2.6).
 inventory-slot-hat = head
 inventory-slot-body = body
