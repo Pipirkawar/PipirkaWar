@@ -23,6 +23,74 @@
 
 ---
 
+## 2026-05-09 — Спринт 3.5-B «Persistence-слой рулетки»
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** ГДД §12.4 «Free-to-play рулетка», ПД §6.3.5 «Спринт 3.5 — Free-to-play рулетка» (задача 3.5.2 «persistence-слой»). `current_tasks.md` чек-лист 3.5-B. Базируется на 3.5-A (PR #121, `792a366` — каркас домена «Рулетка» + балансовый конфиг). Следующий PR — 3.5-C «Application use-case `SpinFreeRoulette` + audit + spend-100см».
+
+Что сделано (по чек-листу B.0–B.6):
+
+- **B.0 — Обновлён `current_tasks.md`** под старт Спринта 3.5-B: «Снимок состояния» пересобран под `main = 792a366`, добавлен чек-лист 3.5-B (B.0–B.6), архивирован чек-лист 3.5-A.
+- **B.1 — Доменный порт `IRouletteSpinRepository` + entity `RouletteSpin`** (`src/pipirik_wars/domain/roulette/`):
+  - `ports.py` (новый, ~50 строк) — `IRouletteSpinRepository(Protocol)` с двумя async-методами: `record(*, spin: RouletteSpin) -> None` (idempotency по `spin.idempotency_key`, повторный вызов с тем же ключом — no-op) + `last_free_spin_at(*, player_id: int) -> datetime | None` (для будущей anti-cheat-проверки cooldown в 3.5-C, если потребуется; возвращает MAX(occurred_at) или None для игроков без спинов).
+  - `entities.py` (+85 строк) — `RouletteSpin(frozen=True, slots=True)` dataclass с полями: `player_id: int`, `occurred_at: datetime` (TZ-aware), `outcome: RouletteOutcome`, `idempotency_key: str`. `__post_init__` валидаторы: `player_id > 0`, `occurred_at.tzinfo is not None` (TZ-aware), `idempotency_key.strip() != ""`. Convenience-properties `.kind` и `.length_cm` делегируют в `outcome` для удобства ORM-маппинга.
+  - `__init__.py` — экспорт `RouletteSpin` + `IRouletteSpinRepository`.
+  - 11 unit-тестов в `tests/unit/domain/roulette/test_entities.py` (`TestRouletteSpinValidation` 5 тестов: ok-конструктор, `player_id <= 0` reject, naive datetime reject, empty/whitespace `idempotency_key` reject; `TestRouletteSpinImmutability` 3 теста: frozen, equality, hashability; `TestRouletteSpinProperties` 3 теста: `.kind`/`.length_cm` делегаты, LENGTH-исход с `length_cm`, не-LENGTH с `length_cm = None`).
+  - Закоммичено в `9d67af2` (checkpoint #1).
+- **B.2 — ORM `RouletteSpinORM` + миграция Alembic `0023_roulette_spins`**:
+  - `infrastructure/db/models/roulette.py` (новый, ~75 строк) — `RouletteSpinORM(Base)` с `__tablename__ = "roulette_spins"`. Колонки: `id BIGINT PK autoincrement`, `player_id BIGINT NOT NULL FK→users.id ondelete=CASCADE`, `occurred_at TIMESTAMP(timezone=True) NOT NULL`, `kind VARCHAR(32) NOT NULL` (значения соответствуют `RouletteOutcomeKind.value`), `length_cm INT NULL` (только при `kind='length'`), `idempotency_key VARCHAR(128) NOT NULL UNIQUE`. `__table_args__`: `UniqueConstraint("idempotency_key", name="uq_roulette_spins_idempotency_key")`, composite `Index("ix_roulette_spins_player_id_occurred_at", "player_id", "occurred_at")` для `last_free_spin_at`-запроса.
+  - `infrastructure/db/migrations/versions/20260510_0023_roulette_spins.py` (новый, ~110 строк) — `revision="0023_roulette_spins"`, `down_revision="0022_scrolls"`. `op.create_table("roulette_spins", ...)` зеркалит ORM с CheckConstraint `ck_roulette_spins_kind_length_consistency`: `(kind = 'length' AND length_cm IS NOT NULL) OR (kind != 'length' AND length_cm IS NULL)` (мапит инвариант `RouletteOutcome.__post_init__` на DB-уровень). `downgrade()` — `op.drop_table("roulette_spins")`.
+  - Зарегистрирован `RouletteSpinORM` в `infrastructure/db/models/__init__.py` (export + `__all__`) и в `tests/integration/db/conftest.py` (импорт для `Base.metadata.create_all`).
+  - Закоммичено в `e2b28ec` (checkpoint #2).
+- **B.3 — `SqlAlchemyRouletteSpinRepository`** (`infrastructure/db/repositories/roulette.py`, новый, ~90 строк):
+  - Принимает `uow: SqlAlchemyUnitOfWork`. `record(*, spin: RouletteSpin) -> None` использует dialect-specific `INSERT ... ON CONFLICT (idempotency_key) DO NOTHING` (через `pg_insert(...).on_conflict_do_nothing(index_elements=[RouletteSpinORM.idempotency_key])` для PostgreSQL и `sqlite_insert(...).on_conflict_do_nothing(...)` для SQLite). Извлекает `spin.kind.value` и `spin.length_cm` для INSERT-параметров.
+  - `last_free_spin_at(*, player_id: int) -> datetime | None` — `SELECT MAX(occurred_at) FROM roulette_spins WHERE player_id = :player_id`. SQLite-специфика: возвращает naive datetime (TZ теряется в SQLite-движке), Postgres — TZ-aware. Use-case в 3.5-C должен это учесть (или нормализовать на UoW-уровне).
+  - Зарегистрировано в `infrastructure/db/repositories/__init__.py`.
+  - Закоммичено в `e2b28ec` (checkpoint #2).
+- **B.4 — Integration-тесты `tests/integration/db/test_roulette_spin_repository.py`** (новый, ~330 строк, 15 тестов):
+  - `TestSqlAlchemyRouletteSpinRepositoryRoundTripLength` (1 тест) — round-trip для LENGTH-исхода с `length_cm`.
+  - `TestSqlAlchemyRouletteSpinRepositoryRoundTripNonLength` (4 параметризованных теста) — round-trip для ITEM/SCROLL_REGULAR/SCROLL_BLESSED/CRYPTO_LOT с `length_cm = NULL`.
+  - `TestSqlAlchemyRouletteSpinRepositoryIdempotency` (2 теста) — повтор `record(...)` с тем же ключом создаёт 1 строку; повтор с другим payload и тем же ключом сохраняет первую запись (DO NOTHING semantics).
+  - `TestSqlAlchemyRouletteSpinRepositoryLastFreeSpinAt` (3 теста) — `None` для игрока без спинов; `None` для unknown `player_id`; возвращает `MAX(occurred_at)` (а не первый/последний по `id`-order).
+  - `TestSqlAlchemyRouletteSpinRepositoryIsolation` (2 теста) — спин одного игрока невидим другому; `idempotency_key` глобально уникален (а не per-player).
+  - `TestSqlAlchemyRouletteSpinRepositoryDbInvariants` (3 теста) — DB-CHECK reject `kind='length'` с `length_cm = NULL`; reject `kind='item'` с `length_cm = 42`; reject unknown `kind`-значений.
+  - Также обновлён `tests/integration/db/test_migrations.py`: добавлен `test_0023_descends_from_0022` (chain-test), добавлен `0023_roulette_spins` в `test_versions_dir_lists_only_known_files`-list, добавлено `roulette_spins` в `test_upgrade_head_creates_all_tables`-set, добавлен `test_0023_creates_roulette_spins_table` (структура: 6 колонок + FK с CASCADE + composite-индекс `(player_id, occurred_at)` + UNIQUE-индекс по `idempotency_key`).
+  - Закоммичено в `e2b28ec` (checkpoint #2) + `13a1b58` (test_migrations.py update).
+- **B.5 — `make ci` локально:** ruff (clean), `mypy --strict` (0 issues), import-linter (4 contracts KEPT), pytest **5017 passed / 2 skipped** (4988 baseline 3.5-A → +29 новых тестов: 11 entity + 15 repo + 3 migration). Coverage **95.56%** (gate ≥ 80%). Load-тесты `tests/integration/load/` flaky при параллельном прогоне в `make ci`, проходят при изолированном запуске (4 passed in 64.38s); not related to 3.5-B changes.
+- **B.6 — Финальный док-коммит:** `history.md` (эта запись) + пересборка «Снимка состояния» в `current_tasks.md` под `main = <merge_3_5_B>`, чек-лист передвинут на старт **Спринта 3.5-C «Application use-case `SpinFreeRoulette` + audit + spend-100см»**. Старый чек-лист 3.5-B архивирован.
+
+Результат / артефакты:
+
+- Новые файлы:
+  - `src/pipirik_wars/domain/roulette/ports.py` (~50 строк) — `IRouletteSpinRepository` Protocol.
+  - `src/pipirik_wars/infrastructure/db/models/roulette.py` (~75 строк) — `RouletteSpinORM`.
+  - `src/pipirik_wars/infrastructure/db/migrations/versions/20260510_0023_roulette_spins.py` (~110 строк) — Alembic-миграция.
+  - `src/pipirik_wars/infrastructure/db/repositories/roulette.py` (~90 строк) — `SqlAlchemyRouletteSpinRepository`.
+  - `tests/integration/db/test_roulette_spin_repository.py` (~330 строк, 15 тестов).
+- Изменённые файлы:
+  - `src/pipirik_wars/domain/roulette/entities.py` (+85 строк) — `RouletteSpin` entity + properties.
+  - `src/pipirik_wars/domain/roulette/__init__.py` (+2 экспорта).
+  - `src/pipirik_wars/infrastructure/db/models/__init__.py` (+1 строка) — регистрация `RouletteSpinORM`.
+  - `src/pipirik_wars/infrastructure/db/repositories/__init__.py` (+2 строки) — регистрация `SqlAlchemyRouletteSpinRepository`.
+  - `tests/integration/db/conftest.py` (+1 импорт) — для `Base.metadata.create_all`.
+  - `tests/unit/domain/roulette/test_entities.py` (+11 тестов) — `RouletteSpin` unit-тесты.
+  - `tests/integration/db/test_migrations.py` (+45 строк) — chain-test 0023, dir-list, upgrade-head set, table-structure-test.
+
+Заметки / решения:
+
+- **`RouletteSpinORM.id BIGINT autoincrement PK`** — а не composite `(player_id, idempotency_key)` или composite `(player_id, occurred_at)`. Причина: roulette_spins — append-only event-log (как `audit_log`), поэтому surrogate-PK + UNIQUE-constraint по `idempotency_key` — стандартный паттерн. Composite-индекс `(player_id, occurred_at)` обслуживает single-query `last_free_spin_at`.
+- **DB-CHECK `kind ↔ length_cm`-инвариант на ORM/migration-уровне** — двойная защита: Pydantic-валидатор `RouletteOutcome.__post_init__` уже не позволит создать неконсистентный `RouletteOutcome`, но миграция гарантирует, что прямая SQL-запись (например, через `psql` или legacy-миграция) не нарушит инвариант.
+- **`INSERT ... ON CONFLICT (idempotency_key) DO NOTHING` через dialect-specific `pg_insert` / `sqlite_insert`** — стандартный SQLAlchemy-паттерн (см. `SqlAlchemyScrollRepository.add` в Спринте 3.4-C). При retry use-case-а `SpinFreeRoulette` с тем же `idempotency_key` репо вернёт `None` без ошибок, а первая запись сохранится. Это ключевой инвариант для anti-replay-защиты в 3.5-C.
+- **`last_free_spin_at` возвращает `datetime | None`** — а не raise при отсутствии спинов. Use-case 3.5-C сам решит, как обрабатывать `None` (вероятно: «нет cooldown-а, можно спинить»).
+- **SQLite TZ quirk** — `MAX(occurred_at)` возвращает naive datetime в SQLite-движке (TZ информация теряется). Postgres — TZ-aware. Тесты на repo-уровне сравнивают через `.replace(tzinfo=None)` — но в 3.5-C use-case должен быть TZ-агностичен (например, через нормализацию к UTC на UoW-уровне).
+- **Composite-индекс `(player_id, occurred_at)` — без `DESC`-клаузы.** `MAX(occurred_at)` оптимизатор всё равно может пройтись по индексу в обратную сторону (Postgres + SQLite). Если в будущем нужна оптимизация для list-by-player с пагинацией по времени — добавится отдельная миграция с `DESC`-вариантом индекса.
+- **15 integration-тестов покрывают все 5 `RouletteOutcomeKind`** (LENGTH с `length_cm` + 4 не-LENGTH без `length_cm`) + idempotency + isolation + DB-CHECK invariants. Это база для 3.5-C: use-case `SpinFreeRoulette` будет вызывать `record(...)` ровно один раз на каждый успешный спин.
+- **`test_migrations.py` обновление** — стандартная процедура для каждого нового PR с миграцией (см. 3.4-B `0021_items`, 3.4-C `0022_scrolls`). Гарантирует, что миграция корректно применяется на чистой БД и не ломает downgrade-цепочку.
+- **`tests/integration/load/` — flaky при параллельном прогоне.** При изолированном запуске (`pytest tests/integration/load/`) — 4 passed in 64.38s. При прогоне в `make ci` (с другими load/integration-тестами параллельно) — иногда таймаутят. Это **не блокер 3.5-B**: load-тесты не тронуты в этом PR, изменений в anticheat / forest-логике нет. Будет отдельной задачей по стабилизации load-тестов (например, через `pytest-xdist` группировку или увеличение timeout-ов).
+
+---
+
 ## 2026-05-09 — Спринт 3.5-A «Каркас домена «Рулетка» + балансовый конфиг»
 
 **Автор:** Devin (агент)

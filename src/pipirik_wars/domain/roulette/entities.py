@@ -1,4 +1,4 @@
-"""Доменные сущности рулетки (ГДД §12.4, Спринт 3.5-A).
+"""Доменные сущности рулетки (ГДД §12.4, Спринт 3.5-A/B).
 
 `RouletteOutcomeKind` живёт в `domain/balance/config.py` (стабильные
 машинные id попадают в `audit_log.target_id` Спринта 3.5-C). Этот
@@ -14,17 +14,25 @@
 тип. Это сделано, чтобы picker оставался чистой функцией от
 `(config, random, crypto_pool_empty)` без зависимостей от каталога
 предметов / пула скроллов / внешних крипто-API.
+
+`RouletteSpin` (Спринт 3.5-B) — иммутабельная запись одной прокрутки
+для аудит-таблицы `roulette_spins`: `(player_id, occurred_at, outcome,
+idempotency_key)`. Доменное представление одной строки event-log-а,
+которое use-case `SpinFreeRoulette` (Спринт 3.5-C) кладёт через
+`IRouletteSpinRepository.record(...)`.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from pipirik_wars.domain.balance.config import RouletteOutcomeKind
 
 __all__ = [
     "RouletteOutcome",
     "RouletteOutcomeKind",
+    "RouletteSpin",
 ]
 
 
@@ -63,3 +71,62 @@ class RouletteOutcome:
                 f"RouletteOutcome(kind={self.kind.value!r}) must have "
                 f"length_cm=None, got {self.length_cm}",
             )
+
+
+@dataclass(frozen=True, slots=True)
+class RouletteSpin:
+    """Иммутабельная запись одной прокрутки рулетки (ГДД §12.4, Спринт 3.5-B).
+
+    Доменное представление строки `roulette_spins`-таблицы. Хранит
+    «кто-когда-что» одной прокрутки + `idempotency_key` для надёжной
+    дедупликации (двойной клик `[Прокрутить]`-кнопки → одна запись).
+
+    Поля:
+
+    * `player_id: int` — id игрока (FK → `users.id`).
+    * `occurred_at: datetime` — момент прокрутки (TZ-aware).
+    * `outcome: RouletteOutcome` — результат пика (`kind` + `length_cm`).
+      `kind` денормализуется в ORM-колонку `kind VARCHAR(32)` для
+      быстрых фильтров и audit-выгрузок. `length_cm` идёт в
+      ORM-колонку `length_cm INT NULL` (только для `kind=LENGTH`).
+    * `idempotency_key: str` — стабильный ключ дедупликации (в
+      Спринте 3.5-C use-case будет генерировать вид
+      `f"roulette_free:{player_id}:{tg_message_id}"`). На уровне БД
+      хранится в `idempotency_key VARCHAR(128) UNIQUE` — повтор
+      `record(...)`-вызова с тем же ключом приводит к no-op (см.
+      `IRouletteSpinRepository.record`).
+
+    Frozen + slots — VO без identity (на уровне домена две
+    идентичные `RouletteSpin`-VO неотличимы; identity у строки в БД
+    обеспечивается автоинкрементной `id`-колонкой ORM).
+    """
+
+    player_id: int
+    occurred_at: datetime
+    outcome: RouletteOutcome
+    idempotency_key: str
+
+    def __post_init__(self) -> None:
+        if self.player_id <= 0:
+            raise ValueError(
+                f"RouletteSpin.player_id must be > 0, got {self.player_id}",
+            )
+        if self.occurred_at.tzinfo is None:
+            raise ValueError(
+                "RouletteSpin.occurred_at must be timezone-aware "
+                "(naïve datetime would lose UTC offset on persistence)",
+            )
+        if not self.idempotency_key:
+            raise ValueError(
+                "RouletteSpin.idempotency_key must be a non-empty string",
+            )
+
+    @property
+    def kind(self) -> RouletteOutcomeKind:
+        """Удобный shortcut для `spin.outcome.kind` (используется ORM-репо)."""
+        return self.outcome.kind
+
+    @property
+    def length_cm(self) -> int | None:
+        """Удобный shortcut для `spin.outcome.length_cm` (используется ORM-репо)."""
+        return self.outcome.length_cm

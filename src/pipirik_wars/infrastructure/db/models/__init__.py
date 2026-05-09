@@ -45,6 +45,9 @@ PvP массовый клан×клан (Спринт 2.2.D):
 
 Инвентарь — скроллы (Спринт 3.4.C):
 - `ScrollORM` — таблица `scrolls` (стэкабельный `qty`).
+
+Free-to-play рулетка (Спринт 3.5.B):
+- `RouletteSpinORM` — таблица `roulette_spins` (event-log прокруток).
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
@@ -77,6 +80,7 @@ from pipirik_wars.infrastructure.db.models.pvp import (
     PvpMassDuelORM,
 )
 from pipirik_wars.infrastructure.db.models.referral import ReferralORM
+from pipirik_wars.infrastructure.db.models.roulette import RouletteSpinORM
 from pipirik_wars.infrastructure.db.models.scrolls import ScrollORM
 from pipirik_wars.infrastructure.db.models.security import (
     ActivityLockORM,
@@ -111,6 +115,7 @@ __all__ = [
     "PvpMassDuelDamageEntryORM",
     "PvpMassDuelORM",
     "ReferralORM",
+    "RouletteSpinORM",
     "ScrollORM",
     "SignupQueueORM",
     "UserORM",

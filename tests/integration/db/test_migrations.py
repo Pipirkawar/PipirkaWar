@@ -71,6 +71,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0020_boss_fights" in revisions
         assert "0021_items" in revisions
         assert "0022_scrolls" in revisions
+        assert "0023_roulette_spins" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -212,6 +213,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0022 is not None
         assert rev_0022.down_revision == "0021_items"
 
+    def test_0023_descends_from_0022(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0023 = script.get_revision("0023_roulette_spins")
+        assert rev_0023 is not None
+        assert rev_0023.down_revision == "0022_scrolls"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -238,6 +246,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260508_0020_boss_fights.py",
             "20260509_0021_items.py",
             "20260509_0022_scrolls.py",
+            "20260510_0023_roulette_spins.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -293,6 +302,7 @@ class TestAlembicMigrationsApplyCleanly:
             "admin_audit_log",
             "items",
             "scrolls",
+            "roulette_spins",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 
@@ -412,6 +422,52 @@ class TestAlembicMigrationsApplyCleanly:
             and fk["options"].get("ondelete", "").upper() == "CASCADE"
             for fk in fks
         )
+
+    def test_0023_creates_roulette_spins_table(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Спринт 3.5-B: миграция создаёт `roulette_spins`-таблицу + индексы + FK."""
+        db_path = tmp_path / "alembic_0023.sqlite"
+        async_url = f"sqlite+aiosqlite:///{db_path}"
+        monkeypatch.setenv("DATABASE_URL", async_url)
+
+        cfg = _alembic_config(async_url)
+        command.upgrade(cfg, "head")
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                inspector = inspect(conn)
+                spins_cols = {c["name"] for c in inspector.get_columns("roulette_spins")}
+                fks = inspector.get_foreign_keys("roulette_spins")
+                index_names = {ix["name"] for ix in inspector.get_indexes("roulette_spins")}
+                unique_names = {
+                    uc["name"] for uc in inspector.get_unique_constraints("roulette_spins")
+                }
+        finally:
+            engine.dispose()
+
+        assert spins_cols == {
+            "id",
+            "player_id",
+            "occurred_at",
+            "kind",
+            "length_cm",
+            "idempotency_key",
+        }
+        # FK на users.id с каскадом.
+        assert any(
+            fk["referred_table"] == "users"
+            and fk["constrained_columns"] == ["player_id"]
+            and fk["options"].get("ondelete", "").upper() == "CASCADE"
+            for fk in fks
+        )
+        # Composite-индекс по (player_id, occurred_at) для last_free_spin_at.
+        assert "ix_roulette_spins_player_id_occurred_at" in index_names
+        # UNIQUE-индекс по idempotency_key для INSERT … ON CONFLICT DO NOTHING.
+        assert "uq_roulette_spins_idempotency_key" in unique_names
 
     def test_downgrade_then_upgrade_round_trips(
         self,
