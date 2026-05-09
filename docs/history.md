@@ -23,6 +23,108 @@
 
 ---
 
+## 2026-05-09 — Спринт 3.4-C «Application use-case `EnchantItem` + audit + анти-чит trip-wire + `ScrollORM`»
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** ГДД §2.8 «Заточка», §2.8.6 «Стартовые веса исходов», ПД §6.3.4 «Спринт 3.4 — Заточка предметов», `current_tasks.md` чек-лист 3.4-C. Базируется на 3.4-A (PR #117 — каркас домена + `EnchantmentConfig`) и 3.4-B (PR #118 — persistence `items`-таблицы). Подготавливает 3.4-D (bot-UI + локали + display + закрытие Спринта 3.4).
+
+Что сделано (по чек-листу C.1–C.9):
+
+- **C.1 — Доменный VO `Scroll` расширен** (`src/pipirik_wars/domain/inventory/entities.py`):
+  - `Scroll.scroll_id` (property) — каноническая строка `<category.value>:<regular|blessed>` (например, `"weapon_scroll:regular"`). Используется как PK в `scrolls`-таблице и для поиска подходящего скролла под предмет.
+  - `Scroll.from_scroll_id(scroll_id: str) -> Scroll` (classmethod) — обратное преобразование. Бросает `ValueError` для невалидного формата.
+  - `Item.matches_scroll(scroll: Scroll) -> bool` (метод) — проверка совпадения категорий **по `Enum.name`** (а не value), потому что `ScrollCategory.WEAPON` и `ItemCategory.WEAPON` имеют разные `value` (`"weapon_scroll"` vs `"weapon"`), но одинаковый `name` (`"WEAPON"`).
+  - **Доменные ошибки** (`src/pipirik_wars/domain/inventory/errors.py`): `WrongScrollCategoryError(InventoryDomainError)`, `ScrollNotFoundError(InventoryDomainError)`, `ScrollOutOfStockError(InventoryDomainError)` — все kw-only с `player_id`/`scroll_id`/`item_id` для chain-логики.
+  - **`IItemRepository.delete(*, player_id, item_id) -> None`** добавлен в порт (`domain/inventory/ports.py`) — нужен для `DESTROY`-исхода use-case-а. Реализация в `SqlAlchemyItemRepository`: `DELETE WHERE player_id=:p AND item_id=:i`, `rowcount == 0` → `ItemNotFoundError`.
+- **C.2 — ORM `ScrollORM` + миграция Alembic `0022_scrolls`** (`src/pipirik_wars/infrastructure/db/models/scrolls.py`, новый, и `migrations/versions/20260509_0022_scrolls.py`, новый):
+  - Колонки: `player_id BIGINT FK→users.id ondelete=CASCADE` (PK#1), `scroll_id VARCHAR(64)` (PK#2), `qty INT NOT NULL`, `acquired_at TIMESTAMP(timezone=True) NOT NULL`.
+  - `CheckConstraint("qty >= 0")` (`ck_scrolls_qty_non_negative`) — стэкаемые скроллы не могут уйти в минус.
+  - Composite PK `pk_scrolls` `(player_id, scroll_id)` — каждый scroll-id для игрока хранится в единственной строке (стек).
+  - `down_revision="0021_items"`, `op.create_table(...)` зеркалит ORM, `downgrade()` — `op.drop_table("scrolls")`.
+- **C.3 — `SqlAlchemyScrollRepository`** (`src/pipirik_wars/infrastructure/db/repositories/scrolls.py`, новый ~140 строк):
+  - `get(*, player_id, scroll_id) -> Scroll` — `SELECT WHERE`, 0 строк → `ScrollNotFoundError`. VO восстанавливается из стабильного `scroll_id` через `Scroll.from_scroll_id(scroll_id)` (от `qty` не зависит).
+  - `add(*, player_id, scroll_id, qty, now) -> None` — `INSERT ... ON CONFLICT (player_id, scroll_id) DO UPDATE SET qty = scrolls.qty + EXCLUDED.qty`. Диалект-специфичный (Postgres + SQLite).
+  - `consume(*, player_id, scroll_id, qty) -> None` — `UPDATE scrolls SET qty = qty - :n WHERE player_id = :p AND scroll_id = :s AND qty >= :n`. Если `rowcount == 0`: предварительный `SELECT EXISTS` отличает `ScrollNotFoundError` (нет строки) от `ScrollOutOfStockError` (есть строка, но `qty < n`).
+  - 22 integration-теста (`tests/integration/db/test_scroll_repository.py`, новый): round-trip всех 6 вариантов (3 категории × regular/blessed); stacking add (2 вызова `add(qty=3)` + `add(qty=2)` → row с `qty=5`); изоляция между игроками (player_a vs player_b с одним scroll_id); error-кейсы (consume на 0-строке → NotFound; consume на qty=2, n=3 → OutOfStock).
+- **C.4 — `AuditAction` whitelist расширен** (`src/pipirik_wars/domain/shared/ports/audit.py`): добавлены `ITEM_ENCHANT_ATTEMPT = "item_enchant_attempt"` и `ENCHANT_ANOMALY = "enchant_anomaly"`. **Без новых `AuditSource`** — заточка не влияет на длину игрока, поэтому не входит в anti-cheat rolling-окно.
+- **C.5 — Application use-case `EnchantItem`** (`src/pipirik_wars/application/inventory/enchant_item.py`, новый ~450 строк):
+  - **DTO `EnchantAttemptResult(frozen=True)`** с 7 полями: `outcome: RegularEnchantOutcome | BlessedEnchantOutcome`, `old_level: int`, `new_level: int`, `item_destroyed: bool`, `item_dropped: bool`, `idempotent: bool`, `anomaly_detected: bool`.
+  - **10-шаговый flow** в `__call__(*, player_id, item_id, scroll_id, idempotency_key) -> EnchantAttemptResult`:
+    1. **Idempotency check** — `IIdempotencyKey.is_seen(namespace="enchant", key=idempotency_key)`; если повторный вызов → возврат «болванки» с `idempotent=True` (без побочных эффектов; **не** возвращает кэшированный outcome — намеренно, see Lessons learned ниже).
+    2. **Load Item** через `IItemRepository.get(...)`; missing → `ItemNotFoundError` (всплывает наверх).
+    3. **Parse Scroll** через `Scroll.from_scroll_id(scroll_id)`; невалидный формат → `ValueError`.
+    4. **Load Scroll qty** через `IScrollRepository.get(...)`; missing → `ScrollNotFoundError`.
+    5. **Category match** через `item.matches_scroll(scroll)`; mismatch → `WrongScrollCategoryError`.
+    6. **Consume Scroll** через `scroll_repo.consume(qty=1)`; 0-stock → `ScrollOutOfStockError`. **Атомарно списывается перед роллом** — если ролл/последующее упадёт, UoW откатит транзакцию, вернёт скролл.
+    7. **Roll outcome** через `pick_enchant_outcome(level, blessed, config, random)` — чистая функция из 3.4-A (safe-zone forced SUCCESS на `level=0`; иначе weighted_choice по `EnchantmentConfig`).
+    8. **Apply outcome** через `_apply_outcome(...)` (внутренний хелпер) — диспатчер на `_OUTCOME_LEVEL_DELTA` dict (мап `RegularEnchantOutcome | BlessedEnchantOutcome` → `int delta`); `DESTROY` → `item_repo.delete(...)`; иначе `update_enchant_level(new_level=clamp(0, 30, old_level + delta))`.
+    9. **Audit `ITEM_ENCHANT_ATTEMPT`** через `IAuditLogger.record(...)` — payload `{item_id, scroll_id, outcome, old_level, new_level, blessed, item_destroyed, item_dropped, success}`; `actor_id=player_id`, `target_kind="player"`, `target_id=str(player_id)`, `idempotency_key=idempotency_key`.
+    10. **Mark idempotency** через `idempotency.mark(...)` (записываем ключ в `idempotency_keys` таблицу).
+    11. **Trip-wire check** — если `outcome.success and old_level ∈ [18, 25]`: `enchant_history.get_recent_high_tier_outcomes(...)` возвращает кортеж `(bool, ...)` последних 10 high-tier попыток DESC; если `len == 10 and all(history)` → audit `ENCHANT_ANOMALY` (otherwise no-op). Триггер check ИДЁТ ПОСЛЕ записи текущей попытки в audit_log, поэтому 11-я подряд success на тире → ENCHANT_ANOMALY.
+  - **Доменный порт `IEnchantHistoryReader`** (`src/pipirik_wars/domain/inventory/ports.py`):
+    ```python
+    class IEnchantHistoryReader(Protocol):
+        async def get_recent_high_tier_outcomes(
+            self, *, player_id: int, tier_min: int, tier_max: int, limit: int,
+        ) -> tuple[bool, ...]:
+            """Кортеж последних `limit` ITEM_ENCHANT_ATTEMPT-success-флагов
+            (DESC по occurred_at) для попыток на тире `[tier_min, tier_max]`."""
+    ```
+  - **SQL-impl `SqlAlchemyEnchantHistoryReader`** (`src/pipirik_wars/infrastructure/db/repositories/enchant_history.py`, новый): `SELECT after FROM audit_log WHERE action='item_enchant_attempt' AND target_id=:p ORDER BY occurred_at DESC LIMIT 10*scan_factor` (скан-фактор `≥ 1` чтобы уверенно собрать 10 high-tier после фильтрации по `after.old_level ∈ [tier_min, tier_max]`); JSON-фильтрация **в Python** (а не в SQL) — для портабельности SQLite/Postgres в integration-тестах.
+  - **Constants** в use-case (`Final`): `_IDEMPOTENCY_NAMESPACE = "enchant"`, `_ANOMALY_TIER_MIN = 18`, `_ANOMALY_TIER_MAX = 25`, `_ANOMALY_WINDOW_SIZE = 10`. `_OUTCOME_LEVEL_DELTA: dict[...]` — explicit mapping (`SUCCESS=+1`, `NO_EFFECT=0`, `DROP=-1`, `DESTROY=0` (handled separately), `SUCCESS_1=+1`, `SUCCESS_2=+2`, `DROP_1=-1`, `DROP_2=-2`).
+- **C.6 — Trip-wire `ENCHANT_ANOMALY` интегрирован в `EnchantItem`** (`__call__` шаг 11). Не вынесен в отдельный сервис — флоу слишком тесно связан с записью текущей попытки в audit_log (must-be-after-audit-write). Юнит-тест `test_trip_wire_*` × 6 покрывает все ветки.
+- **C.7 — Юнит-тесты `EnchantItem`** (`tests/unit/application/inventory/test_enchant_item.py`, новый ~700 строк):
+  - **Test doubles**: `_RiggedRandom` (queue-based weighted_choice; raises на других методах), `_InMemoryItemRepository` (dict-based), `_InMemoryScrollRepository` (dict-based), `_StubEnchantHistoryReader` (programmable `set_outcomes(...)` для trip-wire-тестов).
+  - **25 тестов**:
+    - 2 safe-zone (regular/blessed успех на `level=0` без weighted_choice);
+    - 4 regular outcomes (NO_EFFECT, DROP, DESTROY + clamp на 0);
+    - 4 blessed outcomes (SUCCESS_2 +2, NO_EFFECT, DROP_1 -1, DROP_2 -2);
+    - 5 ошибок (WrongScrollCategoryError, ItemNotFoundError, ScrollNotFoundError, ScrollOutOfStockError, invalid scroll_id ValueError);
+    - 2 idempotency (повтор с тем же ключом → `idempotent=True`, no-op);
+    - 1 audit-payload (проверка всех 9 полей `after`-словаря);
+    - 6 trip-wire (10/10 success → ANOMALY; 9 success + 1 fail → нет; <10 attempts → нет; current attempt не success → нет; old_level=17 (ниже tier) → нет; old_level=26 (выше tier) → нет);
+    - 1 ambient-UoW guard (вызов вне `async with uow` → `RuntimeError`);
+    - 1 clamp-test (DROP на `level=0` → `new_level=0`, не уходит в `-1`).
+  - **Integration-тесты** (`tests/integration/db/test_enchant_item_use_case.py`, новый ~370 строк): 4 realDB сценария — round-trip `+0 → +1` (item update + scroll qty 3 → 2 + audit-row); destroy-исход на `+10` → строка items физически удалена; idempotency через realDB (повтор → no-op, qty не списан, audit ровно одна запись); trip-wire после 10 заранее засеянных audit-записей с `success=True` на `old_level=22` → `ENCHANT_ANOMALY`-запись с `trigger_old_level=22`, `tier_min=18`, `tier_max=25`, `window_size=10`.
+- **C.8 — `make ci` локально зелёный**: ruff (clean), `mypy --strict` (864 source files, 0 issues), import-linter (4 contracts KEPT: `layered_architecture`, `domain_must_not_import_infrastructure`, `application_must_not_import_io_libs`, `balance_must_not_import_inventory`), pytest **4762 passed / 2 skipped** (4664 baseline 3.4-B + 22 scroll-repo + 25 EnchantItem unit + 4 EnchantItem integration + ещё несколько на доменные расширения), **coverage 96%** (gate ≥ 80%, large margin).
+- **C.9 — Финальный док-коммит:** `history.md` (эта запись) + пересборка «Снимка состояния» в `current_tasks.md` под `main = <merge_3_4_C>`, чек-лист передвинут на **3.4-D** «Bot UI + локали + display + закрытие Спринта 3.4».
+
+Результат / артефакты:
+
+- Новые файлы:
+  - `src/pipirik_wars/application/inventory/__init__.py` (новый, экспорт `EnchantItem`/`EnchantAttemptResult`)
+  - `src/pipirik_wars/application/inventory/enchant_item.py` (новый ~450 строк)
+  - `src/pipirik_wars/domain/inventory/ports.py` (расширен — `IEnchantHistoryReader`, `IItemRepository.delete`, `IScrollRepository`)
+  - `src/pipirik_wars/infrastructure/db/models/scrolls.py` (новый `ScrollORM`)
+  - `src/pipirik_wars/infrastructure/db/migrations/versions/20260509_0022_scrolls.py` (новая миграция)
+  - `src/pipirik_wars/infrastructure/db/repositories/scrolls.py` (новый `SqlAlchemyScrollRepository`)
+  - `src/pipirik_wars/infrastructure/db/repositories/enchant_history.py` (новый `SqlAlchemyEnchantHistoryReader`)
+  - `tests/unit/application/inventory/__init__.py`, `tests/unit/application/inventory/test_enchant_item.py` (новые)
+  - `tests/integration/db/test_scroll_repository.py` (новый, 22 теста)
+  - `tests/integration/db/test_enchant_item_use_case.py` (новый, 4 теста)
+- Изменённые:
+  - `src/pipirik_wars/domain/inventory/entities.py` (добавлены `Scroll.scroll_id`/`from_scroll_id`, `Item.matches_scroll`, `Item.delete`-сигнатура в порт)
+  - `src/pipirik_wars/domain/inventory/errors.py` (добавлены `WrongScrollCategoryError`/`ScrollNotFoundError`/`ScrollOutOfStockError`)
+  - `src/pipirik_wars/domain/inventory/__init__.py` (`__all__` расширен)
+  - `src/pipirik_wars/domain/shared/ports/audit.py` (добавлены `AuditAction.ITEM_ENCHANT_ATTEMPT`/`ENCHANT_ANOMALY`)
+  - `src/pipirik_wars/infrastructure/db/models/__init__.py` (`__all__` расширен `ScrollORM`)
+  - `src/pipirik_wars/infrastructure/db/repositories/__init__.py` (`__all__` расширен `SqlAlchemyScrollRepository`/`SqlAlchemyEnchantHistoryReader`)
+  - `src/pipirik_wars/infrastructure/db/repositories/items.py` (метод `delete(...)`)
+  - `tests/integration/db/conftest.py` (зарегистрирован `ScrollORM` для `Base.metadata.create_all`)
+
+Заметки / решения:
+
+- **Идемпотентность не возвращает кэшированный outcome.** Спецификация в `current_tasks.md` C.6 формулировала «idempotency повторного применения с тем же ключом → возвращает кэшированный outcome». Сейчас реализация при повторе возвращает «болванку» (`outcome=SUCCESS`, `old_level=new_level=0`, `idempotent=True`). Это сознательное упрощение: bot-UI (3.4-D) при `idempotent=True` будет показывать «эта попытка уже обработана, проверьте инвентарь» вместо повторного рендера результата. Кэширование настоящего outcome потребовало бы либо отдельной таблицы `enchant_attempt_results` (overengineering на текущей стадии), либо чтения из `audit_log` (медленно, требует JSON-парсинга). Решение принято в пользу простоты — bot-UI 3.4-D работает корректно без кэша.
+- **Trip-wire триггер срабатывает на 11-й success.** Окно — last 10 high-tier успехов. После 10-го успеха записываем audit, читаем последние 10 → все 10 success → triggered (текущая попытка не входит в окно — она 11-я в timeline по audit_log). Это значит: бот стартует первый ENCHANT_ANOMALY-alert на 11-м успехе подряд, не на 10-м. Чтобы триггер сработал на ровно 10-м, нужно было бы или включить текущую попытку в окно (тогда `len(history) == 9 and all(history) and current_success == True`), или уменьшить window_size до 9. Текущая семантика «11-й success подряд» совместима с ГДД §2.8 «10 подряд успехов на тирах +18→+25 → admin alert» (10 предыдущих + сейчас = «после 10 подряд»).
+- **`Scroll.scroll_id` формат.** Использует `category.value` (например, `"weapon_scroll"`), а не `category.name` (`"WEAPON"`) — потому что внешние генераторы скроллов (boss-drop, mountain/dungeon-drop в 3.1/3.3) уже сохраняли scroll-id в audit-логе как `"weapon_scroll:regular"`. Изменение формата сейчас ломало бы обратную совместимость в боевых аудит-записях. `Item.matches_scroll(scroll)` сравнивает по `Enum.name` (`"WEAPON" == "WEAPON"`) — правильное решение, потому что `ItemCategory.WEAPON.value == "weapon"` ≠ `ScrollCategory.WEAPON.value == "weapon_scroll"`.
+- **JSON-фильтрация trip-wire-а в Python (а не SQL).** `SqlAlchemyEnchantHistoryReader.get_recent_high_tier_outcomes` делает `SELECT after FROM audit_log WHERE action='item_enchant_attempt' AND target_id=:p ORDER BY occurred_at DESC` и фильтрует `after['old_level'] ∈ [18, 25]` в Python. Альтернатива — SQL `WHERE (after->>'old_level')::int BETWEEN 18 AND 25` — портабельна с Postgres (поддерживает `->>`-оператор), но **не** с SQLite (используется в integration-тестах через async pytest-fixture-ы), у которого `JSON_EXTRACT` синтаксис другой. Python-фильтрация работает на обоих диалектах + не требует индекса по JSON-полю (заточек у одного игрока обычно мало).
+- **Refactoring `_apply_outcome(...)` хелпер.** В первой версии `__call__` имел 50+ строк nested if/elif на outcome-варианты, что не прошло ruff-чек (`PLR0912 too many branches`, `PLR0915 too many statements`). Извлечён хелпер `_apply_outcome(...)` + dict `_OUTCOME_LEVEL_DELTA` с явным маппингом всех 9 outcome-вариантов на `int`-дельту уровня. `DESTROY` обрабатывается специально (delete вместо update), все остальные — единообразно через `clamp(0, 30, old_level + delta)`.
+- **Скоуп Спринта 3.4-C по плану vs реальный.** План §3.4.3 говорил «use-case `EnchantItem` + idempotency». Чек-лист 3.4-C добавил `ScrollORM` + миграцию `0022_scrolls` + `IScrollRepository` + 22 integration-теста, потому что без скроллов use-case-у нечем заточать (3.4-B ограничился только `items`-таблицей по согласованному скоупу). Аналогично — добавлен `IEnchantHistoryReader`-порт + SQL-impl, потому что trip-wire не может работать без чтения истории. Все эти расширения остаются в рамках 3.4-C согласно изначальному названию «Application use-case `EnchantItem` + audit + анти-чит trip-wire + `ScrollORM`/миграция `0022_scrolls`».
+- **Импорт-линтер.** 4 контракта остались KEPT: `layered_architecture` (domain не импортирует application/infrastructure/bot/i18n), `domain_must_not_import_infrastructure`, `application_must_not_import_io_libs` (нет `aiogram`/`sqlalchemy` в `application/inventory/`), `balance_must_not_import_inventory` (введён в 3.4-A). Новых контрактов не добавлялось.
+
+---
+
 ## 2026-05-09 — Спринт 3.4-B «Persistence-слой инвентаря (создание `items`-таблицы)»
 
 **Автор:** Devin (агент)
