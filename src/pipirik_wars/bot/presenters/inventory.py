@@ -115,8 +115,7 @@ def parse_inventory_callback_data(
     parts = data.split(":", maxsplit=3)
     if not parts or parts[0] != _INVENTORY_CALLBACK_PREFIX:
         raise ValueError(
-            "inventory callback_data must start with 'inv:', "
-            f"got {data!r}",
+            f"inventory callback_data must start with 'inv:', got {data!r}",
         )
     if len(parts) < 2:
         raise ValueError(f"inventory callback_data missing action: {data!r}")
@@ -124,23 +123,19 @@ def parse_inventory_callback_data(
     if action_raw == "enchant":
         if len(parts) != 3 or not parts[2]:
             raise ValueError(
-                "inventory callback_data must be 'inv:enchant:<item_id>', "
-                f"got {data!r}",
+                f"inventory callback_data must be 'inv:enchant:<item_id>', got {data!r}",
             )
         return "enchant", parts[2], None
     if action_raw == "pick":
         if len(parts) != 4 or not parts[2] or not parts[3]:
             raise ValueError(
-                "inventory callback_data must be "
-                "'inv:pick:<item_id>:<scroll_id>', "
-                f"got {data!r}",
+                f"inventory callback_data must be 'inv:pick:<item_id>:<scroll_id>', got {data!r}",
             )
         return "pick", parts[2], parts[3]
     if action_raw == "pickcancel":
         if len(parts) != 3 or not parts[2]:
             raise ValueError(
-                "inventory callback_data must be 'inv:pickcancel:<item_id>', "
-                f"got {data!r}",
+                f"inventory callback_data must be 'inv:pickcancel:<item_id>', got {data!r}",
             )
         return "pickcancel", parts[2], None
     raise ValueError(f"unknown inventory action: {action_raw!r}")

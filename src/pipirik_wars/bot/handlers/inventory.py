@@ -400,6 +400,4 @@ def _has_scroll_in_stock(
     scroll_id: str,
 ) -> bool:
     """Проверить, что у игрока в инвентаре есть стэк такого скролла с `qty > 0`."""
-    return any(
-        scroll.scroll_id == scroll_id and scroll.qty > 0 for scroll in scrolls
-    )
+    return any(scroll.scroll_id == scroll_id and scroll.qty > 0 for scroll in scrolls)

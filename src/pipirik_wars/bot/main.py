@@ -1109,9 +1109,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clock=clock,
         enchant_history=enchant_history,
     )
-    get_inventory = GetInventory(
-        item_repo=items, scroll_repo=scrolls, balance=balance
-    )
+    get_inventory = GetInventory(item_repo=items, scroll_repo=scrolls, balance=balance)
     # Спринт 3.3-D D.1: саммонер отменяет рейд из лобби. Идемпотентен
     # на повторный вызов в `CANCELLED`-статусе.
     cancel_boss_fight = CancelBossFight(
