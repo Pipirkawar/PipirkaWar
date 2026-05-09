@@ -43,6 +43,9 @@ from pipirik_wars.infrastructure.db.repositories.forest_run import (
 from pipirik_wars.infrastructure.db.repositories.global_lobby import (
     SqlAlchemyGlobalLobbyRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.items import (
+    SqlAlchemyItemRepository,
+)
 from pipirik_wars.infrastructure.db.repositories.mountain_run import (
     SqlAlchemyMountainRunRepository,
 )
@@ -82,6 +85,7 @@ __all__ = [
     "SqlAlchemyDungeonRunRepository",
     "SqlAlchemyForestRunRepository",
     "SqlAlchemyGlobalLobbyRepository",
+    "SqlAlchemyItemRepository",
     "SqlAlchemyMassDuelRepository",
     "SqlAlchemyMountainRunRepository",
     "SqlAlchemyOracleHistoryRepository",
