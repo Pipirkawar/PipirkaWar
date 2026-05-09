@@ -17,16 +17,16 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный PR — **3.5-A** (PR #121, `792a366`) — каркас домена free-to-play рулетки: `domain/roulette/` (`RouletteOutcome` frozen-VO с инвариантом `kind ↔ length_cm`; pure picker `pick_roulette_outcome(*, config, random, crypto_pool_empty) -> RouletteOutcome` с двухуровневым weighted_choice — сначала по `RouletteOutcomeKind` (LENGTH/ITEM/SCROLL_REGULAR/SCROLL_BLESSED/CRYPTO_LOT), потом для LENGTH — внутри по 4 length-buckets + uniform по диапазону; правило ГДД §12.4.2 «crypto-пул пуст → вес CRYPTO_LOT перетекает на LENGTH» через флаг `crypto_pool_empty=True`; `RouletteDomainError` + `InvalidRouletteConfigError`); pydantic-конфиг в `domain/balance/config.py` (`RouletteFreeConfig` с полями `cost_cm=100`, `min_thickness_level=2`, `outcomes` из 5 типов с весами `Σ=1.0±ε`, `length_buckets` — 4 бакета `small/medium/good/big` с `Σ=1.0±ε`; 5 валидаторов: outcome-веса в сумму, уникальность kind, полнота 5-ти kind, bucket-веса в сумму, уникальность имён бакетов; `RouletteLengthBucket.min_cm <= max_cm`-валидатор; `extra="forbid"` на всех моделях); `RouletteOutcomeKind` (StrEnum) живёт **только** в `domain/balance/config.py` и ре-экспортируется из `domain/roulette/entities.py` (стабильные машинные id для `audit_log.target_id` будущего use-case-а 3.5-C). `BalanceConfig.roulette: RouletteConfig` — обязательное поле. Стартовые дефолты в `config/balance.yaml` (LENGTH 0.85 / ITEM 0.10 / SCROLL_REGULAR 0.04 / SCROLL_BLESSED 0.005 / CRYPTO_LOT 0.005; buckets `small[10..50] 0.7 / medium[50..150] 0.25 / good[150..300] 0.04 / big[300..500] 0.01`). Без use-case-а, без миграции, без bot-UI — это 3.5-B/C/D. **47 новых тестов**: 11 entity-инвариантов, 14 picker-сценариев (включая Bernoulli-распределения на 10 000 ролов с 3σ-границами + crypto-pool drain percolation), 18 config-валидатор-тестов + 4 `BalanceConfig` integration-тестов. local `make ci`: **4988 passed / 2 skipped, coverage 95.56%**. Перед ним — **3.4-D** (PR #120, `9ebbf15`) — bot-UI заточки + закрытие Спринта 3.4; **3.4-C** (PR #119, `e490095`); **3.4-B** (PR #118, `7259fad`); **3.4-A** (PR #117, `5c21d4e`). **Закрыт Спринт 3.3 «Рейд-боссы»**, **закрыт Спринт 3.4 «Заточка предметов»**, **в работе Спринт 3.5 «Free-to-play рулетка»** ([`development_plan.md`](development_plan.md) §6.3.5) — A смержен, активный PR — **3.5-B** «Persistence-слой рулетки».
+**На `main`:** последний смерженный PR — **3.5-B** (PR #<TBD>, `<merge_3_5_B>`) — persistence-слой free-to-play рулетки: доменный порт `IRouletteSpinRepository(Protocol)` (`record(*, spin)` идемпотентный + `last_free_spin_at(*, player_id) -> datetime | None`); entity `RouletteSpin(frozen=True, slots=True)` с полями `player_id`, `occurred_at` (TZ-aware), `outcome: RouletteOutcome`, `idempotency_key` + valdiation-правила (`player_id > 0`, TZ-aware, non-empty key) + convenience-properties `.kind`/`.length_cm`. ORM `RouletteSpinORM` (`roulette_spins` таблица: `id BIGINT PK autoincrement`, `player_id BIGINT FK→users.id ondelete=CASCADE`, `occurred_at TIMESTAMPTZ`, `kind VARCHAR(32)`, `length_cm INT NULL`, `idempotency_key VARCHAR(128) UNIQUE`; UNIQUE-constraint по `idempotency_key` + composite-индекс `(player_id, occurred_at)` для `last_free_spin_at`-запроса; CheckConstraint `(kind='length' AND length_cm IS NOT NULL) OR (kind != 'length' AND length_cm IS NULL)` зеркалит инвариант `RouletteOutcome`). Миграция Alembic `0023_roulette_spins` (down_revision=`0022_scrolls`). `SqlAlchemyRouletteSpinRepository` использует dialect-specific `INSERT ... ON CONFLICT (idempotency_key) DO NOTHING` через `pg_insert` / `sqlite_insert`. **29 новых тестов**: 11 entity-валидаций (`RouletteSpin`), 15 integration-тестов репо (round-trip всех 5 RouletteOutcomeKind, idempotency, isolation, DB-CHECK invariants), 3 migration-теста (chain `0023→0022`, dir-list registry, table-structure). Без use-case-а — это 3.5-C. local `make ci`: **5017 passed / 2 skipped, coverage 95.56%**. Перед ним — **3.5-A** (PR #121, `792a366`) — каркас домена «Рулетка» + балансовый конфиг; **3.4-D** (PR #120, `9ebbf15`); **3.4-C** (PR #119, `e490095`); **3.4-B** (PR #118, `7259fad`); **3.4-A** (PR #117, `5c21d4e`). **Закрыт Спринт 3.3 «Рейд-боссы»**, **закрыт Спринт 3.4 «Заточка предметов»**, **в работе Спринт 3.5 «Free-to-play рулетка»** ([`development_plan.md`](development_plan.md) §6.3.5) — A+B смержены, активный PR — **3.5-C** «Application use-case `SpinFreeRoulette` + audit + spend-100см».
 
-**Текущая ветка** — `devin/1778347640-sprint-3-5-B-roulette-persistence` (Спринт **3.5-B «Persistence-слой рулетки»**), открыта от `main = 792a366` (мердж PR #121). Активный шаг — B.0/B.1: каркас доменного порта `IRouletteSpinRepository` + entity `RouletteSpin`.
+**Текущая ветка** — старт **Спринта 3.5-C «Application use-case `SpinFreeRoulette` + audit + spend-100см»** будет открыт от свежего `main = <merge_3_5_B>` после мерджа PR #<TBD> (3.5-B). Имя ветки следующего PR-а: `devin/<unix_ts>-sprint-3-5-C-roulette-use-case`.
 
-Перед `3.5-A`: **3.4-D** (PR #120, `9ebbf15`); **3.4-C** (PR #119, `e490095`); **3.4-B** (PR #118, `7259fad`); **3.4-A** (PR #117, `5c21d4e`); **3.6 design doc** (PR #116, `f7d671f`); **3.3-D** (PR #115, `5d6c9a3`); **3.3-C** (PR #114, `d08985e`); **3.3-B** (PR #113, `9c859b7`), **3.3-A** (PR #112, `dbb9b1c`); **3.2-A→D** (#108–#111); **3.1-E** (PR #107, `5c1b26f`) и PR-ы Спринтов 3.1 (#99–#106) и 2.5 (#79–#97).
+Перед `3.5-B`: **3.5-A** (PR #121, `792a366`); **3.4-D** (PR #120, `9ebbf15`); **3.4-C** (PR #119, `e490095`); **3.4-B** (PR #118, `7259fad`); **3.4-A** (PR #117, `5c21d4e`); **3.6 design doc** (PR #116, `f7d671f`); **3.3-D** (PR #115, `5d6c9a3`); **3.3-C** (PR #114, `d08985e`); **3.3-B** (PR #113, `9c859b7`), **3.3-A** (PR #112, `dbb9b1c`); **3.2-A→D** (#108–#111); **3.1-E** (PR #107, `5c1b26f`) и PR-ы Спринтов 3.1 (#99–#106) и 2.5 (#79–#97).
 
-**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов). **Закрыт Спринт 3.2 «Караваны (полная механика)»** (4 PR-а). **Закрыт Спринт 3.3 «Рейд-боссы»** (4 PR-а). **Закрыт Спринт 3.4 «Заточка предметов»** (4 PR-а: 3.4-A/B/C/D). **В работе Спринт 3.5 «Free-to-play рулетка»** — **3.5-A смержен**, идёт **3.5-B «Persistence-слой рулетки»** ([`development_plan.md`](development_plan.md) §6.3.5).
+**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов). **Закрыт Спринт 3.2 «Караваны (полная механика)»** (4 PR-а). **Закрыт Спринт 3.3 «Рейд-боссы»** (4 PR-а). **Закрыт Спринт 3.4 «Заточка предметов»** (4 PR-а: 3.4-A/B/C/D). **В работе Спринт 3.5 «Free-to-play рулетка»** — **3.5-A+B смержены**, идёт **3.5-C «Application use-case `SpinFreeRoulette` + audit + spend-100см»** ([`development_plan.md`](development_plan.md) §6.3.5).
 
 **Roadmap (после Спринта 3.5 → далее):**
-- **Спринт 3.5 «Free-to-play рулетка»** ([`development_plan.md`](development_plan.md) §6.3.5) — **активный**, 3.5-A смержен; осталось 3.5-B/C/D (см. ниже).
+- **Спринт 3.5 «Free-to-play рулетка»** ([`development_plan.md`](development_plan.md) §6.3.5) — **активный**, 3.5-A+B смержены; осталось 3.5-C/D (см. ниже).
 - **Спринт 3.6 «Бонус-за-племена в Предсказателе»** 🎯 ([`development_plan.md`](development_plan.md) §6.3.6, ГДД §11.1) — после 3.5. Виральная мини-механика: за каждое активное племя `/predict` начисляет `+1 см` к базовому `uniform(1,20)`, cap `+131 см` (итого `≤ 151 см`). Отдельный лимит anti-cheat (`source = "oracle_tribe_bonus"` НЕ входит в organic 24h/7d). 1–2 PR-а (3.6-A: domain + config + use-case + anti-cheat; 3.6-B: bot UI + локали + закрытие).
 
 ---
@@ -46,7 +46,7 @@
 **Декомпозиция Спринта 3.5 на фичевые PR-ы:**
 
 - **3.5-A ✅ — Каркас домена + балансовый конфиг.** `domain/roulette/` с `RouletteOutcomeKind` / `RouletteOutcome` / `pick_roulette_outcome(...)`; pydantic `RouletteFreeConfig` с инвариантами; стартовые дефолты в `balance.yaml`. **Смержен** (PR #121, `792a366`).
-- **3.5-B — Persistence-слой.** `IRouletteSpinRepository` + ORM `RouletteSpinORM` + миграция Alembic `0023_roulette_spins` + SQL-impl. Integration-тесты на round-trip.
+- **3.5-B ✅ — Persistence-слой.** `IRouletteSpinRepository` + ORM `RouletteSpinORM` + миграция Alembic `0023_roulette_spins` + SQL-impl. Integration-тесты на round-trip. **Смержен** (PR #<TBD>, `<merge_3_5_B>`).
 - **3.5-C — Application use-case `SpinFreeRoulette` + audit + spend-100см.** `application/roulette/spin_free_roulette.py`; audit-action `ROULETTE_SPIN` whitelist; gate `min_thickness_level=2`; spend-100см sink. Юнит + integration-тесты.
 - **3.5-D — Bot UI + локали + display + закрытие Спринта 3.5.** Команда `/roulette_free` + warning/spin/result-карточки + локали `roulette-free-*` (RU/EN parity) + composition root wiring. Закрытие Спринта.
 
@@ -54,30 +54,50 @@
 
 ---
 
-## 📝 Чек-лист следующего PR (Спринт 3.5-B — Persistence-слой рулетки)
+## 📝 Чек-лист следующего PR (Спринт 3.5-C — Application use-case `SpinFreeRoulette` + audit + spend-100см)
 
-> Этот PR — второй PR Спринта 3.5. Создаёт persistence-слой для аудита прокруток рулетки: `IRouletteSpinRepository` + ORM `RouletteSpinORM` + миграция Alembic `0023_roulette_spins` + SQLAlchemy-репо. Без use-case-а и без bot-UI — это 3.5-C/D.
+> Этот PR — третий PR Спринта 3.5. Создаёт application-use-case прокрутки free-to-play рулетки: `SpinFreeRoulette(*, player_id, idempotency_key) -> SpinResult` с gate-ом `min_thickness_level=2`, проверкой стоимости (100 см), записью audit-события `ROULETTE_SPIN` и расходом 100 см через `progression.add_length(delta=-100, source="roulette_free_cost")`. Без bot-UI — это 3.5-D.
+
+- [ ] Дождаться мерджа `3.5-B` в `main` (PR #<TBD>, `<merge_3_5_B>`).
+- [ ] `git fetch && git checkout main && git pull`.
+- [ ] Создать ветку `devin/<unix_ts>-sprint-3-5-C-roulette-use-case` от свежего `main = <merge_3_5_B>`.
+- [ ] **C.0 — Обновить `current_tasks.md`** под старт Спринта 3.5-C: пересобрать «Снимок состояния» под актуальный `main`, расписать чек-лист 3.5-C.
+- [ ] **C.1 — Audit-action `ROULETTE_SPIN`** в `domain/shared/ports/audit.py`:
+  - Добавить `ROULETTE_SPIN = "roulette_spin"` в `AuditAction(StrEnum)`.
+  - Whitelist в anti-cheat: `roulette_free_cost` (sink, delta=-100) и `roulette_free_reward` (LENGTH-исход, delta=+roll) **НЕ** входят в organic 24h/7d-окна.
+  - **Критерий:** `mypy --strict` 0 issues; обновлены existing-тесты `AuditAction` enum + anti-cheat-source whitelist.
+- [ ] **C.2 — Application use-case `SpinFreeRoulette`** (`application/roulette/spin_free_roulette.py`, новый):
+  - DTO `SpinFreeRouletteCommand(player_id, idempotency_key)` + `SpinResult(outcome: RouletteOutcome, spent_cm: int, idempotent: bool)`.
+  - 8-шаговый flow: idempotency check (namespace `roulette_free`) → load Player → gate `thickness_level >= 2` (иначе `RouletteThicknessGateError`) → check `length_cm >= 100` (иначе `InsufficientLengthForRouletteError`) → `add_length(delta=-100, source="roulette_free_cost", idempotency_key="<root>:cost")` → `pick_roulette_outcome(config, random, crypto_pool_empty=True)` → `RouletteSpinRepository.record(spin)` → audit `ROULETTE_SPIN` → mark idempotency → return `SpinResult`.
+  - **LENGTH-исход:** дополнительно `add_length(delta=+spin.length_cm, source="roulette_free_reward", idempotency_key="<root>:reward")` ДО финального audit.
+  - **Не-LENGTH исходы (ITEM/SCROLL_REGULAR/SCROLL_BLESSED/CRYPTO_LOT):** на C.1 оставляем заглушки — выбор конкретного предмета/скролла/лота — это задача 3.5-D (bot-UI) или Фазы 4 (для CRYPTO_LOT). Audit-payload включает `kind` без `target_id`.
+  - **Критерий:** `mypy --strict` 0 issues; 12-15 unit-тестов (idempotency × 2, gate-fail, insufficient-length, LENGTH-spin happy path, не-LENGTH-spin × 4 параметризованных, audit-payload, CRYPTO_LOT drain через `crypto_pool_empty=True`, anomaly).
+- [ ] **C.3 — Integration-тесты use-case** (`tests/integration/application/test_spin_free_roulette.py`):
+  - Real DB round-trip (через `engine` фикстуру): успешный спин с LENGTH-исходом → `roulette_spins` содержит запись + `users.length_cm` уменьшилась на 100 + увеличилась на reward + `audit_log` содержит 3 записи (`length_change` -100 + `length_change` +reward + `roulette_spin`).
+  - Idempotent повтор `SpinFreeRoulette(...)` с тем же `idempotency_key` → возвращается тот же `SpinResult` без двойного списания.
+  - Gate-fail: игрок с `thickness_level=1` → `RouletteThicknessGateError` без записи в `roulette_spins`.
+  - **Критерий:** `mypy --strict` 0 issues; все integration-тесты зелёные.
+- [ ] **C.4 — `make ci` локально:** ruff + mypy --strict + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%).
+- [ ] **C.5 — Финальный док-коммит:** `history.md` + запись 3.5-C, `current_tasks.md` пересборка под старт **Спринта 3.5-D «Bot UI + локали + display + закрытие Спринта 3.5»**.
+- [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md`.
+- [ ] Дождаться зелёного GitHub CI.
+
+---
+
+## 📦 Архив чек-листа (Спринт 3.5-B — Persistence-слой рулетки) ✅
+
+> Этот PR закрыт, чек-лист сохранён для истории.
 
 - [x] Дождаться мерджа `3.5-A` в `main` (PR #121, `792a366`).
 - [x] `git fetch && git checkout main && git pull`.
 - [x] Создать ветку `devin/1778347640-sprint-3-5-B-roulette-persistence` от свежего `main = 792a366`.
 - [x] **B.0 — Обновить `current_tasks.md`** под старт Спринта 3.5-B: пересобрать «Снимок состояния» под актуальный `main`, расписать чек-лист 3.5-B.
-- [ ] **B.1 — Доменный порт `IRouletteSpinRepository`** + `RouletteSpin` запись:
-  - `domain/roulette/ports.py` (новый) — `IRouletteSpinRepository(Protocol)` с `async record(*, player_id, spin: RouletteSpin) -> None` (idempotency по `idempotency_key`) + `async last_free_spin_at(*, player_id) -> datetime | None` (для будущей anti-cheat-проверки cooldown в 3.5-C, если потребуется).
-  - `domain/roulette/entities.py` — добавить `RouletteSpin(frozen=True, slots=True)` с полями: `player_id: int`, `occurred_at: datetime`, `kind: RouletteOutcomeKind`, `outcome: RouletteOutcome`, `idempotency_key: str` (дет.: `f"roulette_free:{player_id}:{server_msg_id}"` или похожее, согласовать на B.0).
-  - **Критерий:** `mypy --strict` 0 issues; юнит-тесты на конструктор `RouletteSpin` (валидация полей, frozen-свойство).
-- [ ] **B.2 — ORM `RouletteSpinORM` + миграция `0023_roulette_spins`**:
-  - `infrastructure/db/models/roulette.py` (новый) — `RouletteSpinORM(Base)`. Колонки: `id INTEGER PK`, `player_id BIGINT FK→users.id ondelete=CASCADE`, `occurred_at TIMESTAMP(timezone=True) NOT NULL`, `kind VARCHAR(32) NOT NULL` (значения соответствуют `RouletteOutcomeKind.value`), `length_cm INT NULL` (только при `kind=LENGTH`, остальные `NULL`), `idempotency_key VARCHAR(128) NOT NULL UNIQUE`. Индекс по `(player_id, occurred_at DESC)` для `last_free_spin_at`-запроса.
-  - `infrastructure/db/migrations/versions/20260510_0023_roulette_spins.py` — `revision="0023_roulette_spins"`, `down_revision="0022_scrolls"`. `op.create_table("roulette_spins", ...)` зеркалит ORM. CheckConstraint `(kind = 'length' AND length_cm IS NOT NULL) OR (kind != 'length' AND length_cm IS NULL)` для согласованности с `RouletteOutcome` инвариантом.
-  - Зарегистрировать `RouletteSpinORM` в `infrastructure/db/models/__init__.py` + `tests/integration/db/conftest.py`.
-  - **Критерий:** `mypy --strict` 0 issues; integration-тест миграций (`up → down → up`) зелёный.
-- [ ] **B.3 — `SqlAlchemyRouletteSpinRepository`**:
-  - `infrastructure/db/repositories/roulette.py` (новый). `record(...)`: `INSERT ... ON CONFLICT (idempotency_key) DO NOTHING` (idempotent). `last_free_spin_at(...)`: `SELECT MAX(occurred_at) FROM roulette_spins WHERE player_id=:player_id`.
-  - Зарегистрировать в `infrastructure/db/repositories/__init__.py`.
-  - **Критерий:** `mypy --strict` 0 issues; integration-тест на `record → last_free_spin_at` round-trip + idempotent повтор `record(...)` × 2 = 1 запись.
-- [ ] **B.4 — Integration-тесты `tests/integration/db/test_roulette_spin_repository.py`**: round-trip для всех 5 `RouletteOutcomeKind` (с `length_cm` для LENGTH и без для остальных); idempotency повтора `record(...)`; изоляция между игроками; `last_free_spin_at` для отсутствующего игрока возвращает `None`.
-- [ ] **B.5 — `make ci` локально:** ruff + mypy --strict + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%).
-- [ ] **B.6 — Финальный док-коммит:** `history.md` + запись 3.5-B, `current_tasks.md` пересборка под старт **Спринта 3.5-C «Application use-case `SpinFreeRoulette` + audit + spend-100см»**.
+- [x] **B.1 — Доменный порт `IRouletteSpinRepository` + `RouletteSpin` entity** (`domain/roulette/ports.py` + `domain/roulette/entities.py`): Protocol с `record(*, spin)` + `last_free_spin_at(*, player_id)`; entity с TZ-aware `occurred_at`, `__post_init__`-валидация (`player_id > 0`, TZ-aware, non-empty key), convenience-properties `.kind`/`.length_cm`. 11 unit-тестов в `test_entities.py`. Закоммичено в `9d67af2` (checkpoint #1).
+- [x] **B.2 — ORM `RouletteSpinORM` + миграция `0023_roulette_spins`**: ORM с `id BIGINT PK autoincrement`, `player_id` FK→users.id CASCADE, `occurred_at TIMESTAMPTZ`, `kind VARCHAR(32)`, `length_cm INT NULL`, `idempotency_key VARCHAR(128) UNIQUE`; CheckConstraint `(kind='length' AND length_cm IS NOT NULL) OR (kind != 'length' AND length_cm IS NULL)`; composite-индекс `(player_id, occurred_at)`. Миграция `down_revision="0022_scrolls"`. Зарегистрирована в `models/__init__.py` + `tests/integration/db/conftest.py`. Закоммичено в `e2b28ec` (checkpoint #2).
+- [x] **B.3 — `SqlAlchemyRouletteSpinRepository`**: dialect-specific `INSERT ... ON CONFLICT (idempotency_key) DO NOTHING` через `pg_insert` / `sqlite_insert`; `last_free_spin_at` через `SELECT MAX(occurred_at) WHERE player_id=:p`. Зарегистрировано в `repositories/__init__.py`. Закоммичено в `e2b28ec` (checkpoint #2).
+- [x] **B.4 — Integration-тесты** (15 тестов в `test_roulette_spin_repository.py`): round-trip для всех 5 `RouletteOutcomeKind`, idempotency (повтор + DO NOTHING semantics), isolation (per-player), DB-CHECK invariants (отказ на нарушении `kind ↔ length_cm`). Также обновлён `test_migrations.py` (chain-test 0023, dir-list, table-structure). Закоммичено в `e2b28ec` (checkpoint #2) + `13a1b58` (test_migrations.py).
+- [x] **B.5 — `make ci` локально:** ruff (clean), `mypy --strict` (0 issues), import-linter (4 contracts KEPT), pytest **5017 passed / 2 skipped** (4988 baseline 3.5-A → +29 новых тестов: 11 entity + 15 repo + 3 migration), **coverage 95.56%** (gate ≥ 80%). Load-тесты flaky при параллельном прогоне в `make ci`, проходят при изолированном запуске; not related to 3.5-B changes.
+- [x] **B.6 — Финальный док-коммит:** `history.md` (запись 3.5-B) + `current_tasks.md` пересборка под старт **Спринта 3.5-C «Application use-case `SpinFreeRoulette` + audit + spend-100см»** (этот коммит).
 - [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md`.
 - [ ] Дождаться зелёного GitHub CI.
 
