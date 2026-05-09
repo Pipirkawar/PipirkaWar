@@ -595,4 +595,4 @@ class TestSqlAlchemyScrollRepositoryListByPlayer:
             qty=5,
         )
         with pytest.raises((AttributeError, TypeError)):
-            stack.qty = 7  # type: ignore[misc]
+            stack.qty = 7

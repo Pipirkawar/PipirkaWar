@@ -239,7 +239,7 @@ class TestInventoryViewFrozen:
     def test_inventory_view_is_frozen(self) -> None:
         view = InventoryView(items=(), scrolls=())
         with pytest.raises((AttributeError, TypeError)):
-            view.items = ()  # type: ignore[misc]
+            view.items = ()
 
     def test_item_view_is_frozen(self) -> None:
         view = ItemView(
@@ -251,7 +251,7 @@ class TestInventoryViewFrozen:
             enchant_level=0,
         )
         with pytest.raises((AttributeError, TypeError)):
-            view.enchant_level = 5  # type: ignore[misc]
+            view.enchant_level = 5
 
     def test_scroll_view_is_frozen(self) -> None:
         view = ScrollView(
@@ -261,4 +261,4 @@ class TestInventoryViewFrozen:
             qty=1,
         )
         with pytest.raises((AttributeError, TypeError)):
-            view.qty = 2  # type: ignore[misc]
+            view.qty = 2

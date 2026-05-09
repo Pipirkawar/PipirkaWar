@@ -22,6 +22,7 @@ from pipirik_wars.domain.inventory import (
     ItemNotFoundError,
     ScrollNotFoundError,
     ScrollOutOfStockError,
+    ScrollStack,
 )
 
 NOW = datetime(2026, 5, 9, 12, 0, tzinfo=UTC)
@@ -63,6 +64,9 @@ class _InMemoryItemRepository:
         if (player_id, item_id) not in self._rows:
             raise ItemNotFoundError(player_id=player_id, item_id=item_id)
         del self._rows[(player_id, item_id)]
+
+    async def list_by_player(self, *, player_id: int) -> tuple[Item, ...]:
+        return tuple(item for (pid, _item_id), item in self._rows.items() if pid == player_id)
 
 
 class _InMemoryScrollRepository:
@@ -107,6 +111,13 @@ class _InMemoryScrollRepository:
                 available_qty=available,
             )
         self._rows[(player_id, scroll_id)] = available - qty
+
+    async def list_by_player(self, *, player_id: int) -> tuple[ScrollStack, ...]:
+        return tuple(
+            ScrollStack(scroll=Scroll.from_scroll_id(scroll_id), qty=qty)
+            for (pid, scroll_id), qty in self._rows.items()
+            if pid == player_id and qty > 0
+        )
 
 
 class TestIItemRepositoryProtocol:
