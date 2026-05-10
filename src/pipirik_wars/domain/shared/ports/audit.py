@@ -145,6 +145,17 @@ class AuditAction(str, enum.Enum):
     # (донат < 10 native-юнитов, no-op инкремент) audit **не** пишется —
     # инвариант «нет нулевых-дельт в audit-логе».
     PRIZE_POOL_INCREMENT = "prize_pool_increment"
+    # ── Спринт 4.1-C (лот-генератор, ГДД §12.6.3) ──
+    # Каждый свежесгенерированный `PrizeLot` пишется одной audit-записью
+    # в той же транзакции UoW, что и `IPrizeLotRepository.add(lot)` +
+    # `IPrizePoolRepository.apply_increment(currency, -lot.amount_native)`.
+    # `target_kind="prize_lot"`, `target_id="<root_key>:lot:<idx>"`, `after={
+    # "lot_id": <int>, "currency": ..., "amount_native": <gross>, "fee_buffer_native":
+    # <int>, "net_amount_native": <gross-fee>, "pool_after_native": <остаток пула>}`.
+    # Парного `before`-снапшота не пишем (delta + after однозначно
+    # восстанавливают before). Источник — `AuditSource.PRIZE_LOT_GENERATED`.
+    # Пишется use-case-ом `GeneratePrizeLots`.
+    PRIZE_LOT_GENERATED = "prize_lot_generated"
 
 
 class AuditSource(str, enum.Enum):
@@ -224,6 +235,16 @@ class AuditSource(str, enum.Enum):
     # `tribe_bonus_sources` (это пул-внутренний бухгалтерский маркер,
     # не length-source).
     PRIZE_POOL_INCREMENT = "prize_pool_increment"
+    # ── Спринт 4.1-C (лот-генератор, ГДД §12.6.3) ──
+    # `PRIZE_LOT_GENERATED` — source-маркер audit-записи «вырезали лот из пула».
+    # Пишется use-case-ом `GeneratePrizeLots` внутри той же UoW, что и
+    # `add(lot)` + `apply_increment(currency, -amount)`. Парного «cost»-source-а
+    # нет (декремент пула — это уже интернальная проводка, безвыплаты игроку).
+    # `PRIZE_LOT_GENERATED` **НЕ** входит в `anticheat.organic_sources` /
+    # `donate_sources` / `tribe_bonus_sources` (не length-source, это
+    # пул-внутренний бухгалтерский маркер). DB-whitelist (`audit_log_source_whitelist`)
+    # расширяется Alembic-миграцией `0030_audit_source_prize_lot_*` (шаг C.4).
+    PRIZE_LOT_GENERATED = "prize_lot_generated"
     UNKNOWN = "unknown"
 
 

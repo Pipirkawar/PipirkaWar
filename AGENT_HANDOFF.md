@@ -7,10 +7,10 @@
 ## Состояние на этом коммите
 
 - **Ветка:** `devin/1778438123-sprint-4-1-C-lot-generator` (от `main = 93148aa`, merge PR #130).
-- **Активный шаг чек-листа:** **C.2** — Application use-case `GeneratePrizeLots`.
-- **Готовы:** C.0 (snapshot pivot + sticky HANDOFF), C.1 (Domain `PrizeLot` aggregate + VO `FeeBufferAmount` + ports + errors + 67 unit-тестов).
+- **Активный шаг чек-листа:** **C.3** — Persistence `prize_lots` + Alembic 0030 + ORM + repo + integration-тесты.
+- **Готовы:** C.0 (snapshot pivot + sticky HANDOFF), C.1 (Domain `PrizeLot` aggregate + VO `FeeBufferAmount` + ports + errors + 67 unit-тестов), C.2 (Application use-case `GeneratePrizeLots` + 41 unit-тестов + Alembic 0029 audit-source `prize_lot_generated`).
 - **В работе:** —.
-- **Дальше:** C.2 — application/monetization/generate_prize_lots.py + unit-тесты на «нарезку» пула по min/max/decimal-step + `fee_buffer` через `IFeeEstimator`.
+- **Дальше:** C.3 — ORM-модель + Alembic-миграция `0030_prize_lots` (таблица `prize_lots` с CHECK-инвариантами) + `SqlAlchemyPrizeLotRepository` + integration-тесты.
 
 ## Что нужно знать следующему агенту, если меня прервёт
 
@@ -31,15 +31,26 @@
    - ORM-модель + Alembic-миграция с initial-seed.
    - Атомарные `UPDATE ... WHERE id = :id` + `SELECT *` после.
    - DB-CHECK как last-line-of-defense для domain-invariants.
-7. **Pattern для audit-source расширения** (см. Alembic `0028`):
+7. **Pattern для audit-source расширения** (см. Alembic `0028`, `0029`):
    - Расширяй `AuditSource` enum в `domain/shared/ports/audit.py`.
-   - Отдельная миграция `0030_audit_source_prize_lot_*` через `op.batch_alter_table` (SQLite-совместимо).
+   - Отдельная миграция `*_audit_source_*` через `op.batch_alter_table` (SQLite-совместимо).
    - Обнови `_SOURCE_WHITELIST` и `_PREV_SOURCE_WHITELIST` в миграции.
+   - Обнови `tests/unit/domain/shared/ports/test_audit_source.py` (`_load_migration_whitelist` указывает на последнюю расширяющую миграцию).
+   - Обнови `tests/integration/db/test_migrations.py` (`test_<NNNN>_descends_from_<NNNN-1>` + `test_versions_dir_lists_only_known_files`).
 8. **Pattern для picker крипто-приза** (см. `domain/roulette/services.py`):
    - `pick_paid_outcome(*, config, random, crypto_pool_empty)` — сейчас `crypto_pool_empty=True` всегда.
    - В 4.1-C нужно превратить `bool` в реальный сигнал: `crypto_pool_empty = not active_lots_for(currency)`.
    - Или ввести `active_lots: Sequence[PrizeLot]` параметр и возвращать `RouletteOutcome(kind=CRYPTO_LOT, lot_id=...)`. **Открытый вопрос.**
-9. **C.1 итог** (готов в этом коммите):
+9. **C.2 итог** (готов в этом коммите):
+   - `application/monetization/generate_prize_lots.py::GeneratePrizeLots` — use-case класс с DI-конструктором (`uow`, `prize_pool_repository`, `prize_lot_repository`, `fee_estimator`, `audit_logger`, `idempotency`, `clock`), `execute(GeneratePrizeLotsCommand)` → `GeneratePrizeLotsResult`. Открывает UoW самостоятельно (top-level, как `SpinPaidRoulette`).
+   - Алгоритм: idempotency-root `prize_lot_generator:<currency>|<key>` → проверка `is_seen` → ранний выход с `idempotent=True`; иначе → читаем пул, выбираем `target_usd_native` (max если ≥ 10 USD, min если ≥ 1 USD, иначе `None`); estimate fee один раз; sanity check `fee >= target` → 0 лотов; while `free_balance ≥ lot_amount` → `PrizeLot.freshly_generated()` + repo.add + pool.apply_increment(-lot_amount) + audit (per lot, target_id = `<root>:lot:<idx>`); `mark` idempotency; commit UoW.
+   - Константы: `_MIN_USD_NATIVE` / `_MAX_USD_NATIVE` MappingProxyType per currency (STARS=100/1000, TON_NANO=500_000_000/5_000_000_000, USDT_DECIMAL=1_000_000/10_000_000) — temporary; переедут в `balance.yaml` в 4.1-D.
+   - `domain/shared/ports/audit.py::AuditAction.PRIZE_LOT_GENERATED` + `AuditSource.PRIZE_LOT_GENERATED` (значения `prize_lot_generated`).
+   - Alembic `0029_audit_source_prize_lot_generated` — расширение whitelist `audit_log.source`. `down_revision = 0028`.
+   - 41 unit-тест в `tests/unit/application/monetization/test_generate_prize_lots.py` (max/min режим, below-min, все 3 валюты, идемпотентность, fee буфер + sanity check, audit per lot, декремент пула, UoW commit, корректная конструкция PrizeLot).
+   - Fake-инфраструктура: `tests/fakes/prize_lot_repo.py::FakePrizeLotRepository`, `tests/fakes/fee_estimator.py::FakeFeeEstimator` (с дефолтным `fee=0` и `factory`/`fees`-оверрайдами).
+
+10. **C.1 итог** (готов из C.1-коммита):
    - `domain/monetization/value_objects.py::FeeBufferAmount` — frozen-VO с `>= 0`-invariant.
    - `domain/monetization/entities.py::PrizeLot` — `@dataclass(frozen=True, slots=True)` с полями `(id, currency, amount_native, fee_buffer_native, status, created_at, claimed_at)`, invariants `amount_native > fee_buffer_native >= 0`, TZ-aware datetime, `id ∈ {None} ∪ ℕ+`, `status == CLAIMED ⇔ claimed_at`.
    - `PrizeLotStatus` (StrEnum: `active|reserved|claimed|refunded`) + immutable transition-методы `reserve()` / `claim(claimed_at=...)` / `refund()`, машина состояний `ACTIVE → RESERVED|REFUNDED`, `RESERVED → CLAIMED|REFUNDED`, terminal `CLAIMED|REFUNDED`. Транзишены через приватный `_PRIZE_LOT_TRANSITIONS: MappingProxyType`.
