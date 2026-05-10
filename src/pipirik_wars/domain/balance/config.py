@@ -1182,16 +1182,127 @@ class RouletteFreeConfig(_Frozen):
         return self
 
 
+class RoulettePaidConfig(_Frozen):
+    """Конфиг платной рулетки (ГДД §12.5.2, Спринт 4.1-A).
+
+    Структурно идентичен `RouletteFreeConfig` (те же 5 типов исхода,
+    те же 4 бакета длины), но веса смещены: меньше «голой длины» (0.55
+    vs 0.85), больше шмота / скроллов / крипто-приза. Цены —
+    в Telegram Stars (`cost_stars_single` / `cost_stars_pack10`).
+
+    Поля:
+    - `cost_stars_single` — цена одиночного спина в ⭐ (`>= 1`).
+    - `cost_stars_pack10` — цена 10-pack-а в ⭐ (`>= 1`). По ГДД §12.5.1 —
+      `9 ⭐` (фиксированная скидка ~10 % vs `10 × 1`).
+    - `pack10_spins` — количество спинов в 10-pack-е. По ГДД §12.5.1 —
+      `10`. Параметр оставлен балансируемым, но пока строго `>= 2`.
+    - `min_thickness_level` — минимальный уровень толщины игрока. По ГДД
+      §12.5.1 — `1` (доступ со старта без ограничения по толщине).
+    - `outcomes` — 5 веток исходов с весами; сумма == 1.0 ± ε.
+    - `length_buckets` — 4 бакета длины с весами; сумма == 1.0 ± ε.
+
+    Pydantic-инварианты — те же, что и у `RouletteFreeConfig`:
+    - сумма весов `outcomes` == 1.0 ± ε;
+    - сумма весов `length_buckets` == 1.0 ± ε;
+    - `kind`-ы в `outcomes` уникальны;
+    - все 5 значений `RouletteOutcomeKind` представлены ровно один раз
+      (для `crypto_lot` это нужно, чтобы `pick_paid_outcome` мог
+      перетекать его вес на `length` при пустом крипто-пуле).
+
+    После валидации `RoulettePaidConfig` неизменяем. Hot-reload в
+    `YamlBalanceLoader.reload()` атомарно создаёт новый объект.
+    """
+
+    cost_stars_single: int = Field(ge=1, le=10_000)
+    cost_stars_pack10: int = Field(ge=1, le=10_000)
+    pack10_spins: int = Field(ge=2, le=100)
+    min_thickness_level: int = Field(ge=1, le=30)
+    outcomes: tuple[RouletteOutcomeWeight, ...] = Field(min_length=1)
+    length_buckets: tuple[RouletteLengthBucket, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_outcome_weights_sum_to_one(self) -> RoulettePaidConfig:
+        total = sum(o.weight for o in self.outcomes)
+        if abs(total - 1.0) > _ROULETTE_WEIGHT_SUM_EPSILON:
+            raise ValueError(
+                f"roulette.paid.outcomes weights must sum to 1.0, got {total} "
+                f"(entries: {[(o.kind.value, o.weight) for o in self.outcomes]})",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_outcome_kinds_unique(self) -> RoulettePaidConfig:
+        kinds = [o.kind for o in self.outcomes]
+        if len(set(kinds)) != len(kinds):
+            duplicates = sorted({k.value for k in kinds if kinds.count(k) > 1})
+            raise ValueError(
+                f"roulette.paid.outcomes: duplicate kinds: {duplicates}",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_outcome_kinds_full(self) -> RoulettePaidConfig:
+        present: set[RouletteOutcomeKind] = {o.kind for o in self.outcomes}
+        expected: set[RouletteOutcomeKind] = set(RouletteOutcomeKind)
+        missing = expected - present
+        if missing:
+            raise ValueError(
+                "roulette.paid.outcomes must list all 5 RouletteOutcomeKind "
+                f"values (missing: {sorted(k.value for k in missing)})",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_bucket_weights_sum_to_one(self) -> RoulettePaidConfig:
+        total = sum(b.weight for b in self.length_buckets)
+        if abs(total - 1.0) > _ROULETTE_WEIGHT_SUM_EPSILON:
+            raise ValueError(
+                f"roulette.paid.length_buckets weights must sum to 1.0, "
+                f"got {total} (entries: "
+                f"{[(b.name, b.weight) for b in self.length_buckets]})",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_bucket_names_unique(self) -> RoulettePaidConfig:
+        names = [b.name for b in self.length_buckets]
+        if len(set(names)) != len(names):
+            duplicates = sorted({n for n in names if names.count(n) > 1})
+            raise ValueError(
+                f"roulette.paid.length_buckets: duplicate names: {duplicates}",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_pack10_discount(self) -> RoulettePaidConfig:
+        # 10-pack должен стоить дешевле, чем `pack10_spins × cost_stars_single`.
+        # По ГДД §12.5.1: `1 ⭐` × 10 = 10 ⭐, но 10-pack = 9 ⭐ (скидка ~10 %).
+        # Защита от ляпа в `balance.yaml`: если `cost_stars_pack10 >= pack10_spins
+        # * cost_stars_single`, то скидки нет — это ошибка конфига.
+        single_total = self.pack10_spins * self.cost_stars_single
+        if self.cost_stars_pack10 >= single_total:
+            raise ValueError(
+                f"roulette.paid: cost_stars_pack10 ({self.cost_stars_pack10}) "
+                f"must be < pack10_spins ({self.pack10_spins}) × "
+                f"cost_stars_single ({self.cost_stars_single}) = {single_total} "
+                "(no discount on 10-pack)",
+            )
+        return self
+
+
 class RouletteConfig(_Frozen):
-    """Корневой конфиг рулеток (ГДД §12.4, Спринт 3.5-A).
+    """Корневой конфиг рулеток (ГДД §12.4–§12.5, Спринт 3.5-A → 4.1-A).
 
     На 3.5-A определена только free-рулетка (`free: RouletteFreeConfig`).
-    Платная рулетка / VIP-варианты — задел на будущие спринты;
-    добавление новых полей не сломает обратную совместимость
-    (pydantic с `extra="forbid"` отловит опечатки).
+    На 4.1-A добавлено опциональное поле `paid: RoulettePaidConfig | None`
+    под платную рулетку (`Telegram Stars`, ГДД §12.5). На текущем
+    `balance.yaml` блок `paid` будет добавлен в Спринте 4.1-A (A.4),
+    но `Optional`-поле здесь пропустит загрузку даже без него (для
+    обратной совместимости).
     """
 
     free: RouletteFreeConfig
+    paid: RoulettePaidConfig | None = None
 
 
 class PvpDuel1v1Config(_Frozen):

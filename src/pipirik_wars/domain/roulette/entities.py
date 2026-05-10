@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 
 from pipirik_wars.domain.balance.config import RouletteOutcomeKind
 
@@ -33,7 +34,28 @@ __all__ = [
     "RouletteOutcome",
     "RouletteOutcomeKind",
     "RouletteSpin",
+    "RouletteVariant",
 ]
+
+
+class RouletteVariant(StrEnum):
+    """Вариант рулетки (free / paid).
+
+    Спринт 3.5: только `FREE`. Спринт 4.1-A: добавлен `PAID` под платную
+    рулетку (Telegram Stars, ГДД §12.5). Стабильные машинные id —
+    попадают в `audit_log.payload.roulette_variant` и в будущую колонку
+    `roulette_spins.variant` (планируется в Спринте 4.1-B вместе с
+    persistence-расширением). На 4.1-A `RouletteSpin`-сущность пока
+    не несёт `variant`-поля — use-case `SpinPaidRoulette` (4.1-A)
+    использует `RouletteVariant.PAID` только в audit-payload-е и в
+    логах. Расширение `RouletteSpin` будет в 4.1-B миграцией с дефолтом
+    `'free'` для исторических записей.
+
+    Не менять без миграции.
+    """
+
+    FREE = "free"
+    PAID = "paid"
 
 
 @dataclass(frozen=True, slots=True)

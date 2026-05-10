@@ -1,13 +1,17 @@
-"""Чистый picker `pick_roulette_outcome` для free-рулетки (ГДД §12.4.2).
+"""Чистые picker-ы рулеток (ГДД §12.4.2 free + §12.5.2 paid, Спринт 4.1-A).
 
-Единственная точка домена, где разыгрывается результат одного спина:
-возвращает `RouletteOutcome` с `kind` (один из 5 типов исхода) и —
+Две доменных функции:
+
+- `pick_roulette_outcome` — free-рулетка (Спринт 3.5-A, ГДД §12.4.2).
+- `pick_paid_outcome` — платная рулетка (Спринт 4.1-A, ГДД §12.5.2).
+
+Обе возвращают `RouletteOutcome` с `kind` (один из 5 типов исхода) и —
 для `LENGTH` — конкретным `length_cm`. Все остальные типы (`item` /
 `scroll_regular` / `scroll_blessed` / `crypto_lot`) дальше резолвятся
-в use-case-е (Спринт 3.5-C/D), потому что им нужен доступ к каталогу
-предметов / пулу скроллов / крипто-API.
+в use-case-е (Спринт 3.5-C/D / 4.1-C-D), потому что им нужен доступ к
+каталогу предметов / пулу скроллов / крипто-API.
 
-Алгоритм (ГДД §12.4.2):
+Алгоритм (одинаковый для free и paid):
 
 1. Считаются итоговые веса исходов с учётом перетекания
    `crypto_lot` → `length` при пустом крипто-пуле (флаг
@@ -17,6 +21,9 @@
    `IRandom.weighted_choice(buckets, int_weights)`,
    затем `IRandom.randint(min_cm, max_cm)` даёт конкретное число
    сантиметров.
+
+Различие — только в конфиге (free vs paid веса). Внутренние хелперы
+`_roll_kind` / `_roll_length_bucket` / `_weighted_choice` шарятся.
 
 Picker — чистая функция от `(config, random, crypto_pool_empty)`.
 В тестах `IRandom` подменяется на `FakeRandom(seed=...)`, что даёт
@@ -32,12 +39,16 @@ from pipirik_wars.domain.balance.config import (
     RouletteLengthBucket,
     RouletteOutcomeKind,
     RouletteOutcomeWeight,
+    RoulettePaidConfig,
 )
 from pipirik_wars.domain.roulette.entities import RouletteOutcome
 from pipirik_wars.domain.roulette.errors import InvalidRouletteConfigError
 from pipirik_wars.domain.shared.ports import IRandom
 
-__all__ = ["pick_roulette_outcome"]
+__all__ = [
+    "pick_paid_outcome",
+    "pick_roulette_outcome",
+]
 
 _T = TypeVar("_T")
 
@@ -75,6 +86,47 @@ def pick_roulette_outcome(
     Raises:
     - `InvalidRouletteConfigError` — defence-in-depth, если все веса
       нулевые (pydantic-инвариант не должен такое пропустить).
+    """
+    kind = _roll_kind(
+        outcomes=config.outcomes,
+        random=random,
+        crypto_pool_empty=crypto_pool_empty,
+    )
+    if kind is RouletteOutcomeKind.LENGTH:
+        bucket = _roll_length_bucket(
+            buckets=config.length_buckets,
+            random=random,
+        )
+        length_cm = random.randint(bucket.min_cm, bucket.max_cm)
+        return RouletteOutcome(kind=kind, length_cm=length_cm)
+    return RouletteOutcome(kind=kind)
+
+
+def pick_paid_outcome(
+    *,
+    config: RoulettePaidConfig,
+    random: IRandom,
+    crypto_pool_empty: bool,
+) -> RouletteOutcome:
+    """Разыграть один исход платной рулетки (ГДД §12.5.2, Спринт 4.1-A).
+
+    Параметры — те же, что у `pick_roulette_outcome`, но `config` —
+    `RoulettePaidConfig` (веса смещены в пользу шмота / скроллов /
+    крипто, см. §12.5.2).
+
+    Returns:
+    - `RouletteOutcome(kind, length_cm)`, где для `kind == LENGTH`
+      `length_cm` — целое число в `[bucket.min_cm, bucket.max_cm]`,
+      для остальных типов `length_cm = None`.
+
+    Raises:
+    - `InvalidRouletteConfigError` — defence-in-depth, если все веса
+      нулевые (pydantic-инвариант не должен такое пропустить).
+
+    Использование: вызывается из use-case `SpinPaidRoulette` (4.1-A).
+    Как и для free-рулетки, `crypto_pool_empty=True` на 4.1-A до
+    Спринта 4.1-D (когда появится `IPrizePool` порт). До тех пор вес
+    `crypto_lot` (0.020) перетекает на `length` (становится 0.570).
     """
     kind = _roll_kind(
         outcomes=config.outcomes,
