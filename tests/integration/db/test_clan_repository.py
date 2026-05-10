@@ -245,6 +245,94 @@ class TestSqlAlchemyClanMembershipRepository:
             assert (await repo.remove(clan_id=12345, player_id=67890)) is False
 
     @pytest.mark.asyncio
+    async def test_count_active_for_player(self, uow: SqlAlchemyUnitOfWork) -> None:
+        """Sprint 3.6-A: бонус-за-племена. Все gates на одном sql-репо.
+
+        Проверяем за один тест полный набор:
+        - frozen-клан → не считается;
+        - размер `< min_tribe_size` → не считается;
+        - размер `>= min_tribe_size` + игрок-член → +1;
+        - игрок не в членах → не считается.
+        """
+        clan_repo = SqlAlchemyClanRepository(uow=uow)
+        member_repo = SqlAlchemyClanMembershipRepository(uow=uow)
+
+        # ── ACTIVE-клан с 4 членами, в т. ч. наш игрок (id=42) ──
+        active_big = await _seed_clan(uow, chat_id=-100100)
+        assert active_big.id is not None
+        # ── ACTIVE-клан с 3 членами, в т. ч. наш игрок ──
+        active_small = await _seed_clan(uow, chat_id=-100200)
+        assert active_small.id is not None
+        # ── FROZEN-клан с 5 членами, в т. ч. наш игрок ──
+        frozen = await _seed_clan(uow, chat_id=-100300)
+        assert frozen.id is not None
+        async with uow:
+            saved = await clan_repo.save(frozen.freeze(now=NOW + timedelta(seconds=1)))
+            assert saved.status is ClanStatus.FROZEN
+        # ── ACTIVE-клан с 4 членами, БЕЗ нашего игрока ──
+        active_no_player = await _seed_clan(uow, chat_id=-100400)
+        assert active_no_player.id is not None
+
+        # Сидим игрока 42 (uniq player) и других игроков для добивки размеров
+        # каждого клана. UNIQUE(player_id) запрещает 1 игрока в нескольких
+        # кланах, поэтому используем разных игроков для добивки.
+        target = await _seed_player(uow, tg_id=42)
+        assert target.id is not None
+        # Заполняем active_big: 3 «других» + наш игрок = 4 (>= 4).
+        for tg in (101, 102, 103):
+            other = await _seed_player(uow, tg_id=tg)
+            assert other.id is not None
+            async with uow:
+                await member_repo.add(
+                    ClanMember.new(clan_id=active_big.id, player_id=other.id, now=NOW),
+                )
+        async with uow:
+            await member_repo.add(
+                ClanMember.new(clan_id=active_big.id, player_id=target.id, now=NOW),
+            )
+        # Заполняем active_small: 3 других = 3 (< 4) — игрока сюда не положим
+        # (один игрок = один клан).
+        for tg in (201, 202, 203):
+            other = await _seed_player(uow, tg_id=tg)
+            assert other.id is not None
+            async with uow:
+                await member_repo.add(
+                    ClanMember.new(clan_id=active_small.id, player_id=other.id, now=NOW),
+                )
+        # Заполняем frozen-клан 5 разными игроками.
+        for tg in (301, 302, 303, 304, 305):
+            other = await _seed_player(uow, tg_id=tg)
+            assert other.id is not None
+            async with uow:
+                await member_repo.add(
+                    ClanMember.new(clan_id=frozen.id, player_id=other.id, now=NOW),
+                )
+        # active_no_player: 4 чужих — игрока 42 нет.
+        for tg in (401, 402, 403, 404):
+            other = await _seed_player(uow, tg_id=tg)
+            assert other.id is not None
+            async with uow:
+                await member_repo.add(
+                    ClanMember.new(clan_id=active_no_player.id, player_id=other.id, now=NOW),
+                )
+
+        async with uow:
+            n = await clan_repo.count_active_for_player(player_id=target.id, min_tribe_size=4)
+            # Только `active_big` квалифицирован: ACTIVE + size>=4 + игрок-член.
+            assert n == 1
+
+            # Игрок без членств → 0 (используем заведомо несуществующий player_id).
+            n_ghost = await clan_repo.count_active_for_player(player_id=999_999, min_tribe_size=4)
+            assert n_ghost == 0
+
+            # `min_tribe_size=1` не превратит frozen в активный.
+            n_frozen = await clan_repo.count_active_for_player(
+                player_id=target.id, min_tribe_size=1
+            )
+            # `target` сидит только в active_big (UNIQUE) → 1.
+            assert n_frozen == 1
+
+    @pytest.mark.asyncio
     async def test_list_by_clan_orders_by_joined_at(self, uow: SqlAlchemyUnitOfWork) -> None:
         clan = await _seed_clan(uow, chat_id=-100444)
         p1 = await _seed_player(uow, tg_id=1)

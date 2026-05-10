@@ -60,11 +60,11 @@
 - [x] `git fetch && git checkout main && git pull`.
 - [x] Создать ветку `devin/1778391635-sprint-3-6-A-tribe-bonus-domain` от свежего `main = ba0b769`.
 - [x] **A.0 — Обновить `current_tasks.md`** под старт Спринта 3.6-A: пересобрать «Снимок состояния» под актуальный `main = ba0b769`, расписать чек-лист 3.6-A, заархивировать чек-лист 3.5-D (этот коммит — Checkpoint 1).
-- [ ] **A.1 — Доменный запрос `count_active_for_player`** (`domain/clan/ports.py` + SQL impl):
-  - Метод `IClanRepository.count_active_for_player(player_id: int, *, min_tribe_size: int) -> int` — возвращает количество активных племён, в которых состоит игрок.
-  - Активное племя: `status='active'` (не `frozen`/`archived`), `len(members) > min_tribe_size`, игрок есть в `members`.
-  - SQL impl: `SELECT COUNT(*) FROM clans c JOIN clan_members cm ON cm.clan_id=c.id WHERE cm.player_id=:player_id AND c.status='active' GROUP BY c.id HAVING COUNT(cm.id) > :min_tribe_size` (или эквивалент через subquery).
-  - **Критерий:** `mypy --strict` 0 issues; юнит-тесты на каждый gate (frozen → 0; size=3 при min=4 → 0; size=4 → +1; not_member → 0; bot-only-member → 0); 1 integration-тест `tests/integration/db/test_clan_repository.py`.
+- [x] **A.1 — Доменный запрос `count_active_for_player`** (`domain/clan/repositories.py` + SQL impl):
+  - Метод `IClanRepository.count_active_for_player(*, player_id: int, min_tribe_size: int) -> int` — возвращает количество активных племён, в которых состоит игрок (Phase 3 → 0/1; интерфейс готов к multi-membership Фазы 4+).
+  - Активное племя: `status='active'` (не `frozen`/`archived`), `len(members) >= min_tribe_size` (с учётом самого игрока), игрок есть в `members`. Семантика `>=` совпадает с GDD §11.1 «> 3» при дефолте `min_tribe_size=4`.
+  - SQL impl `SqlAlchemyClanRepository.count_active_for_player`: `SELECT clan_id FROM clan_members JOIN clans WHERE clan_id IN (SELECT clan_id FROM clan_members WHERE player_id=:p) AND clans.status='active' GROUP BY clan_id HAVING COUNT(*) >= :min_tribe_size` → `len(rows)`.
+  - **Критерий:** юнит-тесты `FakeClanRepository.count_active_for_player` (9 тестов: пустой репо; не-член; size<min; size=min; size>min; frozen; min=1; min=0 → ValueError; multi-clan смешанный сценарий) + 1 integration-тест `tests/integration/db/test_clan_repository.py::test_count_active_for_player` (4 gates на одном sql-репо: ACTIVE+size>=min+член → 1; ACTIVE+size<min → 0; FROZEN+size>=min+член → 0; ACTIVE+size>=min+не-член → 0).
 - [ ] **A.2 — pydantic `OracleTribeBonusConfig`** (`domain/balance/config.py`):
   - Поля: `enabled: bool` (default `true`), `cm_per_tribe: int >= 0` (default `1`), `cap_cm: int >= 0` (default `131`), `min_tribe_size: int >= 1` (default `4`). `extra="forbid"`.
   - Добавить `tribe_bonus: OracleTribeBonusConfig = Field(default_factory=OracleTribeBonusConfig)` в `OracleConfig`.

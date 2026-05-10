@@ -112,6 +112,35 @@ class FakeClanRepository(IClanRepository):
         active.sort(key=lambda c: c.id or 0)
         return tuple(active)
 
+    async def count_active_for_player(
+        self,
+        *,
+        player_id: int,
+        min_tribe_size: int,
+    ) -> int:
+        # Бонус-за-племена (ГДД §11.1, Спринт 3.6-A): количество активных
+        # кланов, где состоит `player_id` и общее число `clan_members`
+        # >= `min_tribe_size`. Frozen-кланы исключены.
+        if min_tribe_size < 1:
+            raise ValueError(f"min_tribe_size must be >= 1, got {min_tribe_size}")
+        active_clans_by_id = {
+            c.id: c for c in self.rows if c.status is ClanStatus.ACTIVE and c.id is not None
+        }
+        # Собираем размер каждого активного клана и проверяем членство игрока.
+        clan_to_size: dict[int, int] = {}
+        clan_to_has_player: dict[int, bool] = {}
+        for m in self.members:
+            if m.clan_id not in active_clans_by_id:
+                continue
+            clan_to_size[m.clan_id] = clan_to_size.get(m.clan_id, 0) + 1
+            if m.player_id == player_id:
+                clan_to_has_player[m.clan_id] = True
+        return sum(
+            1
+            for clan_id, size in clan_to_size.items()
+            if size >= min_tribe_size and clan_to_has_player.get(clan_id, False)
+        )
+
 
 @dataclass
 class FakeClanMembershipRepository(IClanMembershipRepository):
