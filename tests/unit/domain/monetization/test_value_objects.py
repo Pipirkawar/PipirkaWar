@@ -41,7 +41,7 @@ class TestStarsAmountPostInit:
     def test_bool_value_raises(self) -> None:
         # `bool` — подкласс `int` в Python, но семантически это не количество ⭐.
         with pytest.raises(TypeError, match="must be int"):
-            StarsAmount(True)  # type: ignore[arg-type]
+            StarsAmount(True)
 
 
 class TestStarsAmountImmutability:
@@ -50,7 +50,7 @@ class TestStarsAmountImmutability:
     def test_amount_is_frozen(self) -> None:
         amount = StarsAmount(1)
         with pytest.raises(dataclasses.FrozenInstanceError):
-            amount.value = 9  # type: ignore[misc]
+            amount.value = 9
 
     def test_amounts_with_same_value_compare_equal(self) -> None:
         a = StarsAmount(9)
@@ -116,7 +116,7 @@ class TestIdempotencyKeyImmutability:
     def test_key_is_frozen(self) -> None:
         key = IdempotencyKey("a")
         with pytest.raises(dataclasses.FrozenInstanceError):
-            key.value = "b"  # type: ignore[misc]
+            key.value = "b"
 
     def test_keys_with_same_value_compare_equal(self) -> None:
         a = IdempotencyKey("paid_roulette:42:msg-1")
