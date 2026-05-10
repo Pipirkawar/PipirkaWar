@@ -63,7 +63,7 @@ admin/          ← FastAPI веб-панель (тонкий слой)
 | Параметр | Значение |
 |---|---|
 | Платформа | Telegram Bot (групповые чаты + ЛС) |
-| Язык/фреймворк | Python 3.11+, **aiogram 3.x** |
+| Язык/фреймворк | Python 3.12+, **aiogram 3.x** |
 | БД | Managed PostgreSQL (Neon free → paid) |
 | Кэш | In-memory (MVP) → Redis |
 | Планировщик | APScheduler |

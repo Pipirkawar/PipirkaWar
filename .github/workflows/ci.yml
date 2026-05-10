@@ -3,7 +3,19 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'AGENT_HANDOFF.md'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'AGENT_HANDOFF.md'
+  schedule:
+    # Ежедневный security-аудит зависимостей в 04:00 UTC.
+    # Дополняет on-demand pip-audit-trigger на изменения pyproject.toml.
+    - cron: '0 4 * * *'
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -15,11 +27,13 @@ permissions:
 jobs:
   lint-typecheck-test:
     name: lint + types + tests (py${{ matrix.python-version }})
+    # Skipped on schedule-trigger (audit-only).
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.12"]
 
     steps:
       - name: Checkout
@@ -63,12 +77,44 @@ jobs:
 
   audit:
     name: pip-audit (security)
+    # pip-audit гоняется только когда:
+    #   - schedule (ежедневный CVE-rescan на актуальном main);
+    #   - push в main (после мерджа PR-а);
+    #   - PR, который меняет pyproject.toml (новый/обновлённый dep).
+    # Pull_request-runs без изменений зависимостей пропускают этот job —
+    # это безопасно, т.к. набор зависимостей такой же как на main.
     runs-on: ubuntu-latest
+    # dorny/paths-filter требует pull-requests:read для запроса списка
+    # изменённых файлов в PR через GitHub API.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Detect pyproject changes (PR only)
+        id: changes
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            pyproject:
+              - 'pyproject.toml'
+
+      - name: Skip on PR without pyproject changes
+        id: should_run
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && \
+             [ "${{ steps.changes.outputs.pyproject }}" != "true" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping pip-audit: pyproject.toml unchanged in this PR."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Python
+        if: steps.should_run.outputs.run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -76,9 +122,11 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install pip-audit
+        if: steps.should_run.outputs.run == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
       - name: pip-audit (fail on known CVEs)
+        if: steps.should_run.outputs.run == 'true'
         run: pip-audit --skip-editable
