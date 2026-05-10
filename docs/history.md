@@ -23,6 +23,62 @@
 
 ---
 
+## 2026-05-10 — Спринт 3.6-B «Bot UI + локали + закрытие Спринта 3.6»
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** ГДД §11.1 «Бонус за племена», ПД §6.3.6 «Спринт 3.6 — Бонус-за-племена в Предсказателе» (задачи 3.6.5 «расширение `OraclePresenter` с тремя строками прироста», 3.6.6 «локали `oracle-base-line` / `oracle-tribe-bonus-line` / `oracle-total-line` с Fluent-плюрал-формами», 3.6.7 «wire-up в `bot/handlers/oracle.py`», 3.6.8 «закрытие Спринта 3.6 + переход к Фазе 4»). `current_tasks.md` чек-лист 3.6-B. Базируется на 3.6-A (PR #126, `d0eb138` — domain + config + use-case + anti-cheat). **Закрывает Спринт 3.6 «Бонус-за-племена в Предсказателе»**. Следующий спринт — Фаза 4 «Монетизация и масштаб» (Спринт 4.1).
+
+Что сделано (по чек-листу B.0–B.6):
+
+- **B.0 — Обновлён `current_tasks.md`** под старт Спринта 3.6-B: «Снимок состояния» пересобран под `main = d0eb138`, чек-лист 3.6-B (B.0–B.6) расписан, чек-лист 3.6-A заархивирован. Коммит `e779faf`.
+- **B.1+B.2+B.3 — UI-расширение `/predict`** (одним коммитом):
+  - **B.1 — `OraclePresenter` (`bot/presenters/oracle.py`):** signature метода `success()` расширен с `(template_text, bonus_cm, new_length_cm, user_display, locale)` до `(template_text, base_cm, tribe_bonus_cm, n_active_tribes, new_length_cm, user_display, locale)`. Рендерит **до 5 строк**: `oracle-success-prediction` (само предсказание) + `oracle-base-line` (`+N см — базовый`, всегда) + `oracle-tribe-bonus-line` (`+M см — за племена (K активных племён)`, **только** при `n_active_tribes > 0`) + `oracle-total-line` (`+(N+M) см — итого`, всегда) + `oracle-new-length-line` (текущая длина игрока).
+  - **B.2 — Локали (`locales/ru.ftl` + `locales/en.ftl`):** добавлены ключи `oracle-base-line` / `oracle-tribe-bonus-line` / `oracle-total-line` / `oracle-new-length-line`. Fluent-плюрал-формы для `oracle-tribe-bonus-line`: RU `{ $n_active_tribes -> [one]племя [few]племени *[other]племён}` (4 формы по правилам RU); EN `{ $n_active_tribes -> [one]tribe *[other]tribes}` (2 формы). Locale-parity-тест зелёный — все ключи `oracle-*` присутствуют и в RU, и в EN.
+  - **B.3 — Wire-up в `bot/handlers/oracle.py`:** `predict_handler` пробрасывает в `presenter.success()` новые параметры из `OraclePredictionResult` — `base_cm=result.base_cm`, `tribe_bonus_cm=result.tribe_bonus_cm`, `n_active_tribes=result.n_active_tribes` (вместо старого `bonus_cm=result.result.bonus_cm`). Composition root в `bot/main.py` уже строит `OraclePresenter` (без новых полей).
+  - **Тесты:** обновлены `tests/unit/bot/presenters/test_oracle.py` и `tests/unit/bot/handlers/test_oracle.py` под новую signature. Добавлено 7 новых snapshot-тестов на 4 сценария (`n_active_tribes ∈ {0, 1, 5, 131}`) × 2 locales (RU + EN) → суммарно 35/35 oracle-тестов зелёные.
+  - Коммит `99ac666`.
+- **B.5 — `make ci` локально:** ruff (clean), `mypy --strict` (0 issues), import-linter (4 contracts KEPT), pytest **5179 passed / 2 skipped**, coverage **95.63%** (gate ≥ 80%). Время прогона ~22 минуты (включая полный integration-suite).
+- **B.6 — Финальный док-коммит закрытия Спринта 3.6:** `history.md` (эта запись) + `current_tasks.md` пересобран под старт **Фазы 4 «Монетизация и масштаб» (Спринт 4.1)** + `game_design.md` §11.1 «Бонус за племена» — добавлен маркер «✅ **Реализовано в Спринте 3.6** (PR #126 «3.6-A: domain + config + use-case + anti-cheat», PR #127 «3.6-B: bot UI + локали»)».
+
+Результат / артефакты:
+
+- Изменённые файлы:
+  - `src/pipirik_wars/bot/presenters/oracle.py` — signature `OraclePresenter.success()` расширена `(base_cm, tribe_bonus_cm, n_active_tribes)`; conditional рендер `oracle-tribe-bonus-line` при `n_active_tribes > 0`.
+  - `src/pipirik_wars/bot/handlers/oracle.py` — `predict_handler` пробрасывает новые поля DTO.
+  - `locales/ru.ftl` — `oracle-base-line` / `oracle-tribe-bonus-line` (RU plural) / `oracle-total-line` / `oracle-new-length-line`.
+  - `locales/en.ftl` — `oracle-base-line` / `oracle-tribe-bonus-line` (EN plural) / `oracle-total-line` / `oracle-new-length-line`.
+  - `tests/unit/bot/presenters/test_oracle.py` — обновлены под новую signature, +7 snapshot-тестов.
+  - `tests/unit/bot/handlers/test_oracle.py` — обновлены под новые параметры handler-а.
+  - `docs/game_design.md` §11.1 — маркер «✅ Реализовано в Спринте 3.6 (PR #126 + PR #127)».
+  - `docs/history.md` — эта запись.
+  - `docs/current_tasks.md` — пересобран под Спринт 4.1 (Фаза 4).
+
+Заметки / решения:
+
+- **Условный рендер `oracle-tribe-bonus-line`** (только при `n_active_tribes > 0`). Если игрок не состоит ни в одном активном племени — строка-за-племена скрывается, чтобы не «зашумлять» базовое предсказание. `total == base` в этом случае; всё равно рендерим `oracle-total-line` для единообразия (унификация UI-шаблона) — это упрощает snapshot-тестирование (всегда 4 строки структурно: prediction + base + total + new-length).
+- **Fluent-плюрал-формы.** RU использует 4 формы `[one] / [few] / [many] / [other]` (Fluent применяет CLDR-правила), но в нашем `oracle-tribe-bonus-line` используется компактный pattern `[one]племя [few]племени *[other]племён` — `[other]` покрывает `[many]` и оставшиеся числа. Тестовое покрытие: `n_active_tribes=1` → «1 племя», `n_active_tribes=2` → «2 племени», `n_active_tribes=5` → «5 племён», `n_active_tribes=131` → «131 племя» (CLDR: `131 % 100 = 31`, `31 % 10 = 1`, `31 % 100 != 11` → `[one]`).
+- **Опциональный hint `oracle-no-tribes-hint`** (3 нулевых `/predict` подряд → «*вступай в новые племена и получай больше см*») — **не реализован** в 3.6-B. Помечен как feature-flag `oracle.show_no_tribes_hint` (default `false`) на будущее. Реальная реализация требует трекинга последних 3 invocations — это отдельный enhancement, выходящий за scope «закрытия Спринта 3.6». Можно вернуться в любой будущий спринт без архитектурных рисков.
+- **Manual smoke (B.4)** не блокирует PR, выполняется ревьюером после мерджа в стейдж-окружении: (a) `/predict` без активных племён → видим `prediction + base + total + new-length` (4 строки, без `tribe-bonus-line`); (b) `/predict` с активным племенем (`size >= 4`) → видим все 5 строк включая `tribe-bonus-line` с правильным плюралом.
+- **Composition root без изменений.** `OraclePresenter` уже зарегистрирован в `Container` (3.6-A не трогал DI presenter-а). 3.6-B меняет только signature `success()` — никаких новых полей для DI.
+
+Чек-лист (архив):
+
+- [x] Дождаться мерджа `3.6-A` в `main` (PR #126, `d0eb138`).
+- [x] `git fetch && git checkout main && git pull`.
+- [x] Создать ветку `devin/1778401031-sprint-3-6-B-oracle-bot-ui` от свежего `main = d0eb138`.
+- [x] **B.0 — Обновить `current_tasks.md`** под старт Спринта 3.6-B: пересобрать «Снимок состояния» под актуальный `main = d0eb138`, расписать чек-лист 3.6-B, заархивировать чек-лист 3.6-A (Checkpoint 1). Коммит `e779faf`.
+- [x] **B.1 — Расширение `OraclePresenter`** (`bot/presenters/oracle.py`): signature `success()` расширена `(base_cm, tribe_bonus_cm, n_active_tribes)`, conditional рендер `oracle-tribe-bonus-line` при `n_active_tribes > 0`. Snapshot-тесты на 4 сценария (`n_active_tribes ∈ {0, 1, 5, 131}`) × 2 locales (RU + EN). Коммит `99ac666`.
+- [x] **B.2 — Локализация** (`locales/ru.ftl` + `locales/en.ftl`): `oracle-base-line` / `oracle-tribe-bonus-line` (Fluent-плюрал) / `oracle-total-line` / `oracle-new-length-line`. Locale-parity-тест зелёный. Коммит `99ac666` (одним коммитом с B.1+B.3).
+- [x] **B.3 — Wire-up в bot-handler `/predict`** (`bot/handlers/oracle.py`): `predict_handler` пробрасывает `base_cm`/`tribe_bonus_cm`/`n_active_tribes` из DTO в presenter. Коммит `99ac666` (одним коммитом с B.1+B.2).
+- [ ] **B.4 — Manual smoke в Telegram** (не блокирует PR; делается ревьюером на стейдже).
+- [x] **B.5 — `make ci` локально:** ruff + `mypy --strict` + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%) — **5179 passed / 2 skipped, coverage 95.63%**.
+- [x] **B.6 — Финальный док-коммит закрытия Спринта 3.6:** `history.md` (эта запись) + `current_tasks.md` пересобран под старт **Фазы 4 «Монетизация и масштаб» (Спринт 4.1)** + `game_design.md` §11.1 — маркер «реализовано в Спринте 3.6 (PR #126 + PR #127)» (этот коммит).
+- [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md` — PR #127.
+- [ ] Дождаться зелёного GitHub CI.
+
+---
+
 ## 2026-05-10 — Спринт 3.6-A «Доменный запрос + конфиг + use-case + anti-cheat»
 
 **Автор:** Devin (агент)

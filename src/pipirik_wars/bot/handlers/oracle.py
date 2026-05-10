@@ -101,7 +101,9 @@ async def handle_oracle(
     await message.answer(
         presenter.success(
             template_text=result.result.template.text,
-            bonus_cm=result.result.bonus_cm,
+            base_cm=result.base_cm,
+            tribe_bonus_cm=result.tribe_bonus_cm,
+            n_active_tribes=result.n_active_tribes,
             new_length_cm=result.player_after.length.cm,
             user_display=_user_display(message),
             locale=effective_locale,
