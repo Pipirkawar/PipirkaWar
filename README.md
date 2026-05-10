@@ -52,7 +52,7 @@ docker compose -f ops/docker/docker-compose.yml up --build
 Если хочется пушить код / гонять тесты без оверхеда контейнеров:
 
 ```bash
-# 1. Python 3.11 или 3.12 (project requires-python = ">=3.11").
+# 1. Python 3.12+ (project requires-python = ">=3.12").
 python3.12 --version   # 3.12.x
 
 # 2. Создать venv и поставить dev-зависимости.
@@ -138,7 +138,7 @@ bot/            ← тонкий aiogram-слой (handlers + presenters + middl
 ├── config/                # balance.yaml + JSON-каталоги шаблонов (oracle, forest)
 ├── locales/               # ru.ftl + en.ftl (Mozilla Fluent)
 ├── ops/                   # docker, deploy-runbooks, инцидент-runbook-и
-└── .github/workflows/     # CI (lint + types + tests на 3.11/3.12 + pip-audit)
+└── .github/workflows/     # CI (lint + types + tests на 3.12 + pip-audit)
 ```
 
 ## 🌍 Локализация
