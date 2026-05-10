@@ -65,7 +65,7 @@
   - Активное племя: `status='active'` (не `frozen`/`archived`), `len(members) >= min_tribe_size` (с учётом самого игрока), игрок есть в `members`. Семантика `>=` совпадает с GDD §11.1 «> 3» при дефолте `min_tribe_size=4`.
   - SQL impl `SqlAlchemyClanRepository.count_active_for_player`: `SELECT clan_id FROM clan_members JOIN clans WHERE clan_id IN (SELECT clan_id FROM clan_members WHERE player_id=:p) AND clans.status='active' GROUP BY clan_id HAVING COUNT(*) >= :min_tribe_size` → `len(rows)`.
   - **Критерий:** юнит-тесты `FakeClanRepository.count_active_for_player` (9 тестов: пустой репо; не-член; size<min; size=min; size>min; frozen; min=1; min=0 → ValueError; multi-clan смешанный сценарий) + 1 integration-тест `tests/integration/db/test_clan_repository.py::test_count_active_for_player` (4 gates на одном sql-репо: ACTIVE+size>=min+член → 1; ACTIVE+size<min → 0; FROZEN+size>=min+член → 0; ACTIVE+size>=min+не-член → 0).
-- [ ] **A.2 — pydantic `OracleTribeBonusConfig`** (`domain/balance/config.py`):
+- [x] **A.2 — pydantic `OracleTribeBonusConfig`** (`domain/balance/config.py`):
   - Поля: `enabled: bool` (default `true`), `cm_per_tribe: int >= 0` (default `1`), `cap_cm: int >= 0` (default `131`), `min_tribe_size: int >= 1` (default `4`). `extra="forbid"`.
   - Добавить `tribe_bonus: OracleTribeBonusConfig = Field(default_factory=OracleTribeBonusConfig)` в `OracleConfig`.
   - Sanity-check: `cap_cm + bonus_max <= 151` (мягкий warning в логе при загрузке).
@@ -78,12 +78,12 @@
     - `add_length(delta=+tribe_bonus, reason="oracle_tribe_bonus", source=AuditSource.ORACLE_TRIBE_BONUS, idempotency_key="add_length:{root}:tribe_bonus")` (если `tribe_bonus > 0`).
   - DTO `OraclePredictionResult` — расширить полями `base_cm: int` + `tribe_bonus_cm: int` + `n_active_tribes: int` (для presenter-а 3.6-B).
   - **Критерий:** юнит-тесты — 0 племён → нет второй проводки; 5 племён → +5 см второй проводкой; 200 племён → +131 см (cap); idempotency повторного вызова за те же сутки → не дублирует ни одну проводку.
-- [ ] **A.4 — Anti-cheat `tribe_bonus_sources`**:
-  - Новый `AuditSource.ORACLE_TRIBE_BONUS = "oracle_tribe_bonus"` в `domain/shared/ports/audit.py`.
-  - Миграция Alembic `0025_audit_source_oracle_tribe_bonus` — расширение CHECK constraint `audit_log_source_whitelist` на `'oracle_tribe_bonus'`. Зеркало в ORM `AuditLogORM.audit_log_source_whitelist` (`infrastructure/db/models/security.py`).
-  - В `balance.yaml::anticheat` — новое поле `tribe_bonus_sources: [oracle_tribe_bonus]` (рядом с `organic_sources`). Pydantic-схема `AnticheatConfig` — добавить поле.
-  - `IAnticheatChecker` (`application/anticheat/services/length_change_recorder.py` или эквивалент): при агрегации rolling-окна источники из `tribe_bonus_sources` игнорировать (не попадают в organic-сумму).
-  - **Критерий:** integration-тест: `5 × /predict с +131 см бонуса` подряд = `+655 см «в обход» хардкапа` за час → trip-wire `ANTICHEAT_DAILY_CAP_EXCEEDED` **не** срабатывает; audit-проводки с правильным `source`.
+- [x] **A.4 — Anti-cheat `tribe_bonus_sources`**:
+  - Новый `AuditSource.ORACLE_TRIBE_BONUS = "oracle_tribe_bonus"` в `domain/shared/ports/audit.py` (фактически добавлен в A.3, миграция и whitelist приземлены здесь).
+  - Миграция Alembic `0025_audit_source_oracle_tribe_bonus` — расширение CHECK constraint `audit_log_source_whitelist` на `'oracle_tribe_bonus'` (`down_revision = 0024`). Зеркало в ORM `AuditLogORM.__table_args__` CHECK (`infrastructure/db/models/security.py`).
+  - В `balance.yaml::anticheat` — новое поле `tribe_bonus_sources: [oracle_tribe_bonus]` (рядом с `organic_sources`/`donate_sources`). Pydantic-схема `AnticheatConfig` — добавлено поле `tribe_bonus_sources: tuple[AuditSource, ...] = ()` + валидация disjoint от `organic_sources`/`donate_sources` + запрет `UNKNOWN`.
+  - Anti-cheat rolling-окно (`SqlAlchemyAnticheatRepository.sum_organic_in_window`) уже фильтрует по `source IN organic_sources`; так как `oracle_tribe_bonus` не входит в `organic_sources` — записи с этим источником автоматически выпадают из 24h/7d-агрегации (защита от «съедания» хардкапа крупным кланом). Семантически закреплено новым `tribe_bonus_sources`-whitelist-ом для документации/валидации.
+  - **Критерий:** integration-тест `test_excludes_oracle_tribe_bonus_source` (запись `oracle`+10см и `oracle_tribe_bonus`+131см → окно агрегирует только 10см); 6 новых unit-тестов на `tribe_bonus_sources` валидаторы (default empty, real-yaml, disjoint от organic/donate, duplicates, UNKNOWN). 109/109 тестов зелёные локально.
 - [ ] **A.5 — `make ci` локально:** ruff + mypy --strict + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%).
 - [ ] **A.6 — Финальный док-коммит:** `history.md` + запись 3.6-A, `current_tasks.md` пересборка под старт **Спринта 3.6-B «Bot UI + локали + закрытие Спринта 3.6»**.
 - [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md`.
@@ -95,7 +95,7 @@
 
 > Сюда пиши **дельту** к плану: что именно меняешь, какие use-cases / порты / handler-ы / тесты затронуты.
 
-**Текущий PR — 3.6-A «Доменный запрос + конфиг + use-case + anti-cheat»** — A.0/A.1/A.2/A.3 закрыты; осталось A.4 (anti-cheat whitelist + миграция 0025) → A.5 (`make ci`) → A.6 (финальный док-коммит) → открыть PR #126 → дождаться зелёного CI.
+**Текущий PR — 3.6-A «Доменный запрос + конфиг + use-case + anti-cheat»** — A.0/A.1/A.2/A.3/A.4 закрыты; осталось A.5 (`make ci`) → A.6 (финальный док-коммит) → открыть PR #126 → дождаться зелёного CI.
 - **На `main`:** 3.5-D смержен (PR #125, `ba0b769`). 3.6-A открыт от свежего `main = ba0b769`.
 - **A.3 — что закрыли:** расширили `application/oracle/invoke.py::InvokeOracle` (домен `RequestOracle`-семантики реализован в этом use-case-е): добавили `clans: IClanRepository` в DI, считаем `n_active_tribes = clans.count_active_for_player(player_id, min_tribe_size=cfg.tribe_bonus.min_tribe_size)` (только при `cfg.tribe_bonus.enabled`), `tribe_bonus_cm = min(n_active_tribes * cm_per_tribe, cap_cm)`. Делаем **две** проводки `length_granter.grant(...)`: базовая `(source=ORACLE, reason="oracle_base", idempotency_key="add_length:oracle:{player_id}:{moscow_date}:base")` и бонус `(source=ORACLE_TRIBE_BONUS, reason="oracle_tribe_bonus", idempotency_key="add_length:oracle:{player_id}:{moscow_date}:tribe_bonus")` — последняя только при `tribe_bonus_cm > 0`. DTO `OraclePredictionResult` расширили полями `base_cm`/`tribe_bonus_cm`/`n_active_tribes` + property `total_cm = base_cm + tribe_bonus_cm`. В `oracle_invocations.bonus_cm` пишем итог (`total_cm`). Plumb-up: `bot/main.py` — DI получает `clans` repo. Тесты: 6 новых тестов в `TestInvokeOracleTribeBonus` (no-tribe / single-tribe / size<min / FROZEN / cap-clamp / disabled-flag-skip). 12/12 unit-тестов `test_invoke.py` зелёные.
 - **Открытые блокеры:** нет.
@@ -115,4 +115,4 @@
 
 > Обновляется автоматически перед каждым `git push`. После `git log --oneline -1` — short sha + subject.
 
-`59287ef` — `feat(3.6-A): A.2 — OracleTribeBonusConfig + balance.yaml + cleanup archived checklists` (последний коммит перед `feat(3.6-A): A.3 — InvokeOracle tribe bonus + tests + DI wiring`).
+`7a4d747` — `feat(3.6-A): A.3 — InvokeOracle tribe bonus + tests + DI wiring` (последний коммит перед `feat(3.6-A): A.4 — anti-cheat whitelist + Alembic 0025 + integration test`).

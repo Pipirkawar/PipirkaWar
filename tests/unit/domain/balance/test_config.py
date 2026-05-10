@@ -671,6 +671,59 @@ class TestAnticheatConfig:
         with pytest.raises(ValidationError):
             BalanceConfig.model_validate(_payload_with(anticheat=payload))
 
+    # ── Спринт 3.6-A: anticheat.tribe_bonus_sources ──
+
+    def test_tribe_bonus_sources_default_empty_when_omitted(self) -> None:
+        """Поле опциональное; отсутствие → пустой tuple, не падаем."""
+        payload = self._valid_payload()
+        cfg = BalanceConfig.model_validate(_payload_with(anticheat=payload))
+        assert cfg.anticheat.tribe_bonus_sources == ()
+
+    def test_tribe_bonus_sources_real_balance_yaml(self) -> None:
+        """`config/balance.yaml` декларирует `oracle_tribe_bonus` как audit-only."""
+        path = Path("config/balance.yaml")
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        cfg = BalanceConfig.model_validate(raw)
+        values = {s.value for s in cfg.anticheat.tribe_bonus_sources}
+        assert "oracle_tribe_bonus" in values
+
+    def test_tribe_bonus_sources_disjoint_from_organic(self) -> None:
+        """`tribe_bonus_sources` не пересекается с `organic_sources`."""
+        payload = self._valid_payload() | {
+            "organic_sources": ["forest", "oracle", "oracle_tribe_bonus"],
+            "tribe_bonus_sources": ["oracle_tribe_bonus"],
+        }
+        with pytest.raises(ValidationError, match="organic_sources and tribe_bonus_sources"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_tribe_bonus_sources_disjoint_from_donate(self) -> None:
+        """`tribe_bonus_sources` не пересекается с `donate_sources`."""
+        payload = self._valid_payload() | {
+            "donate_sources": [
+                "stars_payment",
+                "ton_payment",
+                "usdt_payment",
+                "oracle_tribe_bonus",
+            ],
+            "tribe_bonus_sources": ["oracle_tribe_bonus"],
+        }
+        with pytest.raises(ValidationError, match="donate_sources and tribe_bonus_sources"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_tribe_bonus_sources_duplicates_rejected(self) -> None:
+        payload = self._valid_payload() | {
+            "tribe_bonus_sources": ["oracle_tribe_bonus", "oracle_tribe_bonus"],
+        }
+        with pytest.raises(ValidationError, match="tribe_bonus_sources contains duplicates"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_unknown_in_tribe_bonus_sources_rejected(self) -> None:
+        payload = self._valid_payload() | {
+            "tribe_bonus_sources": ["unknown"],
+        }
+        with pytest.raises(ValidationError, match="UNKNOWN"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
 
 class TestExtraForbid:
     def test_extra_top_level_field_rejected(self) -> None:

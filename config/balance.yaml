@@ -387,6 +387,12 @@ anticheat:
     - stars_payment
     - ton_payment
     - usdt_payment
+  # Спринт 3.6-A (ГДД §11.1) — бонус-за-племена в /predict пишется в audit_log
+  # с source=oracle_tribe_bonus, но НЕ учитывается в anti-cheat-окнах 24h/7d
+  # (крупный клан не должен «съедать» хардкап своих участников). Disjoint
+  # с organic_sources/donate_sources — проверяется pydantic-валидатором.
+  tribe_bonus_sources:
+    - oracle_tribe_bonus
 
 # -----------------------------------------------------------------------------
 # §7 — PvP-система. Сейчас только дуэли 1×1 (Спринт 2.1.A); масс-PvP

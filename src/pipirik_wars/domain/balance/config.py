@@ -721,12 +721,17 @@ class AnticheatConfig(_Frozen):
     """Конфиг анти-чит хардкапа (ГДД §3.3.5, Спринт 1.6.B).
 
     Параметры rolling-окон (24 ч / 7 дн) и длительности soft-ban-а, плюс
-    whitelist organic-источников (попадают в агрегацию хардкапа) и
-    blacklist donate-источников (платный канал — без ограничений).
+    whitelist organic-источников (попадают в агрегацию хардкапа),
+    blacklist donate-источников (платный канал — без ограничений) и
+    отдельный whitelist tribe-bonus-источников (Спринт 3.6-A): бонус
+    за активные племена в `/predict` пишется в `audit_log` с
+    `source = "oracle_tribe_bonus"`, но **не** учитывается в rolling-окнах
+    24h/7d, чтобы крупный клан не «съедал» хардкап своих участников.
 
-    Источники, отсутствующие в обоих списках (`admin_refund`, `unknown`),
-    вообще не учитываются в агрегации: первый — служебная отрицательная
-    дельта при сторно, второй — backfill для исторических записей.
+    Источники, отсутствующие во всех трёх списках (`admin_refund`, `unknown`,
+    `roulette_free_*`), вообще не учитываются в агрегации: первый —
+    служебная отрицательная дельта при сторно; `unknown` — backfill для
+    исторических записей; пара рулетки — audit-only метки cost/reward.
     """
 
     daily_cap_cm: int = Field(gt=0)
@@ -734,6 +739,14 @@ class AnticheatConfig(_Frozen):
     soft_ban_duration_days: int = Field(gt=0)
     organic_sources: tuple[AuditSource, ...] = Field(min_length=1)
     donate_sources: tuple[AuditSource, ...] = Field(min_length=1)
+    # ── Спринт 3.6-A (бонус-за-племена в /predict, ГДД §11.1) ──
+    # Audit-only whitelist: источники, которые пишутся в `audit_log`
+    # с положительной `delta_cm`, но **не** идут в anti-cheat-агрегацию.
+    # Семантически это «не-органический прирост» (виральный бонус за
+    # размер клана; не органическая активность игрока). Валидируется
+    # disjoint с `organic_sources`/`donate_sources`. Дефолт — `()`,
+    # чтобы старые конфиги без поля парсились без миграции.
+    tribe_bonus_sources: tuple[AuditSource, ...] = ()
 
     @model_validator(mode="after")
     def _validate(self) -> AnticheatConfig:
@@ -744,22 +757,45 @@ class AnticheatConfig(_Frozen):
             )
         organic_set = set(self.organic_sources)
         donate_set = set(self.donate_sources)
+        tribe_set = set(self.tribe_bonus_sources)
         if len(organic_set) != len(self.organic_sources):
             raise ValueError(
                 f"anticheat.organic_sources contains duplicates: {self.organic_sources}"
             )
         if len(donate_set) != len(self.donate_sources):
             raise ValueError(f"anticheat.donate_sources contains duplicates: {self.donate_sources}")
+        if len(tribe_set) != len(self.tribe_bonus_sources):
+            raise ValueError(
+                f"anticheat.tribe_bonus_sources contains duplicates: {self.tribe_bonus_sources}"
+            )
         intersection = organic_set & donate_set
         if intersection:
             raise ValueError(
                 "anticheat: organic_sources and donate_sources must be disjoint, "
                 f"intersection: {sorted(s.value for s in intersection)}"
             )
-        if AuditSource.UNKNOWN in organic_set or AuditSource.UNKNOWN in donate_set:
+        organic_tribe_overlap = organic_set & tribe_set
+        if organic_tribe_overlap:
             raise ValueError(
-                "anticheat: AuditSource.UNKNOWN must not appear in organic_sources "
-                "or donate_sources (it is a backfill marker, not a real source)"
+                "anticheat: organic_sources and tribe_bonus_sources must be disjoint "
+                "(tribe bonus is audit-only, not organic), "
+                f"intersection: {sorted(s.value for s in organic_tribe_overlap)}"
+            )
+        donate_tribe_overlap = donate_set & tribe_set
+        if donate_tribe_overlap:
+            raise ValueError(
+                "anticheat: donate_sources and tribe_bonus_sources must be disjoint, "
+                f"intersection: {sorted(s.value for s in donate_tribe_overlap)}"
+            )
+        if (
+            AuditSource.UNKNOWN in organic_set
+            or AuditSource.UNKNOWN in donate_set
+            or AuditSource.UNKNOWN in tribe_set
+        ):
+            raise ValueError(
+                "anticheat: AuditSource.UNKNOWN must not appear in organic_sources, "
+                "donate_sources, or tribe_bonus_sources (it is a backfill marker, "
+                "not a real source)"
             )
         if AuditSource.ADMIN_REFUND in organic_set:
             raise ValueError(

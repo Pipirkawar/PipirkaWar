@@ -445,6 +445,43 @@ class TestSumOrganicInWindow:
             )
 
     @pytest.mark.asyncio
+    async def test_excludes_oracle_tribe_bonus_source(self, uow: SqlAlchemyUnitOfWork) -> None:
+        """Спринт 3.6-A: `oracle_tribe_bonus` пишется в audit_log, но не входит
+        в `organic_sources` → не учитывается в rolling-окне 24h/7d. Это
+        защищает крупные племена от «съедания» хардкапа своих участников."""
+        logger = SqlAlchemyAuditLogger(uow=uow)
+        async with uow:
+            # Базовая oracle-проводка попадает в organic-окно.
+            await logger.record(
+                _entry(
+                    target_id="42",
+                    delta_cm=10,
+                    occurred_at=_NOW - timedelta(hours=2),
+                    source=AuditSource.ORACLE,
+                )
+            )
+            # Tribe-bonus поверх — отдельный source, audit-only.
+            await logger.record(
+                _entry(
+                    target_id="42",
+                    delta_cm=131,
+                    occurred_at=_NOW - timedelta(hours=2),
+                    source=AuditSource.ORACLE_TRIBE_BONUS,
+                )
+            )
+
+        repo = SqlAlchemyAnticheatRepository(uow=uow)
+        async with uow:
+            window = await repo.sum_organic_in_window(
+                player_id=42,
+                since=_NOW - timedelta(hours=24),
+                organic_sources=_ORGANIC_SOURCES,
+            )
+        # Только базовая oracle-проводка (10 см) — tribe-bonus 131 см
+        # игнорируется, потому что `ORACLE_TRIBE_BONUS` не в whitelist-е.
+        assert window.organic_sum_cm == 10
+
+    @pytest.mark.asyncio
     async def test_weekly_window_aggregation(self, uow: SqlAlchemyUnitOfWork) -> None:
         """7-day rolling-window — агрегирует все organic-события за неделю."""
         logger = SqlAlchemyAuditLogger(uow=uow)
