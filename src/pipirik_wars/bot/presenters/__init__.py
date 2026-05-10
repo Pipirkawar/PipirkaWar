@@ -90,6 +90,17 @@ from pipirik_wars.bot.presenters.roulette import (
     parse_roulette_callback_data,
     roulette_callback_data,
 )
+from pipirik_wars.bot.presenters.roulette_paid import (
+    TG_STARS_CURRENCY,
+    RoulettePaidCallbackAction,
+    RoulettePaidCallbackData,
+    RoulettePaidPresenter,
+    invoice_payload_for,
+    is_roulette_paid_callback,
+    parse_invoice_payload,
+    parse_roulette_paid_callback_data,
+    roulette_paid_callback_data,
+)
 from pipirik_wars.bot.presenters.top import TopPresenter
 from pipirik_wars.bot.presenters.upgrade import (
     UpgradeCallbackAction,
@@ -100,6 +111,7 @@ from pipirik_wars.bot.presenters.upgrade import (
 )
 
 __all__ = [
+    "TG_STARS_CURRENCY",
     "AcceptCallbackData",
     "AttackCallbackData",
     "BlockCallbackData",
@@ -131,6 +143,9 @@ __all__ = [
     "RejectCallbackData",
     "RouletteCallbackAction",
     "RouletteCallbackData",
+    "RoulettePaidCallbackAction",
+    "RoulettePaidCallbackData",
+    "RoulettePaidPresenter",
     "RoulettePresenter",
     "ShareCallbackData",
     "ShareKind",
@@ -144,10 +159,12 @@ __all__ = [
     "boss_callback_data",
     "caravan_callback_data",
     "forest_callback_data",
+    "invoice_payload_for",
     "is_boss_callback",
     "is_caravan_callback",
     "is_pve_callback",
     "is_roulette_callback",
+    "is_roulette_paid_callback",
     "mass_attack_callback_data",
     "mass_block_callback_data",
     "parse_accept_callback_data",
@@ -156,18 +173,21 @@ __all__ = [
     "parse_boss_callback_data",
     "parse_caravan_callback_data",
     "parse_forest_callback_data",
+    "parse_invoice_payload",
     "parse_mass_attack_callback_data",
     "parse_mass_block_callback_data",
     "parse_pve_callback_data",
     "parse_referral_share_callback_data",
     "parse_reject_callback_data",
     "parse_roulette_callback_data",
+    "parse_roulette_paid_callback_data",
     "parse_share_callback_data",
     "parse_upgrade_callback_data",
     "pve_callback_data",
     "referral_share_callback_data",
     "reject_callback_data",
     "roulette_callback_data",
+    "roulette_paid_callback_data",
     "share_callback_data",
     "upgrade_callback_data",
 ]

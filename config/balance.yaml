@@ -664,3 +664,42 @@ roulette:
       - { name: "medium", min_cm: 50,  max_cm: 150, weight: 0.250 }
       - { name: "good",   min_cm: 150, max_cm: 300, weight: 0.040 }
       - { name: "big",    min_cm: 300, max_cm: 500, weight: 0.010 }
+  # ── Платная рулетка (Telegram Stars, ГДД §12.5.2, Спринт 4.1-A) ──
+  # Структура полностью совпадает с `roulette.free`, но веса сдвинуты к
+  # шмоту/скроллам/крипто-призу (меньше «голой длины»: 0.55 vs 0.85), а
+  # стоимость взымается в Telegram Stars вместо см. По ГДД §12.5.1:
+  # - 1 спин = `1 ⭐` (`cost_stars_single`);
+  # - 10-pack = `9 ⭐` (`cost_stars_pack10`, ~10 % скидка vs 10 × 1).
+  # `pack10_spins` — количество спинов в одной транзакции 10-pack-а.
+  # `min_thickness_level=1` — доступ со старта, без длинного гейта.
+  #
+  # E[CM | spin, paid] ≈ 26.7 см (по ГДД §12.5.2):
+  #   length-выход: 0.550 × E[length|bucket]
+  #     small:  0.800 × E[10..50]   = 0.800 × 30   = 24.0
+  #     medium: 0.170 × E[50..150]  = 0.170 × 100  = 17.0
+  #     good:   0.025 × E[150..300] = 0.025 × 225  = 5.625
+  #     big:    0.005 × E[300..500] = 0.005 × 400  = 2.0
+  #   E[length|kind=length] = 24.0 + 17.0 + 5.625 + 2.0 ≈ 48.625 см
+  #   E[CM | spin] = 0.550 × 48.625 ≈ 26.74 см
+  # (10-pack за 9 ⭐ → ожидаемый возврат ≈ 9 × 26.7 ≈ 240 см см-эквивалента;
+  # фактическая дисперсия — в integration-тесте 10000 спинов в 4.1-A).
+  #
+  # `crypto_lot` (вес 0.020) — заготовка под крипто-приз 4.1-C. До запуска
+  # лот-генератора use-case всегда передаёт `crypto_pool_empty=True`, и
+  # picker перетекает вес `crypto_lot` на `length` (как и у free-рулетки).
+  paid:
+    cost_stars_single: 1      # цена одиночного спина в ⭐ (ГДД §12.5.1)
+    cost_stars_pack10: 9      # цена 10-pack-а в ⭐ (~10 % скидка vs 10 × 1)
+    pack10_spins: 10          # спинов в одной транзакции 10-pack-а
+    min_thickness_level: 1    # доступ со старта (ГДД §12.5.1)
+    outcomes:
+      - { kind: "length",         weight: 0.550 }
+      - { kind: "item",           weight: 0.200 }
+      - { kind: "scroll_regular", weight: 0.180 }
+      - { kind: "scroll_blessed", weight: 0.050 }
+      - { kind: "crypto_lot",     weight: 0.020 }
+    length_buckets:
+      - { name: "small",  min_cm: 10,  max_cm: 50,  weight: 0.800 }
+      - { name: "medium", min_cm: 50,  max_cm: 150, weight: 0.170 }
+      - { name: "good",   min_cm: 150, max_cm: 300, weight: 0.025 }
+      - { name: "big",    min_cm: 300, max_cm: 500, weight: 0.005 }

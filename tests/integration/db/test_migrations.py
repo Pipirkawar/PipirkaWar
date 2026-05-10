@@ -73,6 +73,8 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0022_scrolls" in revisions
         assert "0023_roulette_spins" in revisions
         assert "0024_audit_source_roulette_free" in revisions
+        assert "0025_audit_source_oracle_tribe_bonus" in revisions
+        assert "0026_payments_and_audit_source" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -235,6 +237,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0025 is not None
         assert rev_0025.down_revision == "0024_audit_source_roulette_free"
 
+    def test_0026_descends_from_0025(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0026 = script.get_revision("0026_payments_and_audit_source")
+        assert rev_0026 is not None
+        assert rev_0026.down_revision == "0025_audit_source_oracle_tribe_bonus"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -264,6 +273,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260510_0023_roulette_spins.py",
             "20260510_0024_audit_source_roulette_free.py",
             "20260510_0025_audit_source_oracle_tribe_bonus.py",
+            "20260510_0026_payments_and_audit_source.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -320,6 +330,7 @@ class TestAlembicMigrationsApplyCleanly:
             "items",
             "scrolls",
             "roulette_spins",
+            "payments",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 

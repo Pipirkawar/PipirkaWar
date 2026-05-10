@@ -124,6 +124,15 @@ class AuditAction(str, enum.Enum):
     # **НЕ** входят в `anticheat.organic_sources` — рулетка не учитывается
     # в anti-cheat 24h/7d-окнах (это zero-sum/audit-only sink/source).
     ROULETTE_SPIN = "roulette_spin"
+    # ── Спринт 4.1-A (Telegram Stars + платная рулетка, ГДД §12.5) ──
+    # Каждое событие платежа (Stars / TON / USDT) пишется как audit-event
+    # с `target_kind="payment"`, `target_id=<idempotency_key>`, `before=None`,
+    # `after={"currency": ..., "amount_native": ..., "status": ...}` и
+    # `source` — `STARS_PAYMENT` / `TON_PAYMENT` / `USDT_PAYMENT`. Аудит
+    # **не** дублирует `payments`-таблицу (она — source of truth для
+    # ledger-а), но даёт единый journal для admin-просмотра рядом с
+    # бизнес-событиями (`ROULETTE_SPIN`, `LENGTH_GRANT`-reward, и т. п.).
+    PAYMENT_RECORDED = "payment_recorded"
 
 
 class AuditSource(str, enum.Enum):
@@ -169,6 +178,18 @@ class AuditSource(str, enum.Enum):
     # прирост длины.
     ROULETTE_FREE_COST = "roulette_free_cost"
     ROULETTE_FREE_REWARD = "roulette_free_reward"
+    # ── Спринт 4.1-A (платная рулетка, ГДД §12.5) ──
+    # `ROULETTE_PAID_REWARD` (delta=+roll) — выдача length-награды
+    # за платную прокрутку (только при LENGTH-исходе; см. ГДД §12.5.2).
+    # «Стоимость» платной прокрутки списывается в Telegram Stars
+    # (через `IPaymentLedger.charge`), не в `length`-валюте; поэтому
+    # парного `ROULETTE_PAID_COST`-source-а **нет** (cost-side событие
+    # — это `AuditAction.PAYMENT_RECORDED` с `source=STARS_PAYMENT`).
+    # Как и `ROULETTE_FREE_REWARD`, `ROULETTE_PAID_REWARD` **НЕ** входит
+    # в `anticheat.organic_sources` — paid-рулетка не учитывается
+    # в rolling-окнах anti-cheat-хардкапа (по тем же причинам, что и
+    # free-вариант: zero-sum/audit-only source).
+    ROULETTE_PAID_REWARD = "roulette_paid_reward"
     # ── Спринт 3.6-A (бонус-за-племена в /predict, ГДД §11.1) ──
     # Дополнительная проводка `LENGTH_GRANT` поверх базового `oracle`-розыгрыша:
     # `+min(n_active_tribes * cm_per_tribe, cap_cm)` см за активные племена,

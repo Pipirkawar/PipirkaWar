@@ -83,6 +83,7 @@ from pipirik_wars.application.forest import (
 )
 from pipirik_wars.application.i18n import IMessageBundle
 from pipirik_wars.application.inventory import EnchantItem, GetInventory
+from pipirik_wars.application.monetization import SpinPaidRoulette
 from pipirik_wars.application.mountains import (
     FinishMountainRun,
     StartMountainRun,
@@ -136,6 +137,7 @@ from pipirik_wars.domain.inventory import (
     ItemNotFoundError,
     ScrollStack,
 )
+from pipirik_wars.domain.monetization import IPaymentLedger
 from pipirik_wars.domain.mountains import IMountainRunRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.pvp import IDuelRepository, IMassDuelRepository
@@ -172,6 +174,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyItemRepository,
     SqlAlchemyMassDuelRepository,
     SqlAlchemyMountainRunRepository,
+    SqlAlchemyPaymentLedger,
     SqlAlchemyPlayerRepository,
     SqlAlchemyRouletteSpinRepository,
     SqlAlchemyScrollRepository,
@@ -232,6 +235,7 @@ from tests.fakes import (
     FakeMountainRunRepository,
     FakeOracleHistoryRepository,
     FakeOracleTemplateProvider,
+    FakePaymentLedger,
     FakePlayerLocaleResolver,
     FakePlayerRepository,
     FakeRandom,
@@ -973,6 +977,23 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         random=rng,
         clock=clock,
     )
+    # Спринт 4.1-A: платная рулетка. `FakePaymentLedger` — in-memory
+    # ledger с idempotency-key dedup; `spin_paid_roulette_uc` — реальный
+    # use-case с теми же фейковыми зависимостями (проверяет
+    # инстанцируемость в Container).
+    payment_ledger_repo: IPaymentLedger = FakePaymentLedger()
+    spin_paid_roulette_uc = SpinPaidRoulette(
+        uow=uow,
+        players=players,
+        roulette_spins=roulette_spins_repo,
+        payments=payment_ledger_repo,
+        length_granter=add_length,
+        balance=balance,
+        audit=audit,
+        idempotency=idempotency,
+        random=rng,
+        clock=clock,
+    )
     close_caravan_lobby_uc = CloseCaravanLobby(
         uow=uow,
         caravans=caravans_repo,
@@ -1245,6 +1266,8 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         get_inventory=get_inventory_uc,
         roulette_spins=roulette_spins_repo,
         spin_free_roulette=spin_free_roulette_uc,
+        payment_ledger=payment_ledger_repo,
+        spin_paid_roulette=spin_paid_roulette_uc,
     )
 
 
@@ -1358,6 +1381,12 @@ class TestContainer:
         c = _container_with_fakes()
         assert isinstance(c.roulette_spins, FakeRouletteSpinRepository)
         assert isinstance(c.spin_free_roulette, SpinFreeRoulette)
+
+    def test_container_holds_paid_roulette_use_cases(self) -> None:
+        """Платная рулетка (Спринт 4.1-A, ГДД §12.5)."""
+        c = _container_with_fakes()
+        assert isinstance(c.payment_ledger, FakePaymentLedger)
+        assert isinstance(c.spin_paid_roulette, SpinPaidRoulette)
 
     def test_container_holds_admin_support_use_cases(self) -> None:
         """Расширенный админ-интерфейс (Спринт 2.5-A.3 + 2.5-B)."""
@@ -1484,6 +1513,10 @@ class TestBuildContainer:
         # SQLAlchemy-репозиторий + use-case `SpinFreeRoulette`.
         assert isinstance(c.roulette_spins, SqlAlchemyRouletteSpinRepository)
         assert isinstance(c.spin_free_roulette, SpinFreeRoulette)
+        # Платная рулетка (Спринт 4.1-A): реальный SQLAlchemy-ledger +
+        # use-case `SpinPaidRoulette`.
+        assert isinstance(c.payment_ledger, SqlAlchemyPaymentLedger)
+        assert isinstance(c.spin_paid_roulette, SpinPaidRoulette)
 
 
 class TestBuildDispatcher:

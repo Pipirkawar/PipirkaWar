@@ -21,6 +21,7 @@ from pipirik_wars.infrastructure.db.models import (  # noqa: F401  (важно: 
     ClanMemberORM,
     ClanORM,
     IdempotencyKeyORM,
+    PaymentORM,
     UserORM,
 )
 from pipirik_wars.infrastructure.settings import DatabaseSettings

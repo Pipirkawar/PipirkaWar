@@ -113,6 +113,7 @@ from pipirik_wars.application.forest import (
 )
 from pipirik_wars.application.i18n import IMessageBundle, IPlayerLocaleResolver
 from pipirik_wars.application.inventory import EnchantItem, GetInventory
+from pipirik_wars.application.monetization import SpinPaidRoulette
 from pipirik_wars.application.mountains import (
     FinishMountainRun,
     IMountainFinishNotifier,
@@ -210,6 +211,7 @@ from pipirik_wars.domain.inventory import (
     IItemRepository,
     IScrollRepository,
 )
+from pipirik_wars.domain.monetization import IPaymentLedger
 from pipirik_wars.domain.mountains import IMountainRunRepository
 from pipirik_wars.domain.oracle import IOracleHistoryRepository
 from pipirik_wars.domain.player import IPlayerRepository
@@ -266,6 +268,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyMassDuelRepository,
     SqlAlchemyMountainRunRepository,
     SqlAlchemyOracleHistoryRepository,
+    SqlAlchemyPaymentLedger,
     SqlAlchemyPlayerRepository,
     SqlAlchemyReferralRepository,
     SqlAlchemyRouletteSpinRepository,
@@ -444,6 +447,16 @@ class Container:
     # пробрасывается в dispatcher через workflow-data в build_dispatcher.
     roulette_spins: IRouletteSpinRepository
     spin_free_roulette: SpinFreeRoulette
+    # Платная рулетка (Спринт 4.1-A, ГДД §12.5). A.5 — `payment_ledger`
+    # (`SqlAlchemyPaymentLedger`, append-only ledger в `payments`-таблице
+    # с idempotency по `(player_id, idempotency_key)`-индексу). A.6 —
+    # use-case `SpinPaidRoulette` (платный 10-step flow: idempotency,
+    # player load, thickness gate, charge, payment-audit, n-spin pick,
+    # spin-record, spin-audit, length-grant on LENGTH, idempotency-mark)
+    # + handler `/roulette_paid` с TG Stars invoice + pre_checkout +
+    # successful_payment-callback.
+    payment_ledger: IPaymentLedger
+    spin_paid_roulette: SpinPaidRoulette
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
@@ -1138,6 +1151,28 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         random=RealRandom(),
         clock=clock,
     )
+    # Спринт 4.1-A: платная рулетка за Telegram Stars. `payment_ledger` —
+    # append-only ledger в `payments`-таблице с idempotency по
+    # `(player_id, idempotency_key)`-индексу (миграция 0026).
+    # `spin_paid_roulette` — use-case с 10-step flow (idempotency-check,
+    # player load, thickness gate, charge, payment-audit, n-spin pick,
+    # spin-record, spin-audit, length-grant on LENGTH, idempotency-mark).
+    # `RealRandom()` детерминирует выбор бакета и outcome-kind через
+    # `IRandom.random()`. Bot-handler `/roulette_paid` подключён в
+    # `register_routers` отдельным router-ом.
+    payment_ledger = SqlAlchemyPaymentLedger(uow=uow)
+    spin_paid_roulette = SpinPaidRoulette(
+        uow=uow,
+        players=players,
+        roulette_spins=roulette_spins,
+        payments=payment_ledger,
+        length_granter=add_length,
+        balance=balance,
+        audit=audit,
+        idempotency=idempotency,
+        random=RealRandom(),
+        clock=clock,
+    )
     # Спринт 3.3-D D.1: саммонер отменяет рейд из лобби. Идемпотентен
     # на повторный вызов в `CANCELLED`-статусе.
     cancel_boss_fight = CancelBossFight(
@@ -1684,6 +1719,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         get_inventory=get_inventory,
         roulette_spins=roulette_spins,
         spin_free_roulette=spin_free_roulette,
+        payment_ledger=payment_ledger,
+        spin_paid_roulette=spin_paid_roulette,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,
@@ -1898,6 +1935,13 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     # spin-callback `roulette_free:spin`. Использует `get_profile` для
     # pre-spin gate-чека и `spin_free_roulette` для самой прокрутки.
     dispatcher["spin_free_roulette"] = container.spin_free_roulette
+    # Спринт 4.1-A — bot-handler `/roulette_paid` (личка-only) +
+    # buy-callback `roulette_paid:buy_*` + `pre_checkout_query` +
+    # `successful_payment`. Использует `get_profile` для pre-spin
+    # gate-чека (`balance.roulette.paid.min_thickness_level`) и
+    # `spin_paid_roulette` для самой прокрутки после подтверждения
+    # платежа Telegram-ом.
+    dispatcher["spin_paid_roulette"] = container.spin_paid_roulette
     return dispatcher
 
 
