@@ -36,6 +36,7 @@ import pytest
 
 from pipirik_wars.application.monetization import (
     PaidRoulettePack,
+    RecordDonation,
     SpinPaidRoulette,
     SpinPaidRouletteCommand,
 )
@@ -71,6 +72,8 @@ from tests.fakes import (
     FakeIdempotencyKey,
     FakePaymentLedger,
     FakePlayerRepository,
+    FakePrizePoolApplyIncrementCall,
+    FakePrizePoolRepository,
     FakeRouletteSpinRepository,
     FakeUnitOfWork,
 )
@@ -195,6 +198,7 @@ def _build_use_case(
     *,
     balance: FakeBalanceConfig | None = None,
     random: IRandom | None = None,
+    prize_pool: FakePrizePoolRepository | None = None,
 ) -> tuple[
     SpinPaidRoulette,
     FakePlayerRepository,
@@ -204,6 +208,7 @@ def _build_use_case(
     FakeIdempotencyKey,
     FakeUnitOfWork,
     FakeClock,
+    FakePrizePoolRepository,
 ]:
     uow = FakeUnitOfWork()
     players = FakePlayerRepository()
@@ -214,6 +219,7 @@ def _build_use_case(
     clock = FakeClock(_NOW)
     used_balance = balance or _balance_with_paid_kind(RouletteOutcomeKind.ITEM)
     used_random = random or _ScriptedRandom()
+    used_prize_pool = prize_pool or FakePrizePoolRepository()
     length_granter = AddLength(
         uow=uow,
         players=players,
@@ -223,6 +229,11 @@ def _build_use_case(
         clock=clock,
         idempotency=idempotency,
         admin_alerter=FakeAnticheatAdminAlerter(),
+    )
+    record_donation = RecordDonation(
+        prize_pool_repository=used_prize_pool,
+        audit_logger=audit,
+        clock=clock,
     )
     use_case = SpinPaidRoulette(
         uow=uow,
@@ -235,8 +246,19 @@ def _build_use_case(
         idempotency=idempotency,
         random=used_random,
         clock=clock,
+        record_donation=record_donation,
     )
-    return use_case, players, spins, payments, audit, idempotency, uow, clock
+    return (
+        use_case,
+        players,
+        spins,
+        payments,
+        audit,
+        idempotency,
+        uow,
+        clock,
+        used_prize_pool,
+    )
 
 
 async def _seed_player(
@@ -268,7 +290,7 @@ class TestIdempotency:
     @pytest.mark.asyncio
     async def test_first_call_marks_idempotency_and_writes_payment_and_spin(self) -> None:
         balance = _balance_with_paid_kind(RouletteOutcomeKind.ITEM)
-        use_case, players, spins, payments, audit, idempotency, _, _ = _build_use_case(
+        use_case, players, spins, payments, audit, idempotency, _, _, _ = _build_use_case(
             balance=balance,
         )
         await _seed_player(players)
@@ -303,7 +325,7 @@ class TestIdempotency:
     @pytest.mark.asyncio
     async def test_replay_with_same_root_key_is_no_op(self) -> None:
         balance = _balance_with_paid_kind(RouletteOutcomeKind.ITEM)
-        use_case, players, spins, payments, audit, _, uow, _ = _build_use_case(
+        use_case, players, spins, payments, audit, _, uow, _, _ = _build_use_case(
             balance=balance,
         )
         await _seed_player(players)
@@ -352,7 +374,7 @@ class TestIdempotency:
 class TestErrors:
     @pytest.mark.asyncio
     async def test_player_not_found_raises(self) -> None:
-        use_case, _, spins, payments, audit, idempotency, uow, _ = _build_use_case()
+        use_case, _, spins, payments, audit, idempotency, uow, _, _ = _build_use_case()
 
         with pytest.raises(PlayerNotFoundError):
             await use_case.execute(
@@ -380,7 +402,7 @@ class TestErrors:
             RouletteOutcomeKind.ITEM,
             min_thickness_level=3,
         )
-        use_case, players, spins, payments, audit, idempotency, uow, _ = _build_use_case(
+        use_case, players, spins, payments, audit, idempotency, uow, _, _ = _build_use_case(
             balance=balance,
         )
         # min=3 → засеваем 1 → ниже гейта.
@@ -429,7 +451,7 @@ class TestCharge:
             cost_stars_pack10=9,
             pack10_spins=10,
         )
-        use_case, players, _, payments, _, _, _, _ = _build_use_case(balance=balance)
+        use_case, players, _, payments, _, _, _, _, _ = _build_use_case(balance=balance)
         await _seed_player(players)
 
         result = await use_case.execute(
@@ -463,7 +485,7 @@ class TestCharge:
             cost_stars_pack10=9,
             pack10_spins=10,
         )
-        use_case, players, spins, payments, audit, _, _, _ = _build_use_case(balance=balance)
+        use_case, players, spins, payments, audit, _, _, _, _ = _build_use_case(balance=balance)
         await _seed_player(players)
 
         result = await use_case.execute(
@@ -496,7 +518,7 @@ class TestCharge:
     async def test_idempotency_conflict_on_different_amount_with_same_key(self) -> None:
         """Антифрод 4.1.4: тот же ключ — разная сумма → `IdempotencyConflictError`."""
         balance = _balance_with_paid_kind(RouletteOutcomeKind.ITEM)
-        use_case, players, _, payments, _, _, _, _ = _build_use_case(balance=balance)
+        use_case, players, _, payments, _, _, _, _, _ = _build_use_case(balance=balance)
         await _seed_player(players)
 
         # Засеваем «фейковый» платёж 9 ⭐ под ключом, который use-case будет
@@ -538,7 +560,7 @@ class TestAudit:
     @pytest.mark.asyncio
     async def test_payment_recorded_audit_payload(self) -> None:
         balance = _balance_with_paid_kind(RouletteOutcomeKind.ITEM)
-        use_case, players, _, _, audit, _, _, _ = _build_use_case(balance=balance)
+        use_case, players, _, _, audit, _, _, _, _ = _build_use_case(balance=balance)
         await _seed_player(players, tg_id=99)
 
         await use_case.execute(
@@ -570,7 +592,7 @@ class TestAudit:
     async def test_roulette_spin_audit_payload_for_length_outcome(self) -> None:
         balance = _balance_with_paid_kind(RouletteOutcomeKind.LENGTH)
         random = _ScriptedRandom(fixed_length_cm=42)
-        use_case, players, _, _, audit, _, _, _ = _build_use_case(
+        use_case, players, _, _, audit, _, _, _, _ = _build_use_case(
             balance=balance,
             random=random,
         )
@@ -605,7 +627,7 @@ class TestAudit:
         `LENGTH_GRANT(source=ROULETTE_FREE_COST, delta_cm=-cost_cm)`.
         """
         balance = _balance_with_paid_kind(RouletteOutcomeKind.ITEM)
-        use_case, players, _, _, audit, _, _, _ = _build_use_case(balance=balance)
+        use_case, players, _, _, audit, _, _, _, _ = _build_use_case(balance=balance)
         await _seed_player(players)
 
         await use_case.execute(
@@ -639,7 +661,7 @@ class TestRewardGrant:
     async def test_length_outcome_grants_reward_via_length_granter(self) -> None:
         balance = _balance_with_paid_kind(RouletteOutcomeKind.LENGTH)
         random = _ScriptedRandom(fixed_length_cm=50)
-        use_case, players, _, _, audit, _, _, _ = _build_use_case(
+        use_case, players, _, _, audit, _, _, _, _ = _build_use_case(
             balance=balance,
             random=random,
         )
@@ -686,7 +708,7 @@ class TestRewardGrant:
         kind: RouletteOutcomeKind,
     ) -> None:
         balance = _balance_with_paid_kind(kind)
-        use_case, players, _, _, audit, _, _, _ = _build_use_case(balance=balance)
+        use_case, players, _, _, audit, _, _, _, _ = _build_use_case(balance=balance)
         player = await _seed_player(players, length_cm=500)
 
         result = await use_case.execute(
@@ -721,7 +743,7 @@ class TestSpinIdempotencyKeys:
             RouletteOutcomeKind.ITEM,
             pack10_spins=10,
         )
-        use_case, players, spins, _, _, _, _, _ = _build_use_case(balance=balance)
+        use_case, players, spins, _, _, _, _, _, _ = _build_use_case(balance=balance)
         await _seed_player(players)
 
         await use_case.execute(
@@ -746,7 +768,7 @@ class TestUowTransactional:
     @pytest.mark.asyncio
     async def test_happy_path_commits_uow_once(self) -> None:
         balance = _balance_with_paid_kind(RouletteOutcomeKind.ITEM)
-        use_case, players, _, _, _, _, uow, _ = _build_use_case(balance=balance)
+        use_case, players, _, _, _, _, uow, _, _ = _build_use_case(balance=balance)
         await _seed_player(players)
 
         await use_case.execute(
@@ -760,3 +782,218 @@ class TestUowTransactional:
 
         assert uow.commits == 1
         assert uow.rollbacks == 0
+
+
+# --------------------------------------------------------------------------- #
+# Prize pool donation (Спринт 4.1-B / Шаг B.5, ГДД §12.6)
+# --------------------------------------------------------------------------- #
+
+
+class TestPrizePoolDonation:
+    """Step 5b 10-step flow-а: 10% от подтверждённого Stars-платежа → пул.
+
+    Покрытие:
+    * single-pack `1 ⭐` → донат `0` (`floor(1/10)`), `apply_increment` не
+      вызван, audit `PRIZE_POOL_INCREMENT` не пишется.
+    * 10-pack `9 ⭐` → донат `0` (`floor(9/10)`), `apply_increment` не вызван.
+    * `cost_stars_single = 100` → донат `10`, пул вырос на 10 ⭐, audit
+      `PRIZE_POOL_INCREMENT` записан с правильными `target_id` / `idempotency_key`.
+    * idempotent-replay (тот же root-key) — `apply_increment` за весь
+      flow вызван ровно один раз (на первой итерации).
+    """
+
+    @pytest.mark.asyncio
+    async def test_single_pack_1_star_does_not_increment_pool(self) -> None:
+        """`1 ⭐` < 10 → донат `0` → `apply_increment` не вызывается."""
+        balance = _balance_with_paid_kind(
+            RouletteOutcomeKind.ITEM,
+            cost_stars_single=1,
+        )
+        use_case, players, _, _, audit, _, _, _, prize_pool = _build_use_case(
+            balance=balance,
+        )
+        await _seed_player(players)
+
+        await use_case.execute(
+            SpinPaidRouletteCommand(
+                player_id=1,
+                pack=PaidRoulettePack.SINGLE,
+                idempotency_key=_key("paid_roulette:1:tg-charge-001"),
+                provider_payment_id="tg-charge-001",
+            ),
+        )
+
+        assert prize_pool.calls == []
+        assert prize_pool.state.stars.value == 0
+        # PRIZE_POOL_INCREMENT-audit-а не было.
+        actions = [e.action for e in audit.entries]
+        assert AuditAction.PRIZE_POOL_INCREMENT not in actions
+
+    @pytest.mark.asyncio
+    async def test_pack_10_9_stars_does_not_increment_pool(self) -> None:
+        """`9 ⭐` < 10 → донат `0` → `apply_increment` не вызывается."""
+        balance = _balance_with_paid_kind(
+            RouletteOutcomeKind.ITEM,
+            cost_stars_pack10=9,
+            pack10_spins=10,
+        )
+        use_case, players, _, _, audit, _, _, _, prize_pool = _build_use_case(
+            balance=balance,
+        )
+        await _seed_player(players)
+
+        await use_case.execute(
+            SpinPaidRouletteCommand(
+                player_id=1,
+                pack=PaidRoulettePack.PACK_10,
+                idempotency_key=_key("paid_roulette:1:tg-charge-pack"),
+                provider_payment_id="tg-charge-pack",
+            ),
+        )
+
+        assert prize_pool.calls == []
+        assert prize_pool.state.stars.value == 0
+        actions = [e.action for e in audit.entries]
+        assert AuditAction.PRIZE_POOL_INCREMENT not in actions
+
+    @pytest.mark.asyncio
+    async def test_single_pack_100_stars_increments_pool_by_10(self) -> None:
+        """`100 ⭐` → донат `10 ⭐` → `apply_increment(STARS, 10)` + audit."""
+        balance = _balance_with_paid_kind(
+            RouletteOutcomeKind.ITEM,
+            cost_stars_single=100,
+        )
+        use_case, players, _, _, audit, _, _, _, prize_pool = _build_use_case(
+            balance=balance,
+        )
+        await _seed_player(players)
+
+        await use_case.execute(
+            SpinPaidRouletteCommand(
+                player_id=1,
+                pack=PaidRoulettePack.SINGLE,
+                idempotency_key=_key("paid_roulette:1:tg-charge-001"),
+                provider_payment_id="tg-charge-001",
+            ),
+        )
+
+        # Ровно один вызов apply_increment с правильными аргументами.
+        assert prize_pool.calls == [
+            FakePrizePoolApplyIncrementCall(
+                currency=Currency.STARS,
+                amount_native=10,
+            )
+        ]
+        assert prize_pool.state.stars.value == 10
+        assert prize_pool.state.ton_nano.value == 0
+        assert prize_pool.state.usdt_decimal.value == 0
+
+        # Audit: PRIZE_POOL_INCREMENT-запись с правильным target/idempotency.
+        donation_entries = [
+            e for e in audit.entries if e.action is AuditAction.PRIZE_POOL_INCREMENT
+        ]
+        assert len(donation_entries) == 1
+        donation = donation_entries[0]
+        assert donation.actor_id is None
+        assert donation.target_kind == "prize_pool"
+        assert donation.target_id == "paid_roulette:1:tg-charge-001:donation"
+        assert donation.idempotency_key == "paid_roulette:1:tg-charge-001:prize_pool"
+        assert donation.source is AuditSource.PRIZE_POOL_INCREMENT
+        assert donation.after == {
+            "currency": Currency.STARS.value,
+            "amount_native": 10,
+            "pool_after_native": 10,
+        }
+
+    @pytest.mark.asyncio
+    async def test_pack_10_100_stars_increments_pool_by_10_once(self) -> None:
+        """10-pack `100 ⭐` за всю транзакцию → ровно один `apply_increment(10)`.
+
+        10-pack списывает `cost_stars_pack10` один раз (не 10 раз
+        per-spin). Донат вычисляется от полного `cost_stars`, а не от
+        per-spin ставки. Защищает от регрессии «N-кратный донат
+        per-pack» (баг при наивной интеграции внутри спин-цикла).
+        """
+        balance = _balance_with_paid_kind(
+            RouletteOutcomeKind.ITEM,
+            cost_stars_single=20,
+            cost_stars_pack10=100,
+            pack10_spins=10,
+        )
+        use_case, players, _, _, _, _, _, _, prize_pool = _build_use_case(
+            balance=balance,
+        )
+        await _seed_player(players)
+
+        await use_case.execute(
+            SpinPaidRouletteCommand(
+                player_id=1,
+                pack=PaidRoulettePack.PACK_10,
+                idempotency_key=_key("paid_roulette:1:tg-charge-pack"),
+                provider_payment_id="tg-charge-pack",
+            ),
+        )
+
+        assert prize_pool.calls == [
+            FakePrizePoolApplyIncrementCall(
+                currency=Currency.STARS,
+                amount_native=10,
+            )
+        ]
+        assert prize_pool.state.stars.value == 10
+
+    @pytest.mark.asyncio
+    async def test_replay_does_not_double_donate(self) -> None:
+        """Idempotent-replay → второй `execute` не делает повторный донат."""
+        balance = _balance_with_paid_kind(
+            RouletteOutcomeKind.ITEM,
+            cost_stars_single=100,
+        )
+        use_case, players, _, _, _, _, _, _, prize_pool = _build_use_case(
+            balance=balance,
+        )
+        await _seed_player(players)
+
+        cmd = SpinPaidRouletteCommand(
+            player_id=1,
+            pack=PaidRoulettePack.SINGLE,
+            idempotency_key=_key("paid_roulette:1:tg-charge-001"),
+            provider_payment_id="tg-charge-001",
+        )
+        first = await use_case.execute(cmd)
+        assert first.idempotent is False
+        calls_after_first = list(prize_pool.calls)
+        state_after_first = prize_pool.state
+
+        second = await use_case.execute(cmd)
+        assert second.idempotent is True
+        # Никакого нового apply_increment, пул тот же.
+        assert prize_pool.calls == calls_after_first
+        assert prize_pool.state == state_after_first
+        assert prize_pool.state.stars.value == 10
+
+    @pytest.mark.asyncio
+    async def test_thickness_gate_does_not_increment_pool(self) -> None:
+        """Гейт-ошибка → UoW rollback → пул не изменился."""
+        balance = _balance_with_paid_kind(
+            RouletteOutcomeKind.ITEM,
+            cost_stars_single=100,
+            min_thickness_level=3,
+        )
+        use_case, players, _, _, _, _, _, _, prize_pool = _build_use_case(
+            balance=balance,
+        )
+        await _seed_player(players, thickness_level=1)
+
+        with pytest.raises(RouletteThicknessGateError):
+            await use_case.execute(
+                SpinPaidRouletteCommand(
+                    player_id=1,
+                    pack=PaidRoulettePack.SINGLE,
+                    idempotency_key=_key("paid_roulette:1:tg-charge-001"),
+                    provider_payment_id="tg-charge-001",
+                ),
+            )
+
+        assert prize_pool.calls == []
+        assert prize_pool.state.stars.value == 0

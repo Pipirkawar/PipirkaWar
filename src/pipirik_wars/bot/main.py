@@ -113,7 +113,7 @@ from pipirik_wars.application.forest import (
 )
 from pipirik_wars.application.i18n import IMessageBundle, IPlayerLocaleResolver
 from pipirik_wars.application.inventory import EnchantItem, GetInventory
-from pipirik_wars.application.monetization import SpinPaidRoulette
+from pipirik_wars.application.monetization import RecordDonation, SpinPaidRoulette
 from pipirik_wars.application.mountains import (
     FinishMountainRun,
     IMountainFinishNotifier,
@@ -211,7 +211,7 @@ from pipirik_wars.domain.inventory import (
     IItemRepository,
     IScrollRepository,
 )
-from pipirik_wars.domain.monetization import IPaymentLedger
+from pipirik_wars.domain.monetization import IPaymentLedger, IPrizePoolRepository
 from pipirik_wars.domain.mountains import IMountainRunRepository
 from pipirik_wars.domain.oracle import IOracleHistoryRepository
 from pipirik_wars.domain.player import IPlayerRepository
@@ -270,6 +270,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPaymentLedger,
     SqlAlchemyPlayerRepository,
+    SqlAlchemyPrizePoolRepository,
     SqlAlchemyReferralRepository,
     SqlAlchemyRouletteSpinRepository,
     SqlAlchemyScrollRepository,
@@ -457,6 +458,14 @@ class Container:
     # successful_payment-callback.
     payment_ledger: IPaymentLedger
     spin_paid_roulette: SpinPaidRoulette
+    # Призовой пул (Спринт 4.1-B, ГДД §12.6). B.3 — `prize_pool_repo`
+    # (`SqlAlchemyPrizePoolRepository`, атомарный UPDATE по ряду в
+    # `prize_pool_balance`-таблице + initial-seed-ряды на каждую
+    # валюту). B.5 — use-case `RecordDonation` (10% с `IPaymentLedger.charge`-
+    # а идет в пул + audit-запись `PRIZE_POOL_INCREMENT` в той же UoW).
+    # Интегрирован в `SpinPaidRoulette` (Step 5b в 10-step flow-е).
+    prize_pool_repo: IPrizePoolRepository
+    record_donation: RecordDonation
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
@@ -1161,6 +1170,20 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     # `IRandom.random()`. Bot-handler `/roulette_paid` подключён в
     # `register_routers` отдельным router-ом.
     payment_ledger = SqlAlchemyPaymentLedger(uow=uow)
+    # Спринт 4.1-B: призовой пул. `SqlAlchemyPrizePoolRepository` —
+    # атомарный UPDATE по ряду `prize_pool_balance(currency)` в той же
+    # UoW, что и `IPaymentLedger.charge` («потерянного доната» нет).
+    # `RecordDonation` — use-case 10% инкремента пула + audit-запись
+    # `PRIZE_POOL_INCREMENT` (Alembic 0028 расширил whitelist `audit_log.
+    # source` этим значением). Прокинут в `SpinPaidRoulette` — Step 5b
+    # 10-step flow-а вызывает `record_donation.execute(...)` с тем же
+    # `idempotency_key`, что и у платежа.
+    prize_pool_repo = SqlAlchemyPrizePoolRepository(uow=uow)
+    record_donation = RecordDonation(
+        prize_pool_repository=prize_pool_repo,
+        audit_logger=audit,
+        clock=clock,
+    )
     spin_paid_roulette = SpinPaidRoulette(
         uow=uow,
         players=players,
@@ -1172,6 +1195,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         idempotency=idempotency,
         random=RealRandom(),
         clock=clock,
+        record_donation=record_donation,
     )
     # Спринт 3.3-D D.1: саммонер отменяет рейд из лобби. Идемпотентен
     # на повторный вызов в `CANCELLED`-статусе.
@@ -1721,6 +1745,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         spin_free_roulette=spin_free_roulette,
         payment_ledger=payment_ledger,
         spin_paid_roulette=spin_paid_roulette,
+        prize_pool_repo=prize_pool_repo,
+        record_donation=record_donation,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,

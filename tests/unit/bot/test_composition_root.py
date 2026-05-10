@@ -83,7 +83,7 @@ from pipirik_wars.application.forest import (
 )
 from pipirik_wars.application.i18n import IMessageBundle
 from pipirik_wars.application.inventory import EnchantItem, GetInventory
-from pipirik_wars.application.monetization import SpinPaidRoulette
+from pipirik_wars.application.monetization import RecordDonation, SpinPaidRoulette
 from pipirik_wars.application.mountains import (
     FinishMountainRun,
     StartMountainRun,
@@ -137,7 +137,7 @@ from pipirik_wars.domain.inventory import (
     ItemNotFoundError,
     ScrollStack,
 )
-from pipirik_wars.domain.monetization import IPaymentLedger
+from pipirik_wars.domain.monetization import IPaymentLedger, IPrizePoolRepository
 from pipirik_wars.domain.mountains import IMountainRunRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.pvp import IDuelRepository, IMassDuelRepository
@@ -176,6 +176,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyMountainRunRepository,
     SqlAlchemyPaymentLedger,
     SqlAlchemyPlayerRepository,
+    SqlAlchemyPrizePoolRepository,
     SqlAlchemyRouletteSpinRepository,
     SqlAlchemyScrollRepository,
     SqlAlchemySignupQueueRepository,
@@ -238,6 +239,7 @@ from tests.fakes import (
     FakePaymentLedger,
     FakePlayerLocaleResolver,
     FakePlayerRepository,
+    FakePrizePoolRepository,
     FakeRandom,
     FakeReferralRepository,
     FakeRouletteSpinRepository,
@@ -982,6 +984,16 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
     # use-case с теми же фейковыми зависимостями (проверяет
     # инстанцируемость в Container).
     payment_ledger_repo: IPaymentLedger = FakePaymentLedger()
+    # Спринт 4.1-B: призовой пул. `FakePrizePoolRepository` — in-memory
+    # state + лог вызовов `apply_increment`. `record_donation_uc` —
+    # реальный use-case на фейк-репозитории (пробрасывается в
+    # `SpinPaidRoulette` Step 5b 10-step flow-а).
+    prize_pool_repo_fake: IPrizePoolRepository = FakePrizePoolRepository()
+    record_donation_uc = RecordDonation(
+        prize_pool_repository=prize_pool_repo_fake,
+        audit_logger=audit,
+        clock=clock,
+    )
     spin_paid_roulette_uc = SpinPaidRoulette(
         uow=uow,
         players=players,
@@ -993,6 +1005,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         idempotency=idempotency,
         random=rng,
         clock=clock,
+        record_donation=record_donation_uc,
     )
     close_caravan_lobby_uc = CloseCaravanLobby(
         uow=uow,
@@ -1268,6 +1281,8 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         spin_free_roulette=spin_free_roulette_uc,
         payment_ledger=payment_ledger_repo,
         spin_paid_roulette=spin_paid_roulette_uc,
+        prize_pool_repo=prize_pool_repo_fake,
+        record_donation=record_donation_uc,
     )
 
 
@@ -1383,10 +1398,12 @@ class TestContainer:
         assert isinstance(c.spin_free_roulette, SpinFreeRoulette)
 
     def test_container_holds_paid_roulette_use_cases(self) -> None:
-        """Платная рулетка (Спринт 4.1-A, ГДД §12.5)."""
+        """Платная рулетка (Спринт 4.1-A, ГДД §12.5) + призовой пул (4.1-B, ГДД §12.6)."""
         c = _container_with_fakes()
         assert isinstance(c.payment_ledger, FakePaymentLedger)
         assert isinstance(c.spin_paid_roulette, SpinPaidRoulette)
+        assert isinstance(c.prize_pool_repo, FakePrizePoolRepository)
+        assert isinstance(c.record_donation, RecordDonation)
 
     def test_container_holds_admin_support_use_cases(self) -> None:
         """Расширенный админ-интерфейс (Спринт 2.5-A.3 + 2.5-B)."""
@@ -1514,9 +1531,12 @@ class TestBuildContainer:
         assert isinstance(c.roulette_spins, SqlAlchemyRouletteSpinRepository)
         assert isinstance(c.spin_free_roulette, SpinFreeRoulette)
         # Платная рулетка (Спринт 4.1-A): реальный SQLAlchemy-ledger +
-        # use-case `SpinPaidRoulette`.
+        # use-case `SpinPaidRoulette`. + Призовой пул (Спринт 4.1-B):
+        # реальный `SqlAlchemyPrizePoolRepository` + use-case `RecordDonation`.
         assert isinstance(c.payment_ledger, SqlAlchemyPaymentLedger)
         assert isinstance(c.spin_paid_roulette, SpinPaidRoulette)
+        assert isinstance(c.prize_pool_repo, SqlAlchemyPrizePoolRepository)
+        assert isinstance(c.record_donation, RecordDonation)
 
 
 class TestBuildDispatcher:
