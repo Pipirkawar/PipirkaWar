@@ -23,6 +23,100 @@
 
 ---
 
+## 2026-05-10 — Спринт 3.6-A «Доменный запрос + конфиг + use-case + anti-cheat»
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** ГДД §11.1 «Бонус за племена», ПД §6.3.6 «Спринт 3.6 — Бонус-за-племена в Предсказателе» (задачи 3.6.1 «доменный запрос `count_active_for_player`», 3.6.2 «pydantic `OracleTribeBonusConfig`», 3.6.3 «расширение `RequestOracle` на две проводки `add_length`», 3.6.4 «anti-cheat `tribe_bonus_sources`»). `current_tasks.md` чек-лист 3.6-A. Базируется на 3.5-D (PR #125, `ba0b769` — bot-UI free-to-play рулетки + закрытие Спринта 3.5). Следующий PR — 3.6-B «Bot UI + локали + закрытие Спринта 3.6».
+
+Что сделано (по чек-листу A.0–A.6):
+
+- **A.0 — Обновлён `current_tasks.md`** под старт Спринта 3.6-A: «Снимок состояния» пересобран под `main = ba0b769`, добавлен чек-лист 3.6-A (A.0–A.6), чек-лист 3.5-D перенесён в `history.md` как `### Чек-лист (архив)`. Коммит `c133166`.
+- **A.1 — Доменный запрос `IClanRepository.count_active_for_player`** (`domain/clan/repositories.py` + SQL impl):
+  - Абстрактный метод `IClanRepository.count_active_for_player(*, player_id: int, min_tribe_size: int) -> int` — возвращает количество активных племён, в которых состоит игрок (Phase 3 → `0`/`1`; интерфейс готов к multi-membership Фазы 4+). Активным считается клан в `status='active'` (не `frozen`/`archived`), `len(members) >= min_tribe_size` (с учётом самого игрока), игрок есть в `members`. Семантика `>=` совпадает с ГДД §11.1 «> 3» при дефолте `min_tribe_size=4`.
+  - SQL impl `SqlAlchemyClanRepository.count_active_for_player` (`infrastructure/db/repositories/clan.py`) — subquery + `GROUP BY` + `HAVING COUNT(*) >= :min_tribe_size`, фильтр `clan_members.player_id=:p` + `clans.status='active'`.
+  - In-memory `FakeClanRepository.count_active_for_player` (`tests/fakes/clan_repo.py`) для unit-тестов use-case-а.
+  - **Тесты:** 9 unit-тестов в `tests/unit/fakes/test_clan_repo.py` (пустой репо; не-член; `size<min`; `size=min`; `size>min`; FROZEN; `min=1`; `min=0` → `ValueError`; multi-clan смешанный сценарий) + 1 integration-тест `tests/integration/db/test_clan_repository.py::test_count_active_for_player` (4 gates на одном sql-репо: ACTIVE+`size>=min`+член → 1; ACTIVE+`size<min` → 0; FROZEN+`size>=min`+член → 0; ACTIVE+`size>=min`+не-член → 0).
+  - Коммит `207cb35`.
+- **A.2 — pydantic `OracleTribeBonusConfig`** (`domain/balance/config.py`, +49 строк):
+  - Frozen pydantic-схема (`extra="forbid"`): `enabled: bool` (default `true`), `cm_per_tribe: int >= 0` (default `1`), `cap_cm: int >= 0` (default `131`), `min_tribe_size: int >= 1` (default `4`).
+  - Wire-up в `OracleConfig`: `tribe_bonus: OracleTribeBonusConfig = Field(default_factory=OracleTribeBonusConfig)`.
+  - **Soft sanity-check:** в `OracleConfig._validate` логируется warning, если `bonus_max + cap_cm > 151` (контракт ГДД §11.1: `/predict ≤ +151 см`). Не падаем — лог + алерт оператору, чтобы баланс можно было ослабить через `balance.yaml` без релиза кода.
+  - Дефолты в `config/balance.yaml::oracle.tribe_bonus.{enabled,cm_per_tribe,cap_cm,min_tribe_size}` (раздел `oracle:`).
+  - **Тесты:** 11 unit-тестов в `TestOracleTribeBonusConfig` (`tests/unit/domain/balance/test_config.py`) — defaults, parsing, disabled, negatives, `min_tribe_size>=1`, `extra="forbid"`, frozen, soft-warning emission/non-emission на стыке инварианта.
+  - **Cleanup:** перенесены 7 архивных чек-листов из `current_tasks.md` в `history.md` как `### Чек-лист (архив)` секции внутри соответствующих записей о спринтах (3.5-D / 3.5-C / 3.5-B / 3.5-A / 3.4-D / 3.4-C / 3.4-B). `current_tasks.md` теперь содержит только активный Спринт 3.6-A; история сохранена дословно.
+  - Коммит `59287ef`.
+- **A.3 — Расширение application use-case `InvokeOracle`** (`application/oracle/invoke.py`, ~128 строк правок):
+  - DI: добавлено поле `clans: IClanRepository`. Plumb-up в `bot/main.py` — `Container` строит `InvokeOracle` с реальным `SqlAlchemyClanRepository`.
+  - Domain-слой: новый `AuditSource.ORACLE_TRIBE_BONUS = "oracle_tribe_bonus"` (`domain/shared/ports/audit.py`). Whitelist-миграция приземлена в A.4 (см. ниже), но enum-значение появилось здесь (без миграции его нельзя писать в `audit_log`, поэтому unit-тесты A.3 используют in-memory audit logger).
+  - Логика: после `length_grant = uniform(bonus_min, bonus_max)` — если `cfg.tribe_bonus.enabled`, считаем `n_active_tribes = clans.count_active_for_player(player_id, min_tribe_size=cfg.tribe_bonus.min_tribe_size)`, далее `tribe_bonus_cm = min(n_active_tribes * cfg.tribe_bonus.cm_per_tribe, cfg.tribe_bonus.cap_cm)`.
+  - **Две проводки `length_granter.grant(...)` в одной транзакции и под одним idempotency-root-key `oracle:{player_id}:{moscow_date}`:**
+    - базовая `(source=ORACLE, reason="oracle_base", idempotency_key="add_length:{root}:base")`;
+    - бонус `(source=ORACLE_TRIBE_BONUS, reason="oracle_tribe_bonus", idempotency_key="add_length:{root}:tribe_bonus")` — **только** при `tribe_bonus_cm > 0`.
+  - DTO `OraclePredictionResult` расширен полями `base_cm: int` / `tribe_bonus_cm: int` / `n_active_tribes: int` + property `total_cm = base_cm + tribe_bonus_cm`. В `oracle_invocations.bonus_cm` пишем итог (`total_cm`).
+  - **Тесты:** 6 новых тестов в `TestInvokeOracleTribeBonus` (`tests/unit/application/oracle/test_invoke.py`) — no-tribe (нет 2-й проводки); single-tribe (+1 см 2-й проводкой); `size<min` (нет 2-й проводки); FROZEN (нет 2-й проводки); cap-clamp (200 племён → +131 см); disabled-flag-skip (`enabled=false` → нет вызова `count_active_for_player`). 12/12 unit-тестов `test_invoke.py` зелёные.
+  - Коммит `7a4d747`.
+- **A.4 — Anti-cheat `tribe_bonus_sources`**:
+  - Миграция Alembic `0025_audit_source_oracle_tribe_bonus` (`infrastructure/db/migrations/versions/20260510_0025_audit_source_oracle_tribe_bonus.py`, `down_revision=0024`) — расширяет CHECK constraint `audit_log_source_whitelist` на колонке `audit_log.source`, добавляя `'oracle_tribe_bonus'` к существующему whitelist-у. `batch_alter_table` для SQLite-совместимости + симметричный `downgrade()`.
+  - Зеркало в ORM `AuditLogORM.__table_args__` CheckConstraint (`infrastructure/db/models/security.py`).
+  - Pydantic-схема `AnticheatConfig` (`domain/balance/config.py`) — добавлено поле `tribe_bonus_sources: tuple[AuditSource, ...] = ()`. Валидаторы: disjoint от `organic_sources` и `donate_sources`, без дубликатов, без `UNKNOWN`.
+  - В `config/balance.yaml::anticheat` — новое поле `tribe_bonus_sources: [oracle_tribe_bonus]` (рядом с `organic_sources`/`donate_sources`).
+  - **Anti-cheat rolling-окно** (`SqlAlchemyAnticheatRepository.sum_organic_in_window`) уже фильтрует по `source IN organic_sources`; так как `oracle_tribe_bonus` не входит в `organic_sources` — записи с этим источником автоматически выпадают из 24h/7d-агрегации (защита от «съедания» хардкапа крупным кланом). Семантически закреплено новым `tribe_bonus_sources`-whitelist-ом для документации/валидации.
+  - **Тесты:** 6 новых unit-тестов в `TestAnticheatConfig` (`tests/unit/domain/balance/test_config.py`) — `tribe_bonus_sources` default empty / real-yaml / disjoint от organic / disjoint от donate / duplicates rejected / UNKNOWN rejected. 1 новый integration-тест `tests/integration/db/test_anticheat_repository.py::test_excludes_oracle_tribe_bonus_source` — запись `oracle`+10см и `oracle_tribe_bonus`+131см → окно агрегирует только 10см. Bumped migration ref в `test_audit_source.py` с `0024` → `0025`.
+  - Коммит `dad4a56`.
+- **A.5 — `make ci` локально:** ruff (clean), `mypy --strict` (0 issues), import-linter (4 contracts KEPT), pytest **5168 passed / 2 skipped**, coverage **95.63%** (gate ≥ 80%). Время прогона ~21 минута (включая полный integration-suite). Перед прогоном сделан hot-fix `03b23a6` в `tests/integration/db/test_migrations.py` (расширение expected-list на `0025`) + `tests/unit/bot/handlers/test_oracle.py` + `tests/unit/bot/test_composition_root.py` + `tests/unit/domain/balance/test_config.py` (фикс test pollution в tribe-bonus warns; `caplog.set_level` локально вместо глобального).
+- **A.6 — Финальный док-коммит:** `history.md` (эта запись) + пересборка «Снимка состояния» в `current_tasks.md` под `main = <merge_3_6_A>`, чек-лист передвинут на старт **Спринта 3.6-B «Bot UI + локали + закрытие Спринта 3.6»** (закрывает Спринт 3.6). Старый чек-лист 3.6-A архивирован.
+
+Результат / артефакты:
+
+- Новые файлы:
+  - `src/pipirik_wars/infrastructure/db/migrations/versions/20260510_0025_audit_source_oracle_tribe_bonus.py` — Alembic-миграция, расширяет `audit_log_source_whitelist` на `'oracle_tribe_bonus'`.
+  - `tests/integration/db/test_clan_repository.py` (88 строк, 1 тест) — integration-round-trip `count_active_for_player` на реальном SQL.
+  - `tests/unit/fakes/test_clan_repo.py` (151 строка, 9 тестов) — gate-coverage на in-memory фейке.
+- Изменённые файлы:
+  - `src/pipirik_wars/domain/clan/repositories.py` — `IClanRepository.count_active_for_player` (новый абстрактный метод).
+  - `src/pipirik_wars/infrastructure/db/repositories/clan.py` — SQL-impl нового метода.
+  - `src/pipirik_wars/domain/balance/config.py` — `OracleTribeBonusConfig` + wire-up в `OracleConfig` + `AnticheatConfig.tribe_bonus_sources` + soft-warning при `bonus_max + cap_cm > 151`.
+  - `src/pipirik_wars/domain/shared/ports/audit.py` — `AuditSource.ORACLE_TRIBE_BONUS`.
+  - `src/pipirik_wars/application/oracle/invoke.py` — две проводки `add_length` + DI `clans` + расширение DTO.
+  - `src/pipirik_wars/bot/main.py` — `Container` пробрасывает `clans` в `InvokeOracle`.
+  - `src/pipirik_wars/infrastructure/db/models/security.py` — зеркало whitelist в `AuditLogORM.__table_args__`.
+  - `config/balance.yaml` — `oracle.tribe_bonus.*` + `anticheat.tribe_bonus_sources: [oracle_tribe_bonus]`.
+  - `tests/fakes/clan_repo.py` — `count_active_for_player` на фейке.
+  - `tests/unit/application/oracle/test_invoke.py` — `TestInvokeOracleTribeBonus` (6 тестов).
+  - `tests/unit/domain/balance/test_config.py` — `TestOracleTribeBonusConfig` (11 тестов) + 6 тестов в `TestAnticheatConfig` для `tribe_bonus_sources`.
+  - `tests/integration/db/test_anticheat_repository.py` — `test_excludes_oracle_tribe_bonus_source`.
+  - `tests/unit/domain/shared/ports/test_audit_source.py` — bump migration ref `0024` → `0025`.
+  - `tests/integration/db/test_migrations.py` — расширен expected-list на `0025`.
+  - `docs/current_tasks.md` — пересобран под Спринт 3.6-A → потом под 3.6-B (этот коммит).
+
+Заметки / решения:
+
+- **Семантика `>=` vs ГДД «> 3».** ГДД §11.1 говорит «активное племя — состав > 3» (т.е. от 4 человек). В коде используем `len(members) >= min_tribe_size` с дефолтом `min_tribe_size=4` — `>= 4` тождественно `> 3`. Контракт: пользователь крутит `min_tribe_size` через `balance.yaml`, а не через инверсию неравенства, чтобы конфиг был очевидно читаем.
+- **Две проводки `add_length` вместо одной.** Можно было бы сделать одну проводку `delta=length_grant + tribe_bonus_cm` и сэкономить запись в `audit_log` + 1 idempotency-row. Но: (а) разные `source`-ы (`ORACLE` vs `ORACLE_TRIBE_BONUS`) важны для anti-cheat (первый — organic, второй — НЕТ); (б) аналитика хочет видеть «сколько игрок получил за племена отдельно от базового бонуса»; (в) ГДД §11.1 явно требует `+N см за племена` отдельной проводкой. Цена — две записи в `audit_log` за один `/predict`, что приемлемо.
+- **`AuditSource.ORACLE_TRIBE_BONUS` НЕ в `organic_sources`.** Это сознательное решение для anti-cheat: бонус за племена — virальный механизм, который при крупном клане может дать `+131 см × 5 раз = +655 см/час`, что сжирает organic-хардкап (`+1500 см / 24h`). Если бы `oracle_tribe_bonus` был в `organic_sources`, игрок с 100+ племён попадал бы под trip-wire `ANTICHEAT_DAILY_CAP_EXCEEDED`. Решение: вынесли в отдельный whitelist `tribe_bonus_sources`, который НЕ агрегируется в rolling-окне. Integration-тест `test_excludes_oracle_tribe_bonus_source` это закрепляет.
+- **`tribe_bonus_cm = 0 → нет 2-й проводки.** Если игрок без активных племён, не вызываем `length_granter.grant(delta=0)` — это бы засорило `audit_log` нулевыми записями. Гард `if tribe_bonus_cm > 0: ...` экономит ~95% записей (большинство `/predict`-вызовов идут без бонуса в Phase 3, где multi-membership ещё не разработан).
+- **Soft warning при `bonus_max + cap_cm > 151` вместо ошибки парсинга.** Жёсткая `pydantic.ValidationError` падала бы при загрузке `balance.yaml`, что блокирует старт бота. Soft warning логирует проблему оператору + продолжает работу — баланс можно поправить через `balance.yaml` хот-релоадом без даунтайма.
+- **DI `clans` в `InvokeOracle`.** Это новая зависимость use-case-а. Composition root в `bot/main.py` уже строит `clans = SqlAlchemyClanRepository(uow.session_factory)` для других use-case-ов (например, `CreateCaravan`), поэтому wire-up — однострочный (передать инстанс в конструктор `InvokeOracle`).
+- **Cleanup архивных чек-листов в `history.md`.** В A.2 заодно перенесли 7 архивных чек-листов из `current_tasks.md` (которые накопились с 3.4-B до 3.5-D) — каждый теперь живёт как `### Чек-лист (архив)` секция внутри соответствующей записи в `history.md`. `current_tasks.md` теперь действительно содержит только активный спринт, как и предписано в [`CONTRIBUTING.md`](../CONTRIBUTING.md).
+
+Чек-лист (архив):
+
+- [x] Дождаться мерджа `3.5-D` в `main` (PR #125, `ba0b769`).
+- [x] `git fetch && git checkout main && git pull`.
+- [x] Создать ветку `devin/1778391635-sprint-3-6-A-tribe-bonus-domain` от свежего `main = ba0b769`.
+- [x] **A.0 — Обновить `current_tasks.md`** под старт Спринта 3.6-A: пересобрать «Снимок состояния» под актуальный `main = ba0b769`, расписать чек-лист 3.6-A, заархивировать чек-лист 3.5-D (этот коммит — Checkpoint 1). Коммит `c133166`.
+- [x] **A.1 — Доменный запрос `count_active_for_player`** (`domain/clan/repositories.py` + SQL impl): абстрактный метод `IClanRepository.count_active_for_player(*, player_id, min_tribe_size) -> int`, SQL impl `SqlAlchemyClanRepository.count_active_for_player`, in-memory `FakeClanRepository.count_active_for_player`. 9 unit-тестов на gate-coverage + 1 integration-тест `test_count_active_for_player` (4 gates). Коммит `207cb35`.
+- [x] **A.2 — pydantic `OracleTribeBonusConfig`** (`domain/balance/config.py`): frozen-схема с `enabled` / `cm_per_tribe>=0` / `cap_cm>=0` / `min_tribe_size>=1`, wire-up в `OracleConfig.tribe_bonus`, soft-warning при `bonus_max + cap_cm > 151`. Дефолты в `config/balance.yaml::oracle.tribe_bonus`. 11 unit-тестов в `TestOracleTribeBonusConfig`. Cleanup: перенесли 7 архивных чек-листов из `current_tasks.md` в `history.md`. Коммит `59287ef`.
+- [x] **A.3 — Расширение use-case `InvokeOracle`** (`application/oracle/invoke.py`): DI `clans: IClanRepository`, `n_active_tribes` через `count_active_for_player(min_tribe_size=cfg.tribe_bonus.min_tribe_size)`, `tribe_bonus_cm = min(n_active_tribes * cm_per_tribe, cap_cm)`, две проводки `length_granter.grant(...)` (`oracle_base` + `oracle_tribe_bonus`, последняя только при `tribe_bonus_cm > 0`), DTO `OraclePredictionResult` с `base_cm`/`tribe_bonus_cm`/`n_active_tribes`/`total_cm`. 6 новых тестов в `TestInvokeOracleTribeBonus`. Коммит `7a4d747`.
+- [x] **A.4 — Anti-cheat `tribe_bonus_sources`**: миграция Alembic `0025_audit_source_oracle_tribe_bonus` (CHECK constraint расширен на `'oracle_tribe_bonus'`), зеркало в `AuditLogORM.__table_args__`, `AnticheatConfig.tribe_bonus_sources: tuple[AuditSource, ...]` с валидаторами (disjoint от `organic_sources`/`donate_sources`, без duplicates, без `UNKNOWN`), `config/balance.yaml::anticheat.tribe_bonus_sources: [oracle_tribe_bonus]`. 6 unit-тестов в `TestAnticheatConfig` + 1 integration `test_excludes_oracle_tribe_bonus_source` + bump migration ref `0024` → `0025`. Коммит `dad4a56`.
+- [x] **A.5 — `make ci` локально:** ruff + `mypy --strict` + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%) — **5168 passed / 2 skipped, coverage 95.63%**. Hot-fix `03b23a6` (test pollution в tribe-bonus warns + bump expected-list в `test_migrations.py` + composition root + handler tests).
+- [x] **A.6 — Финальный док-коммит:** `history.md` (запись 3.6-A) + `current_tasks.md` пересборка под старт **Спринта 3.6-B «Bot UI + локали + закрытие Спринта 3.6»** (этот коммит).
+- [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md` — PR #126.
+- [ ] Дождаться зелёного GitHub CI.
+
+---
+
 ## 2026-05-10 — Спринт 3.5-D «Bot UI + локали + display + закрытие Спринта 3.5»
 
 **Автор:** Devin (агент)
