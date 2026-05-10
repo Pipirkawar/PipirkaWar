@@ -82,7 +82,7 @@ clantop-empty = 🛡 No clans in the top yet. Add the bot to a group — and reg
 # Single row in the clan top: "<rank>. ClanTitle — N cm (M 👥)".
 clantop-entry = { $rank }. { $clan_title } — { $total_length_cm } cm ({ $member_count } 👥)
 
-## /oracle (Sprint 1.4.B → 1.5.D)
+## /oracle (Sprint 1.4.B → 1.5.D, extended in 3.6-B; GDD §11, §11.1)
 
 oracle-group = 🔮 The /oracle command works only in the bot's DM. Open a private chat and try again.
 
@@ -90,16 +90,33 @@ oracle-other = 🔮 The /oracle command works only in the bot's DM.
 
 oracle-not-registered = 🔮 You don't seem to be registered yet. Tap /start in this chat and the oracle will hear you.
 
-# Success message (GDD §11). Parameters:
+# Success header: prediction-of-the-day + template text. Parameters:
 # - `$prediction` — prediction text, already with `{ user }` substituted
-# - `$bonus_cm` — integer, length bonus
-# - `$new_length_cm` — integer, new player length
-oracle-success =
+oracle-success-prediction =
     🔮 Prediction of the day:
     { $prediction }
 
-    📏 +{ NUMBER($bonus_cm, useGrouping: 0) } cm
-    Now you have: { NUMBER($new_length_cm, useGrouping: 0) } cm
+# Base length grant (always, GDD §11). Parameters:
+# - `$base_cm` — integer, base roll 1..20 cm
+oracle-base-line = 📏 +{ NUMBER($base_cm, useGrouping: 0) } cm — base
+
+# Tribe bonus (only when `n_active_tribes > 0`, Sprint 3.6-B / GDD §11.1).
+# Parameters:
+# - `$tribe_bonus_cm` — integer, length bonus from tribes
+# - `$n_active_tribes` — integer, number of active tribes the player is in
+# Plural by `$n_active_tribes` (CLDR EN): 1 → tribe, otherwise → tribes.
+oracle-tribe-bonus-line = 🛡 +{ NUMBER($tribe_bonus_cm, useGrouping: 0) } cm — tribe bonus ({ NUMBER($n_active_tribes, useGrouping: 0) } { $n_active_tribes ->
+        [one] tribe
+       *[other] tribes
+    })
+
+# Total length grant for this call (only when `n_active_tribes > 0`).
+# Parameters: `$total_cm` — integer, `base_cm + tribe_bonus_cm`.
+oracle-total-line = ✨ Total: +{ NUMBER($total_cm, useGrouping: 0) } cm
+
+# New player length after applying the grant/cap (always).
+# Parameters: `$new_length_cm` — integer.
+oracle-new-length-line = Now you have: { NUMBER($new_length_cm, useGrouping: 0) } cm
 
 # "Come back tomorrow" message. Parameters:
 # - `$hours` — integer, hours until 00:00 Moscow reset

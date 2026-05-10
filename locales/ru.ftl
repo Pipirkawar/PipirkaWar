@@ -83,7 +83,7 @@ clantop-empty = 🛡 Кланов в топе пока нет. Добавь бо
 # Один ряд топа: «<rank>. Название клана — N см (M 👥)».
 clantop-entry = { $rank }. { $clan_title } — { $total_length_cm } см ({ $member_count } 👥)
 
-## /oracle (Спринт 1.4.B → 1.5.D)
+## /oracle (Спринт 1.4.B → 1.5.D, расширен в 3.6-B; ГДД §11, §11.1)
 
 oracle-group = 🔮 Команда /oracle доступна только в личке бота. Открой приватный чат и повтори.
 
@@ -91,16 +91,34 @@ oracle-other = 🔮 Команда /oracle доступна только в ли
 
 oracle-not-registered = 🔮 Похоже, ты ещё не зарегистрирован. Нажми /start в этом чате, и тогда предсказатель тебя услышит.
 
-# Сообщение успеха (ГДД §11). Параметры:
+# Шапка успеха: предсказание дня + текст шаблона. Параметры:
 # - `$prediction` — текст предсказания, уже с подставленным `{ user }`
-# - `$bonus_cm` — целое, прибавка длины
-# - `$new_length_cm` — целое, новая длина игрока
-oracle-success =
+oracle-success-prediction =
     🔮 Предсказание дня:
     { $prediction }
 
-    📏 +{ NUMBER($bonus_cm, useGrouping: 0) } см
-    Теперь у тебя: { NUMBER($new_length_cm, useGrouping: 0) } см
+# Базовая прибавка длины (всегда, ГДД §11). Параметры:
+# - `$base_cm` — целое, базовый бросок 1..20 см
+oracle-base-line = 📏 +{ NUMBER($base_cm, useGrouping: 0) } см — базовая
+
+# Бонус-за-племена (только при `n_active_tribes > 0`, Спринт 3.6-B / ГДД §11.1).
+# Параметры:
+# - `$tribe_bonus_cm` — целое, прибавка за племена
+# - `$n_active_tribes` — целое, число активных племён игрока
+# Плюрал по `$n_active_tribes` (CLDR RU): 1 → племя, 2..4 → племени, 5+ → племён.
+oracle-tribe-bonus-line = 🛡 +{ NUMBER($tribe_bonus_cm, useGrouping: 0) } см — за племена ({ NUMBER($n_active_tribes, useGrouping: 0) } { $n_active_tribes ->
+        [one] племя
+        [few] племени
+       *[other] племён
+    })
+
+# Итоговая прибавка длины за вызов (только при `n_active_tribes > 0`).
+# Параметры: `$total_cm` — целое, `base_cm + tribe_bonus_cm`.
+oracle-total-line = ✨ Итого: +{ NUMBER($total_cm, useGrouping: 0) } см
+
+# Новая длина игрока после применения прибавки/клампа (всегда).
+# Параметры: `$new_length_cm` — целое.
+oracle-new-length-line = Теперь у тебя: { NUMBER($new_length_cm, useGrouping: 0) } см
 
 # Сообщение «возвращайся завтра». Параметры:
 # - `$hours` — целое, часов до сброса 00:00 МСК

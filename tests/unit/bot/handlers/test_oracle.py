@@ -119,11 +119,54 @@ class TestHandleOracle:
         assert call_input.locale == "ru"
         msg.answer.assert_awaited_once()
         sent = msg.answer.await_args.args[0]
-        # FakeMessageBundle сериализует ключ + параметры → детерминированно.
-        assert sent.startswith("ru:oracle-success[")
-        assert "prediction=Сегодня всё хорошо, Алиса!" in sent
-        assert "bonus_cm=7" in sent
-        assert "new_length_cm=37" in sent
+        # 3.6-B: handler передаёт `OracleInvoked.{base_cm,tribe_bonus_cm,
+        # n_active_tribes,player_after.length.cm}` в `OraclePresenter.success(...)`.
+        # FakeMessageBundle сериализует ключ+параметры детерминированно.
+        # Без активных племён презентер шлёт три ключа (см. test_oracle для
+        # презентера) — здесь проверяем, что нужные значения добрались.
+        assert "ru:oracle-success-prediction[prediction=Сегодня всё хорошо, Алиса!]" in sent
+        assert "ru:oracle-base-line[base_cm=7]" in sent
+        assert "ru:oracle-new-length-line[new_length_cm=37]" in sent
+        # 0 активных племён → строки tribe-bonus / total скрыты.
+        assert "oracle-tribe-bonus-line" not in sent
+        assert "oracle-total-line" not in sent
+
+    async def test_private_success_with_active_tribes_includes_tribe_lines(self) -> None:
+        # 3.6-B: если у игрока есть активные племена — handler пробрасывает
+        # `tribe_bonus_cm`/`n_active_tribes` в презентер, и тот добавляет
+        # отдельные строки `oracle-tribe-bonus-line` + `oracle-total-line`.
+        msg = _msg(chat_type="private", first_name="Алиса")
+        invoke = MagicMock(spec=InvokeOracle)
+        template = OracleTemplate(id="oracle.ru.0001", text="Привет, {user}!")
+        before = _player(length_cm=30)
+        after = _player(length_cm=42)
+        invoke.execute = AsyncMock(
+            return_value=OracleInvoked(
+                result=OracleResult(bonus_cm=12, template=template),
+                player_before=before,
+                player_after=after,
+                moscow_date=date(2026, 5, 5),
+                base_cm=10,
+                tribe_bonus_cm=2,
+                n_active_tribes=2,
+            )
+        )
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        await handle_oracle(
+            cast(Message, msg),
+            _identity("private"),
+            cast(InvokeOracle, invoke),
+            FakeClock(_NOW),
+            bundle,
+            Locale("ru"),
+        )
+
+        sent = msg.answer.await_args.args[0]
+        assert "ru:oracle-base-line[base_cm=10]" in sent
+        assert "ru:oracle-tribe-bonus-line[n_active_tribes=2,tribe_bonus_cm=2]" in sent
+        assert "ru:oracle-total-line[total_cm=12]" in sent
+        assert "ru:oracle-new-length-line[new_length_cm=42]" in sent
 
     async def test_group_chat_redirects_to_pm(self) -> None:
         msg = _msg(chat_type="group")
@@ -256,7 +299,8 @@ class TestHandleOracle:
         call_input = invoke.execute.await_args.args[0]
         assert call_input.locale == "en"
         sent = msg.answer.await_args.args[0]
-        assert sent.startswith("en:oracle-success[")
+        # 3.6-B: первая строка ответа — `oracle-success-prediction` в нужной локали.
+        assert sent.startswith("en:oracle-success-prediction[")
 
     async def test_no_locale_falls_back_to_default_locale(self) -> None:
         # Если middleware не пробросил локаль — DEFAULT_LOCALE = "en".
@@ -276,4 +320,5 @@ class TestHandleOracle:
         call_input = invoke.execute.await_args.args[0]
         assert call_input.locale == "en"
         sent = msg.answer.await_args.args[0]
-        assert sent.startswith("en:oracle-success[")
+        # 3.6-B: первая строка — `oracle-success-prediction` в EN-fallback-локали.
+        assert sent.startswith("en:oracle-success-prediction[")
