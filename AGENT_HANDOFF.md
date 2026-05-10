@@ -1,69 +1,66 @@
-# AGENT HANDOFF — Спринт 4.1-B (шаг 4/9)
+# AGENT HANDOFF — Спринт 4.1-B (шаг 5/9)
 
 > Этот файл — временный safety-net. Обновляется в том же коммите, что и основные изменения, и лежит в ветке пока есть незаконченная работа. Удали его отдельным коммитом перед открытием PR-а.
 
 ## Что я сделал в этой сессии
-- Приёмка по 7-шаговому промпту из `CONTRIBUTING.md` (HANDOFF отсутствует на main, неслитых веток нет, доки прочитаны, `make ci` локально зелёный, артефактов нет).
-- Создал ветку `devin/1778420160-sprint-4-1-B-prize-pool` от `main = 21c21c0` (merge PR #128).
-- B.0 (sha `48dbfc1`) — обновил `docs/current_tasks.md` под старт 4.1-B + создал `AGENT_HANDOFF.md`. Push на origin (Checkpoint 1).
-- B.1 (sha `05f78c2`) — расширил доменный пакет `monetization`: 3 новых VO (`StarsPoolBalance`, `TonNanoAmount`, `UsdtDecimalAmount`), агрегат `PrizePool` (frozen+slots) с `empty()`/`balance_for()`/`apply_increment()`, ошибка `PrizePoolAmountInvariantError`, порт `IPrizePoolRepository`. Тестов в пакете монетизации стало 120 (было 48). Push на origin (промежуточный).
-- B.2 (sha `f57008f`) — application-use-case `RecordDonation`:
-  - `application/monetization/record_donation.py`: `RecordDonationCommand(currency, payment_amount_native, idempotency_key)` (frozen+slots), `RecordDonationResult(donation_amount_native, pool_after, applied)` (frozen+slots), `class RecordDonation(prize_pool_repository: IPrizePoolRepository)` с `execute(cmd)`-методом: `donation = payment_amount_native // 10` (floor, ГДД §12.6.1) → `donation == 0 ⇒ get_current(), applied=False`; иначе `apply_increment(currency, donation), applied=True`. Идемпотентность — от caller-а.
-  - `tests/fakes/prize_pool_repo.py` — `FakePrizePoolRepository` (in-memory).
-  - `tests/unit/application/monetization/test_record_donation.py` — 14 тестов.
-  - Push на origin (Checkpoint 2).
-- B.3 — persistence-слой пула:
-  - `src/pipirik_wars/infrastructure/db/migrations/versions/20260510_0027_prize_pool_balance.py` — Alembic-миграция: таблица `prize_pool_balance(id, currency UNIQUE, balance_native NUMERIC(38,0) >= 0, updated_at TIMESTAMPTZ)` + initial-seed 3 row-а (по одной на `Currency`-валюту). `audit_log_source_whitelist` **не** трогается (отложено в B.4).
-  - `src/pipirik_wars/infrastructure/db/models/prize_pool.py` — ORM `PrizePoolBalanceORM` (зеркалит DDL, `with_variant` для SQLite-теста). Зарегистрирован в `models/__init__.py`.
-  - `src/pipirik_wars/infrastructure/db/repositories/prize_pool.py` — `SqlAlchemyPrizePoolRepository(uow, clock=datetime)`:
-    - `get_current()` — `SELECT currency, balance_native FROM prize_pool_balance` → `_assemble_pool(...)` собирает `PrizePool` из 3 row-ов; если row missing — `RuntimeError` (invariant violation).
-    - `apply_increment(currency, amount_native)` — атомарный `UPDATE prize_pool_balance SET balance_native = balance_native + :delta, updated_at = :now WHERE currency = :c`, затем повторный `SELECT` для возврата свежего снапшота. Атомарность per-row для concurrent-writers по разным валютам (Postgres row-lock); DB-CHECK `balance_native >= 0` — last-line-of-defense.
-    - Зарегистрирован в `repositories/__init__.py`.
-  - `tests/integration/db/test_prize_pool_repository.py` — 13 integration-тестов:
-    - `TestGetCurrent` (2): `get_current` после initial-seed = `PrizePool.empty()`; `RuntimeError` при отсутствующей row.
-    - `TestApplyIncrement` (5): round-trip параметризованный × 3 валюты, persist across UoW, currency-isolation, accumulation × 3 STARS, `updated_at` обновляется.
-    - `TestDbCheckInvariants` (3): `balance_native = -1` → `IntegrityError`; `currency='gold'` → `IntegrityError`; duplicate `currency='stars'` → `IntegrityError`.
-    - `TestExistingStateRoundTrip` (1): прямой `UPDATE` балансов → `get_current` видит снапшот.
-  - `tests/integration/db/conftest.py` — добавил seed 3 row-ов в `engine`-фикстуру (Base.metadata.create_all не делает initial-seed; миграции в integration-тестах не применяются — DDL берётся из ORM).
-  - `tests/integration/db/test_migrations.py` — добавил 3 assertions для 0027 (revision exists, descend-from-0026, file in versions-listing) + `prize_pool_balance` в smoke-таблицах.
-- Локально на B.3: `pytest tests/integration/db tests/unit/domain/monetization tests/unit/application/monetization tests/unit/domain/shared/ports` — **602 passed**; `mypy --strict` — 0 issues; `ruff check` + `ruff format` — clean; `lint-imports` — 4/4 contracts kept.
+- Приёмка по 7-шаговому промпту из `CONTRIBUTING.md` (HANDOFF присутствует на ветке от предыдущего агента, доки прочитаны, `make ci` локально зелёный, артефактов нет).
+- Создал ветку `devin/1778425880-ci-cost-optimization` от свежего `main` и реализовал PR #129 (CI cost-cut: pytest-xdist + py3.12-only + paths-ignore docs + pip-audit on-demand). Замер фактической экономии: 36.5 мин → 17.6 мин на push (≈52% экономии).
+- Ребейзил `devin/1778420160-sprint-4-1-B-prize-pool` на свежий `main = da7100a` (merge PR #129). `make ci` после ребейза — зелёный (5458 passed).
+- B.4 (текущий шаг) — audit-source `PRIZE_POOL_INCREMENT` + Alembic 0028 + audit-запись в `RecordDonation`:
+  - `src/pipirik_wars/domain/shared/ports/audit.py` — добавил `AuditAction.PRIZE_POOL_INCREMENT = "prize_pool_increment"` и `AuditSource.PRIZE_POOL_INCREMENT = "prize_pool_increment"` (с doc-комментариями про не-вхождение в anticheat-whitelist-ы и инвариант «нет нулевых дельт»).
+  - `src/pipirik_wars/infrastructure/db/migrations/versions/20260510_0028_audit_source_prize_pool_increment.py` — новая миграция: `_SOURCE_WHITELIST` = whitelist 0026 + `prize_pool_increment`; `_PREV_SOURCE_WHITELIST` = whitelist 0026 (для downgrade); `upgrade()` и `downgrade()` через `op.batch_alter_table` (drop CHECK + create CHECK).
+  - `src/pipirik_wars/application/monetization/record_donation.py` — расширил `RecordDonation`:
+    - DI: `audit_logger: IAuditLogger` + `clock: IClock` (использовал `IClock`-порт, не `type[datetime]` — следую существующей конвенции `SpinPaidRoulette`).
+    - В `execute(...)` после успешного `apply_increment(...)` (на `applied=True`) пишет `AuditEntry`:
+      - `action=AuditAction.PRIZE_POOL_INCREMENT`, `source=AuditSource.PRIZE_POOL_INCREMENT`,
+      - `actor_id=None` (системное событие; привязка к игроку — через `target_id`),
+      - `target_kind="prize_pool"`, `target_id=f"{cmd.idempotency_key.value}:donation"`,
+      - `before=None`, `after={"currency": ..., "amount_native": <delta>, "pool_after_native": <pool>}`,
+      - `reason="prize_pool_increment"`, `idempotency_key=f"{cmd.idempotency_key.value}:prize_pool"`,
+      - `occurred_at=clock.now()`.
+    - На `applied=False` (no-op инкремент) audit **не** пишется.
+  - `tests/unit/application/monetization/test_record_donation.py` — добавил `_make_use_case`-фабрику (DI с `FakeAuditLogger` + `FakeClock` дефолтно), 5 новых audit-тестов (`TestAuditWrite`):
+    - audit-запись на `applied=True` (action/source/target/actor_id/before/delta_cm/occurred_at);
+    - отсутствие audit на `applied=False`;
+    - структура `after`-payload (`currency`/`amount_native`/`pool_after_native`);
+    - `idempotency_key` audit-записи = `<cmd.key>:prize_pool` (отдельный scope от `:payment`); `target_id` = `<cmd.key>:donation`; `reason="prize_pool_increment"`;
+    - `pool_after_native` отражает накопление при двух последовательных `execute(...)` (10, 30 после 10+20).
+  - `tests/integration/db/test_migrations.py` — добавил 3 расширения для 0028: `assert "0028..." in revisions`, `test_0028_descends_from_0027`, имя файла в `test_versions_dir_lists_only_known_files`.
+  - `tests/unit/domain/shared/ports/test_audit_source.py` — обновил `_load_migration_whitelist()` чтобы читать whitelist из миграции 0028 (последняя расширяющая).
+- Локально на B.4: `make ci` зелёный — `ruff check` clean, `mypy --strict` 0 issues (928 файлов), `lint-imports` 4/4 contracts kept, `pytest -n auto` **5463 passed, 2 skipped**, coverage 95.53% (≥80%).
 
 ## На каком файле/задаче остановился
-- Файл (следующий шаг B.4): расширить audit-source whitelist + добавить audit-запись в `RecordDonation`:
-  - `src/pipirik_wars/domain/shared/ports/audit.py` — добавить `AuditSource.PRIZE_POOL_INCREMENT = "prize_pool_increment"` (1 строка enum-а).
-  - `src/pipirik_wars/infrastructure/db/migrations/versions/20260510_0028_audit_source_prize_pool_increment.py` — новая миграция: расширить `audit_log_source_whitelist` строкой `'prize_pool_increment'` (по образцу `0024`/`0025` — drop CHECK + create CHECK с расширенным набором значений; downgrade — обратно).
-  - `src/pipirik_wars/application/monetization/record_donation.py` — расширить `RecordDonation` чтобы принимать `audit_logger: IAuditLogger` и `clock: type[datetime]`, и в `execute(...)` после `apply_increment(...)` вызывать `audit_logger.log(...)` с `source=PRIZE_POOL_INCREMENT`, `idempotency_key=cmd.idempotency_key` (тот же что у платежа), полем `payload={'currency': ..., 'amount_native': str(donation_amount_native), 'pool_after_native': str(pool_after.balance_for(currency))}`. Audit-write пропускать на `applied=False`.
-  - `tests/unit/application/monetization/test_record_donation.py` — расширить fake-ы (`FakeAuditLogger` уже есть в `tests/fakes/audit_logger.py`), добавить 4+ теста (audit-запись на `applied=True`, отсутствие audit на `applied=False`, payload корректный, idempotency-key прокинут).
-  - `tests/integration/db/test_migrations.py` — расширения для миграции 0028.
-  - `tests/unit/domain/shared/ports/test_audit_source.py` — обновить набор enum-значений.
-- Что планирую дальше: B.4 → B.5 (интеграция в `SpinPaidRoulette`) → B.6 (composition root) → B.7 (`make ci`) → B.8 (final docs) → PR.
+- B.4 готов. Файлы остаются неcommit-нутыми до пуша. Следующий шаг — commit B.4 + push на origin.
+- После B.4 PR-merge: B.5 — интеграция `RecordDonation` в `SpinPaidRoulette`-flow (после `IPaymentLedger.charge → record_donation.execute(...)` с тем же `idempotency_key`, suffix `:donation`); это потребует:
+  - расширить `SpinPaidRoulette.__init__` принимать `record_donation: RecordDonation` (или передавать `IPrizePoolRepository` + `IAuditLogger` напрямую — выбор в B.5);
+  - вызвать `record_donation.execute(RecordDonationCommand(currency=Currency.STARS, payment_amount_native=cost_stars, idempotency_key=command.idempotency_key))` сразу после `IPaymentLedger.charge`-а;
+  - **breaking change** для `_container_with_fakes()` в `tests/unit/bot/test_composition_root.py` и `_container()` фабрики — добавить `prize_pool` + `record_donation`-поля.
+- Что планирую дальше: B.4 commit+push → ждать PR-merge → B.5 (integration) → B.6 (composition root) → B.7 (`make ci`) → B.8 (final docs) → PR.
 
 ## Состояние ветки
 - Ветка: `devin/1778420160-sprint-4-1-B-prize-pool`
-- База: `main = 21c21c0` (merge PR #128)
-- Последний коммит на origin (после B.2): `f57008f`. B.3-коммит будет создан и запушен сразу.
-- Незакоммиченные изменения (все уйдут в B.3-коммит):
-  - `src/pipirik_wars/infrastructure/db/migrations/versions/20260510_0027_prize_pool_balance.py` — новая миграция
-  - `src/pipirik_wars/infrastructure/db/models/prize_pool.py` — новая ORM
-  - `src/pipirik_wars/infrastructure/db/models/__init__.py` — экспорт
-  - `src/pipirik_wars/infrastructure/db/repositories/prize_pool.py` — новый репозиторий
-  - `src/pipirik_wars/infrastructure/db/repositories/__init__.py` — экспорт
-  - `tests/integration/db/conftest.py` — seed 3 row-ов
-  - `tests/integration/db/test_prize_pool_repository.py` — 13 integration-тестов
-  - `tests/integration/db/test_migrations.py` — расширения теста миграций
-  - `docs/current_tasks.md` — B.2 [x], B.3 [~]
-  - `AGENT_HANDOFF.md` — этот файл
-- CI локально на ветке: pytest integration+unit monetization+ports 602 passed, mypy clean, ruff clean, lint-imports 4/4. Полный `make ci` — в B.7.
+- База: `main = da7100a` (merge PR #129; до этого было `21c21c0` от PR #128)
+- Последний коммит на origin (после B.3 на старом main + ребейз): `5c92aad`. B.4-коммит будет создан и запушен сразу.
+- Незакоммиченные изменения (все уйдут в B.4-коммит):
+  - `src/pipirik_wars/domain/shared/ports/audit.py` — `+AuditAction.PRIZE_POOL_INCREMENT`, `+AuditSource.PRIZE_POOL_INCREMENT`.
+  - `src/pipirik_wars/infrastructure/db/migrations/versions/20260510_0028_audit_source_prize_pool_increment.py` — новая миграция.
+  - `src/pipirik_wars/application/monetization/record_donation.py` — DI расширен (audit_logger + clock), audit-запись в `execute()`.
+  - `tests/unit/application/monetization/test_record_donation.py` — фабрика `_make_use_case` + 5 новых audit-тестов.
+  - `tests/integration/db/test_migrations.py` — расширения для 0028.
+  - `tests/unit/domain/shared/ports/test_audit_source.py` — переключение на 0028.
+  - `docs/current_tasks.md` — B.3 [x], B.4 [x], секция «Что ровно сейчас в работе» обновлена.
+  - `AGENT_HANDOFF.md` — этот файл.
+- CI локально на ветке: pytest **5463 passed**, mypy clean, ruff clean, lint-imports 4/4. Полный `make ci` зелёный.
 
 ## Команды для следующего агента
 - Поднять окружение: см. `README.md` «Локальная разработка» (`python3.12 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]" && pre-commit install`).
-- Прогнать CI: `make ci` (~15 минут на свежей VM).
-- Запустить только тесты монетизации + persistence: `pytest tests/unit/domain/monetization tests/unit/application/monetization tests/integration/db/test_payment_ledger.py tests/integration/db/test_prize_pool_repository.py tests/integration/db/test_migrations.py -q`
-- Прогнать только тесты, добавленные в B.3: `pytest tests/integration/db/test_prize_pool_repository.py -q`.
+- Прогнать CI: `make ci` (≈8 минут с pytest-xdist `-n auto`).
+- Запустить только тесты монетизации + persistence + audit: `pytest tests/unit/domain/monetization tests/unit/application/monetization tests/integration/db tests/unit/domain/shared/ports -q`
+- Прогнать только B.4-тесты: `pytest tests/unit/application/monetization/test_record_donation.py::TestAuditWrite tests/integration/db/test_migrations.py::TestAlembicMigrationsApplyCleanly::test_0028_descends_from_0027 -v`.
 
 ## Известные блокеры / открытые вопросы
 - **Округление 10%-комиссии.** ГДД §12.6.1 без уточнения округления. Стартовали с `floor-division (// 10)` (B.2). При смене правила обновить ГДД §12.6.1 + константу `_DONATION_DIVISOR` в `record_donation.py`.
+- **`PRIZE_POOL_INCREMENT` в anticheat-whitelist-ах.** В B.4 source **не** добавлен в `anticheat.organic_sources` / `donate_sources` / `tribe_bonus_sources` (`balance.yaml`). Это пул-внутренний бухгалтерский маркер, не length-source — органика игрока считается по `STARS_PAYMENT`-source-у (cost-side платежа), не по pool-инкременту. Если в будущем admin-интерфейс покажет «10% от X-донатов попало в пул», это будет агрегация по `prize_pool_increment` отдельно от length-аналитики.
+- **B.5 — DI breaking change.** Расширение конструктора `SpinPaidRoulette` потребует обновить все unit-тесты use-case-а + `_container_with_fakes()`. Ничего сложного, но коммит большой (тесты идут по 70+ кейсов).
 - **Concurrent-writer**-инвариант. В B.3 реализован per-row UPDATE (атомарность Postgres row-lock); SQLite-WAL — connection-level. Если в будущем понадобится `UPDATE ... RETURNING` (single-statement) — оба диалекта поддерживают (Postgres давно, SQLite ≥ 3.35), но текущий `UPDATE` + `SELECT` дают тот же результат внутри одной транзакции UoW и проще читаются.
 - **Initial-seed расхождение**. Миграция `0027` сидит 3 row-а через `op.bulk_insert`. Integration-тесты в проекте используют `Base.metadata.create_all()` (без миграций), поэтому seed дублируется в `tests/integration/db/conftest.py`. Если позже поменяется `_CURRENCY_VALUES` (4-я валюта в 4.1-D) — нужно обновить **обе** места: миграцию и conftest.
-- **`PRIZE_POOL_INCREMENT` в `AuditSource`-enum.** В B.3 enum **не** трогался — добавление перенесено в B.4 (отдельная миграция 0028 расширяет CHECK + добавляет audit-запись внутрь `RecordDonation.execute(...)`). Тест `tests/unit/domain/shared/ports/test_audit_source.py::test_enum_matches_migration_whitelist` сейчас сравнивает enum-set vs whitelist миграций 0007/0014/0024/0025/0026 — **не сломан** на B.3 (enum пока без `PRIZE_POOL_INCREMENT`).
-- **Идемпотентность `RecordDonation`.** В B.2 use-case не дедуплицирует сам — полагается на caller-а (`SpinPaidRoulette` в B.5 идемпотентен через `IPaymentLedger.charge`). В B.4 при добавлении audit-write можно полагаться на `audit_log` UNIQUE-индекс по `(idempotency_key, source)` — если caller прислал тот же `idempotency_key`, второй INSERT либо схлопнется (ON CONFLICT DO NOTHING) либо мы заведём внутренний `audit_logger.is_already_logged(...)`-guard.

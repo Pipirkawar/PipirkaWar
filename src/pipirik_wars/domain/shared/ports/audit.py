@@ -133,6 +133,18 @@ class AuditAction(str, enum.Enum):
     # ledger-а), но даёт единый journal для admin-просмотра рядом с
     # бизнес-событиями (`ROULETTE_SPIN`, `LENGTH_GRANT`-reward, и т. п.).
     PAYMENT_RECORDED = "payment_recorded"
+    # ── Спринт 4.1-B (призовой пул, ГДД §12.6.1) ──
+    # Каждый успешный донат-инкремент пула пишется одной audit-записью
+    # в той же транзакции UoW, что и `apply_increment(...)` на
+    # `IPrizePoolRepository`. `target_kind="prize_pool"`,
+    # `target_id="<idempotency_key>:donation"` (идемпотентен per-платёж),
+    # `after={"currency": ..., "amount_native": "<delta>",
+    # "pool_after_native": "<пул в этой валюте после инкремента>"}`. Парного
+    # `before`-снапшота не пишем (delta + after однозначно восстанавливают
+    # before). Источник — `AuditSource.PRIZE_POOL_INCREMENT`. На `applied=False`
+    # (донат < 10 native-юнитов, no-op инкремент) audit **не** пишется —
+    # инвариант «нет нулевых-дельт в audit-логе».
+    PRIZE_POOL_INCREMENT = "prize_pool_increment"
 
 
 class AuditSource(str, enum.Enum):
@@ -201,6 +213,17 @@ class AuditSource(str, enum.Enum):
     #   и какой» в audit-логе и аналитике.
     # Аналогично паре `roulette_free_cost`/`roulette_free_reward` (Спринт 3.5-C).
     ORACLE_TRIBE_BONUS = "oracle_tribe_bonus"
+    # ── Спринт 4.1-B (призовой пул, ГДД §12.6.1) ──
+    # `PRIZE_POOL_INCREMENT` — донат-инкремент призового пула (10% от
+    # подтверждённого платежа). Пишется в `audit_log` use-case-ом
+    # `RecordDonation` сразу после `IPrizePoolRepository.apply_increment(...)`
+    # внутри той же UoW. Парного «cost»-source-а нет: cost-сторона —
+    # запись в `payments`-таблицу + `STARS_PAYMENT`/`TON_PAYMENT`/
+    # `USDT_PAYMENT` audit-event (см. `PAYMENT_RECORDED`). `prize_pool_increment`
+    # **НЕ** входит в `anticheat.organic_sources` / `donate_sources` /
+    # `tribe_bonus_sources` (это пул-внутренний бухгалтерский маркер,
+    # не length-source).
+    PRIZE_POOL_INCREMENT = "prize_pool_increment"
     UNKNOWN = "unknown"
 
 
