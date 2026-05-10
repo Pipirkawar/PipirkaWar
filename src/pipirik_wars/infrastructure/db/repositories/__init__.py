@@ -55,6 +55,9 @@ from pipirik_wars.infrastructure.db.repositories.mountain_run import (
 from pipirik_wars.infrastructure.db.repositories.oracle_history import (
     SqlAlchemyOracleHistoryRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.payments import (
+    SqlAlchemyPaymentLedger,
+)
 from pipirik_wars.infrastructure.db.repositories.player import (
     SqlAlchemyPlayerRepository,
 )
@@ -99,6 +102,7 @@ __all__ = [
     "SqlAlchemyMassDuelRepository",
     "SqlAlchemyMountainRunRepository",
     "SqlAlchemyOracleHistoryRepository",
+    "SqlAlchemyPaymentLedger",
     "SqlAlchemyPlayerRepository",
     "SqlAlchemyReferralRepository",
     "SqlAlchemyRouletteSpinRepository",

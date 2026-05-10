@@ -48,6 +48,9 @@ PvP массовый клан×клан (Спринт 2.2.D):
 
 Free-to-play рулетка (Спринт 3.5.B):
 - `RouletteSpinORM` — таблица `roulette_spins` (event-log прокруток).
+
+Монетизация (Спринт 4.1-A):
+- `PaymentORM` — таблица `payments` (append-only ledger TG Stars / TON / USDT).
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
@@ -66,6 +69,7 @@ from pipirik_wars.infrastructure.db.models.daily_head import DailyHeadAssignment
 from pipirik_wars.infrastructure.db.models.forest import ForestRunORM
 from pipirik_wars.infrastructure.db.models.items import ItemORM
 from pipirik_wars.infrastructure.db.models.oracle import OracleInvocationORM
+from pipirik_wars.infrastructure.db.models.payments import PaymentORM
 from pipirik_wars.infrastructure.db.models.player import UserORM
 from pipirik_wars.infrastructure.db.models.pve_runs import (
     DungeonRunORM,
@@ -108,6 +112,7 @@ __all__ = [
     "ItemORM",
     "MountainRunORM",
     "OracleInvocationORM",
+    "PaymentORM",
     "PvpDuelORM",
     "PvpDuelRoundORM",
     "PvpGlobalLobbyORM",
