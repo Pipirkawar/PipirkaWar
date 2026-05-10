@@ -85,7 +85,7 @@
   - `bot/handlers/__init__.py`: импорт + регистрация `roulette_router`.
   - `bot/presenters/__init__.py`: экспорт `RoulettePresenter`.
   - **Критерий:** composition-тесты (`tests/unit/bot/test_composition_root.py`) обновлены под новый use-case.
-- [ ] **D.5 — `make ci` локально:** ruff + mypy --strict + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%).
+- [x] **D.5 — `make ci` локально:** ruff + mypy --strict + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%) — **5132 passed / 2 skipped, coverage 95.63%** на `c4a7289`.
 - [ ] **D.6 — Финальный док-коммит:** `history.md` + запись 3.5-D, `current_tasks.md` пересборка под старт **Спринта 3.6 «Бонус-за-племена в Предсказателе»** (закрытие Спринта 3.5).
 - [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md`.
 - [ ] Дождаться зелёного GitHub CI.
