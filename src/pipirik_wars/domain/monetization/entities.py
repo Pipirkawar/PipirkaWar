@@ -31,9 +31,14 @@ from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 
-from pipirik_wars.domain.monetization.errors import PrizePoolAmountInvariantError
+from pipirik_wars.domain.monetization.errors import (
+    PrizeLotInvariantError,
+    PrizeLotStatusTransitionError,
+    PrizePoolAmountInvariantError,
+)
 from pipirik_wars.domain.monetization.value_objects import (
     Currency,
+    FeeBufferAmount,
     IdempotencyKey,
     StarsPoolBalance,
     TonNanoAmount,
@@ -43,6 +48,8 @@ from pipirik_wars.domain.monetization.value_objects import (
 __all__ = [
     "Payment",
     "PaymentStatus",
+    "PrizeLot",
+    "PrizeLotStatus",
     "PrizePool",
 ]
 
@@ -265,3 +272,269 @@ class PrizePool:
             )
         # Недостижимо при исчерпывающем case-анализе `Currency`-StrEnum.
         raise AssertionError(f"unreachable: unknown Currency {currency!r}")
+
+
+class PrizeLotStatus(StrEnum):
+    """Машинный статус лота крипто-приза (ГДД §12.6, Спринт 4.1-C).
+
+    `ACTIVE` — свежесгенерированный лот, доступен для выпадения в
+    результат-пуле free + paid рулеток (picker, шаг C.5). Default-статус
+    после `IPrizeLotRepository.add(...)`.
+
+    `RESERVED` — лот занят конкретным игроком после сработки в спине;
+    выплата отложена до `ClaimPrize` (4.1-D). Не возвращается в picker.
+    Переход `ACTIVE → RESERVED` атомарный (`UPDATE ... WHERE
+    status='active'`-row-lock) — защищает от race-condition «два
+    игрока попали в один лот».
+
+    `CLAIMED` — игрок забрал приз через `ClaimPrize` (4.1-D); транзакция
+    в TON / USDT-сети успешна. Terminal-статус: `claimed_at` помечается,
+    `update_status` дальше не разрешён.
+
+    `REFUNDED` — лот возвращён в пул (например, `actual_fee > fee_buffer`
+    при выводе, или admin-команда `/refund_lot` 4.1-E). Terminal-статус.
+    Сумма лота вычтена обратно в `PrizePool`-балансе отдельным шагом
+    use-case-а — этот enum только маркирует жизненный цикл лота.
+
+    Стабильные машинные id, попадают в `prize_lots.status` (CHECK-constraint
+    миграция 4.1-C `0029_prize_lots`) и в `audit_log.payload.lot_status`.
+    Не менять без миграции.
+    """
+
+    ACTIVE = "active"
+    RESERVED = "reserved"
+    CLAIMED = "claimed"
+    REFUNDED = "refunded"
+
+
+# Разрешённые переходы машины состояний лота (см. PrizeLotStatus-docstring).
+# `frozenset()` под terminal-статус — формальный знак «выходов нет».
+# Доступно как read-only `MappingProxyType` — снаружи модифицировать
+# нельзя (попытка добавить ключ → TypeError).
+_PRIZE_LOT_TRANSITIONS: Mapping[PrizeLotStatus, frozenset[PrizeLotStatus]] = MappingProxyType(
+    {
+        PrizeLotStatus.ACTIVE: frozenset(
+            {PrizeLotStatus.RESERVED, PrizeLotStatus.REFUNDED},
+        ),
+        PrizeLotStatus.RESERVED: frozenset(
+            {PrizeLotStatus.CLAIMED, PrizeLotStatus.REFUNDED},
+        ),
+        PrizeLotStatus.CLAIMED: frozenset(),
+        PrizeLotStatus.REFUNDED: frozenset(),
+    },
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PrizeLot:
+    """Иммутабельный агрегат «лот крипто-приза» (ГДД §12.6, Спринт 4.1-C).
+
+    Лот — это нарезанный кусок призового пула `PrizePool`, заведённый
+    application-сервисом `GeneratePrizeLots` (шаг C.2) под выдачу в
+    результат-пуле рулеток. Жизненный цикл лота — машина состояний
+    `ACTIVE → RESERVED → CLAIMED|REFUNDED`, см. `PrizeLotStatus`.
+
+    Поля:
+
+    * `id: int | None` — id строки в `prize_lots`-таблице.
+      На свежесозданном (in-memory) лоте — `None`; после
+      `IPrizeLotRepository.add(...)` — `int > 0`. Convention
+      идентична `domain/caravan/entities.py::Caravan.id`.
+    * `currency: Currency` — валюта лота (`STARS` / `TON_NANO` /
+      `USDT_DECIMAL`). В рамках одной валюты лоты независимы
+      друг от друга (один игрок может зарезервировать несколько
+      лотов разных валют).
+    * `amount_native: int` — размер приза в минимальных единицах
+      валюты (`>= 1`, валидируется через invariant `amount_native >
+      fee_buffer_native`). На уровне БД — `NUMERIC(38, 0)` (4.1-C
+      миграция `0029`).
+    * `fee_buffer_native: FeeBufferAmount` — заложенный буфер на
+      оплату сетевой комиссии (`>= 0`, валидируется VO). На моменте
+      `CLAIMED` фактическая комиссия может быть `<= fee_buffer_native`
+      (игрок получает остаток); при `actual_fee > fee_buffer_native`
+      лот переводится в `REFUNDED`, сумма возвращается в пул (4.1-D
+      `ClaimPrize`-flow).
+    * `status: PrizeLotStatus` — текущий статус (см. enum-docstring).
+    * `created_at: datetime` — момент `IPrizeLotRepository.add(...)`
+      (TZ-aware; валидируется).
+    * `claimed_at: datetime | None` — момент `ClaimPrize` (TZ-aware).
+      На моменте `ACTIVE` / `RESERVED` / `REFUNDED` — `None`. На моменте
+      `CLAIMED` — обязан быть выставлен (валидируется).
+
+    Invariants:
+    1. `amount_native > fee_buffer_native >= 0` — после удержания комиссии
+       игроку обязан остаться `>= 1` минимальная единица валюты.
+    2. `status == CLAIMED ⇒ claimed_at is not None` (и наоборот:
+       `claimed_at is not None ⇒ status == CLAIMED`).
+    3. Status transition: `ACTIVE → RESERVED|REFUNDED`,
+       `RESERVED → CLAIMED|REFUNDED`, `CLAIMED|REFUNDED` — terminal.
+       Нарушение → `PrizeLotStatusTransitionError`.
+
+    Frozen + slots → агрегат без мутаций; `reserve()` / `claim(...)` /
+    `refund()` возвращают новый инстанс (старый не мутируется).
+    Convention идентична `domain/caravan/entities.py::Caravan.mark_*`.
+    """
+
+    id: int | None
+    currency: Currency
+    amount_native: int
+    fee_buffer_native: FeeBufferAmount
+    status: PrizeLotStatus
+    created_at: datetime
+    claimed_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.amount_native, int) or isinstance(
+            self.amount_native,
+            bool,
+        ):
+            raise TypeError(
+                f"PrizeLot.amount_native must be int, got {type(self.amount_native).__name__}",
+            )
+        if self.amount_native <= self.fee_buffer_native.value:
+            raise PrizeLotInvariantError(
+                currency=self.currency,
+                amount_native=self.amount_native,
+                fee_buffer_native=self.fee_buffer_native.value,
+            )
+        if self.created_at.tzinfo is None:
+            raise ValueError(
+                "PrizeLot.created_at must be timezone-aware "
+                "(naïve datetime would lose UTC offset on persistence)",
+            )
+        if self.claimed_at is not None and self.claimed_at.tzinfo is None:
+            raise ValueError(
+                "PrizeLot.claimed_at must be timezone-aware",
+            )
+        if self.status is PrizeLotStatus.CLAIMED and self.claimed_at is None:
+            raise ValueError(
+                "PrizeLot(status=CLAIMED) requires claimed_at to be set",
+            )
+        if self.status is not PrizeLotStatus.CLAIMED and self.claimed_at is not None:
+            raise ValueError(
+                f"PrizeLot(status={self.status.value!r}) must have "
+                f"claimed_at=None, got {self.claimed_at!r}",
+            )
+        if self.id is not None and (
+            not isinstance(self.id, int) or isinstance(self.id, bool) or self.id <= 0
+        ):
+            raise ValueError(
+                f"PrizeLot.id must be a positive int or None, got {self.id!r}",
+            )
+
+    @classmethod
+    def freshly_generated(
+        cls,
+        *,
+        currency: Currency,
+        amount_native: int,
+        fee_buffer_native: FeeBufferAmount,
+        created_at: datetime,
+    ) -> PrizeLot:
+        """Свежесгенерированный лот — `id=None, status=ACTIVE, claimed_at=None`.
+
+        Используется application-сервисом `GeneratePrizeLots` (шаг C.2)
+        перед `IPrizeLotRepository.add(...)`. После `add(...)` репозиторий
+        вернёт тот же лот, но с `id`, проставленным БД через DEFAULT-
+        `nextval('prize_lots_id_seq')`.
+        """
+        return cls(
+            id=None,
+            currency=currency,
+            amount_native=amount_native,
+            fee_buffer_native=fee_buffer_native,
+            status=PrizeLotStatus.ACTIVE,
+            created_at=created_at,
+            claimed_at=None,
+        )
+
+    @property
+    def is_active(self) -> bool:
+        """Лот активен — доступен в picker-е (шаг C.5)."""
+        return self.status is PrizeLotStatus.ACTIVE
+
+    @property
+    def is_reserved(self) -> bool:
+        """Лот зарезервирован за конкретным игроком до `ClaimPrize` (4.1-D)."""
+        return self.status is PrizeLotStatus.RESERVED
+
+    @property
+    def is_terminal(self) -> bool:
+        """Лот в terminal-статусе (`CLAIMED` / `REFUNDED`) — изменения не разрешены."""
+        return self.status in (PrizeLotStatus.CLAIMED, PrizeLotStatus.REFUNDED)
+
+    @property
+    def net_amount_native(self) -> int:
+        """Чистая сумма приза за вычетом fee-буфера (`amount_native -
+        fee_buffer_native`). По invariant `>= 1`. На моменте `CLAIMED`
+        используется в `ClaimPrize` (4.1-D) как сумма-к-переводу игроку,
+        если фактическая комиссия попала в буфер.
+        """
+        return self.amount_native - self.fee_buffer_native.value
+
+    def reserve(self) -> PrizeLot:
+        """Перевести `ACTIVE → RESERVED`. Невалидный source → ошибка.
+
+        Используется на доменном уровне для in-memory моделирования
+        резервирования (например, в Fake-репозитории unit-тестов).
+        В production-flow атомарность гарантируется SQL-репозиторием
+        (`UPDATE ... WHERE status='active'`, шаг C.3).
+        """
+        return self._transition_to(PrizeLotStatus.RESERVED)
+
+    def claim(self, *, claimed_at: datetime) -> PrizeLot:
+        """Перевести `RESERVED → CLAIMED` с пометкой времени выплаты.
+
+        Используется в use-case `ClaimPrize` (4.1-D) после успешной
+        TON / USDT-транзакции.
+        """
+        if claimed_at.tzinfo is None:
+            raise ValueError(
+                "PrizeLot.claim(claimed_at=...) must be timezone-aware",
+            )
+        if self.status is not PrizeLotStatus.RESERVED:
+            raise PrizeLotStatusTransitionError(
+                lot_id=self.id,
+                from_status=self.status,
+                to_status=PrizeLotStatus.CLAIMED,
+            )
+        return PrizeLot(
+            id=self.id,
+            currency=self.currency,
+            amount_native=self.amount_native,
+            fee_buffer_native=self.fee_buffer_native,
+            status=PrizeLotStatus.CLAIMED,
+            created_at=self.created_at,
+            claimed_at=claimed_at,
+        )
+
+    def refund(self) -> PrizeLot:
+        """Перевести лот в `REFUNDED` (доступен из `ACTIVE` или `RESERVED`).
+
+        Используется когда:
+        * `actual_fee > fee_buffer_native` при попытке выплаты (4.1-D);
+        * admin-команда `/refund_lot` (4.1-E);
+        * лот «истёк» и не был забран (cron, опционально 4.1-E).
+
+        Сумма лота возвращается в `PrizePool` отдельным шагом use-case-а
+        (`PrizePoolService.apply_increment(currency, +amount_native)`).
+        """
+        return self._transition_to(PrizeLotStatus.REFUNDED)
+
+    def _transition_to(self, new_status: PrizeLotStatus) -> PrizeLot:
+        allowed = _PRIZE_LOT_TRANSITIONS[self.status]
+        if new_status not in allowed:
+            raise PrizeLotStatusTransitionError(
+                lot_id=self.id,
+                from_status=self.status,
+                to_status=new_status,
+            )
+        return PrizeLot(
+            id=self.id,
+            currency=self.currency,
+            amount_native=self.amount_native,
+            fee_buffer_native=self.fee_buffer_native,
+            status=new_status,
+            created_at=self.created_at,
+            claimed_at=self.claimed_at,
+        )

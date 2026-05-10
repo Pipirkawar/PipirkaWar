@@ -7,10 +7,10 @@
 ## Состояние на этом коммите
 
 - **Ветка:** `devin/1778438123-sprint-4-1-C-lot-generator` (от `main = 93148aa`, merge PR #130).
-- **Активный шаг чек-листа:** **C.0** — `current_tasks.md` под старт 4.1-C + создание этого `AGENT_HANDOFF.md`.
-- **Готовы:** -.
-- **В работе:** C.0 (планирование + snapshot pivot).
-- **Дальше:** C.1 — Domain `PrizeLot` aggregate + VO `FeeBufferAmount` + ports + errors.
+- **Активный шаг чек-листа:** **C.2** — Application use-case `GeneratePrizeLots`.
+- **Готовы:** C.0 (snapshot pivot + sticky HANDOFF), C.1 (Domain `PrizeLot` aggregate + VO `FeeBufferAmount` + ports + errors + 67 unit-тестов).
+- **В работе:** —.
+- **Дальше:** C.2 — application/monetization/generate_prize_lots.py + unit-тесты на «нарезку» пула по min/max/decimal-step + `fee_buffer` через `IFeeEstimator`.
 
 ## Что нужно знать следующему агенту, если меня прервёт
 
@@ -39,6 +39,14 @@
    - `pick_paid_outcome(*, config, random, crypto_pool_empty)` — сейчас `crypto_pool_empty=True` всегда.
    - В 4.1-C нужно превратить `bool` в реальный сигнал: `crypto_pool_empty = not active_lots_for(currency)`.
    - Или ввести `active_lots: Sequence[PrizeLot]` параметр и возвращать `RouletteOutcome(kind=CRYPTO_LOT, lot_id=...)`. **Открытый вопрос.**
+9. **C.1 итог** (готов в этом коммите):
+   - `domain/monetization/value_objects.py::FeeBufferAmount` — frozen-VO с `>= 0`-invariant.
+   - `domain/monetization/entities.py::PrizeLot` — `@dataclass(frozen=True, slots=True)` с полями `(id, currency, amount_native, fee_buffer_native, status, created_at, claimed_at)`, invariants `amount_native > fee_buffer_native >= 0`, TZ-aware datetime, `id ∈ {None} ∪ ℕ+`, `status == CLAIMED ⇔ claimed_at`.
+   - `PrizeLotStatus` (StrEnum: `active|reserved|claimed|refunded`) + immutable transition-методы `reserve()` / `claim(claimed_at=...)` / `refund()`, машина состояний `ACTIVE → RESERVED|REFUNDED`, `RESERVED → CLAIMED|REFUNDED`, terminal `CLAIMED|REFUNDED`. Транзишены через приватный `_PRIZE_LOT_TRANSITIONS: MappingProxyType`.
+   - `domain/monetization/errors.py`: `PrizeLotInvariantError`, `PrizeLotStatusTransitionError`, `PrizeLotNotFoundError`.
+   - `domain/monetization/ports.py`: `IPrizeLotRepository` (`add` / `get_by_id` / `list_active(currency)` / `update_status(lot_id, new_status, claimed_at?)`) + `IFeeEstimator` (`estimate_fee(currency, target_amount_native) -> int`).
+   - `domain/monetization/__init__.py` — ре-экспорт всех новых символов.
+   - 67 unit-тестов в `tests/unit/domain/monetization/test_prize_lot.py` (VO/invariants/status-machine/errors/immutability).
 
 ## Принципы коммитов на этой ветке
 
