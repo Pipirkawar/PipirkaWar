@@ -40,6 +40,7 @@ from pipirik_wars.bot.handlers.profile import router as profile_router
 from pipirik_wars.bot.handlers.referral_share import router as referral_share_router
 from pipirik_wars.bot.handlers.registration import router as registration_router
 from pipirik_wars.bot.handlers.roulette import router as roulette_router
+from pipirik_wars.bot.handlers.roulette_paid import router as roulette_paid_router
 from pipirik_wars.bot.handlers.start import router as start_router
 from pipirik_wars.bot.handlers.top import router as top_router
 from pipirik_wars.bot.handlers.upgrade import router as upgrade_router
@@ -77,6 +78,12 @@ def register_routers(dispatcher: Dispatcher) -> None:
     # выполняется через `SpinFreeRoulette` с идемпотентностью
     # по `f"msg:{message_id}"` (один клик = один spin).
     dispatcher.include_router(roulette_router)
+    # Спринт 4.1-A: `/roulette_paid` (личка-only) + buy-callback-и
+    # `roulette_paid:buy_single` / `roulette_paid:buy_pack_10`. Отправляет
+    # invoice в Telegram Stars (XTR), валидирует `pre_checkout_query`,
+    # проводит spin на `successful_payment`. Spin выполняется через
+    # `SpinPaidRoulette` с идемпотентностью по `tg_payment_charge_id`.
+    dispatcher.include_router(roulette_paid_router)
     dispatcher.include_router(upgrade_router)
     dispatcher.include_router(duel_router)
     dispatcher.include_router(mass_duel_router)

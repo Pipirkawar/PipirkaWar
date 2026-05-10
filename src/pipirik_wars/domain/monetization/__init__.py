@@ -24,6 +24,9 @@ from pipirik_wars.domain.monetization.errors import (
     IdempotencyConflictError,
     MonetizationDomainError,
 )
+from pipirik_wars.domain.monetization.ports import (
+    IPaymentLedger,
+)
 from pipirik_wars.domain.monetization.value_objects import (
     Currency,
     IdempotencyKey,
@@ -32,6 +35,7 @@ from pipirik_wars.domain.monetization.value_objects import (
 
 __all__ = [
     "Currency",
+    "IPaymentLedger",
     "IdempotencyConflictError",
     "IdempotencyKey",
     "MonetizationDomainError",

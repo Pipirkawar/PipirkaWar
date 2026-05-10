@@ -1329,3 +1329,80 @@ roulette-free-toast-not-registered = Tap /start in the bot DM first.
 roulette-free-toast-spin-complete = Spin complete.
 roulette-free-toast-already-processed = Already processed.
 roulette-free-toast-error = Something went wrong.
+
+# -----------------------------------------------------------------------------
+# /roulette_paid (Sprint 4.1-A, GDD §12.5). Paid roulette via Telegram Stars:
+# 1 ⭐ = 1 spin, 9 ⭐ = 10 spins. Thickness ≥ 1 (available from start).
+# Cost is charged in Stars via invoice + pre_checkout_query +
+# successful_payment flow. On a LENGTH outcome the player receives "fresh" cm
+# (`ROULETTE_PAID_REWARD`); other outcomes — placeholder until 4.1-C.
+# -----------------------------------------------------------------------------
+roulette-paid-group = 🎰 The /roulette_paid command is DM-only. Open the private chat with the bot and try again.
+roulette-paid-other = 🎰 The /roulette_paid command is DM-only.
+roulette-paid-not-registered = 🎰 Looks like you're not registered yet. Tap /start in this chat — then you'll be able to spin the roulette.
+
+# Gate warning card (if thickness < config min_thickness_level).
+roulette-paid-requirement-thickness = 🎰 Paid roulette unlocks at thickness ≥ { NUMBER($required, useGrouping: 0) }. You're at { NUMBER($actual, useGrouping: 0) }. Try /upgrade.
+
+# Pre-spin card with two purchase buttons (single and pack-10).
+roulette-paid-prompt =
+    🎰 Paid roulette
+    Each spin is a chance at length, items, scrolls, or a crypto prize.
+
+    Cost:
+    — 1 spin: { NUMBER($single_cost_stars, useGrouping: 0) } ⭐
+    — { NUMBER($pack10_spins, useGrouping: 0) }-pack: { NUMBER($pack10_cost_stars, useGrouping: 0) } ⭐
+
+    Pick a pack to proceed to checkout.
+
+roulette-paid-button-buy-single = Buy 1 spin — { NUMBER($cost_stars, useGrouping: 0) } ⭐
+roulette-paid-button-buy-pack-10 = Buy { NUMBER($pack10_spins, useGrouping: 0) }-pack — { NUMBER($cost_stars, useGrouping: 0) } ⭐
+
+# Invoice (Telegram Stars) — title / description / label per-pack.
+roulette-paid-invoice-title-single = 🎰 Paid roulette — 1 spin
+roulette-paid-invoice-title-pack-10 = 🎰 Paid roulette — pack-10
+roulette-paid-invoice-description-single = One spin of the paid roulette for { NUMBER($cost_stars, useGrouping: 0) } ⭐. Chance at length, items, scrolls, or a crypto prize.
+roulette-paid-invoice-description-pack-10 = { NUMBER($pack10_spins, useGrouping: 0) } spins of the paid roulette for { NUMBER($cost_stars, useGrouping: 0) } ⭐. ~10% discount vs single purchases.
+roulette-paid-invoice-label-single = Paid roulette — 1 spin
+roulette-paid-invoice-label-pack-10 = Paid roulette — { NUMBER($pack10_spins, useGrouping: 0) }-pack
+
+# Result cards for SINGLE-pack (one outcome).
+roulette-paid-result-single-length =
+    🎰 Length! You got <b>+{ NUMBER($length_cm, useGrouping: 0) } cm</b>.
+    Charged: { NUMBER($spent_stars, useGrouping: 0) } ⭐.
+
+roulette-paid-result-single-item =
+    🎰 You got an item!
+    Charged: { NUMBER($spent_stars, useGrouping: 0) } ⭐.
+    The reward will be granted in Phase 4 — for now the hit is recorded.
+
+roulette-paid-result-single-scroll-regular =
+    🎰 You got a scroll!
+    Charged: { NUMBER($spent_stars, useGrouping: 0) } ⭐.
+    The reward will be granted in Phase 4 — for now the hit is recorded.
+
+roulette-paid-result-single-scroll-blessed =
+    🎰 You got a blessed scroll!
+    Charged: { NUMBER($spent_stars, useGrouping: 0) } ⭐.
+    The reward will be granted in Phase 4 — for now the hit is recorded.
+
+roulette-paid-result-single-crypto-lot =
+    🎰 You got a crypto lot!
+    Charged: { NUMBER($spent_stars, useGrouping: 0) } ⭐.
+    The reward will be granted in Phase 4 — for now the hit is recorded.
+
+# Result card for PACK_10 — aggregated summary across pack10_spins outcomes.
+roulette-paid-result-pack-10 =
+    🎰 Pack-{ NUMBER($n_spins, useGrouping: 0) } complete!
+    Length: <b>+{ NUMBER($total_length_cm, useGrouping: 0) } cm</b> ({ NUMBER($n_length, useGrouping: 0) } of { NUMBER($n_spins, useGrouping: 0) }).
+    Items: { NUMBER($n_item, useGrouping: 0) }, scrolls: { NUMBER($n_scroll_regular, useGrouping: 0) }, blessed: { NUMBER($n_scroll_blessed, useGrouping: 0) }, crypto lots: { NUMBER($n_crypto_lot, useGrouping: 0) }.
+    Charged: { NUMBER($spent_stars, useGrouping: 0) } ⭐.
+
+roulette-paid-result-idempotent = ℹ This spin is already complete. Open /profile to see your current state.
+
+# Toasts.
+roulette-paid-toast-thickness-gate = Need thickness ≥ { NUMBER($required, useGrouping: 0) }. You're at { NUMBER($actual, useGrouping: 0) }.
+roulette-paid-toast-not-registered = Tap /start in the bot DM first.
+roulette-paid-toast-payment-ok = Payment confirmed, roulette spun.
+roulette-paid-toast-already-processed = Already processed.
+roulette-paid-toast-error = Something went wrong.
