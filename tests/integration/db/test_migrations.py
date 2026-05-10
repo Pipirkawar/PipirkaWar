@@ -228,6 +228,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0024 is not None
         assert rev_0024.down_revision == "0023_roulette_spins"
 
+    def test_0025_descends_from_0024(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0025 = script.get_revision("0025_audit_source_oracle_tribe_bonus")
+        assert rev_0025 is not None
+        assert rev_0025.down_revision == "0024_audit_source_roulette_free"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -256,6 +263,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260509_0022_scrolls.py",
             "20260510_0023_roulette_spins.py",
             "20260510_0024_audit_source_roulette_free.py",
+            "20260510_0025_audit_source_oracle_tribe_bonus.py",
         ]
 
     def test_upgrade_head_creates_all_tables(

@@ -286,6 +286,15 @@ oracle:
   bonus_min: 1
   bonus_max: 20
   distribution: "uniform"   # позже можно weighted_buckets
+  # §11.1, Спринт 3.6-A — «бонус-за-племена».
+  # +cm_per_tribe см за каждое активное племя (size >= min_tribe_size,
+  # игрок — член), кап cap_cm. Аудит-источник `oracle_tribe_bonus`
+  # (см. anticheat.tribe_bonus_sources, Спринт 3.6-A).
+  tribe_bonus:
+    enabled: true
+    cm_per_tribe: 1
+    cap_cm: 131
+    min_tribe_size: 4
 
 # -----------------------------------------------------------------------------
 # §13.1 — реферальная схема. Все начисления идут после регистрации новичка
@@ -378,6 +387,12 @@ anticheat:
     - stars_payment
     - ton_payment
     - usdt_payment
+  # Спринт 3.6-A (ГДД §11.1) — бонус-за-племена в /predict пишется в audit_log
+  # с source=oracle_tribe_bonus, но НЕ учитывается в anti-cheat-окнах 24h/7d
+  # (крупный клан не должен «съедать» хардкап своих участников). Disjoint
+  # с organic_sources/donate_sources — проверяется pydantic-валидатором.
+  tribe_bonus_sources:
+    - oracle_tribe_bonus
 
 # -----------------------------------------------------------------------------
 # §7 — PvP-система. Сейчас только дуэли 1×1 (Спринт 2.1.A); масс-PvP

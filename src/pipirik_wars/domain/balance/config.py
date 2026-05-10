@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import itertools
+import logging
 from enum import StrEnum
 from typing import Literal
 
@@ -20,6 +21,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from pipirik_wars.domain.shared.ports.audit import AuditSource
 from pipirik_wars.shared.errors import IntegrityError
+
+_logger = logging.getLogger(__name__)
 
 
 class Slot(StrEnum):
@@ -571,6 +574,37 @@ class BossesConfig(_Frozen):
         return self
 
 
+class OracleTribeBonusConfig(_Frozen):
+    """Бонус-за-племена в `/oracle` (ГДД §11.1, Спринт 3.6-A).
+
+    Дополнительный «довесок» к базовому броску `bonus_min..bonus_max`:
+    `+cm_per_tribe` см за каждое квалифицированное племя, в котором
+    состоит игрок (см. `IClanRepository.count_active_for_player`),
+    с верхним капом `cap_cm`. Формально: `tribe_bonus =
+    min(n_active * cm_per_tribe, cap_cm)`.
+
+    Поля:
+    - `enabled` — глобальный фичефлаг (включает/выключает второе начисление
+      без удаления конфига; «выключено» = `n_active=0` в use-case-е).
+    - `cm_per_tribe` — коэффициент бонуса за одно племя (см).
+    - `cap_cm` — абсолютный кап бонуса в одном `/predict`-вызове (см).
+    - `min_tribe_size` — минимальный размер «активного» племени
+      (включая самого игрока). Меньшие племена в подсчёт не попадают,
+      см. контракт `IClanRepository.count_active_for_player`.
+
+    Согласованность с `OracleConfig` (ГДД §11.1: `/predict ≤ +151 см`)
+    проверяется на уровне родителя (`OracleConfig._validate`): если
+    `bonus_max + cap_cm > 151`, при загрузке балансa выводится мягкий
+    warning в логе (не падаем, чтобы не блокировать релиз; алертим
+    оператору).
+    """
+
+    enabled: bool = True
+    cm_per_tribe: int = Field(default=1, ge=0)
+    cap_cm: int = Field(default=131, ge=0)
+    min_tribe_size: int = Field(default=4, ge=1)
+
+
 class OracleConfig(_Frozen):
     """Конфиг предсказателя `/oracle` (ГДД §11)."""
 
@@ -578,12 +612,27 @@ class OracleConfig(_Frozen):
     bonus_min: int = Field(gt=0)
     bonus_max: int = Field(gt=0)
     distribution: Literal["uniform"] = "uniform"
+    tribe_bonus: OracleTribeBonusConfig = Field(default_factory=OracleTribeBonusConfig)
 
     @model_validator(mode="after")
     def _validate(self) -> OracleConfig:
         if self.bonus_min > self.bonus_max:
             raise ValueError(
                 f"oracle.bonus_min ({self.bonus_min}) must be <= bonus_max ({self.bonus_max})"
+            )
+        # ГДД §11.1: суммарно `/predict` не должен превышать +151 см
+        # (база `bonus_max` + бонус-за-племена `cap_cm`). Это soft-проверка:
+        # пишем warning, но не падаем, чтобы оператор мог временно поднять
+        # кап, если этого требует ивент. В CI на дефолтных значениях
+        # (20 + 131 = 151) предупреждение не сработает.
+        total_max = self.bonus_max + self.tribe_bonus.cap_cm
+        if total_max > 151:
+            _logger.warning(
+                "oracle: bonus_max (%d) + tribe_bonus.cap_cm (%d) = %d cm "
+                "exceeds GDD §11.1 contract (≤ 151 cm per /predict)",
+                self.bonus_max,
+                self.tribe_bonus.cap_cm,
+                total_max,
             )
         return self
 
@@ -672,12 +721,17 @@ class AnticheatConfig(_Frozen):
     """Конфиг анти-чит хардкапа (ГДД §3.3.5, Спринт 1.6.B).
 
     Параметры rolling-окон (24 ч / 7 дн) и длительности soft-ban-а, плюс
-    whitelist organic-источников (попадают в агрегацию хардкапа) и
-    blacklist donate-источников (платный канал — без ограничений).
+    whitelist organic-источников (попадают в агрегацию хардкапа),
+    blacklist donate-источников (платный канал — без ограничений) и
+    отдельный whitelist tribe-bonus-источников (Спринт 3.6-A): бонус
+    за активные племена в `/predict` пишется в `audit_log` с
+    `source = "oracle_tribe_bonus"`, но **не** учитывается в rolling-окнах
+    24h/7d, чтобы крупный клан не «съедал» хардкап своих участников.
 
-    Источники, отсутствующие в обоих списках (`admin_refund`, `unknown`),
-    вообще не учитываются в агрегации: первый — служебная отрицательная
-    дельта при сторно, второй — backfill для исторических записей.
+    Источники, отсутствующие во всех трёх списках (`admin_refund`, `unknown`,
+    `roulette_free_*`), вообще не учитываются в агрегации: первый —
+    служебная отрицательная дельта при сторно; `unknown` — backfill для
+    исторических записей; пара рулетки — audit-only метки cost/reward.
     """
 
     daily_cap_cm: int = Field(gt=0)
@@ -685,6 +739,14 @@ class AnticheatConfig(_Frozen):
     soft_ban_duration_days: int = Field(gt=0)
     organic_sources: tuple[AuditSource, ...] = Field(min_length=1)
     donate_sources: tuple[AuditSource, ...] = Field(min_length=1)
+    # ── Спринт 3.6-A (бонус-за-племена в /predict, ГДД §11.1) ──
+    # Audit-only whitelist: источники, которые пишутся в `audit_log`
+    # с положительной `delta_cm`, но **не** идут в anti-cheat-агрегацию.
+    # Семантически это «не-органический прирост» (виральный бонус за
+    # размер клана; не органическая активность игрока). Валидируется
+    # disjoint с `organic_sources`/`donate_sources`. Дефолт — `()`,
+    # чтобы старые конфиги без поля парсились без миграции.
+    tribe_bonus_sources: tuple[AuditSource, ...] = ()
 
     @model_validator(mode="after")
     def _validate(self) -> AnticheatConfig:
@@ -695,22 +757,45 @@ class AnticheatConfig(_Frozen):
             )
         organic_set = set(self.organic_sources)
         donate_set = set(self.donate_sources)
+        tribe_set = set(self.tribe_bonus_sources)
         if len(organic_set) != len(self.organic_sources):
             raise ValueError(
                 f"anticheat.organic_sources contains duplicates: {self.organic_sources}"
             )
         if len(donate_set) != len(self.donate_sources):
             raise ValueError(f"anticheat.donate_sources contains duplicates: {self.donate_sources}")
+        if len(tribe_set) != len(self.tribe_bonus_sources):
+            raise ValueError(
+                f"anticheat.tribe_bonus_sources contains duplicates: {self.tribe_bonus_sources}"
+            )
         intersection = organic_set & donate_set
         if intersection:
             raise ValueError(
                 "anticheat: organic_sources and donate_sources must be disjoint, "
                 f"intersection: {sorted(s.value for s in intersection)}"
             )
-        if AuditSource.UNKNOWN in organic_set or AuditSource.UNKNOWN in donate_set:
+        organic_tribe_overlap = organic_set & tribe_set
+        if organic_tribe_overlap:
             raise ValueError(
-                "anticheat: AuditSource.UNKNOWN must not appear in organic_sources "
-                "or donate_sources (it is a backfill marker, not a real source)"
+                "anticheat: organic_sources and tribe_bonus_sources must be disjoint "
+                "(tribe bonus is audit-only, not organic), "
+                f"intersection: {sorted(s.value for s in organic_tribe_overlap)}"
+            )
+        donate_tribe_overlap = donate_set & tribe_set
+        if donate_tribe_overlap:
+            raise ValueError(
+                "anticheat: donate_sources and tribe_bonus_sources must be disjoint, "
+                f"intersection: {sorted(s.value for s in donate_tribe_overlap)}"
+            )
+        if (
+            AuditSource.UNKNOWN in organic_set
+            or AuditSource.UNKNOWN in donate_set
+            or AuditSource.UNKNOWN in tribe_set
+        ):
+            raise ValueError(
+                "anticheat: AuditSource.UNKNOWN must not appear in organic_sources, "
+                "donate_sources, or tribe_bonus_sources (it is a backfill marker, "
+                "not a real source)"
             )
         if AuditSource.ADMIN_REFUND in organic_set:
             raise ValueError(

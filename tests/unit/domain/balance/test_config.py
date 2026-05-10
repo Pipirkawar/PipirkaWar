@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -297,6 +298,98 @@ class TestOracleConfig:
             BalanceConfig.model_validate(payload)
 
 
+class TestOracleTribeBonusConfig:
+    """Бонус-за-племена в `/oracle` (ГДД §11.1, Спринт 3.6-A)."""
+
+    def _oracle_with_tribe(self, **tribe_overrides: Any) -> dict[str, Any]:
+        return {
+            "cooldown_tz": "Europe/Moscow",
+            "bonus_min": 1,
+            "bonus_max": 20,
+            "distribution": "uniform",
+            "tribe_bonus": {
+                "enabled": True,
+                "cm_per_tribe": 1,
+                "cap_cm": 131,
+                "min_tribe_size": 4,
+            }
+            | tribe_overrides,
+        }
+
+    def test_defaults_applied_when_section_missing(self) -> None:
+        cfg = build_valid_balance()
+        assert cfg.oracle.tribe_bonus.enabled is True
+        assert cfg.oracle.tribe_bonus.cm_per_tribe == 1
+        assert cfg.oracle.tribe_bonus.cap_cm == 131
+        assert cfg.oracle.tribe_bonus.min_tribe_size == 4
+
+    def test_full_section_parses(self) -> None:
+        payload = _payload_with(oracle=self._oracle_with_tribe())
+        cfg = BalanceConfig.model_validate(payload)
+        assert cfg.oracle.tribe_bonus.enabled is True
+        assert cfg.oracle.tribe_bonus.cm_per_tribe == 1
+        assert cfg.oracle.tribe_bonus.cap_cm == 131
+        assert cfg.oracle.tribe_bonus.min_tribe_size == 4
+
+    def test_disabled_flag_accepted(self) -> None:
+        payload = _payload_with(oracle=self._oracle_with_tribe(enabled=False))
+        cfg = BalanceConfig.model_validate(payload)
+        assert cfg.oracle.tribe_bonus.enabled is False
+
+    def test_zero_cm_per_tribe_allowed(self) -> None:
+        # Допустимо «обнулить» бонус на ивент, не выключая весь модуль.
+        payload = _payload_with(oracle=self._oracle_with_tribe(cm_per_tribe=0))
+        cfg = BalanceConfig.model_validate(payload)
+        assert cfg.oracle.tribe_bonus.cm_per_tribe == 0
+
+    def test_negative_cm_per_tribe_rejected(self) -> None:
+        payload = _payload_with(oracle=self._oracle_with_tribe(cm_per_tribe=-1))
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(payload)
+
+    def test_negative_cap_cm_rejected(self) -> None:
+        payload = _payload_with(oracle=self._oracle_with_tribe(cap_cm=-1))
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(payload)
+
+    def test_min_tribe_size_zero_rejected(self) -> None:
+        payload = _payload_with(oracle=self._oracle_with_tribe(min_tribe_size=0))
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(payload)
+
+    def test_extra_field_rejected(self) -> None:
+        oracle = self._oracle_with_tribe()
+        oracle["tribe_bonus"]["bogus"] = 1
+        payload = _payload_with(oracle=oracle)
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(payload)
+
+    def test_frozen_cannot_mutate(self) -> None:
+        cfg = build_valid_balance()
+        with pytest.raises(ValidationError):
+            cfg.oracle.tribe_bonus.cm_per_tribe = 999
+
+    def test_total_at_contract_limit_no_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        # 20 + 131 = 151 — ровно на границе ГДД §11.1, warning не нужен.
+        caplog.set_level("WARNING", logger="pipirik_wars.domain.balance.config")
+        payload = _payload_with(oracle=self._oracle_with_tribe(cap_cm=131))
+        BalanceConfig.model_validate(payload)
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert all("exceeds GDD" not in r.getMessage() for r in warnings)
+
+    def test_total_above_contract_limit_warns(self) -> None:
+        # 20 + 200 = 220 > 151 — warning ожидаем (не падаем).
+        # Патчим logger напрямую, чтобы не зависеть от состояния propagate-цепочки
+        # после других тестов в полном прогоне.
+        with patch("pipirik_wars.domain.balance.config._logger.warning") as mock_warning:
+            payload = _payload_with(oracle=self._oracle_with_tribe(cap_cm=200))
+            BalanceConfig.model_validate(payload)
+        assert any(
+            "exceeds GDD §11.1 contract" in str(call.args[0])
+            for call in mock_warning.call_args_list
+        )
+
+
 class TestReferralConfig:
     def test_milestones_must_be_sorted(self) -> None:
         payload = _payload_with(
@@ -578,6 +671,59 @@ class TestAnticheatConfig:
     def test_extra_field_in_anticheat_rejected(self) -> None:
         payload = self._valid_payload() | {"unknown_field": 42}
         with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    # ── Спринт 3.6-A: anticheat.tribe_bonus_sources ──
+
+    def test_tribe_bonus_sources_default_empty_when_omitted(self) -> None:
+        """Поле опциональное; отсутствие → пустой tuple, не падаем."""
+        payload = self._valid_payload()
+        cfg = BalanceConfig.model_validate(_payload_with(anticheat=payload))
+        assert cfg.anticheat.tribe_bonus_sources == ()
+
+    def test_tribe_bonus_sources_real_balance_yaml(self) -> None:
+        """`config/balance.yaml` декларирует `oracle_tribe_bonus` как audit-only."""
+        path = Path("config/balance.yaml")
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        cfg = BalanceConfig.model_validate(raw)
+        values = {s.value for s in cfg.anticheat.tribe_bonus_sources}
+        assert "oracle_tribe_bonus" in values
+
+    def test_tribe_bonus_sources_disjoint_from_organic(self) -> None:
+        """`tribe_bonus_sources` не пересекается с `organic_sources`."""
+        payload = self._valid_payload() | {
+            "organic_sources": ["forest", "oracle", "oracle_tribe_bonus"],
+            "tribe_bonus_sources": ["oracle_tribe_bonus"],
+        }
+        with pytest.raises(ValidationError, match="organic_sources and tribe_bonus_sources"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_tribe_bonus_sources_disjoint_from_donate(self) -> None:
+        """`tribe_bonus_sources` не пересекается с `donate_sources`."""
+        payload = self._valid_payload() | {
+            "donate_sources": [
+                "stars_payment",
+                "ton_payment",
+                "usdt_payment",
+                "oracle_tribe_bonus",
+            ],
+            "tribe_bonus_sources": ["oracle_tribe_bonus"],
+        }
+        with pytest.raises(ValidationError, match="donate_sources and tribe_bonus_sources"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_tribe_bonus_sources_duplicates_rejected(self) -> None:
+        payload = self._valid_payload() | {
+            "tribe_bonus_sources": ["oracle_tribe_bonus", "oracle_tribe_bonus"],
+        }
+        with pytest.raises(ValidationError, match="tribe_bonus_sources contains duplicates"):
+            BalanceConfig.model_validate(_payload_with(anticheat=payload))
+
+    def test_unknown_in_tribe_bonus_sources_rejected(self) -> None:
+        payload = self._valid_payload() | {
+            "tribe_bonus_sources": ["unknown"],
+        }
+        with pytest.raises(ValidationError, match="UNKNOWN"):
             BalanceConfig.model_validate(_payload_with(anticheat=payload))
 
 

@@ -1118,6 +1118,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
             random=rng,
             length_granter=add_length,
             clock=clock,
+            clans=clans,
         ),
         top_players_query=top_players_query,
         top_clans_query=top_clans_query,

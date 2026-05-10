@@ -6,7 +6,7 @@
 
 Whitelist первоначально создан в миграции 0007 и расширяется
 последующими миграциями. Тест читает whitelist из **последней расширяющей
-миграции** — 0024 (`roulette_free_cost`, `roulette_free_reward`, Спринт 3.5-C).
+миграции** — 0025 (`oracle_tribe_bonus`, Спринт 3.6-A).
 """
 
 from __future__ import annotations
@@ -21,17 +21,17 @@ def _load_migration_whitelist() -> tuple[str, ...]:
     """Грузим whitelist прямо из файла последней расширяющей миграции.
 
     Файл миграции назван с timestamp-префиксом
-    (`20260510_0024_audit_source_roulette_free.py`), что не валиден как
+    (`20260510_0025_audit_source_oracle_tribe_bonus.py`), что не валиден как
     Python-идентификатор; обычный `import` не работает.
     """
     repo_root = Path(__file__).resolve().parents[5]
     migration_path = (
         repo_root
         / "src/pipirik_wars/infrastructure/db/migrations/versions"
-        / "20260510_0024_audit_source_roulette_free.py"
+        / "20260510_0025_audit_source_oracle_tribe_bonus.py"
     )
     spec = importlib.util.spec_from_file_location(
-        "_migration_0024_audit_source_roulette_free",
+        "_migration_0025_audit_source_oracle_tribe_bonus",
         migration_path,
     )
     assert spec is not None and spec.loader is not None

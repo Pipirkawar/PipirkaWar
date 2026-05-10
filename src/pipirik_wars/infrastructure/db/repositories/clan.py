@@ -157,6 +157,46 @@ class SqlAlchemyClanRepository(IClanRepository):
         result = await self._uow.session.execute(stmt)
         return tuple(_row_to_clan(row) for row in result.scalars().all())
 
+    async def count_active_for_player(
+        self,
+        *,
+        player_id: int,
+        min_tribe_size: int,
+    ) -> int:
+        # Бонус-за-племена (ГДД §11.1, Спринт 3.6-A): количество активных
+        # кланов, в которых состоит игрок, и где общее число `clan_members`
+        # >= `min_tribe_size`. Frozen-кланы исключены.
+        #
+        # Реализация:
+        #   1) подзапрос `member_clan_ids` — id кланов, где есть данный игрок;
+        #   2) внешний `select` по `clan_members` × `clans` отфильтровывает
+        #      ACTIVE-кланы из этого списка и группирует по clan_id, оставляя
+        #      только те, где `COUNT(*) >= min_tribe_size`;
+        #   3) количество строк после `HAVING` — искомый ответ.
+        #
+        # Метод ничего не пишет, не открывает транзакций; вызывается из
+        # use-case-а внутри ambient-UoW.
+        if min_tribe_size < 1:
+            raise ValueError(f"min_tribe_size must be >= 1, got {min_tribe_size}")
+
+        member_clan_ids = (
+            select(ClanMemberORM.clan_id)
+            .where(ClanMemberORM.player_id == player_id)
+            .scalar_subquery()
+        )
+        stmt = (
+            select(ClanMemberORM.clan_id)
+            .join(ClanORM, ClanORM.id == ClanMemberORM.clan_id)
+            .where(
+                ClanMemberORM.clan_id.in_(member_clan_ids),
+                ClanORM.status == ClanStatus.ACTIVE.value,
+            )
+            .group_by(ClanMemberORM.clan_id)
+            .having(func.count(ClanMemberORM.player_id) >= min_tribe_size)
+        )
+        result = await self._uow.session.execute(stmt)
+        return len(result.all())
+
 
 class SqlAlchemyClanMembershipRepository(IClanMembershipRepository):
     """`UNIQUE(player_id)` гарантирует «один игрок = один клан».
