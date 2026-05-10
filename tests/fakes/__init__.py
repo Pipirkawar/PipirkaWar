@@ -72,6 +72,10 @@ from tests.fakes.oracle import (
 from tests.fakes.payment_ledger import FakePaymentLedger
 from tests.fakes.player_locale_resolver import FakePlayerLocaleResolver
 from tests.fakes.player_repo import FakePlayerRepository
+from tests.fakes.prize_pool_repo import (
+    FakePrizePoolApplyIncrementCall,
+    FakePrizePoolRepository,
+)
 from tests.fakes.random import FakeRandom
 from tests.fakes.referral import FakeReferralRepository
 from tests.fakes.roulette_spin_repo import FakeRouletteSpinRepository
@@ -126,6 +130,8 @@ __all__ = [
     "FakePaymentLedger",
     "FakePlayerLocaleResolver",
     "FakePlayerRepository",
+    "FakePrizePoolApplyIncrementCall",
+    "FakePrizePoolRepository",
     "FakeRandom",
     "FakeReferralRepository",
     "FakeRouletteSpinRepository",

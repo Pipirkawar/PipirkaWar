@@ -51,6 +51,9 @@ Free-to-play рулетка (Спринт 3.5.B):
 
 Монетизация (Спринт 4.1-A):
 - `PaymentORM` — таблица `payments` (append-only ledger TG Stars / TON / USDT).
+
+Призовой пул (Спринт 4.1-B):
+- `PrizePoolBalanceORM` — таблица `prize_pool_balance` (одна строка per-currency).
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
@@ -71,6 +74,7 @@ from pipirik_wars.infrastructure.db.models.items import ItemORM
 from pipirik_wars.infrastructure.db.models.oracle import OracleInvocationORM
 from pipirik_wars.infrastructure.db.models.payments import PaymentORM
 from pipirik_wars.infrastructure.db.models.player import UserORM
+from pipirik_wars.infrastructure.db.models.prize_pool import PrizePoolBalanceORM
 from pipirik_wars.infrastructure.db.models.pve_runs import (
     DungeonRunORM,
     MountainRunORM,
@@ -113,6 +117,7 @@ __all__ = [
     "MountainRunORM",
     "OracleInvocationORM",
     "PaymentORM",
+    "PrizePoolBalanceORM",
     "PvpDuelORM",
     "PvpDuelRoundORM",
     "PvpGlobalLobbyORM",

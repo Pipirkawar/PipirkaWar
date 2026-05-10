@@ -37,6 +37,9 @@ __all__ = [
     "Currency",
     "IdempotencyKey",
     "StarsAmount",
+    "StarsPoolBalance",
+    "TonNanoAmount",
+    "UsdtDecimalAmount",
 ]
 
 
@@ -83,6 +86,91 @@ class StarsAmount:
         if self.value < 1:
             raise ValueError(
                 f"StarsAmount.value must be >= 1, got {self.value}",
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class StarsPoolBalance:
+    """Неотрицательный баланс пула Telegram Stars (ГДД §12.6, Спринт 4.1-B).
+
+    Поле `value: int` — сколько ⋆ лежит в призовом пуле (`>= 0`,
+    пустой пул — это ок). Почему отдельный VO, а не `StarsAmount`:
+    `StarsAmount.value >= 1` по своей семантике (размер одного
+    платежа — не может быть нулевым, Спринт 4.1-A); «cуммарный баланс
+    пула» имеет другую семантику и разрешает ноль (свежезаведённый
+    seed-row в `prize_pool_balance` — 0 ⋆).
+
+    Frozen + slots → VO без identity, hashable, безопасно сравнивать `==`.
+    """
+
+    value: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, int) or isinstance(self.value, bool):
+            raise TypeError(
+                f"StarsPoolBalance.value must be int, got {type(self.value).__name__}",
+            )
+        if self.value < 0:
+            raise ValueError(
+                f"StarsPoolBalance.value must be >= 0, got {self.value}",
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class TonNanoAmount:
+    """Неотрицательное целое число нано-тонкоинов (ГДД §12.6, Спринт 4.1-B).
+
+    Поле `value: int` — количество нано-тонкоинов (`>= 0`;
+    `1 TON = 10**9 nano-TON`). Используется как баланс пула
+    (`PrizePool.ton_nano`) и как входная сумма инкремента. На
+    уровне БД хранится как `NUMERIC(38, 0)` без потери точности
+    (Спринт 4.1-B миграция `0027`).
+
+    Разрешает ноль (пустой пул / нулевой инкремент = noop). Для «размера
+    платежа» — введём в 4.1-D свой VO с `>= 1`-инвариантом
+    (аналогично `StarsAmount`).
+
+    Frozen + slots → VO без identity, hashable, безопасно сравнивать `==`.
+    """
+
+    value: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, int) or isinstance(self.value, bool):
+            raise TypeError(
+                f"TonNanoAmount.value must be int, got {type(self.value).__name__}",
+            )
+        if self.value < 0:
+            raise ValueError(
+                f"TonNanoAmount.value must be >= 0, got {self.value}",
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class UsdtDecimalAmount:
+    """Неотрицательное целое число минор-юнит USDT (ГДД §12.6, Спринт 4.1-B).
+
+    Поле `value: int` — количество минор-юнит USDT-jetton (`>= 0`;
+    `1 USDT = 10**6` юнит при `decimals=6`). Используется как баланс
+    пула (`PrizePool.usdt_decimal`) и как входная сумма инкремента.
+    На уровне БД хранится как `NUMERIC(38, 0)` без потери точности.
+
+    Разрешает ноль (пустой пул / нулевой инкремент = noop). Для «размера
+    платежа» — введём в 4.1-D свой VO с `>= 1`-инвариантом.
+
+    Frozen + slots → VO без identity, hashable, безопасно сравнивать `==`.
+    """
+
+    value: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, int) or isinstance(self.value, bool):
+            raise TypeError(
+                f"UsdtDecimalAmount.value must be int, got {type(self.value).__name__}",
+            )
+        if self.value < 0:
+            raise ValueError(
+                f"UsdtDecimalAmount.value must be >= 0, got {self.value}",
             )
 
 

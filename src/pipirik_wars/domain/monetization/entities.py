@@ -31,14 +31,19 @@ from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 
+from pipirik_wars.domain.monetization.errors import PrizePoolAmountInvariantError
 from pipirik_wars.domain.monetization.value_objects import (
     Currency,
     IdempotencyKey,
+    StarsPoolBalance,
+    TonNanoAmount,
+    UsdtDecimalAmount,
 )
 
 __all__ = [
     "Payment",
     "PaymentStatus",
+    "PrizePool",
 ]
 
 
@@ -148,3 +153,115 @@ class Payment:
             raise ValueError(
                 f"Payment(status=PENDING) must have confirmed_at=None, got {self.confirmed_at!r}",
             )
+
+
+@dataclass(frozen=True, slots=True)
+class PrizePool:
+    """Иммутабельный агрегат «призовой пул» (ГДД §12.6, Спринт 4.1-B).
+
+    ГДД §12.6 «Призовой пул и лотерея» определяет пул как
+    «тры отдельных баланса по валютам (Stars / TON / USDT)» — именно
+    это и хранит `PrizePool`. Поля:
+
+    * `stars: StarsPoolBalance` — баланс ⋆ в пуле (`>= 0`).
+    * `ton_nano: TonNanoAmount` — баланс нано-тонкоинов в пуле
+      (`>= 0`; `1 TON = 10**9 nano-TON`).
+    * `usdt_decimal: UsdtDecimalAmount` — баланс минор-юнит USDT-jetton
+      в пуле (`>= 0`; `1 USDT = 10**6` юнит при `decimals=6`).
+
+    Frozen + slots → агрегат без identity на доменном уровне
+    (два идентичных снапшота пула неотличимы; identity хранит БД
+    через первичный ключ ORM-строк `prize_pool_balance`-таблицы).
+    Иммутабельность обязательна: «после +10 ⋆» — это новый
+    `PrizePool` (вид `apply_increment`); старый остаётся в прежнем
+    состоянии (важно для «без побочных эффектов»-тестов).
+    """
+
+    stars: StarsPoolBalance
+    ton_nano: TonNanoAmount
+    usdt_decimal: UsdtDecimalAmount
+
+    @classmethod
+    def empty(cls) -> PrizePool:
+        """Фабричный метод «пустой пул» (`stars=0, ton_nano=0, usdt_decimal=0`).
+
+        Используется в unit-тестах use-case-ов и в seed-логике
+        первого прогона миграции `0027` (3 роу по per-currency).
+        """
+        return cls(
+            stars=StarsPoolBalance(0),
+            ton_nano=TonNanoAmount(0),
+            usdt_decimal=UsdtDecimalAmount(0),
+        )
+
+    def balance_for(self, currency: Currency) -> int:
+        """Вернуть баланс в native-юнитах для указанной `Currency`.
+
+        Полезно в use-case-ах (`RecordDonation` проверяет «пул вырос
+        на N») и в admin-handler-ах (`/prize_pool` печатает все балансы).
+        """
+        if currency is Currency.STARS:
+            return self.stars.value
+        if currency is Currency.TON_NANO:
+            return self.ton_nano.value
+        if currency is Currency.USDT_DECIMAL:
+            return self.usdt_decimal.value
+        # `Currency` — StrEnum, исчерпывающий case-анализ выше; эта строка
+        # не должна быть достижима в рантайме при хороших инвариантах;
+        # mypy видит её как `unreachable` (или «return-ветка отсутствует»,
+        # если опустить).
+        raise AssertionError(f"unreachable: unknown Currency {currency!r}")
+
+    def apply_increment(self, currency: Currency, amount_native: int) -> PrizePool:
+        """Иммутабельный инкремент баланса в валюте `currency`.
+
+        Правила:
+
+        * `amount_native` — `int`, разрешает отрицательное значение
+          (для будущих выводов в 4.1-D / 4.1-E или admin-`reset`-операции).
+        * Результат `balance_for(currency) + amount_native` обязан быть
+          `>= 0`. Иначе — `PrizePoolAmountInvariantError`. На 4.1-B
+          use-case `RecordDonation` вызывает этот метод только
+          с `amount_native >= 0`, но инвариант сторожит будущие
+          выводы / рефакторинги.
+        * Возвращает новый `PrizePool`-инстанс (старый не мутируется).
+          Аналогично конвенции `domain/roulette/entities.py::RouletteOutcome.with_*`.
+
+        Инфраструктура-репозиторий (`SqlAlchemyPrizePoolRepository`)
+        реализует atomic-инкремент через SQL `UPDATE ... RETURNING`,
+        этот же метод — иммутабельный доменный эквивалент для Fake-
+        имплементации (in-memory pool в unit-тестах use-case-ов).
+        """
+        if not isinstance(amount_native, int) or isinstance(amount_native, bool):
+            raise TypeError(
+                f"PrizePool.apply_increment.amount_native must be int, "
+                f"got {type(amount_native).__name__}",
+            )
+        current = self.balance_for(currency)
+        new_value = current + amount_native
+        if new_value < 0:
+            raise PrizePoolAmountInvariantError(
+                currency=currency,
+                current_balance_native=current,
+                attempted_delta_native=amount_native,
+            )
+        if currency is Currency.STARS:
+            return PrizePool(
+                stars=StarsPoolBalance(new_value),
+                ton_nano=self.ton_nano,
+                usdt_decimal=self.usdt_decimal,
+            )
+        if currency is Currency.TON_NANO:
+            return PrizePool(
+                stars=self.stars,
+                ton_nano=TonNanoAmount(new_value),
+                usdt_decimal=self.usdt_decimal,
+            )
+        if currency is Currency.USDT_DECIMAL:
+            return PrizePool(
+                stars=self.stars,
+                ton_nano=self.ton_nano,
+                usdt_decimal=UsdtDecimalAmount(new_value),
+            )
+        # Недостижимо при исчерпывающем case-анализе `Currency`-StrEnum.
+        raise AssertionError(f"unreachable: unknown Currency {currency!r}")

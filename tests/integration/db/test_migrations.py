@@ -75,6 +75,8 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0024_audit_source_roulette_free" in revisions
         assert "0025_audit_source_oracle_tribe_bonus" in revisions
         assert "0026_payments_and_audit_source" in revisions
+        assert "0027_prize_pool_balance" in revisions
+        assert "0028_audit_source_prize_pool_increment" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -244,6 +246,20 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0026 is not None
         assert rev_0026.down_revision == "0025_audit_source_oracle_tribe_bonus"
 
+    def test_0027_descends_from_0026(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0027 = script.get_revision("0027_prize_pool_balance")
+        assert rev_0027 is not None
+        assert rev_0027.down_revision == "0026_payments_and_audit_source"
+
+    def test_0028_descends_from_0027(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0028 = script.get_revision("0028_audit_source_prize_pool_increment")
+        assert rev_0028 is not None
+        assert rev_0028.down_revision == "0027_prize_pool_balance"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -274,6 +290,8 @@ class TestAlembicMigrationsApplyCleanly:
             "20260510_0024_audit_source_roulette_free.py",
             "20260510_0025_audit_source_oracle_tribe_bonus.py",
             "20260510_0026_payments_and_audit_source.py",
+            "20260510_0027_prize_pool_balance.py",
+            "20260510_0028_audit_source_prize_pool_increment.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -331,6 +349,7 @@ class TestAlembicMigrationsApplyCleanly:
             "scrolls",
             "roulette_spins",
             "payments",
+            "prize_pool_balance",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 

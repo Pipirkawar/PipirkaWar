@@ -37,11 +37,12 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Protocol
 
-from pipirik_wars.domain.monetization.entities import Payment, PaymentStatus
+from pipirik_wars.domain.monetization.entities import Payment, PaymentStatus, PrizePool
 from pipirik_wars.domain.monetization.value_objects import Currency, IdempotencyKey
 
 __all__ = [
     "IPaymentLedger",
+    "IPrizePoolRepository",
 ]
 
 
@@ -153,5 +154,71 @@ class IPaymentLedger(Protocol):
         Реализуется через `SELECT ... FROM payments WHERE
         idempotency_key = :key LIMIT 1` (B-tree индекс по
         `idempotency_key`, см. ORM-таблицу).
+        """
+        ...
+
+
+class IPrizePoolRepository(Protocol):
+    """Порт репозитория призового пула (ГДД §12.6, Спринт 4.1-B).
+
+    Призовой пул хранится одной строкой per-currency в таблице
+    `prize_pool_balance` (миграция `0027_prize_pool_balance` —
+    persistence создаётся в B.3). Репозиторий собирает строки в
+    единый доменный VO `PrizePool(stars, ton_nano, usdt_decimal)` и
+    отдаёт его use-case-ам монетизации.
+
+    Все методы — асинхронные, выполняются в открытой `IUnitOfWork`-сессии.
+    Композиционный root (`bot/main.py` Спринт 4.1-B) пробрасывает
+    SQLAlchemy-implementation; тесты use-case-ов (`RecordDonation`) —
+    `FakePrizePoolRepository` (in-memory pool с тем же контрактом).
+
+    Семантика операций:
+
+    * `get_current()` — снапшот всех трёх балансов одной транзакцией.
+      На пустом пуле (свежезаведённая БД, до первого `apply_increment`)
+      возвращает `PrizePool.empty()` (`stars=ton_nano=usdt_decimal=0`).
+      Используется admin-handler-ом `/prize_pool` (4.1-E) и
+      use-case-ом `RecordDonation` для построения `pool_after`-результата.
+    * `apply_increment(currency, amount_native)` — атомарный inc/dec
+      (`balance := balance + amount_native`, `>= 0`-инвариант). Реализация
+      использует SQL `UPDATE prize_pool_balance SET balance_native =
+      balance_native + :delta WHERE currency = :cur RETURNING ...`,
+      что гарантирует атомарность под concurrent-writers (одна
+      строка обновляется row-lock-ом в SERIALIZABLE / READ-COMMITTED).
+      Возвращает свежий `PrizePool`-снапшот всех трёх балансов
+      (после применения инкремента).
+
+      Если `amount_native < 0` и `current_balance + amount_native < 0`
+      — поднимает `PrizePoolAmountInvariantError` (last-line-of-defense
+      на БД-стороне — CHECK-ограничение `ck_prize_pool_balance_native_non_negative`).
+    """
+
+    async def get_current(self) -> PrizePool:
+        """Получить текущий снапшот пула (`PrizePool` по всем валютам).
+
+        Идемпотентен (SELECT, без побочных эффектов). На пустой
+        БД возвращает `PrizePool.empty()`.
+        """
+        ...
+
+    async def apply_increment(
+        self,
+        *,
+        currency: Currency,
+        amount_native: int,
+    ) -> PrizePool:
+        """Атомарно увеличить (или уменьшить) баланс в указанной валюте.
+
+        Параметры:
+        - `currency` — какой балансовый счёт пула обновлять.
+        - `amount_native` — дельта в native-юнитах. Может быть `0`
+          (no-op), положительной (увеличить пул), отрицательной
+          (уменьшить — будущие `withdraw`/`reset`-флоу 4.1-D/E).
+
+        Возвращает: свежий `PrizePool`-снапшот всех трёх балансов
+        после применения дельты.
+
+        Поднимает `PrizePoolAmountInvariantError` если
+        `current_balance + amount_native < 0`.
         """
         ...
