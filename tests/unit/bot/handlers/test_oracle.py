@@ -89,6 +89,9 @@ def _stub_invoke(
             player_before=before,
             player_after=after,
             moscow_date=date(2026, 5, 5),
+            base_cm=bonus_cm,
+            tribe_bonus_cm=0,
+            n_active_tribes=0,
         )
     )
     return use_case

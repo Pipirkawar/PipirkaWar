@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -366,7 +367,7 @@ class TestOracleTribeBonusConfig:
     def test_frozen_cannot_mutate(self) -> None:
         cfg = build_valid_balance()
         with pytest.raises(ValidationError):
-            cfg.oracle.tribe_bonus.cm_per_tribe = 999  # type: ignore[misc]
+            cfg.oracle.tribe_bonus.cm_per_tribe = 999
 
     def test_total_at_contract_limit_no_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         # 20 + 131 = 151 — ровно на границе ГДД §11.1, warning не нужен.
@@ -376,15 +377,16 @@ class TestOracleTribeBonusConfig:
         warnings = [r for r in caplog.records if r.levelname == "WARNING"]
         assert all("exceeds GDD" not in r.getMessage() for r in warnings)
 
-    def test_total_above_contract_limit_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_total_above_contract_limit_warns(self) -> None:
         # 20 + 200 = 220 > 151 — warning ожидаем (не падаем).
-        caplog.set_level("WARNING", logger="pipirik_wars.domain.balance.config")
-        payload = _payload_with(oracle=self._oracle_with_tribe(cap_cm=200))
-        BalanceConfig.model_validate(payload)
+        # Патчим logger напрямую, чтобы не зависеть от состояния propagate-цепочки
+        # после других тестов в полном прогоне.
+        with patch("pipirik_wars.domain.balance.config._logger.warning") as mock_warning:
+            payload = _payload_with(oracle=self._oracle_with_tribe(cap_cm=200))
+            BalanceConfig.model_validate(payload)
         assert any(
-            "exceeds GDD §11.1 contract" in r.getMessage()
-            for r in caplog.records
-            if r.levelname == "WARNING"
+            "exceeds GDD §11.1 contract" in str(call.args[0])
+            for call in mock_warning.call_args_list
         )
 
 
