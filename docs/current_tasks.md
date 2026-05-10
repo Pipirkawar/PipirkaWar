@@ -17,70 +17,76 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный PR — **3.6-A** (PR #126, `d0eb138`) — domain-side бонус-за-племена в `/predict`: новый `IClanRepository.count_active_for_player(*, player_id, min_tribe_size) -> int` (`status='active'`, `len(members) >= min_tribe_size`, игрок — член) + SQL-impl `SqlAlchemyClanRepository.count_active_for_player`; pydantic `OracleTribeBonusConfig` (`enabled=true`, `cm_per_tribe=1`, `cap_cm=131`, `min_tribe_size=4`) с soft-warning при `bonus_max + cap_cm > 151`; расширение `application/oracle/invoke.py::InvokeOracle` — DI `clans: IClanRepository`, **две** проводки `length_granter.grant(...)` под одним idempotency-root `oracle:{player_id}:{moscow_date}` (базовая `source=ORACLE`, бонус `source=ORACLE_TRIBE_BONUS` — только при `tribe_bonus_cm > 0`); DTO `OraclePredictionResult` расширен полями `base_cm`/`tribe_bonus_cm`/`n_active_tribes`/`total_cm`. Anti-cheat: новый `AuditSource.ORACLE_TRIBE_BONUS`, миграция Alembic `0025_audit_source_oracle_tribe_bonus` (CHECK constraint `audit_log_source_whitelist` расширен), `AnticheatConfig.tribe_bonus_sources: tuple[AuditSource, ...]` (валидаторы disjoint от `organic_sources`/`donate_sources` + запрет `UNKNOWN`), `config/balance.yaml::anticheat.tribe_bonus_sources: [oracle_tribe_bonus]`. `oracle_tribe_bonus` НЕ входит в `organic_sources` → автоматически выпадает из 24h/7d-агрегации `SqlAlchemyAnticheatRepository.sum_organic_in_window` (защита от съедания хардкапа крупным кланом). 9 unit-тестов на `FakeClanRepository.count_active_for_player` + 1 integration `test_count_active_for_player` + 11 unit-тестов `TestOracleTribeBonusConfig` + 6 unit-тестов `TestAnticheatConfig::tribe_bonus_sources` + 6 unit-тестов `TestInvokeOracleTribeBonus` + 1 integration `test_excludes_oracle_tribe_bonus_source`. **Без UI-изменений** — UI делается отдельным PR-ом 3.6-B. Перед ним: **3.5-D** (PR #125, `ba0b769`) — bot-UI free-to-play рулетки: команда `/roulette_free` (личка-only) + pre-spin gate + spin-callback с 3-кадровой анимацией → result-card по `RouletteOutcomeKind`; `RoulettePresenter` (`bot/presenters/roulette.py`); локали `roulette-free-*` (~50 ключей × RU+EN parity); 24 unit-теста handler-а + 18 snapshot-тестов presenter-а. **Закрывает Спринт 3.5 «Free-to-play рулетка»**. Перед ним: **fix(load-tests)** (PR #124, `4baca4b`) — `poolclass=NullPool` для flaky load-теста. **3.5-C** (PR #123, `7085e51`) — application use-case `SpinFreeRoulette` + audit `ROULETTE_SPIN`. **3.5-B** (PR #122, `3505e83`) — persistence-слой рулетки. **3.5-A** (PR #121, `792a366`) — каркас домена. **3.4-D** (PR #120, `9ebbf15`); **3.4-C** (PR #119, `e490095`); **3.4-B** (PR #118, `7259fad`); **3.4-A** (PR #117, `5c21d4e`). **Закрыты Спринты 3.1 «PvE-Expeditions»**, **3.2 «Караваны»**, **3.3 «Рейд-боссы»**, **3.4 «Заточка предметов»**, **3.5 «Free-to-play рулетка»**. **В работе Спринт 3.6 «Бонус-за-племена в Предсказателе»** ([`development_plan.md`](development_plan.md) §6.3.6, ГДД §11.1) — активный PR **3.6-B** «Bot UI + локали + закрытие Спринта 3.6» (UI-сторона + закрытие спринта).
+**На `main`:** последний смерженный PR — **3.6-A** (PR #126, `d0eb138`) — domain-side бонус-за-племена в `/predict`. UI-сторона (`OraclePresenter` 3-line breakdown + локали `oracle-base-line`/`oracle-tribe-bonus-line`/`oracle-total-line`/`oracle-new-length-line` + Fluent-плюрал-формы) — в активном PR **3.6-B** (закрывающий Спринт 3.6, ещё не смержен). Перед `3.6-A`: **3.5-D** (PR #125, `ba0b769`) — bot-UI free-to-play рулетки, закрытие Спринта 3.5; **fix(load-tests)** (PR #124, `4baca4b`); **3.5-C** (PR #123, `7085e51`) — application use-case `SpinFreeRoulette`; **3.5-B** (PR #122, `3505e83`) — persistence-слой рулетки; **3.5-A** (PR #121, `792a366`) — каркас домена. **Закрыты Спринты 3.1 «PvE-Expeditions»**, **3.2 «Караваны»**, **3.3 «Рейд-боссы»**, **3.4 «Заточка предметов»**, **3.5 «Free-to-play рулетка»**. **Закрывается Спринт 3.6 «Бонус-за-племена в Предсказателе»** (PR #127 в работе — последний коммит спринта). **Следующая фаза — Фаза 4 «Монетизация и масштаб»** ([`development_plan.md`](development_plan.md) §7) — Telegram Stars + TON Connect + USDT + крипто-приз в рулетке + лот-генератор + админ-команды (`/prize_pool`, `/refund_lot`, `/freeze_payouts`).
 
-**Текущая ветка** — `devin/1778401031-sprint-3-6-B-oracle-bot-ui` (создана от `main = d0eb138`, мердж PR #126) под **Спринт 3.6-B «Bot UI + локали + закрытие Спринта 3.6»**.
+**Текущая ветка** — `devin/1778401031-sprint-3-6-B-oracle-bot-ui` (создана от `main = d0eb138`, мердж PR #126) под **Спринт 3.6-B «Bot UI + локали + закрытие Спринта 3.6»** (закрывающий PR Спринта 3.6).
 
 Перед `3.6-A` (PR #126, `d0eb138`): **3.5-D** (PR #125, `ba0b769`); **fix(load-tests)** (PR #124, `4baca4b`); **3.5-C** (PR #123, `7085e51`); **3.5-B** (PR #122, `3505e83`); **3.5-A** (PR #121, `792a366`); **3.4-D** (PR #120, `9ebbf15`); **3.4-C** (PR #119, `e490095`); **3.4-B** (PR #118, `7259fad`); **3.4-A** (PR #117, `5c21d4e`); **3.6 design doc** (PR #116, `f7d671f`); **3.3-D** (PR #115, `5d6c9a3`); **3.3-C** (PR #114, `d08985e`); **3.3-B** (PR #113, `9c859b7`), **3.3-A** (PR #112, `dbb9b1c`); **3.2-A→D** (#108–#111); **3.1-E** (PR #107, `5c1b26f`) и PR-ы Спринтов 3.1 (#99–#106) и 2.5 (#79–#97).
 
-**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов). **Закрыт Спринт 3.2 «Караваны (полная механика)»** (4 PR-а). **Закрыт Спринт 3.3 «Рейд-боссы»** (4 PR-а). **Закрыт Спринт 3.4 «Заточка предметов»** (4 PR-а: 3.4-A/B/C/D). **Закрыт Спринт 3.5 «Free-to-play рулетка»** (4 PR-а: 3.5-A/B/C/D). **В работе Спринт 3.6 «Бонус-за-племена в Предсказателе»** ([`development_plan.md`](development_plan.md) §6.3.6) — активный PR **3.6-B** (закрывающий).
+**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов). **Закрыт Спринт 3.2 «Караваны (полная механика)»** (4 PR-а). **Закрыт Спринт 3.3 «Рейд-боссы»** (4 PR-а). **Закрыт Спринт 3.4 «Заточка предметов»** (4 PR-а: 3.4-A/B/C/D). **Закрыт Спринт 3.5 «Free-to-play рулетка»** (4 PR-а: 3.5-A/B/C/D). **Закрывается Спринт 3.6 «Бонус-за-племена в Предсказателе»** ([`development_plan.md`](development_plan.md) §6.3.6) — PR #127 — последний (закрывающий) PR. **Следующая фаза — Фаза 4 «Монетизация и масштаб» (Спринт 4.1)**.
 
 **Roadmap (после Спринта 3.6 → далее):**
-- **Спринт 3.6 «Бонус-за-племена в Предсказателе»** 🎯 ([`development_plan.md`](development_plan.md) §6.3.6, ГДД §11.1) — **активный**, 2 PR-а: 3.6-A ✅ (domain + config + use-case + anti-cheat — смержен) → 3.6-B (bot UI + локали + закрытие — **активный**).
-- **Фаза 4 «Монетизация и масштаб»** ([`development_plan.md`](development_plan.md) §7) — после Спринта 3.6. Telegram Stars + TON Connect + USDT + крипто-приз в рулетке + лот-генератор + админ-команды (`/prize_pool`, `/refund_lot`, `/freeze_payouts`).
+- **Спринт 3.6 «Бонус-за-племена в Предсказателе»** ✅ ([`development_plan.md`](development_plan.md) §6.3.6, ГДД §11.1) — 2 PR-а: 3.6-A ✅ (PR #126, смержен) → 3.6-B (PR #127, **закрывающий, активный**).
+- **Фаза 4 «Монетизация и масштаб»** ([`development_plan.md`](development_plan.md) §7) — **следующая после Спринта 3.6**. Спринт 4.1 (15 задач): Telegram Stars (платная рулетка `1 ⭐ × 1 спин`, `9 ⭐ × 10-pack`, ГДД §12.5) + TON Connect (фикс длина за TON) + USDT (через TON-сеть) + антифрод платежей (idempotency-key) + 10% от каждого донат-зачисления → крипто-призовой пул (ГДД §12.6) + domain-агрегат `PrizePool(stars, ton_nano, usdt_decimal)` + persistence + миграция + audit-лог + лот-генератор (cron 1×/час, `IFeeEstimator` с P95 за 7 дней, мин 1 USD-экв, макс 10 USD-экв) + крипто-приз в результат-пуле платной + free-рулеток + use-case `ClaimPrize` + handler «Привязать кошелёк» + админ-команды (`/prize_pool`, `/refund_lot`, `/freeze_payouts`, super_admin + TOTP) + лимиты выплат (`max 50 USDT-экв за 30 дней`) + переход на Redis (лобби, очереди, DAU, locks) + ИИ-предсказания (опц.) + доп. языки (PT, ES, TR, ID, FA, UK) + метрики/дашборд (Prometheus + Grafana). Декомпозиция Спринта 4.1 на фичевые PR-ы — на старте Спринта 4.1 (после мерджа 3.6-B).
 
 ---
 
-## 🎯 Активный спринт — Спринт 3.6 «Бонус-за-племена в Предсказателе» 🎯
+## 🎯 Активный спринт — Спринт 3.6 «Бонус-за-племена в Предсказателе» 🎯 (закрывается на 3.6-B)
 
 > Цель спринта (по [`development_plan.md`](development_plan.md) §6.3.6 «Спринт 3.6 — Бонус-за-племена в Предсказателе», ГДД §11.1 «Бонус за племена»): виральная мини-механика — расширение `/predict`. За каждое **активное** племя, в котором состоит игрок, начисляется `+1 см` к базовому `uniform(1, 20)`. Cap = `+131 см` за вызов (итого `/predict` ≤ `+151 см` вместе с базой). Активным считается племя со `status="active"`, **числом участников `> 3`**, где игрок — член. Anti-cheat: **отдельный лимит** (`source = "oracle_tribe_bonus"` НЕ входит в organic 24h/7d). Display: явная строка `+N см за племена` в результате `/predict`. Снапшот — **live** в момент вызова `/predict`.
-
-**Скоуп — задачи плана 3.6.* (детали — в [`development_plan.md`](development_plan.md) §6.3.6):**
-
-- Domain: `IClanRepository.count_active_for_player(player_id, *, min_tribe_size: int) -> int` (или симметричный сервис в `application/clan/services/`). Активное племя = `status='active'`, members > min_tribe_size, игрок — член.
-- Config: pydantic `OracleTribeBonusConfig` с полями `enabled: bool`, `cm_per_tribe: int >= 0`, `cap_cm: int >= 0`, `min_tribe_size: int >= 1`. Дефолты: `enabled=true`, `cm_per_tribe=1`, `cap_cm=131`, `min_tribe_size=4`.
-- Application: расширение use-case `RequestOracle` — после рандома `uniform(bonus_min, bonus_max)` считаем `n_active_tribes`, прибавляем `min(n_active_tribes * cm_per_tribe, cap_cm)`. **Две** проводки `add_length(...)`: `oracle_base` (source=`oracle`) + `oracle_tribe_bonus` (source=`oracle_tribe_bonus`). Один idempotency-key `oracle:{player_id}:{moscow_date}`.
-- Anti-cheat: `oracle_tribe_bonus` в **новый** whitelist `tribe_bonus_sources` в `balance.yaml::anticheat`; `IAnticheatChecker` игнорирует эти источники при rolling-окне.
-- Bot UI (3.6-B, не входит в 3.6-A): `OraclePresenter` — две строки прироста + локали с Fluent-плюрал-формами.
 
 **Декомпозиция Спринта 3.6 на фичевые PR-ы:**
 
 - **3.6-A ✅ — Доменный запрос + конфиг + use-case + anti-cheat.** `IClanRepository.count_active_for_player`, pydantic `OracleTribeBonusConfig`, расширение `InvokeOracle` use-case-а (две проводки `length_granter.grant(...)`: `oracle_base` + `oracle_tribe_bonus`), `tribe_bonus_sources` в `balance.yaml::anticheat` + Alembic-миграция `0025` + ORM-зеркало. Юнит + integration-тесты. **Без** UI-изменений. **Смержен** (PR #126, `d0eb138`).
-- **3.6-B — Bot UI + локали + закрытие Спринта 3.6 (активный).** Расширение `OraclePresenter` строками `+N см — за племена (K активных племён)` (Fluent-плюрал-формы `1 племя / 2-4 племени / 5+ племён`) + опциональный hint после 3 нулевых `/predict` подряд (feature-flag, off by default), локали RU+EN, snapshot-тесты, manual smoke + финальный док-коммит закрытия Спринта 3.6. Покрывает задачи 3.6.5, 3.6.6, 3.6.7, 3.6.8.
+- **3.6-B — Bot UI + локали + закрытие Спринта 3.6 (активный, закрывающий).** Расширение `OraclePresenter.success()` signature `(base_cm, tribe_bonus_cm, n_active_tribes)` + conditional рендер `oracle-tribe-bonus-line` при `n_active_tribes > 0` + Fluent-плюрал-формы локалей (RU 4 формы / EN 2 формы) + wire-up в `predict_handler` + 7 snapshot-тестов (4 сценария × 2 locales) + финальный док-коммит закрытия Спринта 3.6.
 
 **Финальный коммит каждого PR-а Спринта 3.6** (внутри ветки, последним перед мерджем) — обновить `history.md` (запись «Спринт 3.6-X: ...») + пересобрать «Снимок состояния» в `current_tasks.md` под `main = <коммит_слияния>`, передвинуть чек-лист на следующий PR (или закрыть Спринт 3.6 на 3.6-B и расписать чек-лист **первого PR-а Фазы 4** «Монетизация и масштаб»).
 
 ---
 
-## 📝 Чек-лист следующего PR (Спринт 3.6-B — Bot UI + локали + закрытие Спринта 3.6)
+## 📝 Чек-лист следующего PR (Спринт 4.1 — Фаза 4 «Монетизация и масштаб», старт после мерджа 3.6-B)
 
-> Этот PR — закрывающий PR Спринта 3.6. UI-сторона `/predict`: bot-presenter `OraclePresenter` рендерит **две** строки прироста (`+N см — базовый` + `+M см — за племена (K активных племён)`) + итоговую `+(N+M) см — итого`; при `n_active_tribes == 0` строка-за-племена скрывается. Опциональный hint «*вступай в новые племена и получай больше см*» — после первых 3 нулевых `/predict` подряд (feature-flag, off by default). Локали `oracle-base-line` / `oracle-tribe-bonus-line` (Fluent-плюрал `1 племя / 2-4 племени / 5+ племён`) / `oracle-total-line` / `oracle-no-tribes-hint` в RU+EN. Финальный док-коммит закрытия Спринта 3.6 (history.md + game_design.md §11.1 «реализовано в Спринте 3.6 (PR #...)»).
+> После мерджа PR #127 (закрывающий Спринт 3.6) — стартует **Фаза 4 «Монетизация и масштаб»** ([`development_plan.md`](development_plan.md) §7, Спринт 4.1, 15 задач). Декомпозиция Спринта 4.1 на фичевые PR-ы делается **на старте Спринта 4.1** (после первого `git fetch && git checkout main && git pull` от свежего `main = <merge_3_6_B>`). Ниже — предварительная декомпозиция, может быть скорректирована при старте.
+
+**Скоуп — задачи плана 4.1.* (детали — в [`development_plan.md`](development_plan.md) §7):**
+
+- **4.1.1 — Telegram Stars: платная рулетка** за 1 ⭐ (1 спин) и 9 ⭐ (10 спинов, 10-pack). ГДД §12.5; стартовые веса призов и бакеты СМ — §12.5.2. Расчёт случайного выигрыша; чек-лог транзакций; 10-pack одной транзакцией; integration 10000 спинов: `E[CM | spin] ≈ 27 см`.
+- **4.1.2 — TON Connect:** фикс длина за TON. Sandbox + продакшн-сеть; webhook/poll платежей.
+- **4.1.3 — USDT (через TON-сеть/процессор):** параметризованные суммы → длина.
+- **4.1.4 — Антифрод платежей,** проверка двойных зачислений. Idempotency-key на платёж.
+- **4.1.5 — 10% от каждого донат-зачисления → крипто-призовой пул** (ГДД §12.6). `RecordDonation` use-case при подтверждении платежа делает второй проводкой `IncreasePrizePool(currency, amount=donation*0.10)`. Идемпотентно. Юнит-тесты на all 3 валюты; integration: подтверждённый донат 100 ⭐ → пул вырос на 10 ⭐.
+- **4.1.6 — Призовой пул** — domain-агрегат `PrizePool(stars, ton_nano, usdt_decimal)`. Persistence + миграция. Audit-лог любого изменения. Юнит-тесты на инкременты/декременты; round-trip persistence.
+- **4.1.7 — Лот-генератор** (`PrizePoolService.regenerate_lots`, ГДД §12.6.3). Cron 1×/час + триггер после крупного донат-зачисления. Учёт комиссии: `IFeeEstimator` с P95 за 7 дней. Минимум лота = 1 USD-эквивалент + комиссия; максимум = 10 USD-эквивалент. Юнит-тесты: пул 3 USDT → 3 лота × 1 USDT; пул 15 USDT → 1 лот × 10 USDT (5 USDT остаются); комиссия > buffer → лот возвращается.
+- **4.1.8 — Крипто-приз** в результат-пуле платной + free-рулеток (ГДД §12.4.2, §12.5.2). Если активных лотов в данной валюте нет — слот криптоприза занимает СМ-приз. Юнит-тесты picker-а: пул пуст → крипто-приз не появляется.
+- **4.1.9 — Выплата выигрыша:** handler «Привязать кошелёк» + use-case `ClaimPrize(player, lot_id, recipient_address)` + транзакция через TON SDK. Жёсткая защита: `actual_fee > fee_buffer` → лот возвращается в пул, выплата откладывается. Юнит-тесты на все ветки; integration в TON sandbox.
+- **4.1.10 — Админ-команды** `/prize_pool`, `/refund_lot <lot_id>`, `/freeze_payouts` (super_admin + TOTP, ГДД §12.6.6). RBAC-тесты; audit-записи `ADMIN_PRIZE_*`.
+- **4.1.11 — Лимиты выплат на игрока:** `max 50 USDT-экв за 30 дней` (TODO(balance): финальное число). Сверх лимита — выплата ставится в очередь. Юнит-тесты на rolling 30 day window.
+- **4.1.12 — Переход на Redis** (лобби, очереди, DAU, locks). Нагрузочный тест 10× от MVP.
+- **4.1.13 — Перевод предсказаний/логов на ИИ** (опционально). Кэш на сгенерированных ответах.
+- **4.1.14 — Доп. языки:** PT, ES, TR, ID, FA, UK. Файлы переводов, тест fallback.
+- **4.1.15 — Метрики и дашборд** (Prometheus + Grafana). Графики DAU/RPS/караваны/рейды + крипто-пул per currency.
+
+**Декомпозиция Спринта 4.1 на фичевые PR-ы (предварительная, уточняется на старте):**
+
+- **4.1-A — Telegram Stars + платная рулетка (skeleton)** (задачи 4.1.1, 4.1.4): TG Stars провайдер, payment-handler, idempotency-key, use-case `SpinPaidRoulette` (расширение существующего `SpinFreeRoulette`), бакеты СМ §12.5.2.
+- **4.1-B — Призовой пул + persistence + audit** (задачи 4.1.5, 4.1.6): `RecordDonation` (10% → пул), domain-агрегат `PrizePool(stars, ton_nano, usdt_decimal)`, миграция Alembic, ORM, audit `ADMIN_PRIZE_POOL_*`.
+- **4.1-C — Лот-генератор + крипто-приз в рулетке** (задачи 4.1.7, 4.1.8): `PrizePoolService.regenerate_lots`, `IFeeEstimator`, cron 1×/час, picker-крипто-приз в результат-пул.
+- **4.1-D — TON Connect + USDT + ClaimPrize** (задачи 4.1.2, 4.1.3, 4.1.9): TON SDK, USDT через TON-процессор, `ClaimPrize`, handler «Привязать кошелёк», integration в sandbox.
+- **4.1-E — Админ-команды + лимиты выплат** (задачи 4.1.10, 4.1.11): `/prize_pool`/`/refund_lot`/`/freeze_payouts` (super_admin + TOTP), rolling-30d-лимит.
+- **4.1-F — Redis + ИИ + многоязычность + метрики + закрытие Спринта 4.1** (задачи 4.1.12, 4.1.13, 4.1.14, 4.1.15): переход на Redis, опц. ИИ-предсказания, +6 локалей (PT, ES, TR, ID, FA, UK), Prometheus + Grafana, финальный док-коммит.
+
+**Чек-лист 3.6-B (текущий, активный):**
 
 - [x] Дождаться мерджа `3.6-A` в `main` (PR #126, `d0eb138`).
 - [x] `git fetch && git checkout main && git pull`.
 - [x] Создать ветку `devin/1778401031-sprint-3-6-B-oracle-bot-ui` от свежего `main = d0eb138`.
-- [x] **B.0 — Обновить `current_tasks.md`** под старт Спринта 3.6-B: пересобрать «Снимок состояния» под актуальный `main = d0eb138`, расписать чек-лист 3.6-B, заархивировать чек-лист 3.6-A (этот коммит — Checkpoint 1).
-- [ ] **B.1 — Расширение `OraclePresenter`** (`bot/presenters/oracle.py`):
-  - Добавить `result(*, prediction: OraclePredictionResult, locale: str) -> str` (или расширить существующий) — рендер **до 3 строк**: `oracle-base-line` (`{ $base_cm } см — базовый`) + опционально `oracle-tribe-bonus-line` (`{ $tribe_bonus_cm } см — за племена ({ $n_active_tribes } { $n_active_tribes -> [one]племя [few]племени *[other]племён})`) + `oracle-total-line` (`{ $total_cm } см — итого`).
-  - При `prediction.tribe_bonus_cm == 0` или `prediction.n_active_tribes == 0` — строка-за-племена **скрывается**, рендерится только базовая + итоговая (`base == total`).
-  - Опциональный hint (feature-flag `oracle.show_no_tribes_hint`, default `false`): если игрок выполнил 3 `/predict` подряд с `n_active_tribes == 0` (трекинг через `oracle_invocations` по последним 3 записям) — показать `oracle-no-tribes-hint`.
-  - **Критерий:** snapshot-тесты на 4 сценария (0 / 1 / N=5 / cap=131 племён) × 2 locales (RU + EN) → 8 снапшотов.
-- [ ] **B.2 — Локализация** (`locales/ru.ftl` + `locales/en.ftl`):
-  - `oracle-base-line` (с `{ $base_cm }`).
-  - `oracle-tribe-bonus-line` (с `{ $tribe_bonus_cm }`, `{ $n_active_tribes }` + Fluent-`select`-pattern для плюрала: RU `[one]племя [few]племени *[other]племён`; EN `[one]tribe *[other]tribes`).
-  - `oracle-total-line` (с `{ $total_cm }`).
-  - `oracle-no-tribes-hint` (опц., feature-flag).
-  - **Критерий:** locale-parity-тест (`tests/integration/i18n/test_locales_parity.py`) зелёный — все ключи `oracle-*` присутствуют и в RU, и в EN.
-- [ ] **B.3 — Wire-up в bot-handler `/predict`** (`bot/handlers/oracle.py`):
-  - Использовать новый презентер вместо текущего рендеринга. После `await invoke_oracle.execute(...)` — `presenter.result(prediction=result, locale=user_locale)` → `await message.answer(...)`.
-  - Композитный composition root (`bot/main.py`) — добавить `OraclePresenter` в `Container.oracle_presenter` если ещё не подключён.
-  - **Критерий:** `tests/unit/bot/handlers/test_oracle.py` зелёные (включая существующие тесты handler-а), composition-root-тест зелёный.
-- [ ] **B.4 — Manual smoke в Telegram** (не блокирует PR; делается на стейдже):
-  - `/predict` без активных племён → видим только `+N см — базовый` + `+N см — итого`, без строки-за-племена.
-  - `/predict` с активным племенем (`size >= 4`) → видим `+N см — базовый` + `+M см — за племена (K активных племён)` + `+(N+M) см — итого`.
-  - Чек-лист в PR-описании, выполняется ревьюером после мерджа.
-- [ ] **B.5 — `make ci` локально:** ruff + `mypy --strict` + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%).
-- [ ] **B.6 — Финальный док-коммит закрытия Спринта 3.6:** `history.md` (запись 3.6-B + закрытие Спринта 3.6) + `current_tasks.md` пересборка под старт **Фазы 4 «Монетизация и масштаб»** (Спринт 4.1) + `game_design.md` §11.1 — пометка «реализовано в Спринте 3.6 (PR #...)».
+- [x] **B.0 — Обновить `current_tasks.md`** под старт Спринта 3.6-B: пересобрать «Снимок состояния» под актуальный `main = d0eb138`, расписать чек-лист 3.6-B, заархивировать чек-лист 3.6-A (Checkpoint 1). Коммит `e779faf`.
+- [x] **B.1 — Расширение `OraclePresenter`** (`bot/presenters/oracle.py`): signature `success()` расширена `(base_cm, tribe_bonus_cm, n_active_tribes)`, conditional рендер `oracle-tribe-bonus-line` при `n_active_tribes > 0`. Snapshot-тесты на 4 сценария (`n_active_tribes ∈ {0, 1, 5, 131}`) × 2 locales (RU + EN). Коммит `99ac666`.
+- [x] **B.2 — Локализация** (`locales/ru.ftl` + `locales/en.ftl`): `oracle-base-line` / `oracle-tribe-bonus-line` (Fluent-плюрал) / `oracle-total-line` / `oracle-new-length-line`. Locale-parity-тест зелёный. Коммит `99ac666`.
+- [x] **B.3 — Wire-up в bot-handler `/predict`** (`bot/handlers/oracle.py`): `predict_handler` пробрасывает `base_cm`/`tribe_bonus_cm`/`n_active_tribes` из DTO в presenter. Коммит `99ac666`.
+- [ ] **B.4 — Manual smoke в Telegram** (не блокирует PR; делается ревьюером на стейдже).
+- [x] **B.5 — `make ci` локально:** ruff + `mypy --strict` + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%) — **5179 passed / 2 skipped, coverage 95.63%**.
+- [x] **B.6 — Финальный док-коммит закрытия Спринта 3.6:** `history.md` (запись 3.6-B + закрытие Спринта 3.6) + `current_tasks.md` пересборка под старт **Фазы 4 «Монетизация и масштаб» (Спринт 4.1)** + `game_design.md` §11.1 — маркер «реализовано в Спринте 3.6 (PR #126 + PR #127)» (этот коммит).
 - [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md` — PR #127.
 - [ ] Дождаться зелёного GitHub CI.
 
@@ -92,14 +98,16 @@
 
 **Текущий PR — 3.6-B «Bot UI + локали + закрытие Спринта 3.6»** — закрывающий PR Спринта 3.6. Стартован от свежего `main = d0eb138` (мердж PR #126).
 - **На `main`:** 3.6-A смержен (PR #126, `d0eb138`). 3.6-B открыт от свежего `main = d0eb138`.
-- **Скоуп 3.6-B:** UI-сторона `/predict` — рендер двух строк прироста (`+N см — базовый` + `+M см — за племена (K активных племён)`) + итоговая, опциональный hint после 3 нулевых `/predict` подряд (feature-flag, off by default). Локали `oracle-base-line` / `oracle-tribe-bonus-line` (Fluent-плюрал) / `oracle-total-line` / `oracle-no-tribes-hint` (опц.) в RU+EN. Snapshot-тесты на 4 сценария × 2 locales. Финальный док-коммит закрытия Спринта 3.6 (`history.md` + `game_design.md` §11.1 «реализовано в Спринте 3.6»). После закрытия Спринта 3.6 — переход к Фазе 4 «Монетизация и масштаб» (Спринт 4.1).
+- **Скоуп 3.6-B:** UI-сторона `/predict` — рендер conditional `oracle-tribe-bonus-line` (только при `n_active_tribes > 0`) поверх обязательных `oracle-base-line` + `oracle-total-line` + `oracle-new-length-line`. Локали `oracle-base-line` / `oracle-tribe-bonus-line` (Fluent-плюрал) / `oracle-total-line` / `oracle-new-length-line` в RU+EN. Snapshot-тесты на 4 сценария × 2 locales. Финальный док-коммит закрытия Спринта 3.6 (`history.md` + `game_design.md` §11.1 «реализовано в Спринте 3.6»). После закрытия Спринта 3.6 — переход к Фазе 4 «Монетизация и масштаб» (Спринт 4.1).
 - **Открытые блокеры:** нет.
+- **После мерджа PR #127:** старт Спринта 4.1 (Фаза 4 «Монетизация и масштаб») — декомпозиция на фичевые PR-ы (4.1-A → 4.1-F) делается на старте Спринта 4.1.
 
 ---
 
 ## 🛑 Известные блокеры / открытые вопросы PR-а
 
 - **Phase-3 multi-membership ограничение.** В Phase 3 игрок может состоять максимум в **одном** клане (`UNIQUE` constraint на `clan_members.player_id` ещё с миграции `0006_clan_members`). Поэтому `count_active_for_player` фактически возвращает `0` или `1` в Phase 3, и `tribe_bonus_cm ∈ {0, cm_per_tribe}` (по дефолту `0` или `1`). Интерфейс готов к Phase 4+ (multi-membership), но реальный `+131 см cap` будет достигаться только после снятия `UNIQUE`-constraint и реализации UI «вступить в племя × N» (вне скоупа Спринта 3.6).
+- **Опциональный hint `oracle-no-tribes-hint`** (3 нулевых `/predict` подряд → «*вступай в новые племена и получай больше см*») — **не реализован** в 3.6-B. Помечен как feature-flag `oracle.show_no_tribes_hint` (default `false`). Реальная реализация требует трекинга последних 3 invocations — отдельный enhancement, выходящий за scope «закрытия Спринта 3.6». Можно вернуться в любой будущий спринт без архитектурных рисков.
 - **`crypto_lot` — реальный розыгрыш отложен до Фазы 4 (Спринт 4.1).** В рулетке `crypto_pool_empty=True` (всегда) в use-case-е → вес `CRYPTO_LOT` перетекает на `LENGTH` в picker-е. До запуска Фазы 4 `crypto_lot` никогда не выпадет в продакшне, но result-карточка `roulette-free-result-crypto-lot` готова и snapshot-тестирована (для будущей платной рулетки + крипто-пула).
 - **Не-LENGTH исходы рулетки (ITEM/SCROLL_REGULAR/SCROLL_BLESSED) — без INSERT в инвентарь.** `RouletteSpinRepository.record(spin)` пишет `kind` + `length_cm=NULL`; audit-payload не содержит `target_id`. Реальный выбор предмета/скролла + INSERT в `items`/`scrolls` — задача отдельного спринта «инвентарь + рулетка интеграция» (после 3.6).
 - **`AuditAction.SCROLL_DROP` всё ещё audit-only без write-through в инвентарь** — наследие предыдущих спринтов. Рейды и PvE дропают скроллы только в `audit_log`, без `INSERT` в `scrolls`-таблицу. Запланировано как отдельная задача после Спринта 3.6 (инвентарь готов с 3.4-B/C; нужен только wire-up в use-case-ах `FinishBossFight` / `FinishMountainRun` / `FinishDungeonRun`).
@@ -110,4 +118,4 @@
 
 > Обновляется автоматически перед каждым `git push`. После `git log --oneline -1` — short sha + subject.
 
-`<обновится после B.0 push>` — `docs(3.6-B): B.0 — pivot current_tasks.md под Спринт 3.6-B start (main = d0eb138)`.
+`<обновится после B.6 push>` — `docs(3.6-B): B.6 — final doc-commit (closing Sprint 3.6 + pivot to Phase 4 / Sprint 4.1)`.
