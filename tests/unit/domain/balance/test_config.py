@@ -297,6 +297,97 @@ class TestOracleConfig:
             BalanceConfig.model_validate(payload)
 
 
+class TestOracleTribeBonusConfig:
+    """Бонус-за-племена в `/oracle` (ГДД §11.1, Спринт 3.6-A)."""
+
+    def _oracle_with_tribe(self, **tribe_overrides: Any) -> dict[str, Any]:
+        return {
+            "cooldown_tz": "Europe/Moscow",
+            "bonus_min": 1,
+            "bonus_max": 20,
+            "distribution": "uniform",
+            "tribe_bonus": {
+                "enabled": True,
+                "cm_per_tribe": 1,
+                "cap_cm": 131,
+                "min_tribe_size": 4,
+            }
+            | tribe_overrides,
+        }
+
+    def test_defaults_applied_when_section_missing(self) -> None:
+        cfg = build_valid_balance()
+        assert cfg.oracle.tribe_bonus.enabled is True
+        assert cfg.oracle.tribe_bonus.cm_per_tribe == 1
+        assert cfg.oracle.tribe_bonus.cap_cm == 131
+        assert cfg.oracle.tribe_bonus.min_tribe_size == 4
+
+    def test_full_section_parses(self) -> None:
+        payload = _payload_with(oracle=self._oracle_with_tribe())
+        cfg = BalanceConfig.model_validate(payload)
+        assert cfg.oracle.tribe_bonus.enabled is True
+        assert cfg.oracle.tribe_bonus.cm_per_tribe == 1
+        assert cfg.oracle.tribe_bonus.cap_cm == 131
+        assert cfg.oracle.tribe_bonus.min_tribe_size == 4
+
+    def test_disabled_flag_accepted(self) -> None:
+        payload = _payload_with(oracle=self._oracle_with_tribe(enabled=False))
+        cfg = BalanceConfig.model_validate(payload)
+        assert cfg.oracle.tribe_bonus.enabled is False
+
+    def test_zero_cm_per_tribe_allowed(self) -> None:
+        # Допустимо «обнулить» бонус на ивент, не выключая весь модуль.
+        payload = _payload_with(oracle=self._oracle_with_tribe(cm_per_tribe=0))
+        cfg = BalanceConfig.model_validate(payload)
+        assert cfg.oracle.tribe_bonus.cm_per_tribe == 0
+
+    def test_negative_cm_per_tribe_rejected(self) -> None:
+        payload = _payload_with(oracle=self._oracle_with_tribe(cm_per_tribe=-1))
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(payload)
+
+    def test_negative_cap_cm_rejected(self) -> None:
+        payload = _payload_with(oracle=self._oracle_with_tribe(cap_cm=-1))
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(payload)
+
+    def test_min_tribe_size_zero_rejected(self) -> None:
+        payload = _payload_with(oracle=self._oracle_with_tribe(min_tribe_size=0))
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(payload)
+
+    def test_extra_field_rejected(self) -> None:
+        oracle = self._oracle_with_tribe()
+        oracle["tribe_bonus"]["bogus"] = 1
+        payload = _payload_with(oracle=oracle)
+        with pytest.raises(ValidationError):
+            BalanceConfig.model_validate(payload)
+
+    def test_frozen_cannot_mutate(self) -> None:
+        cfg = build_valid_balance()
+        with pytest.raises(ValidationError):
+            cfg.oracle.tribe_bonus.cm_per_tribe = 999  # type: ignore[misc]
+
+    def test_total_at_contract_limit_no_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        # 20 + 131 = 151 — ровно на границе ГДД §11.1, warning не нужен.
+        caplog.set_level("WARNING", logger="pipirik_wars.domain.balance.config")
+        payload = _payload_with(oracle=self._oracle_with_tribe(cap_cm=131))
+        BalanceConfig.model_validate(payload)
+        warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+        assert all("exceeds GDD" not in r.getMessage() for r in warnings)
+
+    def test_total_above_contract_limit_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        # 20 + 200 = 220 > 151 — warning ожидаем (не падаем).
+        caplog.set_level("WARNING", logger="pipirik_wars.domain.balance.config")
+        payload = _payload_with(oracle=self._oracle_with_tribe(cap_cm=200))
+        BalanceConfig.model_validate(payload)
+        assert any(
+            "exceeds GDD §11.1 contract" in r.getMessage()
+            for r in caplog.records
+            if r.levelname == "WARNING"
+        )
+
+
 class TestReferralConfig:
     def test_milestones_must_be_sorted(self) -> None:
         payload = _payload_with(

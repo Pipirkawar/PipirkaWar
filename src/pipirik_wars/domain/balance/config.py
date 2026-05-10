@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import itertools
+import logging
 from enum import StrEnum
 from typing import Literal
 
@@ -20,6 +21,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from pipirik_wars.domain.shared.ports.audit import AuditSource
 from pipirik_wars.shared.errors import IntegrityError
+
+_logger = logging.getLogger(__name__)
 
 
 class Slot(StrEnum):
@@ -571,6 +574,37 @@ class BossesConfig(_Frozen):
         return self
 
 
+class OracleTribeBonusConfig(_Frozen):
+    """Бонус-за-племена в `/oracle` (ГДД §11.1, Спринт 3.6-A).
+
+    Дополнительный «довесок» к базовому броску `bonus_min..bonus_max`:
+    `+cm_per_tribe` см за каждое квалифицированное племя, в котором
+    состоит игрок (см. `IClanRepository.count_active_for_player`),
+    с верхним капом `cap_cm`. Формально: `tribe_bonus =
+    min(n_active * cm_per_tribe, cap_cm)`.
+
+    Поля:
+    - `enabled` — глобальный фичефлаг (включает/выключает второе начисление
+      без удаления конфига; «выключено» = `n_active=0` в use-case-е).
+    - `cm_per_tribe` — коэффициент бонуса за одно племя (см).
+    - `cap_cm` — абсолютный кап бонуса в одном `/predict`-вызове (см).
+    - `min_tribe_size` — минимальный размер «активного» племени
+      (включая самого игрока). Меньшие племена в подсчёт не попадают,
+      см. контракт `IClanRepository.count_active_for_player`.
+
+    Согласованность с `OracleConfig` (ГДД §11.1: `/predict ≤ +151 см`)
+    проверяется на уровне родителя (`OracleConfig._validate`): если
+    `bonus_max + cap_cm > 151`, при загрузке балансa выводится мягкий
+    warning в логе (не падаем, чтобы не блокировать релиз; алертим
+    оператору).
+    """
+
+    enabled: bool = True
+    cm_per_tribe: int = Field(default=1, ge=0)
+    cap_cm: int = Field(default=131, ge=0)
+    min_tribe_size: int = Field(default=4, ge=1)
+
+
 class OracleConfig(_Frozen):
     """Конфиг предсказателя `/oracle` (ГДД §11)."""
 
@@ -578,12 +612,27 @@ class OracleConfig(_Frozen):
     bonus_min: int = Field(gt=0)
     bonus_max: int = Field(gt=0)
     distribution: Literal["uniform"] = "uniform"
+    tribe_bonus: OracleTribeBonusConfig = Field(default_factory=OracleTribeBonusConfig)
 
     @model_validator(mode="after")
     def _validate(self) -> OracleConfig:
         if self.bonus_min > self.bonus_max:
             raise ValueError(
                 f"oracle.bonus_min ({self.bonus_min}) must be <= bonus_max ({self.bonus_max})"
+            )
+        # ГДД §11.1: суммарно `/predict` не должен превышать +151 см
+        # (база `bonus_max` + бонус-за-племена `cap_cm`). Это soft-проверка:
+        # пишем warning, но не падаем, чтобы оператор мог временно поднять
+        # кап, если этого требует ивент. В CI на дефолтных значениях
+        # (20 + 131 = 151) предупреждение не сработает.
+        total_max = self.bonus_max + self.tribe_bonus.cap_cm
+        if total_max > 151:
+            _logger.warning(
+                "oracle: bonus_max (%d) + tribe_bonus.cap_cm (%d) = %d cm "
+                "exceeds GDD §11.1 contract (≤ 151 cm per /predict)",
+                self.bonus_max,
+                self.tribe_bonus.cap_cm,
+                total_max,
             )
         return self
 
