@@ -24,6 +24,7 @@ from pipirik_wars.shared.errors import DomainError
 __all__ = [
     "IdempotencyConflictError",
     "MonetizationDomainError",
+    "PrizePoolAmountInvariantError",
 ]
 
 
@@ -86,4 +87,46 @@ class IdempotencyConflictError(MonetizationDomainError):
             f"attempted player={attempted_player_id} "
             f"currency={attempted_currency.value} "
             f"amount={attempted_amount_native}",
+        )
+
+
+class PrizePoolAmountInvariantError(MonetizationDomainError):
+    """Попытка увести баланс пула ниже нуля (ГДД §12.6, Спринт 4.1-B).
+
+    Бросается из `PrizePool.apply_increment(currency, amount_native)`,
+    когда `current_balance + amount_native < 0`. На 4.1-B use-case
+    `RecordDonation` вызывает этот метод только с
+    неотрицательным инкрементом, но инвариант сторожит будущие
+    `withdraw`-/`reset`-флоу (4.1-D / 4.1-E) от «увести в минус»-багов.
+
+    Параллельный last-line-of-defense — CHECK-ограничение
+    `ck_prize_pool_balance_native_non_negative` на БД-стороне (миграция
+    `0027`). Эта доменная ошибка срабатывает раньше (в unit-тестах
+    use-case-а), БД-CHECK — последний рубеж при прямых SQL-правках.
+
+    Аттрибуты для машинной обработки и подстановки в локали:
+
+    - `currency: Currency` — валюта, баланс которой пытался
+      уйти в минус.
+    - `current_balance_native: int` — баланс до попытки инкремента
+      (`>= 0`).
+    - `attempted_delta_native: int` — попытанная дельта (`< 0`,
+      иначе ошибка бы не возникла).
+    """
+
+    def __init__(
+        self,
+        *,
+        currency: Currency,
+        current_balance_native: int,
+        attempted_delta_native: int,
+    ) -> None:
+        self.currency = currency
+        self.current_balance_native = current_balance_native
+        self.attempted_delta_native = attempted_delta_native
+        super().__init__(
+            f"PrizePool[{currency.value}] balance invariant violated: "
+            f"current={current_balance_native}, "
+            f"attempted_delta={attempted_delta_native}, "
+            f"would-become={current_balance_native + attempted_delta_native} (< 0)",
         )

@@ -17,6 +17,9 @@ from pipirik_wars.domain.monetization import (
     Currency,
     IdempotencyKey,
     StarsAmount,
+    StarsPoolBalance,
+    TonNanoAmount,
+    UsdtDecimalAmount,
 )
 
 
@@ -144,3 +147,105 @@ class TestCurrencyEnum:
 
     def test_three_currencies(self) -> None:
         assert {c.value for c in Currency} == {"stars", "ton_nano", "usdt_decimal"}
+
+
+class TestStarsPoolBalancePostInit:
+    """Пул-баланс ⋆ разрешает ноль («пустой пул»)."""
+
+    @pytest.mark.parametrize("good", [0, 1, 9, 100, 10**18])
+    def test_non_negative_int_ok(self, good: int) -> None:
+        balance = StarsPoolBalance(good)
+        assert balance.value == good
+
+    @pytest.mark.parametrize("bad", [-1, -42, -(10**9)])
+    def test_negative_int_raises(self, bad: int) -> None:
+        with pytest.raises(ValueError, match="must be >= 0"):
+            StarsPoolBalance(bad)
+
+    @pytest.mark.parametrize("bad", [1.5, "9", b"1", None, object()])
+    def test_non_int_value_raises(self, bad: object) -> None:
+        with pytest.raises(TypeError, match="must be int"):
+            StarsPoolBalance(bad)  # type: ignore[arg-type]
+
+    def test_bool_value_raises(self) -> None:
+        with pytest.raises(TypeError, match="must be int"):
+            StarsPoolBalance(True)
+
+    def test_balance_is_frozen(self) -> None:
+        balance = StarsPoolBalance(10)
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            balance.value = 0
+
+    def test_balances_with_same_value_compare_equal(self) -> None:
+        a = StarsPoolBalance(0)
+        b = StarsPoolBalance(0)
+        assert a == b
+        assert hash(a) == hash(b)
+
+
+class TestTonNanoAmountPostInit:
+    """Нано-TON разрешает ноль (пустой пул / no-op инкремент)."""
+
+    @pytest.mark.parametrize("good", [0, 1, 1_000_000_000, 10**24])
+    def test_non_negative_int_ok(self, good: int) -> None:
+        amount = TonNanoAmount(good)
+        assert amount.value == good
+
+    @pytest.mark.parametrize("bad", [-1, -1_000_000_000])
+    def test_negative_int_raises(self, bad: int) -> None:
+        with pytest.raises(ValueError, match="must be >= 0"):
+            TonNanoAmount(bad)
+
+    @pytest.mark.parametrize("bad", [1.5, "9", b"1", None, object()])
+    def test_non_int_value_raises(self, bad: object) -> None:
+        with pytest.raises(TypeError, match="must be int"):
+            TonNanoAmount(bad)  # type: ignore[arg-type]
+
+    def test_bool_value_raises(self) -> None:
+        with pytest.raises(TypeError, match="must be int"):
+            TonNanoAmount(False)
+
+    def test_amount_is_frozen(self) -> None:
+        amount = TonNanoAmount(0)
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            amount.value = 1
+
+    def test_amounts_with_same_value_compare_equal(self) -> None:
+        a = TonNanoAmount(1_000_000_000)
+        b = TonNanoAmount(1_000_000_000)
+        assert a == b
+        assert hash(a) == hash(b)
+
+
+class TestUsdtDecimalAmountPostInit:
+    """USDT минор-юниты разрешают ноль (пустой пул / no-op инкремент)."""
+
+    @pytest.mark.parametrize("good", [0, 1, 1_000_000, 10**24])
+    def test_non_negative_int_ok(self, good: int) -> None:
+        amount = UsdtDecimalAmount(good)
+        assert amount.value == good
+
+    @pytest.mark.parametrize("bad", [-1, -1_000_000])
+    def test_negative_int_raises(self, bad: int) -> None:
+        with pytest.raises(ValueError, match="must be >= 0"):
+            UsdtDecimalAmount(bad)
+
+    @pytest.mark.parametrize("bad", [1.5, "9", b"1", None, object()])
+    def test_non_int_value_raises(self, bad: object) -> None:
+        with pytest.raises(TypeError, match="must be int"):
+            UsdtDecimalAmount(bad)  # type: ignore[arg-type]
+
+    def test_bool_value_raises(self) -> None:
+        with pytest.raises(TypeError, match="must be int"):
+            UsdtDecimalAmount(True)
+
+    def test_amount_is_frozen(self) -> None:
+        amount = UsdtDecimalAmount(0)
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            amount.value = 1
+
+    def test_amounts_with_same_value_compare_equal(self) -> None:
+        a = UsdtDecimalAmount(1_000_000)
+        b = UsdtDecimalAmount(1_000_000)
+        assert a == b
+        assert hash(a) == hash(b)
