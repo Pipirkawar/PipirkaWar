@@ -84,6 +84,11 @@ jobs:
     # Pull_request-runs без изменений зависимостей пропускают этот job —
     # это безопасно, т.к. набор зависимостей такой же как на main.
     runs-on: ubuntu-latest
+    # dorny/paths-filter требует pull-requests:read для запроса списка
+    # изменённых файлов в PR через GitHub API.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
