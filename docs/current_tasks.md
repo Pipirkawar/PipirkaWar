@@ -17,77 +17,95 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main`:** последний смерженный PR — **3.5-C** (PR #<TBD>, `<merge_3_5_C>`) — application use-case `SpinFreeRoulette(*, command: SpinFreeRouletteCommand) -> SpinResult` (`application/roulette/spin_free_roulette.py`, ~340 строк) с 8-шаговым flow: idempotency-check (namespace `roulette_free`) → load Player → gate `thickness_level >= config.roulette.free.min_thickness_level=2` (иначе `RouletteThicknessGateError`) → check `length_cm >= cost_cm=100` (иначе `InsufficientLengthForRouletteError`) → `add_length(delta=-100, source=ROULETTE_FREE_COST, idempotency_key="add_length:{root}:cost")` → `pick_roulette_outcome(config, random, crypto_pool_empty=True)` (Фаза 3 — crypto-пул всегда пуст) → `RouletteSpinRepository.record(spin)` (idempotent через DO NOTHING) → audit `ROULETTE_SPIN(payload={kind, length_cm | None})` → mark idempotency. LENGTH-исход: дополнительно `add_length(delta=+spin.length_cm, source=ROULETTE_FREE_REWARD, idempotency_key="add_length:{root}:reward")` ДО финального audit. Domain-errors `RouletteThicknessGateError` + `InsufficientLengthForRouletteError` (`domain/roulette/errors.py`). `AuditAction.ROULETTE_SPIN` + `AuditSource.ROULETTE_FREE_COST/REWARD` (`domain/shared/ports/audit.py`) — оба source-а **НЕ** входят в organic 24h/7d-окна anti-cheat. Миграция Alembic `0024_audit_source_roulette_free` (`down_revision=0023_roulette_spins`) расширяет CHECK constraint `audit_log_source_whitelist` на `roulette_free_cost`/`roulette_free_reward`; зеркало в ORM `AuditLogORM.audit_log_source_whitelist` (`infrastructure/db/models/security.py`). 13 unit-тестов `tests/unit/application/roulette/test_spin_free_roulette.py` + 7 integration-тестов `tests/integration/db/test_spin_free_roulette_use_case.py` (round-trip LENGTH/ITEM/SCROLL_REGULAR/SCROLL_BLESSED + idempotency + gate-fails). Without bot-UI — это 3.5-D. local: ruff + mypy --strict (0 issues, 891 source files) + import-linter (4 contracts KEPT) + pytest unit **4529 passed / 2 skipped** + integration db/admin/balance/i18n/templates/application **515 passed**. Перед ним — **3.5-B** (PR #122, `3505e83`) — persistence-слой рулетки (`IRouletteSpinRepository` + ORM + миграция `0023_roulette_spins`); **3.5-A** (PR #121, `792a366`) — каркас домена + балансовый конфиг; **3.4-D** (PR #120, `9ebbf15`); **3.4-C** (PR #119, `e490095`); **3.4-B** (PR #118, `7259fad`); **3.4-A** (PR #117, `5c21d4e`). **Закрыт Спринт 3.3 «Рейд-боссы»**, **закрыт Спринт 3.4 «Заточка предметов»**, **в работе Спринт 3.5 «Free-to-play рулетка»** ([`development_plan.md`](development_plan.md) §6.3.5) — A+B+C смержены, активный PR — **3.5-D** «Bot UI + локали + display + закрытие Спринта 3.5».
+**На `main`:** последний смерженный PR — **3.5-D** (PR #125, `<merge_3_5_D>`) — bot-UI free-to-play рулетки: команда `/roulette_free` (личка-only) + pre-spin gate (warning `roulette-free-warn-thickness` при `thickness_level < 2`, `roulette-free-warn-length` при `length_cm < 100`) + spin-кнопка → callback `roulette_free:spin` → 3-кадровая анимация-крутилка (`asyncio.sleep(1.0)` × 3 + `bot.edit_message_text` с best-effort `contextlib.suppress(TelegramAPIError)`) → result-card по `RouletteOutcomeKind` (LENGTH × 4 buckets `small[10..50]/medium[50..150]/good[150..300]/big[300..500]` + ITEM/SCROLL_REGULAR/SCROLL_BLESSED/CRYPTO_LOT). `RoulettePresenter` (`bot/presenters/roulette.py`, ~115 строк) — locale-driven рендер всех карточек. Локали `roulette-free-*` (~50 ключей × RU+EN parity). DI: `Container.spin_free_roulette` + `roulette_router` зарегистрирован в `bot/handlers/__init__.py`. 24 unit-теста handler-а + 18 snapshot-тестов presenter-а. **Закрывает Спринт 3.5 «Free-to-play рулетка»**. Перед ним: **fix(load-tests)** (PR #124, `4baca4b`) — `poolclass=NullPool` в `tests/integration/load/conftest.py::shared_engine` (test-only фикс flaky-падения `test_100_parallel_grants_for_same_player_respect_daily_cap` на py3.11; не относится к скоупу Спринта 3.5). **3.5-C** (PR #123, `7085e51`) — application use-case `SpinFreeRoulette` с 8-шаговым flow + audit `ROULETTE_SPIN` + `AuditSource.ROULETTE_FREE_{COST,REWARD}` (миграция `0024_audit_source_roulette_free`); 13 unit + 7 integration-тестов. **3.5-B** (PR #122, `3505e83`) — persistence-слой (`IRouletteSpinRepository` + ORM + миграция `0023_roulette_spins`). **3.5-A** (PR #121, `792a366`) — каркас домена + балансовый конфиг. Перед ними: **3.4-D** (PR #120, `9ebbf15`); **3.4-C** (PR #119, `e490095`); **3.4-B** (PR #118, `7259fad`); **3.4-A** (PR #117, `5c21d4e`). **Закрыты Спринты 3.1 «PvE-Expeditions»**, **3.2 «Караваны»**, **3.3 «Рейд-боссы»**, **3.4 «Заточка предметов»**, **3.5 «Free-to-play рулетка»**. **В работе Спринт 3.6 «Бонус-за-племена в Предсказателе»** ([`development_plan.md`](development_plan.md) §6.3.6, ГДД §11.1) — активный PR **3.6-A** «Доменный запрос + конфиг + use-case + anti-cheat» (domain-side, без UI).
 
-**Текущая ветка** — `devin/<TBD>-sprint-3-5-D-roulette-bot-ui` — открывается от свежего `main = <merge_3_5_C>` под **Спринт 3.5-D «Bot UI + локали + display + закрытие Спринта 3.5»**.
+**Текущая ветка** — `devin/<новый_ts>-sprint-3-6-A-tribe-bonus-domain` (создаётся от свежего `main = <merge_3_5_D>` после мерджа PR #125) под **Спринт 3.6-A «Доменный запрос + конфиг + use-case + anti-cheat»**.
 
-Перед `3.5-C`: **3.5-B** (PR #122, `3505e83`); **3.5-A** (PR #121, `792a366`); **3.4-D** (PR #120, `9ebbf15`); **3.4-C** (PR #119, `e490095`); **3.4-B** (PR #118, `7259fad`); **3.4-A** (PR #117, `5c21d4e`); **3.6 design doc** (PR #116, `f7d671f`); **3.3-D** (PR #115, `5d6c9a3`); **3.3-C** (PR #114, `d08985e`); **3.3-B** (PR #113, `9c859b7`), **3.3-A** (PR #112, `dbb9b1c`); **3.2-A→D** (#108–#111); **3.1-E** (PR #107, `5c1b26f`) и PR-ы Спринтов 3.1 (#99–#106) и 2.5 (#79–#97).
+Перед `3.5-D` (PR #125, `<merge_3_5_D>`): **fix(load-tests)** (PR #124, `4baca4b`); **3.5-C** (PR #123, `7085e51`); **3.5-B** (PR #122, `3505e83`); **3.5-A** (PR #121, `792a366`); **3.4-D** (PR #120, `9ebbf15`); **3.4-C** (PR #119, `e490095`); **3.4-B** (PR #118, `7259fad`); **3.4-A** (PR #117, `5c21d4e`); **3.6 design doc** (PR #116, `f7d671f`); **3.3-D** (PR #115, `5d6c9a3`); **3.3-C** (PR #114, `d08985e`); **3.3-B** (PR #113, `9c859b7`), **3.3-A** (PR #112, `dbb9b1c`); **3.2-A→D** (#108–#111); **3.1-E** (PR #107, `5c1b26f`) и PR-ы Спринтов 3.1 (#99–#106) и 2.5 (#79–#97).
 
-**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов). **Закрыт Спринт 3.2 «Караваны (полная механика)»** (4 PR-а). **Закрыт Спринт 3.3 «Рейд-боссы»** (4 PR-а). **Закрыт Спринт 3.4 «Заточка предметов»** (4 PR-а: 3.4-A/B/C/D). **В работе Спринт 3.5 «Free-to-play рулетка»** — **3.5-A+B+C смержены**, идёт **3.5-D «Bot UI + локали + display + закрытие Спринта 3.5»** ([`development_plan.md`](development_plan.md) §6.3.5).
+**Закрыт Спринт 3.1 «PvE-Expeditions»** (5 PR-ов). **Закрыт Спринт 3.2 «Караваны (полная механика)»** (4 PR-а). **Закрыт Спринт 3.3 «Рейд-боссы»** (4 PR-а). **Закрыт Спринт 3.4 «Заточка предметов»** (4 PR-а: 3.4-A/B/C/D). **Закрыт Спринт 3.5 «Free-to-play рулетка»** (4 PR-а: 3.5-A/B/C/D). **В работе Спринт 3.6 «Бонус-за-племена в Предсказателе»** ([`development_plan.md`](development_plan.md) §6.3.6) — активный PR **3.6-A**.
 
-**Roadmap (после Спринта 3.5 → далее):**
-- **Спринт 3.5 «Free-to-play рулетка»** ([`development_plan.md`](development_plan.md) §6.3.5) — **активный**, 3.5-A+B+C смержены; осталось 3.5-D (см. ниже).
-- **Спринт 3.6 «Бонус-за-племена в Предсказателе»** 🎯 ([`development_plan.md`](development_plan.md) §6.3.6, ГДД §11.1) — после 3.5. Виральная мини-механика: за каждое активное племя `/predict` начисляет `+1 см` к базовому `uniform(1,20)`, cap `+131 см` (итого `≤ 151 см`). Отдельный лимит anti-cheat (`source = "oracle_tribe_bonus"` НЕ входит в organic 24h/7d). 1–2 PR-а (3.6-A: domain + config + use-case + anti-cheat; 3.6-B: bot UI + локали + закрытие).
-
----
-
-## 🎯 Активный спринт — Спринт 3.5 «Free-to-play рулетка» 🎰
-
-> Цель спринта (по [`development_plan.md`](development_plan.md) §6.3.5 «Спринт 3.5 — Free-to-play рулетка», ГДД §12.4 «Free-to-play рулетка»): free-to-play рулетка с 5 типами исходов (`length` / `item` / `scroll_regular` / `scroll_blessed` / `crypto_lot`). Игрок платит 100 см для прокрутки (открыта от уровня толщины ≥ 2). Внутри `length`-исхода — 4 length-bucket-а (`small[10..50]` / `medium[50..150]` / `good[150..300]` / `big[300..500]` см). Если crypto-пул пуст — вес `crypto_lot` перетекает на `length`. См. ГДД §12.4 и ПД §6.3.5.
-
-**Скоуп — задачи плана 3.5.* (детали — в [`development_plan.md`](development_plan.md)):**
-
-- Domain: pure-picker `pick_roulette_outcome(*, config, random, crypto_pool_empty)`; pydantic `RouletteFreeConfig` с инвариантами (сумма весов = 1.0 на каждом уровне).
-- Persistence: таблица `roulette_spins` (player_id, occurred_at, kind, length_cm | item_id | scroll_id | crypto_lot_id, idempotency_key); ORM + миграция Alembic `0023_roulette_spins`.
-- Application: use-case `SpinFreeRoulette(*, player_id, idempotency_key) -> SpinResult` с проверкой стоимости (100 см), gate-ом `min_thickness_level=2` и аудитом `ROULETTE_SPIN`.
-- Bot UI: команда `/roulette_free` + warning/spin/result-карточки + локали `roulette-free-*` (RU/EN parity).
-- Anti-cheat: spend-длины через `progression.add_length(delta=-100, source="roulette_free_cost")`; награда `length` исход через `add_length(delta=+roll, source="roulette_free_reward")` — обе строки **НЕ** идут в organic-окно (audit-only sources).
-
-**Декомпозиция Спринта 3.5 на фичевые PR-ы:**
-
-- **3.5-A ✅ — Каркас домена + балансовый конфиг.** `domain/roulette/` с `RouletteOutcomeKind` / `RouletteOutcome` / `pick_roulette_outcome(...)`; pydantic `RouletteFreeConfig` с инвариантами; стартовые дефолты в `balance.yaml`. **Смержен** (PR #121, `792a366`).
-- **3.5-B ✅ — Persistence-слой.** `IRouletteSpinRepository` + ORM `RouletteSpinORM` + миграция Alembic `0023_roulette_spins` + SQL-impl. Integration-тесты на round-trip. **Смержен** (PR #122, `3505e83`).
-- **3.5-C ✅ — Application use-case `SpinFreeRoulette` + audit + spend-100см.** `application/roulette/spin_free_roulette.py`; audit-action `ROULETTE_SPIN` + `AuditSource.ROULETTE_FREE_{COST,REWARD}` + миграция `0024`; gate `min_thickness_level=2`; spend-100см sink. 13 unit + 7 integration-тестов. **Смержен** (PR #<TBD>, `<merge_3_5_C>`).
-- **3.5-D — Bot UI + локали + display + закрытие Спринта 3.5.** Команда `/roulette_free` + warning/spin/result-карточки + локали `roulette-free-*` (RU/EN parity) + composition root wiring. Закрытие Спринта.
-
-**Финальный коммит каждого PR-а Спринта 3.5** (внутри ветки, последним перед мерджем) — обновить `history.md` (запись «Спринт 3.5-X: ...») + пересобрать «Снимок состояния» в `current_tasks.md` под `main = <коммит_слияния>`, передвинуть чек-лист на следующий PR (или закрыть Спринт 3.5 на 3.5-D и расписать чек-лист **первого PR-а Спринта 3.6** «Бонус-за-племена в Предсказателе»).
+**Roadmap (после Спринта 3.6 → далее):**
+- **Спринт 3.6 «Бонус-за-племена в Предсказателе»** 🎯 ([`development_plan.md`](development_plan.md) §6.3.6, ГДД §11.1) — **активный**, 1–2 PR-а: 3.6-A (domain + config + use-case + anti-cheat — **активный**) → 3.6-B (bot UI + локали + закрытие).
+- **Фаза 4 «Монетизация и масштаб»** ([`development_plan.md`](development_plan.md) §7) — после Спринта 3.6. Telegram Stars + TON Connect + USDT + крипто-приз в рулетке + лот-генератор + админ-команды (`/prize_pool`, `/refund_lot`, `/freeze_payouts`).
 
 ---
 
-## 📝 Чек-лист следующего PR (Спринт 3.5-D — Bot UI + локали + display + закрытие Спринта 3.5)
+## 🎯 Активный спринт — Спринт 3.6 «Бонус-за-племена в Предсказателе» 🎯
 
-> Этот PR — четвёртый и финальный PR Спринта 3.5. Создаёт bot-UI free-to-play рулетки: команда `/roulette_free` + warning-карточка (длина < 100 см / толщина < 2) + result-карточка (LENGTH/ITEM/SCROLL_REGULAR/SCROLL_BLESSED) + анимация-крутилка + локали `roulette-free-*` (RU/EN parity) + DI-провязка в `bot/main.py`. Закрывает Спринт 3.5.
+> Цель спринта (по [`development_plan.md`](development_plan.md) §6.3.6 «Спринт 3.6 — Бонус-за-племена в Предсказателе», ГДД §11.1 «Бонус за племена»): виральная мини-механика — расширение `/predict`. За каждое **активное** племя, в котором состоит игрок, начисляется `+1 см` к базовому `uniform(1, 20)`. Cap = `+131 см` за вызов (итого `/predict` ≤ `+151 см` вместе с базой). Активным считается племя со `status="active"`, **числом участников `> 3`**, где игрок — член. Anti-cheat: **отдельный лимит** (`source = "oracle_tribe_bonus"` НЕ входит в organic 24h/7d). Display: явная строка `+N см за племена` в результате `/predict`. Снапшот — **live** в момент вызова `/predict`.
 
-- [ ] Дождаться мерджа `3.5-C` в `main` (PR #<TBD>, `<merge_3_5_C>`).
+**Скоуп — задачи плана 3.6.* (детали — в [`development_plan.md`](development_plan.md) §6.3.6):**
+
+- Domain: `IClanRepository.count_active_for_player(player_id, *, min_tribe_size: int) -> int` (или симметричный сервис в `application/clan/services/`). Активное племя = `status='active'`, members > min_tribe_size, игрок — член.
+- Config: pydantic `OracleTribeBonusConfig` с полями `enabled: bool`, `cm_per_tribe: int >= 0`, `cap_cm: int >= 0`, `min_tribe_size: int >= 1`. Дефолты: `enabled=true`, `cm_per_tribe=1`, `cap_cm=131`, `min_tribe_size=4`.
+- Application: расширение use-case `RequestOracle` — после рандома `uniform(bonus_min, bonus_max)` считаем `n_active_tribes`, прибавляем `min(n_active_tribes * cm_per_tribe, cap_cm)`. **Две** проводки `add_length(...)`: `oracle_base` (source=`oracle`) + `oracle_tribe_bonus` (source=`oracle_tribe_bonus`). Один idempotency-key `oracle:{player_id}:{moscow_date}`.
+- Anti-cheat: `oracle_tribe_bonus` в **новый** whitelist `tribe_bonus_sources` в `balance.yaml::anticheat`; `IAnticheatChecker` игнорирует эти источники при rolling-окне.
+- Bot UI (3.6-B, не входит в 3.6-A): `OraclePresenter` — две строки прироста + локали с Fluent-плюрал-формами.
+
+**Декомпозиция Спринта 3.6 на фичевые PR-ы:**
+
+- **3.6-A — Доменный запрос + конфиг + use-case + anti-cheat (активный).** `IClanRepository.count_active_for_player`, pydantic `OracleTribeBonusConfig`, расширение `RequestOracle` use-case-а (две проводки `add_length`), `tribe_bonus_sources` в `balance.yaml` + `IAnticheatChecker`. Юнит + integration-тесты. **Без** UI-изменений. Покрывает задачи 3.6.1, 3.6.2, 3.6.3, 3.6.4.
+- **3.6-B — Bot UI + локали + закрытие Спринта 3.6.** Расширение `OraclePresenter` строками `+N за племена`, локали RU+EN с Fluent-плюрал-формами, snapshot-тесты, manual smoke + финальный док-коммит. Покрывает задачи 3.6.5, 3.6.6, 3.6.7, 3.6.8.
+
+**Финальный коммит каждого PR-а Спринта 3.6** (внутри ветки, последним перед мерджем) — обновить `history.md` (запись «Спринт 3.6-X: ...») + пересобрать «Снимок состояния» в `current_tasks.md` под `main = <коммит_слияния>`, передвинуть чек-лист на следующий PR (или закрыть Спринт 3.6 на 3.6-B и расписать чек-лист **первого PR-а Фазы 4** «Монетизация и масштаб»).
+
+---
+
+## 📝 Чек-лист следующего PR (Спринт 3.6-A — Доменный запрос + конфиг + use-case + anti-cheat)
+
+> Этот PR — первый PR Спринта 3.6. Расширяет `/predict` на бонус-за-племена: новый доменный запрос `IClanRepository.count_active_for_player`, pydantic `OracleTribeBonusConfig`, расширение application use-case `RequestOracle` (две проводки `add_length`: `oracle_base` + `oracle_tribe_bonus`), интеграция в `IAnticheatChecker` через новый whitelist `tribe_bonus_sources` (источник НЕ идёт в organic 24h/7d). **Без** UI-изменений — UI делается отдельным PR-ом 3.6-B.
+
+- [ ] Дождаться мерджа `3.5-D` в `main` (PR #125, `<merge_3_5_D>`).
 - [ ] `git fetch && git checkout main && git pull`.
-- [ ] Создать ветку `devin/<TBD>-sprint-3-5-D-roulette-bot-ui` от свежего `main = <merge_3_5_C>`.
-- [ ] **D.0 — Обновить `current_tasks.md`** под старт Спринта 3.5-D: пересобрать «Снимок состояния» под актуальный `main`, расписать чек-лист 3.5-D, заархивировать чек-лист 3.5-C.
-- [ ] **D.1 — Bot-handler `/roulette_free`** (`bot/handlers/roulette.py`, новый):
-  - Команда `/roulette_free` в личке-only (по аналогии с `caravan.py`/`boss.py`/`enchant.py`).
-  - **Pre-spin gate-проверка:** если `player.thickness_level < 2` → warning-карточка `roulette-free-warn-thickness` (с подсказкой «Прокачай толщину до 2 уровня»); если `player.length_cm < 100` → warning-карточка `roulette-free-warn-length` (с подсказкой «Накопи 100 см длины»).
-  - **Spin-кнопка:** `«Крутить за 100 см»` → callback `roulette_free:spin`.
-  - **Анимация-крутилка:** 3-5 промежуточных сообщений с задержкой (1-2 сек между ними) — например `🎰 …` → `🎰 🍆 …` → `🎰 🍆 ⏳ …` → final result. Реализация через `bot.send_message` + `asyncio.sleep` + `bot.edit_message_text` или последовательные сообщения.
-  - **Result-карточка:** разная для каждого `RouletteOutcomeKind` — `roulette-free-result-length-{small|medium|good|big}`, `roulette-free-result-item`, `roulette-free-result-scroll-regular`, `roulette-free-result-scroll-blessed`, `roulette-free-result-crypto-lot` (Фаза 4 — заглушка).
-  - DI: `SpinFreeRoulette` use-case через `Container.spin_free_roulette` (D.4); `bot/handlers/roulette.py` зарегистрирован в `bot/handlers/__init__.py`.
-  - Error-маппинг: `RouletteThicknessGateError` / `InsufficientLengthForRouletteError` → toast с локализованным сообщением (через `RoulettePresenter` D.3).
-  - **Критерий:** `mypy --strict` 0 issues; handler-тесты (mock `Container` + `bot` через `aiogram-tests` или ручной mock).
-- [ ] **D.2 — Локали `roulette-free-*`** (`bot/i18n/locales/ru/roulette-free.ftl` + `en/roulette-free.ftl`):
-  - Стартовая команда (`/roulette_free`-help, intro), warnings (thickness/length), spin-button label, результат-карточки на все `RouletteOutcomeKind` × `length_buckets` (small/medium/good/big).
-  - **Локали-parity тест:** все ключи в RU есть в EN и vice versa (как `bosses-*` / `enchant-*` / `caravan-*`).
-  - **Критерий:** `mypy --strict` 0 issues; locale-parity-тест зелёный.
-- [ ] **D.3 — `RoulettePresenter`** (`bot/presenters/roulette.py`, новый):
-  - Locale-driven рендер всех роулетка-карточек (warnings, spin-prompt, results).
-  - Маппинг `SpinResult` → result-карточка (выбор шаблона по `outcome.kind` + для LENGTH — выбор bucket по `length_cm`).
-  - Snapshot-тесты RU/EN parity (как `BossPresenter` / `EnchantPresenter`).
-  - **Критерий:** `mypy --strict` 0 issues; snapshot-тесты зелёные.
-- [ ] **D.4 — DI-провязка** в `bot/main.py`:
-  - Добавить `spin_free_roulette: SpinFreeRoulette` в `Container` + конструктор `build_container(...)` с реальными SQL-репо/audit-сервисами.
-  - `bot/handlers/__init__.py`: импорт + регистрация `roulette_router`.
-  - `bot/presenters/__init__.py`: экспорт `RoulettePresenter`.
-  - **Критерий:** composition-тесты (`tests/unit/bot/test_composition_root.py`) обновлены под новый use-case.
-- [ ] **D.5 — `make ci` локально:** ruff + mypy --strict + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%).
-- [ ] **D.6 — Финальный док-коммит:** `history.md` + запись 3.5-D, `current_tasks.md` пересборка под старт **Спринта 3.6 «Бонус-за-племена в Предсказателе»** (закрытие Спринта 3.5).
+- [ ] Создать ветку `devin/<новый_ts>-sprint-3-6-A-tribe-bonus-domain` от свежего `main = <merge_3_5_D>`.
+- [ ] **A.0 — Обновить `current_tasks.md`** под старт Спринта 3.6-A: пересобрать «Снимок состояния» под актуальный `main = <merge_3_5_D>`, расписать чек-лист 3.6-A, заархивировать чек-лист 3.5-D (этот коммит — Checkpoint 1).
+- [ ] **A.1 — Доменный запрос `count_active_for_player`** (`domain/clan/ports.py` + SQL impl):
+  - Метод `IClanRepository.count_active_for_player(player_id: int, *, min_tribe_size: int) -> int` — возвращает количество активных племён, в которых состоит игрок.
+  - Активное племя: `status='active'` (не `frozen`/`archived`), `len(members) > min_tribe_size`, игрок есть в `members`.
+  - SQL impl: `SELECT COUNT(*) FROM clans c JOIN clan_members cm ON cm.clan_id=c.id WHERE cm.player_id=:player_id AND c.status='active' GROUP BY c.id HAVING COUNT(cm.id) > :min_tribe_size` (или эквивалент через subquery).
+  - **Критерий:** `mypy --strict` 0 issues; юнит-тесты на каждый gate (frozen → 0; size=3 при min=4 → 0; size=4 → +1; not_member → 0; bot-only-member → 0); 1 integration-тест `tests/integration/db/test_clan_repository.py`.
+- [ ] **A.2 — pydantic `OracleTribeBonusConfig`** (`domain/balance/config.py`):
+  - Поля: `enabled: bool` (default `true`), `cm_per_tribe: int >= 0` (default `1`), `cap_cm: int >= 0` (default `131`), `min_tribe_size: int >= 1` (default `4`). `extra="forbid"`.
+  - Добавить `tribe_bonus: OracleTribeBonusConfig = Field(default_factory=OracleTribeBonusConfig)` в `OracleConfig`.
+  - Sanity-check: `cap_cm + bonus_max <= 151` (мягкий warning в логе при загрузке).
+  - Дефолты в `config/balance.yaml::oracle.tribe_bonus`.
+  - **Критерий:** юнит-тесты pydantic-валидаторов; integration-тест парсинга дефолтного `balance.yaml`.
+- [ ] **A.3 — Расширение use-case `RequestOracle`** (`application/oracle/request_oracle.py`):
+  - После `length_grant = uniform(bonus_min, bonus_max)` — если `cfg.tribe_bonus.enabled`, считаем `n_active = clan_repo.count_active_for_player(player_id, min_tribe_size=cfg.tribe_bonus.min_tribe_size)`, далее `tribe_bonus = min(n_active * cfg.tribe_bonus.cm_per_tribe, cfg.tribe_bonus.cap_cm)`.
+  - **Две** проводки `add_length` внутри одного idempotency-key `oracle:{player_id}:{moscow_date}` и одной транзакции:
+    - `add_length(delta=+length_grant, reason="oracle_base", source=AuditSource.ORACLE, idempotency_key="add_length:{root}:base")`;
+    - `add_length(delta=+tribe_bonus, reason="oracle_tribe_bonus", source=AuditSource.ORACLE_TRIBE_BONUS, idempotency_key="add_length:{root}:tribe_bonus")` (если `tribe_bonus > 0`).
+  - DTO `OraclePredictionResult` — расширить полями `base_cm: int` + `tribe_bonus_cm: int` + `n_active_tribes: int` (для presenter-а 3.6-B).
+  - **Критерий:** юнит-тесты — 0 племён → нет второй проводки; 5 племён → +5 см второй проводкой; 200 племён → +131 см (cap); idempotency повторного вызова за те же сутки → не дублирует ни одну проводку.
+- [ ] **A.4 — Anti-cheat `tribe_bonus_sources`**:
+  - Новый `AuditSource.ORACLE_TRIBE_BONUS = "oracle_tribe_bonus"` в `domain/shared/ports/audit.py`.
+  - Миграция Alembic `0025_audit_source_oracle_tribe_bonus` — расширение CHECK constraint `audit_log_source_whitelist` на `'oracle_tribe_bonus'`. Зеркало в ORM `AuditLogORM.audit_log_source_whitelist` (`infrastructure/db/models/security.py`).
+  - В `balance.yaml::anticheat` — новое поле `tribe_bonus_sources: [oracle_tribe_bonus]` (рядом с `organic_sources`). Pydantic-схема `AnticheatConfig` — добавить поле.
+  - `IAnticheatChecker` (`application/anticheat/services/length_change_recorder.py` или эквивалент): при агрегации rolling-окна источники из `tribe_bonus_sources` игнорировать (не попадают в organic-сумму).
+  - **Критерий:** integration-тест: `5 × /predict с +131 см бонуса` подряд = `+655 см «в обход» хардкапа` за час → trip-wire `ANTICHEAT_DAILY_CAP_EXCEEDED` **не** срабатывает; audit-проводки с правильным `source`.
+- [ ] **A.5 — `make ci` локально:** ruff + mypy --strict + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%).
+- [ ] **A.6 — Финальный док-коммит:** `history.md` + запись 3.6-A, `current_tasks.md` пересборка под старт **Спринта 3.6-B «Bot UI + локали + закрытие Спринта 3.6»**.
 - [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md`.
+- [ ] Дождаться зелёного GitHub CI.
+
+---
+
+## 📦 Архив чек-листа (Спринт 3.5-D — Bot UI + локали + display + закрытие Спринта 3.5) ✅
+
+> Этот PR закрыт, чек-лист сохранён для истории.
+
+- [x] Дождаться мерджа `3.5-C` в `main` (PR #123, `7085e51`).
+- [x] `git fetch && git checkout main && git pull` (после PR #124 fix-flaky → `main = 4baca4b`).
+- [x] Создать ветку `devin/1778361483-sprint-3-5-D-roulette-bot-ui` от свежего `main = 4baca4b`.
+- [x] **D.0 — Обновить `current_tasks.md`** под старт Спринта 3.5-D: пересобрать «Снимок состояния» под актуальный `main = 4baca4b`, расписать чек-лист 3.5-D, заархивировать чек-лист 3.5-C. Коммит `61bdbdd`.
+- [x] **D.1 — Bot-handler `/roulette_free`** (`bot/handlers/roulette.py`, ~280 строк): команда `/roulette_free` (личка-only) + pre-spin gate (warning при `thickness_level < 2` / `length_cm < 100`) + spin-кнопка → callback `roulette_free:spin` → 3-кадровая анимация-крутилка (`asyncio.sleep(1.0)` × 3 + `bot.edit_message_text` с best-effort `contextlib.suppress(TelegramAPIError)`) → result-card. `idempotency_key = f"roulette_free:{tg_user_id}:{ts_ns()}"` (per-press). 24 unit-теста в `tests/unit/bot/handlers/test_roulette.py`. Коммиты `d8dca20` (handler) + `eb8b343` (24 unit-теста).
+- [x] **D.2 — Локали `roulette-free-*`** (`locales/ru.ftl` + `locales/en.ftl`, ~50 ключей × RU+EN): intro, warnings (thickness/length), spin-prompt + spin-button, anim-frame × 3, result-cards (LENGTH × 4 buckets + ITEM/SCROLL_REGULAR/SCROLL_BLESSED/CRYPTO_LOT), toast-errors (5). Locale-parity-тест зелёный. Коммит `a7d650a` (вместе с D.3).
+- [x] **D.3 — `RoulettePresenter`** (`bot/presenters/roulette.py`, ~115 строк): locale-driven рендер всех роулетка-карточек; маппинг `SpinResult` → result-card (switch по `outcome.kind` для не-LENGTH; для LENGTH — bucket по `length_cm`). 18 snapshot-тестов RU/EN parity. Коммит `a7d650a`.
+- [x] **D.4 — DI-провязка** в `bot/main.py` + `bot/handlers/__init__.py` + `bot/presenters/__init__.py`: `Container.spin_free_roulette` создаётся через реальный `SpinFreeRoulette` в `build_container(...)`; `roulette_router` зарегистрирован в dispatcher; `RoulettePresenter` экспортирован. 5 composition-тестов в `tests/unit/bot/test_composition_root.py`. Коммит `c4a7289`.
+- [x] **D.5 — `make ci` локально:** ruff + mypy --strict + import-linter (4 contracts kept) + pytest зелёный + coverage gate (≥ 80%) — **5132 passed / 2 skipped, coverage 95.63%** на `c4a7289`. Коммит `9914997`.
+- [x] **D.6 — Финальный док-коммит:** `history.md` (запись 3.5-D) + `current_tasks.md` пересборка под старт **Спринта 3.6-A «Доменный запрос + конфиг + use-case + anti-cheat»** (этот коммит).
+- [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md` — PR #125.
 - [ ] Дождаться зелёного GitHub CI.
 
 ---
@@ -99,14 +117,15 @@
 - [x] Дождаться мерджа `3.5-B` в `main` (PR #122, `3505e83`).
 - [x] `git fetch && git checkout main && git pull`.
 - [x] Создать ветку `devin/1778350327-sprint-3-5-C-roulette-use-case` от свежего `main = 3505e83`.
+- [x] PR #123 → merged → `7085e51`. После merge на main отдельным PR #124 поверх (`4baca4b`) — test-only NullPool-fix flaky load-теста (вне скоупа 3.5-C).
 - [x] **C.0 — Обновить `current_tasks.md`** под старт Спринта 3.5-C: пересобрать «Снимок состояния» под актуальный `main`, расписать чек-лист 3.5-C. Коммит `902119e`.
 - [x] **C.1 — Audit-action `ROULETTE_SPIN` + `AuditSource.ROULETTE_FREE_{COST,REWARD}` + миграция `0024_audit_source_roulette_free`**: добавлены в `domain/shared/ports/audit.py`; миграция расширяет CHECK whitelist `audit_log_source_whitelist`; обновлён parity-тест `test_audit_source.py`. Коммит `478d242`.
 - [x] **C.2 — Application use-case `SpinFreeRoulette`** (`application/roulette/spin_free_roulette.py`, ~340 строк): DTO `SpinFreeRouletteCommand` + `SpinResult`; 8-шаговый flow (idempotency → load → thickness-gate → length-check → spend-100 → pick-outcome → record-spin → audit → mark-idempotency); domain-errors `RouletteThicknessGateError` / `InsufficientLengthForRouletteError`; для LENGTH-исхода — дополнительный `add_length(delta=+roll, source=ROULETTE_FREE_REWARD)`. 13 unit-тестов. Коммит `6330100` (checkpoint #1).
 - [x] **C.3 — Integration-тесты use-case** (`tests/integration/db/test_spin_free_roulette_use_case.py`, ~440 строк, 7 тестов): real-DB round-trip для LENGTH-исхода (3 audit-записи: cost + ROULETTE_SPIN + reward); 3 параметризованных не-LENGTH (ITEM/SCROLL_REGULAR/SCROLL_BLESSED, 2 audit-записи); idempotent replay (тот же `idempotency_key` → no-op); gate-fail × 2 (thickness < 2, length < 100) без DB-записей. Bug fix: `AuditLogORM.audit_log_source_whitelist` (`infrastructure/db/models/security.py`) синхронизирован с миграцией 0024. Коммит `2c24ad7` (checkpoint #2).
 - [x] **C.4 — `make ci` локально:** ruff (clean), `mypy --strict` (0 issues, 891 source files), import-linter (4 contracts KEPT), pytest unit **4529 passed / 2 skipped** (5017 baseline 3.5-B → +13 unit-тестов SpinFreeRoulette − дедупликация length_grant_guard whitelist), integration db/admin/balance/i18n/templates/application **515 passed**. Load-тесты `tests/integration/load/` flaky при параллельном прогоне (известный flake из 3.5-B), not related to 3.5-C.
-- [x] **C.5 — Финальный док-коммит:** `history.md` (запись 3.5-C) + `current_tasks.md` пересборка под старт **Спринта 3.5-D «Bot UI + локали + display + закрытие Спринта 3.5»** (этот коммит).
-- [ ] Открыть PR в `main` по шаблону `.github/pull_request_template.md`.
-- [ ] Дождаться зелёного GitHub CI.
+- [x] **C.5 — Финальный док-коммит:** `history.md` (запись 3.5-C) + `current_tasks.md` пересборка под старт **Спринта 3.5-D «Bot UI + локали + display + закрытие Спринта 3.5»**.
+- [x] Открыть PR в `main` по шаблону `.github/pull_request_template.md` — PR #123.
+- [x] Дождаться зелёного GitHub CI — PR #123 смержен в `7085e51`.
 
 ---
 
@@ -240,20 +259,19 @@
 
 > Сюда пиши **дельту** к плану: что именно меняешь, какие use-cases / порты / handler-ы / тесты затронуты.
 
-**Текущий PR — 3.5-C «Application use-case `SpinFreeRoulette` + audit + spend-100см»** — C.0/C.1/C.2/C.3/C.4/C.5 закрыты, осталось открыть PR в `main` и дождаться зелёного CI.
-- **На `main`:** 3.5-B смержен (PR #122, `3505e83`). 3.5-C открыт от фреш-`main`.
-- **Что закрыли в 3.5-C:** см. архив чек-листа выше — 6 шагов (C.0–C.5) полностью покрыты. **Активный спринт 3.5 «Free-to-play рулетка»**: 3.5-C смержится этим PR-ом, дальше — 3.5-D «Bot UI + локали + display + закрытие Спринта 3.5».
+**Текущий PR — 3.5-D «Bot UI + локали + display + закрытие Спринта 3.5»** — D.0/D.1/D.2/D.3/D.4/D.5/D.6 закрыты, осталось открыть PR в `main` и дождаться зелёного CI.
+- **На `main`:** 3.5-C смержен (PR #123, `7085e51`); поверх — fix-flaky load-test (PR #124, `4baca4b`). 3.5-D открыт от свежего `main = 4baca4b`.
+- **Что закрыли в 3.5-D:** см. архив чек-листа выше — 7 шагов (D.0–D.6) полностью покрыты. **Закрывает Спринт 3.5 «Free-to-play рулетка»**: после мерджа PR #125 → следующий спринт **3.6 «Бонус-за-племена в Предсказателе»** (3.6-A: domain + config + use-case + anti-cheat).
 - **Открытые блокеры:** нет.
 
 ---
 
 ## 🛑 Известные блокеры / открытые вопросы PR-а
 
-- **`crypto_lot` — реальный розыгрыш отложен до Фазы 4 (Спринт 4.1).** На 3.5-C использован `crypto_pool_empty=True` (всегда) — вес `CRYPTO_LOT` перетекает на `LENGTH` в picker-е. До запуска Фазы 4 `crypto_lot` никогда не выпадет в продакшне, но code-path покрыт unit-тестом через явный `crypto_pool_empty=False`-сценарий.
-- **Не-LENGTH исходы (ITEM/SCROLL_REGULAR/SCROLL_BLESSED) — стабы на 3.5-C.** `RouletteSpinRepository.record(spin)` пишет `kind` + `length_cm=NULL`, audit-payload не содержит `target_id`. Реальный выбор предмета/скролла + INSERT в инвентарь — задача 3.5-D / отдельный спринт «инвентарь + рулетка интеграция».
-- **Bot UI / команда `/roulette_free` — задача 3.5-D.** На 3.5-C use-case вызывается только из тестов. Композишн-root (`bot/main.py`) ещё не пробрасывает `SpinFreeRoulette` — это задача 3.5-D вместе с handler-ом.
+- **`crypto_lot` — реальный розыгрыш отложен до Фазы 4 (Спринт 4.1).** На 3.5-D `crypto_pool_empty=True` (всегда) в use-case-е → вес `CRYPTO_LOT` перетекает на `LENGTH` в picker-е. До запуска Фазы 4 `crypto_lot` никогда не выпадет в продакшне, но result-карточка `roulette-free-result-crypto-lot` готова и snapshot-тестирована (для будущей платной рулетки + крипто-пула).
+- **Не-LENGTH исходы (ITEM/SCROLL_REGULAR/SCROLL_BLESSED) — без INSERT в инвентарь на 3.5-D.** `RouletteSpinRepository.record(spin)` пишет `kind` + `length_cm=NULL`; audit-payload не содержит `target_id`. Реальный выбор предмета/скролла + INSERT в `items`/`scrolls` — задача отдельного спринта «инвентарь + рулетка интеграция» (после 3.6).
 - **Баланс рулетки — стартовые веса (LENGTH 0.85 / ITEM 0.10 / SCROLL_REGULAR 0.04 / SCROLL_BLESSED 0.005 / CRYPTO_LOT 0.005)** — копия ГДД §12.4.2. После альфа-теста подбираются по метрикам; настройка через `balance.yaml` без релиза кода.
-- **`AuditAction.SCROLL_DROP` всё ещё audit-only без write-through в инвентарь** — наследие предыдущих спринтов. Рейды и PvE дропают скроллы только в `audit_log`, без `INSERT` в `scrolls`-таблицу. Запланировано как отдельная задача после 3.5 (инвентарь готов с 3.4-B/C; нужен только wire-up в use-case-ах `FinishBossFight` / `FinishMountainRun` / `FinishDungeonRun`).
+- **`AuditAction.SCROLL_DROP` всё ещё audit-only без write-through в инвентарь** — наследие предыдущих спринтов. Рейды и PvE дропают скроллы только в `audit_log`, без `INSERT` в `scrolls`-таблицу. Запланировано как отдельная задача после Спринта 3.6 (инвентарь готов с 3.4-B/C; нужен только wire-up в use-case-ах `FinishBossFight` / `FinishMountainRun` / `FinishDungeonRun`).
 
 ---
 
@@ -261,4 +279,4 @@
 
 > Обновляется автоматически перед каждым `git push`. После `git log --oneline -1` — short sha + subject.
 
-`2c24ad7` — `feat(3.5-C): C.3 — integration tests SpinFreeRoulette (real-DB) + audit_log whitelist parity` (последний коммит перед docs-коммитом C.5).
+`9914997` — `docs(3.5-D): D.5 — local make ci passing (5132 passed / coverage 95.63%)` (последний коммит перед docs-коммитом D.6).

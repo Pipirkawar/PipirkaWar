@@ -1248,3 +1248,70 @@ enchant-toast-confirmed = Заточка завершена.
 enchant-toast-cancelled = Заточка отменена.
 enchant-toast-already-processed = Уже обработано.
 enchant-toast-error = Что-то пошло не так.
+
+# ============================================================================
+# /roulette_free (Спринт 3.5-D, ГДД §12.4). Free-to-play рулетка:
+# толщина ≥ 2, списание 100 см, разыгрывается приз — длина (LENGTH-исход)
+# или зарезервированные предметы / скроллы / крипто-лоты (Phase 4).
+# Команда работает только в личке бота.
+# ============================================================================
+
+roulette-free-group = 🎰 Команда /roulette_free доступна только в личке бота. Открой приватный чат и повтори.
+roulette-free-other = 🎰 Команда /roulette_free доступна только в личке бота.
+roulette-free-not-registered = 🎰 Похоже, ты ещё не зарегистрирован. Нажми /start в этом чате — и тогда сможешь крутить рулетку.
+
+# Gate-warning-карточки в личке (вместо pre-spin-карточки).
+roulette-free-requirement-thickness = 🎰 Рулетка открывается с толщиной ≥ { NUMBER($required, useGrouping: 0) }. У тебя сейчас { NUMBER($actual, useGrouping: 0) }. Прокачай /upgrade.
+roulette-free-requirement-length = 🎰 Для прокрутки нужно ≥ { NUMBER($required_cm, useGrouping: 0) } см. У тебя сейчас { NUMBER($actual_cm, useGrouping: 0) } см.
+
+# Pre-spin карточка с кнопкой [Прокрутить — 100 см].
+roulette-free-prompt =
+    🎰 Free-рулетка
+    Текущая длина: { NUMBER($current_length_cm, useGrouping: 0) } см
+    Стоимость прокрутки: { NUMBER($cost_cm, useGrouping: 0) } см
+    После прокрутки останется: { NUMBER($remaining_cm, useGrouping: 0) } см
+
+    Нажми кнопку, чтобы прокрутить.
+
+roulette-free-button-spin = Прокрутить — { NUMBER($cost_cm, useGrouping: 0) } см
+
+# Анимация прокрутки (3 кадра через edit_text).
+roulette-free-animation-frame-1 = 🎰 Прокручиваем рулетку…
+roulette-free-animation-frame-2 = 🎰 Шарик ещё крутится…
+roulette-free-animation-frame-3 = 🎰 Почти остановился…
+
+# Result-карточки. Параметры в каждой: $cost_cm — фактически списано;
+# в LENGTH-варианте дополнительно $length_cm — приз в см.
+roulette-free-result-length =
+    🎰 Длина! Тебе выпало <b>+{ NUMBER($length_cm, useGrouping: 0) } см</b>.
+    Списано за прокрутку: { NUMBER($cost_cm, useGrouping: 0) } см.
+
+roulette-free-result-item =
+    🎰 Тебе выпал предмет!
+    Списано: { NUMBER($cost_cm, useGrouping: 0) } см.
+    Награда будет начислена в Phase 4 — пока что попадание зафиксировано.
+
+roulette-free-result-scroll-regular =
+    🎰 Тебе выпал свиток!
+    Списано: { NUMBER($cost_cm, useGrouping: 0) } см.
+    Награда будет начислена в Phase 4 — пока что попадание зафиксировано.
+
+roulette-free-result-scroll-blessed =
+    🎰 Тебе выпал благословлённый свиток!
+    Списано: { NUMBER($cost_cm, useGrouping: 0) } см.
+    Награда будет начислена в Phase 4 — пока что попадание зафиксировано.
+
+roulette-free-result-crypto-lot =
+    🎰 Тебе выпал крипто-лот!
+    Списано: { NUMBER($cost_cm, useGrouping: 0) } см.
+    Награда будет начислена в Phase 4 — пока что попадание зафиксировано.
+
+roulette-free-result-idempotent = ℹ Эта прокрутка уже завершена. Открой /profile, чтобы увидеть актуальное состояние.
+
+# Toast-ы для callback-ответов (Telegram ≤ 200 символов).
+roulette-free-toast-thickness-gate = Нужна толщина ≥ { NUMBER($required, useGrouping: 0) }. У тебя { NUMBER($actual, useGrouping: 0) }.
+roulette-free-toast-insufficient-length = Нужно ≥ { NUMBER($required_cm, useGrouping: 0) } см. У тебя { NUMBER($actual_cm, useGrouping: 0) } см.
+roulette-free-toast-not-registered = Сначала /start в личке бота.
+roulette-free-toast-spin-complete = Прокрутка завершена.
+roulette-free-toast-already-processed = Уже обработано.
+roulette-free-toast-error = Что-то пошло не так.

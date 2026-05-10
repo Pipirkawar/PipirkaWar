@@ -117,6 +117,7 @@ from pipirik_wars.application.referral import (
     RegisterReferral,
     RunWeeklyClanReferralSummary,
 )
+from pipirik_wars.application.roulette import SpinFreeRoulette
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.application.signup_queue import PromoteFromQueue
 from pipirik_wars.application.top import GetTopClans, GetTopPlayers
@@ -138,6 +139,7 @@ from pipirik_wars.domain.inventory import (
 from pipirik_wars.domain.mountains import IMountainRunRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.pvp import IDuelRepository, IMassDuelRepository
+from pipirik_wars.domain.roulette import IRouletteSpinRepository
 from pipirik_wars.domain.security import IActivityLockRepository
 from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
 from pipirik_wars.domain.signup_queue import ISignupQueueRepository
@@ -171,6 +173,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyMassDuelRepository,
     SqlAlchemyMountainRunRepository,
     SqlAlchemyPlayerRepository,
+    SqlAlchemyRouletteSpinRepository,
     SqlAlchemyScrollRepository,
     SqlAlchemySignupQueueRepository,
 )
@@ -233,6 +236,7 @@ from tests.fakes import (
     FakePlayerRepository,
     FakeRandom,
     FakeReferralRepository,
+    FakeRouletteSpinRepository,
     FakeSignupQueueRepository,
     FakeTopPlayersQuery,
     FakeTotpVerifier,
@@ -954,6 +958,21 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         clock=clock,
         scheduler=delayed_jobs,
     )
+    # Спринт 3.5-B/C/D: free-to-play рулетка. `roulette_spins_repo` —
+    # in-memory фейк; `spin_free_roulette_uc` — реальный use-case с
+    # фейковыми зависимостями (проверяет инстанцируемость в Container).
+    roulette_spins_repo: IRouletteSpinRepository = FakeRouletteSpinRepository()
+    spin_free_roulette_uc = SpinFreeRoulette(
+        uow=uow,
+        players=players,
+        roulette_spins=roulette_spins_repo,
+        length_granter=add_length,
+        balance=balance,
+        audit=audit,
+        idempotency=idempotency,
+        random=rng,
+        clock=clock,
+    )
     close_caravan_lobby_uc = CloseCaravanLobby(
         uow=uow,
         caravans=caravans_repo,
@@ -1223,6 +1242,8 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         enchant_history=enchant_history_reader,
         enchant_item=enchant_item_uc,
         get_inventory=get_inventory_uc,
+        roulette_spins=roulette_spins_repo,
+        spin_free_roulette=spin_free_roulette_uc,
     )
 
 
@@ -1330,6 +1351,12 @@ class TestContainer:
         assert isinstance(c.enchant_history, _StubEnchantHistoryReader)
         assert isinstance(c.enchant_item, EnchantItem)
         assert isinstance(c.get_inventory, GetInventory)
+
+    def test_container_holds_roulette_use_cases(self) -> None:
+        """Free-to-play рулетка (Спринт 3.5-B/C/D, ГДД §12.4)."""
+        c = _container_with_fakes()
+        assert isinstance(c.roulette_spins, FakeRouletteSpinRepository)
+        assert isinstance(c.spin_free_roulette, SpinFreeRoulette)
 
     def test_container_holds_admin_support_use_cases(self) -> None:
         """Расширенный админ-интерфейс (Спринт 2.5-A.3 + 2.5-B)."""
@@ -1452,6 +1479,10 @@ class TestBuildContainer:
         assert isinstance(c.enchant_history, SqlAlchemyEnchantHistoryReader)
         assert isinstance(c.enchant_item, EnchantItem)
         assert isinstance(c.get_inventory, GetInventory)
+        # Free-to-play рулетка (Спринт 3.5-B/C/D): реальный
+        # SQLAlchemy-репозиторий + use-case `SpinFreeRoulette`.
+        assert isinstance(c.roulette_spins, SqlAlchemyRouletteSpinRepository)
+        assert isinstance(c.spin_free_roulette, SpinFreeRoulette)
 
 
 class TestBuildDispatcher:

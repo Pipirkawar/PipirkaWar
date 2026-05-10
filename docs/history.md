@@ -23,6 +23,72 @@
 
 ---
 
+## 2026-05-10 — Спринт 3.5-D «Bot UI + локали + display + закрытие Спринта 3.5»
+
+**Автор:** Devin (агент)
+**Тип:** feature
+**Связано:** ГДД §12.4 «Free-to-play рулетка», ПД §6.3.5 «Спринт 3.5 — Free-to-play рулетка» (задачи 3.5.5 «handler `/roulette_free` + анимация», 3.5.6 «локализация `roulette-free-*`»). `current_tasks.md` чек-лист 3.5-D. Базируется на 3.5-C (PR #123, `7085e51` — application use-case `SpinFreeRoulette`). **Закрывает Спринт 3.5 «Free-to-play рулетка»** — следующий спринт **3.6 «Бонус-за-племена в Предсказателе»** (3.6-A: domain + config + use-case + anti-cheat).
+
+Что сделано (по чек-листу D.0–D.6):
+
+- **D.0 — Обновлён `current_tasks.md`** под старт Спринта 3.5-D: «Снимок состояния» пересобран под `main = 4baca4b` (PR #124 fix-flaky load-test поверх PR #123 = 3.5-C), добавлен чек-лист 3.5-D (D.0–D.6), архивирован чек-лист 3.5-C. Коммит `61bdbdd`.
+- **D.1 — Bot-handler `/roulette_free`** (`bot/handlers/roulette.py`, ~280 строк, новый):
+  - Команда `/roulette_free` в личке-only (по аналогии с `caravan.py`/`boss.py`/`enchant.py`); reply `chat-private-only` для group/supergroup/channel.
+  - **Pre-spin gate:** загрузка `Player` через `IPlayerRepository.find_by_tg_id(tg_id)`. Если `player is None` — `roulette-free-error-player-not-found` toast (без show-alert). Иначе чтение `BalanceConfig.roulette.free.cost_cm` + `min_thickness_level` (читаем динамически — не хардкодим).
+  - **Warning-карточки** через `RoulettePresenter.warn_thickness(level, required)` / `warn_length(have_cm, required_cm)` — render-only, без вызова use-case-а. Использовалось бы дороже использовать use-case + ловить `RouletteThicknessGateError` / `InsufficientLengthForRouletteError` — выбрана более дешёвая ветка с двумя read-only-проверками + локализованным сообщением и подсказкой «Прокачай толщину» / «Накопи длину».
+  - **Spin-кнопка** `caravans-confirm-button` ❌ — на самом деле `roulette-free-spin-button` (proper наименование) → callback `roulette_free:spin`.
+  - **Callback `roulette_free:spin`:** генерация `idempotency_key = f"roulette_free:{tg_user_id}:{ts_ns()}"` (anti-replay — уникальный per-press, не per-day, потому что игрок может крутить много раз подряд). Вызов `SpinFreeRoulette.execute(SpinFreeRouletteCommand(player_id, idempotency_key))`. На `RouletteThicknessGateError` / `InsufficientLengthForRouletteError` — toast с `roulette-free-error-*` сообщением. На прочих доменных ошибках — generic-toast `roulette-free-callback-toast-generic-error`.
+  - **Анимация-крутилка:** 3 промежуточных edit-ов с `asyncio.sleep(1.0)` между кадрами — `🎰 …` → `🎰 🍆 …` → `🎰 🍆 ⏳ …` → final result-card. На `TelegramAPIError` (например, message too old) — best-effort `contextlib.suppress` без падения handler-а.
+  - **Result-card:** `RoulettePresenter.result(spin: SpinResult, locale)` маппит `RouletteOutcome.kind` на ключ `roulette-free-result-{length-{small|medium|good|big}|item|scroll-regular|scroll-blessed|crypto-lot}`; для LENGTH-исхода bucket выбирается из 4 диапазонов `[10,50] / [50,150] / [150,300] / [300,500]` см. CRYPTO_LOT-карточка — заглушка с упоминанием Фазы 4 (на самом деле он не выпадает в Фазе 3 из-за `crypto_pool_empty=True`, но карточка готова).
+  - DI: `SpinFreeRoulette` доступен через `Container.spin_free_roulette` (D.4). Handler регистрируется в `roulette_router` + подключается к `dispatcher` в `bot/handlers/__init__.py` (D.4).
+  - **Тесты:** 24 unit-теста в `tests/unit/bot/handlers/test_roulette.py` (~640 строк): chat-kind gate (4 теста: private/group/supergroup/channel), pre-spin warnings (4: thickness-fail/length-fail/both-fail/happy-path), use-case domain errors (5: ThicknessGate/InsufficientLength/PlayerNotFound/PlayerFrozen/UnexpectedError), happy-path × 5 outcome kinds (LENGTH × 4 buckets + ITEM/SCROLL_REGULAR/SCROLL_BLESSED/CRYPTO_LOT), animation frames (`edit_message_text` × 3), idempotency_key format. Коммиты `d8dca20` (handler) + `eb8b343` (24 unit-теста).
+- **D.2 — Локали `roulette-free-*`** (`locales/ru.ftl` + `locales/en.ftl`, ~50 ключей × 2 языков):
+  - `roulette-free-intro` (`/roulette_free`-help), `roulette-free-warn-thickness` (`level={ $level }`, `required={ $required }`), `roulette-free-warn-length` (`have_cm`, `required_cm`), `roulette-free-spin-prompt` (балансовая надпись «Крутить за 100 см?»), `roulette-free-spin-button`.
+  - **Анимация:** `roulette-free-anim-frame-1` / `-2` / `-3` (3 промежуточных кадра).
+  - **Result-cards:** 4 length-bucket-а (`roulette-free-result-length-small/medium/good/big`) + `roulette-free-result-item` + `roulette-free-result-scroll-regular` + `roulette-free-result-scroll-blessed` + `roulette-free-result-crypto-lot`.
+  - **Toast-ошибки:** `roulette-free-error-thickness-gate`, `-error-insufficient-length`, `-error-player-not-found`, `-error-player-frozen`, `-callback-toast-generic-error`.
+  - **Локали-parity-тест:** все ключи `roulette-free-*` присутствуют и в RU, и в EN — `tests/integration/i18n/test_locales_parity.py` зелёный.
+  - Коммит `a7d650a` (вместе с D.3).
+- **D.3 — `RoulettePresenter`** (`bot/presenters/roulette.py`, ~115 строк, новый):
+  - Locale-driven рендер всех роулетка-карточек: `intro(locale)`, `warn_thickness(*, level, required, locale)`, `warn_length(*, have_cm, required_cm, locale)`, `spin_prompt(*, cost_cm, locale)`, `anim_frame(*, frame, locale)` (1/2/3), `result(*, spin: SpinResult, locale)`.
+  - Маппинг `SpinResult` → result-card: switch по `outcome.kind` для не-LENGTH; для LENGTH — выбор bucket по `length_cm` (`bucket-of(cm) = small if cm < 50 else medium if cm < 150 else good if cm < 300 else big`).
+  - Toast-ошибки: `error_thickness_gate`, `error_insufficient_length`, `error_player_not_found`, `error_player_frozen`, `callback_toast_generic_error`.
+  - Snapshot-тесты RU/EN parity — `tests/unit/bot/presenters/test_roulette.py` (~240 строк, 18 тестов): 4 length-buckets × 2 locales + 4 не-LENGTH × 2 locales + warnings × 2 locales + 5 toast-error × 2 locales.
+  - Коммит `a7d650a`.
+- **D.4 — DI-провязка** в `bot/main.py` (~30 строк правок) + `bot/handlers/__init__.py` (1 строка) + `bot/presenters/__init__.py` (1 строка):
+  - `Container` (`bot/main.py`): добавлено поле `spin_free_roulette: SpinFreeRoulette` + конструктор `build_container(...)` создаёт реальный `SpinFreeRoulette(uow, players, idempotency, audit_logger, length_granter, anticheat_checker, balance, random)`. Реальный `SqlAlchemyRouletteSpinRepository` подключён через `uow.roulette_spins` (с 3.5-B уже зарегистрирован в `SqlAlchemyUnitOfWork`).
+  - `bot/handlers/__init__.py`: импорт `roulette_router` + `dispatcher.include_router(roulette_router)`.
+  - `bot/presenters/__init__.py`: экспорт `RoulettePresenter`.
+  - **Composition-тесты:** обновлены `tests/unit/bot/test_composition_root.py` под новый use-case + handler — 5 тестов (`spin_free_roulette` instance + Container fields + dispatcher routing).
+  - Коммит `c4a7289`.
+- **D.5 — `make ci` локально:** ruff (clean), `mypy --strict` (0 issues, 891 source files), import-linter (4 contracts KEPT), pytest **5132 passed / 2 skipped**, coverage **95.63%** (gate ≥ 80%). Время прогона ~20 минут (включая полный integration-suite). Коммит `9914997`.
+- **D.6 — Финальный док-коммит:** `history.md` (эта запись) + пересборка «Снимка состояния» в `current_tasks.md` под `main = <merge_3_5_D>`, чек-лист передвинут на старт **Спринта 3.6 «Бонус-за-племена в Предсказателе»** (3.6-A: domain + config + use-case + anti-cheat). Старый чек-лист 3.5-D архивирован.
+
+Результат / артефакты:
+
+- Новые файлы:
+  - `src/pipirik_wars/bot/handlers/roulette.py` (~280 строк) — bot-handler `/roulette_free` + callback `roulette_free:spin` + анимация-крутилка.
+  - `src/pipirik_wars/bot/presenters/roulette.py` (~115 строк) — `RoulettePresenter` (warnings, spin-prompt, animation, result-cards, toasts).
+  - `tests/unit/bot/handlers/test_roulette.py` (~640 строк, 24 теста).
+  - `tests/unit/bot/presenters/test_roulette.py` (~240 строк, 18 тестов).
+- Изменённые файлы:
+  - `locales/ru.ftl` + `locales/en.ftl` — ~50 ключей `roulette-free-*` (parity-тест зелёный).
+  - `src/pipirik_wars/bot/main.py` — `Container.spin_free_roulette` + `build_container` создаёт `SpinFreeRoulette`.
+  - `src/pipirik_wars/bot/handlers/__init__.py` — `roulette_router` + регистрация.
+  - `src/pipirik_wars/bot/presenters/__init__.py` — экспорт `RoulettePresenter`.
+  - `tests/unit/bot/test_composition_root.py` — 5 новых тестов под `spin_free_roulette` + dispatcher.
+
+Заметки / решения:
+
+- **Анимация-крутилка через 3 `edit_message_text`** (а не последовательные `send_message`) — UX-выбор: только одно сообщение в чате, оно «оживает», результат заменяет последний кадр. Время кадра — 1.0 сек (общее время до результата 3.0–4.0 сек). На `TelegramAPIError` (например, message too old при медленной сети) — best-effort `contextlib.suppress(TelegramAPIError)`, чтобы не падать на пользователе. Если все 3 edit-а упали — final-result-card всё равно отправляется новым `send_message`, чтобы пользователь не остался без ответа.
+- **`idempotency_key = f"roulette_free:{tg_user_id}:{ts_ns()}"` per-press, не per-day.** Игрок может крутить много раз подряд, поэтому per-day сценарий (как у `/predict` или `/daily_head`) тут не подходит. `ts_ns()` (наносекунды) даёт практически 100% уникальность даже при двойном клике (UI-debounce + нс-разрешение). При retry в Telegram (доставка callback × 2) — оба запроса получат идентичный key, и `IdempotencyService` корректно вернёт cached-result от первого вызова.
+- **Read-only pre-spin gate vs. use-case domain errors** — handler сначала делает дешёвый read-only-check на `thickness_level` и `length_cm`, чтобы дать пользователю warning-карточку «Прокачай толщину» / «Накопи длину» БЕЗ вызова use-case-а (который начнёт списывать длину). Если же handler пропустил (race condition: между warning и spin кто-то изменил состояние), use-case всё равно проверит и вернёт `RouletteThicknessGateError` / `InsufficientLengthForRouletteError` — handler покажет toast. Двойная проверка — ОК, она дёшева на уровне domain-error-toast.
+- **`roulette-free-result-crypto-lot` готов в Фазе 3, но не выпадает.** Балансовый конфиг `roulette.free.outcomes` имеет `CRYPTO_LOT` с весом 0.005, но в use-case-е `crypto_pool_empty=True` всегда (Фаза 4 не реализована), поэтому `pick_roulette_outcome(...)` percolation-rule перетекает 0.005 на `LENGTH`. Карточка `crypto-lot` готова и снапшот-тестирована — она выйдет в production только после Спринта 4.1 (платная рулетка + крипто-пул).
+- **`SpinResult.idempotent` флаг не показан в UI на 3.5-D.** При retry callback-а user видит ту же result-card, что и в первый раз (cached через `IdempotencyService`), что является правильным UX (idempotent — это invisible). Если бы мы показали `«вы уже крутили этот спин»`, это смутило бы пользователя при network-retry. Для аналитики `idempotent=True` запись попадает в `audit_log` через middleware (опц., если включено).
+- **Composition root passes тесты на ✅** — `test_composition_root.py` теперь проверяет, что `SpinFreeRoulette` инстанцируется через `build_container(...)` с реальными SQL-репо, что `roulette_router` зарегистрирован в dispatcher-е, и что `RoulettePresenter` экспортирован. Это ловит регрессии типа «забыл зарегистрировать router» — частая ошибка при добавлении нового handler-а.
+
+---
+
 ## 2026-05-09 — Спринт 3.5-C «Application use-case `SpinFreeRoulette` + audit + spend-100см»
 
 **Автор:** Devin (агент)

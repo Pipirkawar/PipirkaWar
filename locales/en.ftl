@@ -1245,3 +1245,70 @@ enchant-toast-confirmed = Enchant complete.
 enchant-toast-cancelled = Enchant cancelled.
 enchant-toast-already-processed = Already processed.
 enchant-toast-error = Something went wrong.
+
+# ============================================================================
+# /roulette_free (Sprint 3.5-D, GDD §12.4). Free-to-play roulette:
+# thickness ≥ 2, 100 cm cost, draws a prize — length (LENGTH outcome)
+# or a reserved item / scroll / crypto lot (Phase 4). The command runs
+# only in the bot's private chat.
+# ============================================================================
+
+roulette-free-group = 🎰 The /roulette_free command works only in the bot's DM. Open a private chat and try again.
+roulette-free-other = 🎰 The /roulette_free command works only in the bot's DM.
+roulette-free-not-registered = 🎰 Looks like you're not registered yet. Tap /start in this chat — then you'll be able to spin the roulette.
+
+# Gate-warning cards in the DM (instead of the pre-spin card).
+roulette-free-requirement-thickness = 🎰 The roulette unlocks at thickness ≥ { NUMBER($required, useGrouping: 0) }. You're at { NUMBER($actual, useGrouping: 0) }. Train via /upgrade.
+roulette-free-requirement-length = 🎰 A spin requires ≥ { NUMBER($required_cm, useGrouping: 0) } cm. You have { NUMBER($actual_cm, useGrouping: 0) } cm.
+
+# Pre-spin card with a [Spin — 100 cm] button.
+roulette-free-prompt =
+    🎰 Free roulette
+    Current length: { NUMBER($current_length_cm, useGrouping: 0) } cm
+    Spin cost: { NUMBER($cost_cm, useGrouping: 0) } cm
+    After the spin you'll have: { NUMBER($remaining_cm, useGrouping: 0) } cm
+
+    Tap the button to spin.
+
+roulette-free-button-spin = Spin — { NUMBER($cost_cm, useGrouping: 0) } cm
+
+# Animation frames (3 frames via edit_text).
+roulette-free-animation-frame-1 = 🎰 Spinning the roulette…
+roulette-free-animation-frame-2 = 🎰 The ball is still rolling…
+roulette-free-animation-frame-3 = 🎰 Almost stopped…
+
+# Result cards. All take $cost_cm — actual spin cost. The LENGTH variant
+# also takes $length_cm — the prize in centimeters.
+roulette-free-result-length =
+    🎰 Length! You won <b>+{ NUMBER($length_cm, useGrouping: 0) } cm</b>.
+    Spin cost: { NUMBER($cost_cm, useGrouping: 0) } cm.
+
+roulette-free-result-item =
+    🎰 You rolled an item!
+    Spin cost: { NUMBER($cost_cm, useGrouping: 0) } cm.
+    The reward will be granted in Phase 4 — for now the roll is recorded.
+
+roulette-free-result-scroll-regular =
+    🎰 You rolled a scroll!
+    Spin cost: { NUMBER($cost_cm, useGrouping: 0) } cm.
+    The reward will be granted in Phase 4 — for now the roll is recorded.
+
+roulette-free-result-scroll-blessed =
+    🎰 You rolled a blessed scroll!
+    Spin cost: { NUMBER($cost_cm, useGrouping: 0) } cm.
+    The reward will be granted in Phase 4 — for now the roll is recorded.
+
+roulette-free-result-crypto-lot =
+    🎰 You rolled a crypto lot!
+    Spin cost: { NUMBER($cost_cm, useGrouping: 0) } cm.
+    The reward will be granted in Phase 4 — for now the roll is recorded.
+
+roulette-free-result-idempotent = ℹ This spin has already been processed. Open /profile to see the current state.
+
+# Toasts on callback responses (Telegram limit ≤ 200 chars).
+roulette-free-toast-thickness-gate = Need thickness ≥ { NUMBER($required, useGrouping: 0) }. You're at { NUMBER($actual, useGrouping: 0) }.
+roulette-free-toast-insufficient-length = Need ≥ { NUMBER($required_cm, useGrouping: 0) } cm. You have { NUMBER($actual_cm, useGrouping: 0) } cm.
+roulette-free-toast-not-registered = Tap /start in the bot DM first.
+roulette-free-toast-spin-complete = Spin complete.
+roulette-free-toast-already-processed = Already processed.
+roulette-free-toast-error = Something went wrong.
