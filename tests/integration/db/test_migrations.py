@@ -79,6 +79,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0028_audit_source_prize_pool_increment" in revisions
         assert "0029_audit_source_prize_lot_generated" in revisions
         assert "0030_prize_lots" in revisions
+        assert "0031_audit_source_prize_lot_refunded" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -276,6 +277,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0030 is not None
         assert rev_0030.down_revision == "0029_audit_source_prize_lot_generated"
 
+    def test_0031_descends_from_0030(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0031 = script.get_revision("0031_audit_source_prize_lot_refunded")
+        assert rev_0031 is not None
+        assert rev_0031.down_revision == "0030_prize_lots"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -310,6 +318,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260510_0028_audit_source_prize_pool_increment.py",
             "20260510_0029_audit_source_prize_lot_generated.py",
             "20260510_0030_prize_lots.py",
+            "20260510_0031_audit_source_prize_lot_refunded.py",
         ]
 
     def test_upgrade_head_creates_all_tables(

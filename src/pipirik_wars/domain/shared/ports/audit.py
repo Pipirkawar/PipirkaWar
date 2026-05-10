@@ -156,6 +156,20 @@ class AuditAction(str, enum.Enum):
     # восстанавливают before). Источник — `AuditSource.PRIZE_LOT_GENERATED`.
     # Пишется use-case-ом `GeneratePrizeLots`.
     PRIZE_LOT_GENERATED = "prize_lot_generated"
+    # ── Спринт 4.1-C (refund-flow лота, ГДД §12.6.4) ──
+    # Каждый refund лота (`PrizeLot.status: ACTIVE|RESERVED → REFUNDED`)
+    # пишется одной audit-записью в той же транзакции UoW, что и
+    # `IPrizeLotRepository.update_status(lot_id, REFUNDED)` + `IPrizePoolRepository.
+    # apply_increment(currency, +lot.amount_native)` (возврат средств в пул).
+    # `target_kind="prize_lot"`, `target_id="<lot_id>:refund"`, `after={
+    # "lot_id": <int>, "currency": ..., "amount_native": <gross>,
+    # "prev_status": "active"|"reserved", "pool_after_native": <пул после возврата>,
+    # "reason": "timeout"|"player_decline"|"admin"|"…"}`. Парного
+    # `before`-снапшота не пишем. Источник — `AuditSource.PRIZE_LOT_REFUNDED`.
+    # Пишется будущим use-case-ом `RefundPrizeLot` (запланировано
+    # в 4.1-C / Шаг C.6 «race-резервирование + fallback» и 4.1-D /
+    # `ClaimPrize` для timeout-refund-а).
+    PRIZE_LOT_REFUNDED = "prize_lot_refunded"
 
 
 class AuditSource(str, enum.Enum):
@@ -243,8 +257,19 @@ class AuditSource(str, enum.Enum):
     # `PRIZE_LOT_GENERATED` **НЕ** входит в `anticheat.organic_sources` /
     # `donate_sources` / `tribe_bonus_sources` (не length-source, это
     # пул-внутренний бухгалтерский маркер). DB-whitelist (`audit_log_source_whitelist`)
-    # расширяется Alembic-миграцией `0030_audit_source_prize_lot_*` (шаг C.4).
+    # расширен Alembic-миграцией `0029_audit_source_prize_lot_generated` (шаг C.2).
     PRIZE_LOT_GENERATED = "prize_lot_generated"
+    # `PRIZE_LOT_REFUNDED` — source-маркер audit-записи «вернули лот в пул».
+    # Пишется будущим use-case-ом `RefundPrizeLot` (запланирован в 4.1-C / Шаг C.6
+    # «race-резервирование + fallback» и 4.1-D / `ClaimPrize` для timeout-refund-а)
+    # внутри той же UoW, что и `update_status(lot_id, REFUNDED)` + `apply_increment(
+    # currency, +amount)`. Парного «cost»-source-а нет (инкремент пула — внутренняя
+    # проводка, без выплаты игроку). `PRIZE_LOT_REFUNDED` **НЕ** входит в
+    # `anticheat.organic_sources` / `donate_sources` / `tribe_bonus_sources`
+    # (не length-source, это пул-внутренний бухгалтерский маркер). DB-whitelist
+    # (`audit_log_source_whitelist`) расширяется Alembic-миграцией
+    # `0031_audit_source_prize_lot_refunded` (шаг C.4).
+    PRIZE_LOT_REFUNDED = "prize_lot_refunded"
     UNKNOWN = "unknown"
 
 

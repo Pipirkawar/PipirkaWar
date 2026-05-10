@@ -7,10 +7,10 @@
 ## Состояние на этом коммите
 
 - **Ветка:** `devin/1778438123-sprint-4-1-C-lot-generator` (от `main = 93148aa`, merge PR #130).
-- **Активный шаг чек-листа:** **C.4** — Composition root: подключить `SqlAlchemyPrizeLotRepository` + `IFeeEstimator` (in-memory const) в `bot/main.py` (если 4.1-C уже инициирует это в `bot/main.py`); либо отложить на C.9 (см. план).
-- **Готовы:** C.0 (snapshot pivot + sticky HANDOFF), C.1 (Domain `PrizeLot` aggregate + VO `FeeBufferAmount` + ports + errors + 67 unit-тестов), C.2 (Application use-case `GeneratePrizeLots` + 41 unit-тестов + Alembic 0029 audit-source `prize_lot_generated`), C.3 (Alembic `0030_prize_lots` + `PrizeLotORM` + `SqlAlchemyPrizeLotRepository` + 33 integration-тестов).
+- **Активный шаг чек-листа:** **C.5** — picker крипто-приза в `domain/roulette/services.py`: `pick_paid_outcome` принимает `active_lots: Sequence[PrizeLot]` вместо `crypto_pool_empty: bool`; если выпал `crypto_lot`-вес и `active_lots` непуст — выбрать случайный лот и вернуть `RouletteOutcome(kind=CRYPTO_LOT, lot_id=...)`; иначе — `LengthGain`-fallback (как 4.1-A).
+- **Готовы:** C.0 (snapshot pivot + sticky HANDOFF), C.1 (Domain `PrizeLot` aggregate + VO `FeeBufferAmount` + ports + errors + 67 unit-тестов), C.2 (Application use-case `GeneratePrizeLots` + 41 unit-тестов + Alembic 0029 audit-source `prize_lot_generated`), C.3 (Alembic `0030_prize_lots` + `PrizeLotORM` + `SqlAlchemyPrizeLotRepository` + 33 integration-тестов), C.4 (`AuditAction.PRIZE_LOT_REFUNDED` + `AuditSource.PRIZE_LOT_REFUNDED` + Alembic `0031_audit_source_prize_lot_refunded`).
 - **В работе:** —.
-- **Дальше:** C.4 — следующий шаг чек-листа (см. `docs/current_tasks.md`).
+- **Дальше:** C.5 — picker крипто-приза + `RouletteOutcome.crypto_lot(lot_id)` (см. `docs/current_tasks.md`).
 
 ## Что нужно знать следующему агенту, если меня прервёт
 
@@ -50,14 +50,20 @@
    - 41 unit-тест в `tests/unit/application/monetization/test_generate_prize_lots.py` (max/min режим, below-min, все 3 валюты, идемпотентность, fee буфер + sanity check, audit per lot, декремент пула, UoW commit, корректная конструкция PrizeLot).
    - Fake-инфраструктура: `tests/fakes/prize_lot_repo.py::FakePrizeLotRepository`, `tests/fakes/fee_estimator.py::FakeFeeEstimator` (с дефолтным `fee=0` и `factory`/`fees`-оверрайдами).
 
-10. **C.3 итог** (готов в этом коммите):
+10. **C.4 итог** (готов в этом коммите):
+   - `AuditAction.PRIZE_LOT_REFUNDED = "prize_lot_refunded"` и `AuditSource.PRIZE_LOT_REFUNDED = "prize_lot_refunded"` в `domain/shared/ports/audit.py` — размечены для будущего use-case-а `RefundPrizeLot` (C.6 race-fallback + 4.1-D `ClaimPrize` timeout-refund). `target_kind="prize_lot"`, `target_id="<lot_id>:refund"`, `after={lot_id, currency, amount_native, prev_status, pool_after_native, reason}`. Не входит ни в один из anticheat-source-вайтлистов.
+   - Alembic-миграция `20260510_0031_audit_source_prize_lot_refunded.py` — расширяет `audit_log_source_whitelist` вводя `prize_lot_refunded`. `down_revision = 0030`. SQLite-совместимо через `op.batch_alter_table` (drop+create CHECK).
+   - Обновлен `tests/unit/domain/shared/ports/test_audit_source.py` (`_load_migration_whitelist` указывает на 0031, docstring синк-либ).
+   - Обновлен `tests/integration/db/test_migrations.py` (`test_0031_descends_from_0030` + `"0031_audit_source_prize_lot_refunded"` в `expected_revisions` + `"20260510_0031_audit_source_prize_lot_refunded.py"` в versions_dir-listing).
+
+11. **C.3 итог** (готов из C.3-коммита):
    - Alembic-миграция `20260510_0030_prize_lots.py` — `CREATE TABLE prize_lots` со всеми CHECK-инвариантами (`currency` whitelist, `amount_native >= 1`, `fee_buffer_native >= 0`, `amount_native > fee_buffer_native`, `status` whitelist, `claimed_at IFF status='claimed'`) + индекс `ix_prize_lots_status_currency`. `down_revision = 0029`. Без initial-seed-а (лоты генерятся on-demand через `GeneratePrizeLots`).
    - `infrastructure/db/models/prize_lot.py::PrizeLotORM` — SQLAlchemy 2.x `Mapped`-маппинг таблицы. Identity по автоинкрементному `id`. `BigInteger().with_variant(Integer, 'sqlite')`.
    - `infrastructure/db/repositories/prize_lot.py::SqlAlchemyPrizeLotRepository` — реализация `IPrizeLotRepository`: `add(lot)` (`session.add` + `flush` для получения `id`), `get_by_id`, `list_active(currency)` (`ORDER BY id ASC`), `update_status(...)` через атомарный `UPDATE ... WHERE id=:id AND status IN (валидные source-статусы для new_status)`. `rowcount=0` → SELECT для различения `PrizeLotNotFoundError` vs `PrizeLotStatusTransitionError`. `_ensure_utc` нормализация TZ для aiosqlite-квирка (см. `_orm_to_payment` pattern).
    - 33 integration-теста в `tests/integration/db/test_prize_lot_repository.py` (round-trip, все 3 валюты, status-machine `ACTIVE → RESERVED → CLAIMED|REFUNDED`, `list_active` фильтрация по currency и status, double-reserve race → `PrizeLotStatusTransitionError`, ACTIVE→CLAIMED skip → ошибка, terminal-status guard, `PrizeLotNotFoundError`, `update_status(ACTIVE)` → `ValueError`, claimed_at-валидация, все 7 DB-CHECK-ограничений как last-line-of-defense).
    - Обновлены `tests/integration/db/test_migrations.py` (`test_0030_descends_from_0029`, expected_revisions, versions_dir-listing, expected-tables в smoke-тесте) + `tests/integration/db/conftest.py` (импорт `PrizeLotORM` для регистрации).
 
-11. **C.1 итог** (готов из C.1-коммита):
+12. **C.1 итог** (готов из C.1-коммита):
    - `domain/monetization/value_objects.py::FeeBufferAmount` — frozen-VO с `>= 0`-invariant.
    - `domain/monetization/entities.py::PrizeLot` — `@dataclass(frozen=True, slots=True)` с полями `(id, currency, amount_native, fee_buffer_native, status, created_at, claimed_at)`, invariants `amount_native > fee_buffer_native >= 0`, TZ-aware datetime, `id ∈ {None} ∪ ℕ+`, `status == CLAIMED ⇔ claimed_at`.
    - `PrizeLotStatus` (StrEnum: `active|reserved|claimed|refunded`) + immutable transition-методы `reserve()` / `claim(claimed_at=...)` / `refund()`, машина состояний `ACTIVE → RESERVED|REFUNDED`, `RESERVED → CLAIMED|REFUNDED`, terminal `CLAIMED|REFUNDED`. Транзишены через приватный `_PRIZE_LOT_TRANSITIONS: MappingProxyType`.
