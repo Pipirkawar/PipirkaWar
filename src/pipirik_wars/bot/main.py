@@ -1166,6 +1166,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         random=RealRandom(),
         length_granter=add_length,
         clock=clock,
+        clans=clans,
     )
     get_top_players = GetTopPlayers(query=top_players_query)
     get_top_clans = GetTopClans(query=top_clans_query)

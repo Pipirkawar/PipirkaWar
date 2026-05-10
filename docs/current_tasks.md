@@ -71,7 +71,7 @@
   - Sanity-check: `cap_cm + bonus_max <= 151` (мягкий warning в логе при загрузке).
   - Дефолты в `config/balance.yaml::oracle.tribe_bonus`.
   - **Критерий:** юнит-тесты pydantic-валидаторов; integration-тест парсинга дефолтного `balance.yaml`.
-- [ ] **A.3 — Расширение use-case `RequestOracle`** (`application/oracle/request_oracle.py`):
+- [x] **A.3 — Расширение use-case `RequestOracle`** (`application/oracle/request_oracle.py`):
   - После `length_grant = uniform(bonus_min, bonus_max)` — если `cfg.tribe_bonus.enabled`, считаем `n_active = clan_repo.count_active_for_player(player_id, min_tribe_size=cfg.tribe_bonus.min_tribe_size)`, далее `tribe_bonus = min(n_active * cfg.tribe_bonus.cm_per_tribe, cfg.tribe_bonus.cap_cm)`.
   - **Две** проводки `add_length` внутри одного idempotency-key `oracle:{player_id}:{moscow_date}` и одной транзакции:
     - `add_length(delta=+length_grant, reason="oracle_base", source=AuditSource.ORACLE, idempotency_key="add_length:{root}:base")`;
@@ -95,9 +95,9 @@
 
 > Сюда пиши **дельту** к плану: что именно меняешь, какие use-cases / порты / handler-ы / тесты затронуты.
 
-**Текущий PR — 3.5-D «Bot UI + локали + display + закрытие Спринта 3.5»** — D.0/D.1/D.2/D.3/D.4/D.5/D.6 закрыты, осталось открыть PR в `main` и дождаться зелёного CI.
-- **На `main`:** 3.5-C смержен (PR #123, `7085e51`); поверх — fix-flaky load-test (PR #124, `4baca4b`). 3.5-D открыт от свежего `main = 4baca4b`.
-- **Что закрыли в 3.5-D:** см. архив чек-листа выше — 7 шагов (D.0–D.6) полностью покрыты. **Закрывает Спринт 3.5 «Free-to-play рулетка»**: после мерджа PR #125 → следующий спринт **3.6 «Бонус-за-племена в Предсказателе»** (3.6-A: domain + config + use-case + anti-cheat).
+**Текущий PR — 3.6-A «Доменный запрос + конфиг + use-case + anti-cheat»** — A.0/A.1/A.2/A.3 закрыты; осталось A.4 (anti-cheat whitelist + миграция 0025) → A.5 (`make ci`) → A.6 (финальный док-коммит) → открыть PR #126 → дождаться зелёного CI.
+- **На `main`:** 3.5-D смержен (PR #125, `ba0b769`). 3.6-A открыт от свежего `main = ba0b769`.
+- **A.3 — что закрыли:** расширили `application/oracle/invoke.py::InvokeOracle` (домен `RequestOracle`-семантики реализован в этом use-case-е): добавили `clans: IClanRepository` в DI, считаем `n_active_tribes = clans.count_active_for_player(player_id, min_tribe_size=cfg.tribe_bonus.min_tribe_size)` (только при `cfg.tribe_bonus.enabled`), `tribe_bonus_cm = min(n_active_tribes * cm_per_tribe, cap_cm)`. Делаем **две** проводки `length_granter.grant(...)`: базовая `(source=ORACLE, reason="oracle_base", idempotency_key="add_length:oracle:{player_id}:{moscow_date}:base")` и бонус `(source=ORACLE_TRIBE_BONUS, reason="oracle_tribe_bonus", idempotency_key="add_length:oracle:{player_id}:{moscow_date}:tribe_bonus")` — последняя только при `tribe_bonus_cm > 0`. DTO `OraclePredictionResult` расширили полями `base_cm`/`tribe_bonus_cm`/`n_active_tribes` + property `total_cm = base_cm + tribe_bonus_cm`. В `oracle_invocations.bonus_cm` пишем итог (`total_cm`). Plumb-up: `bot/main.py` — DI получает `clans` repo. Тесты: 6 новых тестов в `TestInvokeOracleTribeBonus` (no-tribe / single-tribe / size<min / FROZEN / cap-clamp / disabled-flag-skip). 12/12 unit-тестов `test_invoke.py` зелёные.
 - **Открытые блокеры:** нет.
 
 ---
@@ -115,4 +115,4 @@
 
 > Обновляется автоматически перед каждым `git push`. После `git log --oneline -1` — short sha + subject.
 
-`9914997` — `docs(3.5-D): D.5 — local make ci passing (5132 passed / coverage 95.63%)` (последний коммит перед docs-коммитом D.6).
+`59287ef` — `feat(3.6-A): A.2 — OracleTribeBonusConfig + balance.yaml + cleanup archived checklists` (последний коммит перед `feat(3.6-A): A.3 — InvokeOracle tribe bonus + tests + DI wiring`).

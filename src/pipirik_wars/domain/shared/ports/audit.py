@@ -169,6 +169,17 @@ class AuditSource(str, enum.Enum):
     # прирост длины.
     ROULETTE_FREE_COST = "roulette_free_cost"
     ROULETTE_FREE_REWARD = "roulette_free_reward"
+    # ── Спринт 3.6-A (бонус-за-племена в /predict, ГДД §11.1) ──
+    # Дополнительная проводка `LENGTH_GRANT` поверх базового `oracle`-розыгрыша:
+    # `+min(n_active_tribes * cm_per_tribe, cap_cm)` см за активные племена,
+    # где состоит игрок (ГДД §11.1; см. `OracleTribeBonusConfig`).
+    # Источник специально вынесен из `oracle`, чтобы:
+    # - не учитываться в anti-cheat-окнах 24h/7d (см. новый whitelist
+    #   `anticheat.tribe_bonus_sources` в `balance.yaml`);
+    # - сохранить отдельную статистику «сколько /predict-ов получили бонус
+    #   и какой» в audit-логе и аналитике.
+    # Аналогично паре `roulette_free_cost`/`roulette_free_reward` (Спринт 3.5-C).
+    ORACLE_TRIBE_BONUS = "oracle_tribe_bonus"
     UNKNOWN = "unknown"
 
 
