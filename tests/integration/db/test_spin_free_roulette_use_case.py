@@ -48,6 +48,8 @@ from pipirik_wars.application.roulette import (
     SpinFreeRouletteCommand,
 )
 from pipirik_wars.domain.balance.config import BalanceConfig, RouletteOutcomeKind
+from pipirik_wars.domain.monetization.entities import PrizeLot, PrizeLotStatus
+from pipirik_wars.domain.monetization.value_objects import Currency, FeeBufferAmount
 from pipirik_wars.domain.player import Length, Player, Thickness
 from pipirik_wars.domain.roulette.errors import (
     InsufficientLengthForRouletteError,
@@ -57,6 +59,7 @@ from pipirik_wars.domain.shared.ports import IRandom
 from pipirik_wars.domain.shared.ports.audit import AuditAction, AuditSource
 from pipirik_wars.infrastructure.db.models import (
     AuditLogORM,
+    PrizeLotORM,
     RouletteSpinORM,
     UserORM,
 )
@@ -478,3 +481,98 @@ class TestSpinFreeRouletteGates:
         assert await _length_cm(uow, player_id=player.id) == length_before
         assert await _count_spins(uow, player_id=player.id) == spins_before
         assert len(await _audit_actions(uow, actor_id=player.tg_id)) == audit_before
+
+
+# ────────────────────────────── C.6.e ──────────────────────────────
+
+
+class TestSpinFreeRouletteCryptoLotReservation:
+    """C.6.e: реальный SQLAlchemy + seed STARS-лот → spin резервирует лот в БД.
+
+    Засеваем 1 ACTIVE-лот через `SqlAlchemyPrizeLotRepository.add(...)`,
+    форсируем `CRYPTO_LOT`-исход (balance с `CRYPTO_LOT.weight=1.0` +
+    `_ChoiceRandom` для `random.choice(active_lots)`), запускаем spin,
+    проверяем:
+    - в `prize_lots` строка лота имеет `status='reserved'`;
+    - в `audit_log` есть запись `PRIZE_LOT_RESERVED` с full shape;
+    - в `roulette_spins` строка spin-а имеет `outcome_kind='crypto_lot'`
+      и `outcome_lot_id=<id лота>`.
+    """
+
+    @pytest.mark.asyncio
+    async def test_crypto_lot_outcome_reserves_lot_in_db_with_audit(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        player = await _seed_player_with_thickness(uow, tg_id=70010, length_cm=500)
+        assert player.id is not None
+
+        # Засеять STARS-лот через реальный репозиторий.
+        prize_lots_repo = SqlAlchemyPrizeLotRepository(uow=uow)
+        async with uow:
+            stored = await prize_lots_repo.add(
+                lot=PrizeLot.freshly_generated(
+                    currency=Currency.STARS,
+                    amount_native=2500,
+                    fee_buffer_native=FeeBufferAmount(0),
+                    created_at=NOW,
+                )
+            )
+        assert stored.id is not None
+
+        balance = _balance_with_only_kind(RouletteOutcomeKind.CRYPTO_LOT)
+
+        class _ChoiceRandom(_ScriptedRandom):
+            def choice(self, items: Sequence[_T]) -> _T:
+                if not items:
+                    raise ValueError("choice from empty sequence")
+                return items[0]
+
+        random = _ChoiceRandom(fixed_length_cm=50)
+        use_case = _build_use_case(uow, balance=balance, random=random)
+
+        result = await use_case.execute(
+            SpinFreeRouletteCommand(player_id=player.id, idempotency_key="msg:crypto"),
+        )
+
+        # Outcome — CRYPTO_LOT с lot_id.
+        assert result.outcome is not None
+        assert result.outcome.kind is RouletteOutcomeKind.CRYPTO_LOT
+        assert result.outcome.lot_id == stored.id
+
+        # Лот в БД переведён в RESERVED.
+        async with uow:
+            stmt = select(PrizeLotORM).where(PrizeLotORM.id == stored.id)
+            row = (await uow.session.execute(stmt)).scalar_one()
+            assert row.status == PrizeLotStatus.RESERVED.value
+            assert row.currency == Currency.STARS.value
+            assert row.amount_native == 2500
+
+        # Audit-записи: PRIZE_LOT_RESERVED + ROULETTE_SPIN + LENGTH_GRANT(cost).
+        audit_rows = await _audit_actions(uow, actor_id=player.tg_id)
+        actions = [r.action for r in audit_rows]
+        assert AuditAction.PRIZE_LOT_RESERVED.value in actions
+        assert AuditAction.ROULETTE_SPIN.value in actions
+        # Reward LENGTH_GRANT не должен быть — outcome CRYPTO_LOT.
+        length_reward = [
+            r
+            for r in audit_rows
+            if r.action == AuditAction.LENGTH_GRANT.value
+            and r.source == AuditSource.ROULETTE_FREE_REWARD.value
+        ]
+        assert length_reward == []
+
+        # Shape audit PRIZE_LOT_RESERVED.
+        reserve = next(r for r in audit_rows if r.action == AuditAction.PRIZE_LOT_RESERVED.value)
+        assert reserve.target_kind == "prize_lot"
+        assert reserve.target_id == f"{stored.id}:reserved"
+        assert reserve.source == AuditSource.PRIZE_LOT_RESERVED.value
+        assert reserve.after == {
+            "lot_id": stored.id,
+            "currency": Currency.STARS.value,
+            "amount_native": 2500,
+            "prev_status": PrizeLotStatus.ACTIVE.value,
+            "reserved_at": NOW.isoformat(),
+            "player_id": player.id,
+            "spin_kind": "free",
+        }
