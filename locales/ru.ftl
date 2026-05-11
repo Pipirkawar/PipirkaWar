@@ -1404,6 +1404,11 @@ roulette-paid-result-pack-10 =
 
 roulette-paid-result-idempotent = ℹ Эта прокрутка уже завершена. Открой /profile, чтобы увидеть актуальное состояние.
 
+# Карточка отказа, когда invoice_payload не прошёл серверную HMAC-
+# верификацию (Спринт 4.1-D, D.8.c). Текст намеренно общий —
+# machine-readable reason уходит в structured-log, не к игроку.
+roulette-paid-payment-invalid = ⚠ Платёж не прошёл сверку подлинности и отклонён. Прокрутка не выполнена. Открой /roulette_paid заново и попробуй ещё раз.
+
 # Toast-ы.
 roulette-paid-toast-thickness-gate = Нужна толщина ≥ { NUMBER($required, useGrouping: 0) }. У тебя { NUMBER($actual, useGrouping: 0) }.
 roulette-paid-toast-not-registered = Сначала /start в личке бота.

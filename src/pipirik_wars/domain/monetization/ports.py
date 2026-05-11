@@ -510,6 +510,33 @@ class ITgStarsPayloadVerifier(Protocol):
     ``FakeTgStarsPayloadVerifier``.
     """
 
+    def serialize(
+        self,
+        *,
+        pack_value: str,
+        idempotency_seed: str,
+        amount_native: int,
+        currency: Currency,
+    ) -> str:
+        """Собрать подписанный `invoice_payload` для `bot.send_invoice(...)`.
+
+        Возвращает строку формата ``<version>:<pack_value>:<seed>:<hmac_b64url>``
+        с server-side HMAC-подписью поверх
+        ``(version|pack_value|seed|amount|currency)``-контекста.
+
+        Вызывающая сторона (handler ``handle_roulette_paid_buy`` шага D.8.c)
+        обязана сгенерировать свежий ``idempotency_seed`` per-invoice
+        (24-символьный url-safe-base64 из ``secrets.token_urlsafe(18)``);
+        тот же seed позже используется в `IdempotencyKey` use-case-а.
+
+        Никаких проверок входа здесь нет (adapter-level primitive),
+        вход известен серверу и считается доверенным. VO-инварианты
+        ``StarsPayload`` (формат `idempotency_seed`, etc.) проверяются
+        на стороне ``verify(...)``, а на стороне `serialize(...)` —
+        на стороне caller-а.
+        """
+        ...
+
     def verify(
         self,
         *,

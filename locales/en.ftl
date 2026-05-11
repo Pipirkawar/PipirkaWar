@@ -1400,6 +1400,11 @@ roulette-paid-result-pack-10 =
 
 roulette-paid-result-idempotent = ℹ This spin is already complete. Open /profile to see your current state.
 
+# Card when invoice_payload fails server-side HMAC verification
+# (Sprint 4.1-D, D.8.c). User-facing copy is intentionally generic
+# — the machine-readable failure reason is logged separately.
+roulette-paid-payment-invalid = ⚠ The payment couldn't be verified and was rejected. No spin happened. Reopen /roulette_paid and try again.
+
 # Toasts.
 roulette-paid-toast-thickness-gate = Need thickness ≥ { NUMBER($required, useGrouping: 0) }. You're at { NUMBER($actual, useGrouping: 0) }.
 roulette-paid-toast-not-registered = Tap /start in the bot DM first.

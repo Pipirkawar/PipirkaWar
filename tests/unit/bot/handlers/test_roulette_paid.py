@@ -44,6 +44,8 @@ from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.monetization import (
     Currency,
     IdempotencyKey,
+    InvalidStarsPayloadError,
+    ITgStarsPayloadVerifier,
     Payment,
     PaymentStatus,
 )
@@ -61,7 +63,11 @@ from pipirik_wars.domain.roulette import (
     RouletteOutcomeKind,
     RouletteThicknessGateError,
 )
-from tests.fakes import FakeBalanceConfig, FakeMessageBundle
+from tests.fakes import (
+    FakeBalanceConfig,
+    FakeMessageBundle,
+    FakeTgStarsPayloadVerifier,
+)
 from tests.unit.domain.balance.factories import build_valid_balance
 
 _NOW = datetime(2026, 5, 10, 12, 0, tzinfo=UTC)
@@ -117,6 +123,29 @@ def _stub_balance() -> IBalanceConfig:
 
 def _bundle() -> IMessageBundle:
     return cast(IMessageBundle, FakeMessageBundle())
+
+
+def _verifier(
+    *,
+    error: InvalidStarsPayloadError | None = None,
+) -> FakeTgStarsPayloadVerifier:
+    """Fake-верификатор для handler-тестов (D.8.c). При `error` — verify(...) бросает его."""
+    return FakeTgStarsPayloadVerifier(error=error)
+
+
+def _signed_payload(
+    *,
+    pack_value: str = "single",
+    seed: str = "test_seed_aaaaaaaaaaaaaa",
+) -> str:
+    """Fake-формат v1-payload-а, который `FakeTgStarsPayloadVerifier.verify(...)` парсит.
+
+    Совпадает с реальным форматом `HmacTgStarsPayloadVerifier`: 4 части
+    через ':', с версией 'v1' в первой и fake-hmac в последней.
+    Нужен, чтобы `parse_invoice_payload` (префикс-фильтр) признал
+    пайлоад своим.
+    """
+    return f"v1:{pack_value}:{seed}:fake-hmac"
 
 
 def _payment(*, idempotency_key: str = "paid_roulette:1:tg-charge-001") -> Payment:
@@ -311,6 +340,7 @@ class TestHandleRoulettePaidBuyCallback:
     async def test_buy_single_sends_invoice(self) -> None:
         cb = _callback(data="roulette_paid:buy_single")
         bot = _stub_bot()
+        verifier = _verifier()
 
         await handle_roulette_paid_buy(
             cb,
@@ -318,6 +348,7 @@ class TestHandleRoulettePaidBuyCallback:
             cast(Bot, bot),
             _stub_balance(),
             _bundle(),
+            cast(ITgStarsPayloadVerifier, verifier),
             Locale("ru"),
         )
 
@@ -325,9 +356,18 @@ class TestHandleRoulettePaidBuyCallback:
         kwargs = bot.send_invoice.await_args.kwargs
         assert kwargs["chat_id"] == 42
         assert kwargs["currency"] == "XTR"
-        assert kwargs["payload"] == "paid_roulette:single"
+        # D.8.c: invoice_payload подписан server-side через verifier.serialize(...).
+        # Формат fake: `v1:<pack>:<seed>:fake-hmac` (4 части).
+        assert kwargs["payload"].startswith("v1:single:")
+        assert kwargs["payload"].endswith(":fake-hmac")
         assert len(kwargs["prices"]) == 1
         assert kwargs["prices"][0].amount == 1
+        # verifier.serialize(...) вызван ровно раз с правильными аргументами.
+        assert len(verifier.serialize_calls) == 1
+        call = verifier.serialize_calls[0]
+        assert call["pack_value"] == "single"
+        assert call["amount_native"] == 1
+        assert call["currency"] is Currency.STARS
         # Клавиатура снята до отправки invoice-а.
         cb.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
         cb.answer.assert_awaited_once()
@@ -335,6 +375,7 @@ class TestHandleRoulettePaidBuyCallback:
     async def test_buy_pack_10_sends_invoice(self) -> None:
         cb = _callback(data="roulette_paid:buy_pack_10")
         bot = _stub_bot()
+        verifier = _verifier()
 
         await handle_roulette_paid_buy(
             cb,
@@ -342,17 +383,21 @@ class TestHandleRoulettePaidBuyCallback:
             cast(Bot, bot),
             _stub_balance(),
             _bundle(),
+            cast(ITgStarsPayloadVerifier, verifier),
             Locale("ru"),
         )
 
         bot.send_invoice.assert_awaited_once()
         kwargs = bot.send_invoice.await_args.kwargs
-        assert kwargs["payload"] == "paid_roulette:pack_10"
+        assert kwargs["payload"].startswith("v1:pack_10:")
         assert kwargs["prices"][0].amount == 9
+        assert verifier.serialize_calls[0]["pack_value"] == "pack_10"
+        assert verifier.serialize_calls[0]["amount_native"] == 9
 
     async def test_invalid_callback_data_handled(self) -> None:
         cb = _callback(data="roulette_paid:buy_pack_99")
         bot = _stub_bot()
+        verifier = _verifier()
 
         await handle_roulette_paid_buy(
             cb,
@@ -360,10 +405,13 @@ class TestHandleRoulettePaidBuyCallback:
             cast(Bot, bot),
             _stub_balance(),
             _bundle(),
+            cast(ITgStarsPayloadVerifier, verifier),
             Locale("ru"),
         )
 
         bot.send_invoice.assert_not_awaited()
+        # verifier.serialize(...) НЕ вызывается на мусорный callback.
+        assert verifier.serialize_calls == []
         cb.answer.assert_awaited_once()
         # Клавиатура снята даже на ошибке.
         cb.message.edit_reply_markup.assert_awaited_once_with(reply_markup=None)
@@ -371,6 +419,7 @@ class TestHandleRoulettePaidBuyCallback:
     async def test_no_identity_short_circuits(self) -> None:
         cb = _callback(data="roulette_paid:buy_single")
         bot = _stub_bot()
+        verifier = _verifier()
 
         await handle_roulette_paid_buy(
             cb,
@@ -378,10 +427,41 @@ class TestHandleRoulettePaidBuyCallback:
             cast(Bot, bot),
             _stub_balance(),
             _bundle(),
+            cast(ITgStarsPayloadVerifier, verifier),
             Locale("ru"),
         )
 
         bot.send_invoice.assert_not_awaited()
+        assert verifier.serialize_calls == []
+
+    async def test_buy_single_idempotency_seed_fresh_per_call(self) -> None:
+        """D.8.c: каждый invoice получает свой `idempotency_seed`.
+
+        Это блокирует replay-атаки по старым payload-ам и даёт
+        уникальный HMAC-контекст на каждый send_invoice даже при
+        одинаковых (pack, amount, currency).
+        """
+        bot1 = _stub_bot()
+        bot2 = _stub_bot()
+        verifier = _verifier()
+
+        for bot in (bot1, bot2):
+            await handle_roulette_paid_buy(
+                _callback(data="roulette_paid:buy_single"),
+                _identity("private"),
+                cast(Bot, bot),
+                _stub_balance(),
+                _bundle(),
+                cast(ITgStarsPayloadVerifier, verifier),
+                Locale("ru"),
+            )
+
+        assert len(verifier.serialize_calls) == 2
+        seed1 = verifier.serialize_calls[0]["idempotency_seed"]
+        seed2 = verifier.serialize_calls[1]["idempotency_seed"]
+        assert isinstance(seed1, str) and 16 <= len(seed1) <= 32
+        assert isinstance(seed2, str) and 16 <= len(seed2) <= 32
+        assert seed1 != seed2
 
 
 # ---------------- pre_checkout_query ----------------
@@ -488,7 +568,7 @@ def _msg_with_payment(
 @pytest.mark.asyncio
 class TestHandleSuccessfulPayment:
     async def test_single_success_renders_length_outcome(self) -> None:
-        msg = _msg_with_payment(payload="paid_roulette:single")
+        msg = _msg_with_payment(payload=_signed_payload(pack_value="single"))
         spin = _stub_spin(
             result=_spin_result(
                 pack=PaidRoulettePack.SINGLE,
@@ -496,6 +576,7 @@ class TestHandleSuccessfulPayment:
                 spent_stars=1,
             )
         )
+        verifier = _verifier()
 
         await handle_successful_payment(
             cast(Message, msg),
@@ -503,9 +584,16 @@ class TestHandleSuccessfulPayment:
             cast(GetProfile, _stub_profile()),
             cast(SpinPaidRoulette, spin),
             _bundle(),
+            cast(ITgStarsPayloadVerifier, verifier),
             Locale("ru"),
         )
 
+        # D.8.c: verify(...) вызван перед spin.execute(...).
+        assert len(verifier.verify_calls) == 1
+        call = verifier.verify_calls[0]
+        assert call["provider_payment_id"] == "tg-charge-001"
+        assert call["amount_native"] == 1
+        assert call["currency"] is Currency.STARS
         spin.execute.assert_awaited_once()
         cmd = spin.execute.await_args.args[0]
         assert cmd.player_id == 1
@@ -520,7 +608,10 @@ class TestHandleSuccessfulPayment:
         outcomes = tuple(
             RouletteOutcome(kind=RouletteOutcomeKind.LENGTH, length_cm=10) for _ in range(10)
         )
-        msg = _msg_with_payment(payload="paid_roulette:pack_10", total_amount=9)
+        msg = _msg_with_payment(
+            payload=_signed_payload(pack_value="pack_10"),
+            total_amount=9,
+        )
         spin = _stub_spin(
             result=_spin_result(
                 pack=PaidRoulettePack.PACK_10,
@@ -535,6 +626,7 @@ class TestHandleSuccessfulPayment:
             cast(GetProfile, _stub_profile()),
             cast(SpinPaidRoulette, spin),
             _bundle(),
+            cast(ITgStarsPayloadVerifier, _verifier()),
             Locale("ru"),
         )
 
@@ -544,7 +636,7 @@ class TestHandleSuccessfulPayment:
         assert "total_length_cm=100" in sent_text
 
     async def test_idempotent_replay_short_circuits(self) -> None:
-        msg = _msg_with_payment()
+        msg = _msg_with_payment(payload=_signed_payload(pack_value="single"))
         spin = _stub_spin(
             result=_spin_result(
                 pack=PaidRoulettePack.SINGLE,
@@ -560,13 +652,14 @@ class TestHandleSuccessfulPayment:
             cast(GetProfile, _stub_profile()),
             cast(SpinPaidRoulette, spin),
             _bundle(),
+            cast(ITgStarsPayloadVerifier, _verifier()),
             Locale("ru"),
         )
 
         msg.answer.assert_awaited_once_with("ru:roulette-paid-result-idempotent")
 
     async def test_thickness_gate_error(self) -> None:
-        msg = _msg_with_payment()
+        msg = _msg_with_payment(payload=_signed_payload(pack_value="single"))
         spin = _stub_spin(
             error=RouletteThicknessGateError(
                 player_id=1,
@@ -581,6 +674,7 @@ class TestHandleSuccessfulPayment:
             cast(GetProfile, _stub_profile()),
             cast(SpinPaidRoulette, spin),
             _bundle(),
+            cast(ITgStarsPayloadVerifier, _verifier()),
             Locale("ru"),
         )
 
@@ -588,7 +682,7 @@ class TestHandleSuccessfulPayment:
         assert sent_text.startswith("ru:roulette-paid-requirement-thickness[")
 
     async def test_player_not_found_error(self) -> None:
-        msg = _msg_with_payment()
+        msg = _msg_with_payment(payload=_signed_payload(pack_value="single"))
         spin = _stub_spin(error=PlayerNotFoundError(tg_id=100))
 
         await handle_successful_payment(
@@ -597,13 +691,14 @@ class TestHandleSuccessfulPayment:
             cast(GetProfile, _stub_profile()),
             cast(SpinPaidRoulette, spin),
             _bundle(),
+            cast(ITgStarsPayloadVerifier, _verifier()),
             Locale("ru"),
         )
 
         msg.answer.assert_awaited_once_with("ru:roulette-paid-not-registered")
 
     async def test_unexpected_error_falls_back_to_toast_text(self) -> None:
-        msg = _msg_with_payment()
+        msg = _msg_with_payment(payload=_signed_payload(pack_value="single"))
         spin = _stub_spin(error=RuntimeError("DB connection lost"))
 
         await handle_successful_payment(
@@ -612,6 +707,7 @@ class TestHandleSuccessfulPayment:
             cast(GetProfile, _stub_profile()),
             cast(SpinPaidRoulette, spin),
             _bundle(),
+            cast(ITgStarsPayloadVerifier, _verifier()),
             Locale("ru"),
         )
 
@@ -620,6 +716,7 @@ class TestHandleSuccessfulPayment:
     async def test_foreign_payload_silently_ignored(self) -> None:
         msg = _msg_with_payment(payload="some-other-flow:foo")
         spin = _stub_spin()
+        verifier = _verifier()
 
         await handle_successful_payment(
             cast(Message, msg),
@@ -627,14 +724,18 @@ class TestHandleSuccessfulPayment:
             cast(GetProfile, _stub_profile()),
             cast(SpinPaidRoulette, spin),
             _bundle(),
+            cast(ITgStarsPayloadVerifier, verifier),
             Locale("ru"),
         )
 
+        # Префикс-фильтр срабатывает до verifier.verify(...) — это
+        # foreign-payload, не наш invoice-flow.
+        assert verifier.verify_calls == []
         spin.execute.assert_not_awaited()
         msg.answer.assert_not_awaited()
 
     async def test_player_not_found_at_lookup_short_circuits(self) -> None:
-        msg = _msg_with_payment()
+        msg = _msg_with_payment(payload=_signed_payload(pack_value="single"))
         get_profile = MagicMock(spec=GetProfile)
         get_profile.execute = AsyncMock(return_value=None)
         spin = _stub_spin()
@@ -645,8 +746,151 @@ class TestHandleSuccessfulPayment:
             cast(GetProfile, get_profile),
             cast(SpinPaidRoulette, spin),
             _bundle(),
+            cast(ITgStarsPayloadVerifier, _verifier()),
             Locale("ru"),
         )
 
         spin.execute.assert_not_awaited()
         msg.answer.assert_awaited_once_with("ru:roulette-paid-not-registered")
+
+    # ---- D.8.c — HMAC-верификация payload-а (4 новых ветки) ----
+
+    async def test_invalid_payload_hmac_mismatch_rejects_without_spin(self) -> None:
+        """D.8.c: `InvalidStarsPayloadError(reason="hmac_mismatch")` —
+        handler НЕ зовёт spin, показывает payment_invalid.
+        """
+        msg = _msg_with_payment(payload=_signed_payload(pack_value="single"))
+        spin = _stub_spin()
+        verifier = _verifier(
+            error=InvalidStarsPayloadError(reason="hmac_mismatch", payload_len=64),
+        )
+
+        await handle_successful_payment(
+            cast(Message, msg),
+            _identity("private"),
+            cast(GetProfile, _stub_profile()),
+            cast(SpinPaidRoulette, spin),
+            _bundle(),
+            cast(ITgStarsPayloadVerifier, verifier),
+            Locale("ru"),
+        )
+
+        assert len(verifier.verify_calls) == 1
+        spin.execute.assert_not_awaited()
+        msg.answer.assert_awaited_once_with("ru:roulette-paid-payment-invalid")
+
+    async def test_invalid_payload_bad_provider_id_rejects(self) -> None:
+        """D.8.c: `bad_provider_id` (пустой telegram_payment_charge_id) —
+        handler отклоняет платёж, не зовёт spin.
+        """
+        msg = _msg_with_payment(payload=_signed_payload(pack_value="single"))
+        spin = _stub_spin()
+        verifier = _verifier(
+            error=InvalidStarsPayloadError(
+                reason="bad_provider_id",
+                payload_len=64,
+            ),
+        )
+
+        await handle_successful_payment(
+            cast(Message, msg),
+            _identity("private"),
+            cast(GetProfile, _stub_profile()),
+            cast(SpinPaidRoulette, spin),
+            _bundle(),
+            cast(ITgStarsPayloadVerifier, verifier),
+            Locale("ru"),
+        )
+
+        spin.execute.assert_not_awaited()
+        msg.answer.assert_awaited_once_with("ru:roulette-paid-payment-invalid")
+
+    async def test_invalid_payload_too_long_rejects(self) -> None:
+        """D.8.c: `too_long` payload — handler отклоняет, не зовёт spin."""
+        msg = _msg_with_payment(payload=_signed_payload(pack_value="single"))
+        spin = _stub_spin()
+        verifier = _verifier(
+            error=InvalidStarsPayloadError(reason="too_long", payload_len=129),
+        )
+
+        await handle_successful_payment(
+            cast(Message, msg),
+            _identity("private"),
+            cast(GetProfile, _stub_profile()),
+            cast(SpinPaidRoulette, spin),
+            _bundle(),
+            cast(ITgStarsPayloadVerifier, verifier),
+            Locale("ru"),
+        )
+
+        spin.execute.assert_not_awaited()
+        msg.answer.assert_awaited_once_with("ru:roulette-paid-payment-invalid")
+
+    async def test_invalid_payload_logs_machine_readable_reason(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """D.8.c: machine-readable `reason` и `payload_len` уходят в
+        structured-log (не к игроку).
+        """
+        import logging  # noqa: PLC0415 — тест-локальный import для caplog-фикстуры.
+
+        msg = _msg_with_payment(payload=_signed_payload(pack_value="single"))
+        spin = _stub_spin()
+        verifier = _verifier(
+            error=InvalidStarsPayloadError(reason="hmac_mismatch", payload_len=64),
+        )
+
+        with caplog.at_level(
+            logging.WARNING,
+            logger="pipirik_wars.bot.handlers.roulette_paid",
+        ):
+            await handle_successful_payment(
+                cast(Message, msg),
+                _identity("private"),
+                cast(GetProfile, _stub_profile()),
+                cast(SpinPaidRoulette, spin),
+                _bundle(),
+                cast(ITgStarsPayloadVerifier, verifier),
+                Locale("ru"),
+            )
+
+        # Ровно одна warning-запись с reason + payload_len + provider_id.
+        warnings = [
+            r
+            for r in caplog.records
+            if r.name == "pipirik_wars.bot.handlers.roulette_paid" and r.levelno == logging.WARNING
+        ]
+        assert len(warnings) == 1
+        rec = warnings[0]
+        assert getattr(rec, "reason", None) == "hmac_mismatch"
+        assert getattr(rec, "payload_len", None) == 64
+        assert getattr(rec, "tg_payment_charge_id", None) == "tg-charge-001"
+        spin.execute.assert_not_awaited()
+
+    async def test_legacy_v0_payload_rejected_by_verifier(self) -> None:
+        """D.8.c: легаси v0-payload `paid_roulette:single` проходит
+        префикс-фильтр (это наш invoice-flow), но verifier его
+        отклоняет с `malformed`. spin НЕ зовётся.
+        """
+        msg = _msg_with_payment(payload="paid_roulette:single")
+        spin = _stub_spin()
+        verifier = _verifier(
+            error=InvalidStarsPayloadError(reason="malformed", payload_len=20),
+        )
+
+        await handle_successful_payment(
+            cast(Message, msg),
+            _identity("private"),
+            cast(GetProfile, _stub_profile()),
+            cast(SpinPaidRoulette, spin),
+            _bundle(),
+            cast(ITgStarsPayloadVerifier, verifier),
+            Locale("ru"),
+        )
+
+        # Префикс-фильтр НЕ режет v0 — это наш легаси-формат;
+        # отказ приходит из verifier.verify(...).
+        assert len(verifier.verify_calls) == 1
+        spin.execute.assert_not_awaited()
+        msg.answer.assert_awaited_once_with("ru:roulette-paid-payment-invalid")
