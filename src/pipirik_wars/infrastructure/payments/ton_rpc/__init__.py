@@ -47,8 +47,14 @@ from pipirik_wars.infrastructure.payments.ton_rpc.jetton import (
     JettonUsdtProvider,
 )
 from pipirik_wars.infrastructure.payments.ton_rpc.settings import TonRpcSettings
+from pipirik_wars.infrastructure.payments.ton_rpc.signer import (
+    Ed25519MessageSigner,
+    ITonMessageSigner,
+)
 
 __all__ = [
+    "Ed25519MessageSigner",
+    "ITonMessageSigner",
     "ITonRpcClient",
     "JettonResolutionError",
     "JettonTransferPayload",
