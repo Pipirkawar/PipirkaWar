@@ -26,9 +26,12 @@
     - **`test_double_tick_same_period_is_idempotent`** — два тика подряд в один `period_id` → суммарно 1 лот (второй тик попал в idempotency-кэш `FakeIdempotencyKey`).
     - Не повторяет контракт C.2 (use-case-юнит-тесты) — фокус на сшивке слоёв через cron-callback.
     - make ci зелёный: ruff ok, mypy --strict 506 source files, import-linter 4 contracts kept, pytest 5665→5668 passed / 2 skipped, coverage 95.60%.
-- **Активный шаг чек-листа:** —. C.7.d закрыт; следующий шаг — закрытие чек-листа C.0–C.7 (PR-готовность) и переход к C.8+ (см. `docs/current_tasks.md`).
+- **C.8 (готов на пред. коммитах через C.6.b/C.7.b/C.7.d):** Composition root собран в `bot/main.py::build_container`: `prize_lot_repo = SqlAlchemyPrizeLotRepository(uow=uow)` + `fee_estimator = InMemoryFeeEstimator()` + `generate_prize_lots = GeneratePrizeLots(...)` + `record_donation = RecordDonation(..., generate_prize_lots=generate_prize_lots)` + `SpinFreeRoulette`/`SpinPaidRoulette` принимают `prize_lots=prize_lot_repo`. Smoke-тест Container в `tests/unit/bot/test_composition_root.py` собирает реальный `GeneratePrizeLots(uow=...)` на фейк-репах с `InMemoryFeeEstimator()`.
+- **C.9 (готов на этом коммите):** `make ci` зелёный полностью на C.7.d-коммите (см. предыдущий отчёт). `pre-commit run --all-files` — все 12 хуков зелёные, без форматтер-дрейфа.
+- **C.10 (этот коммит):** Финальный док-коммит — `docs/history.md` дополнен записью «2026-05-11 — Спринт 4.1-C» с полным разбором C.0–C.7.d по шагам + результат/артефакты + заметки/решения; `docs/current_tasks.md` — снимок состояния пересобран под `main = <merge-of-4.1-C>` (после мерджа), Roadmap-4.1 обновлён (4.1-C → закрыт, 4.1-D → активный), задачи плана 4.1.7/4.1.8 отмечены ✅; «Чек-лист текущего PR» заменён с C.0–C.11 на гипотезу D.0–D.15 (следующий агент пусть пересмотрит); «Что ровно сейчас в работе» переписан под 4.1-D; «Известные блокеры» обновлены (`ClaimPrize` → 4.1-D, `InMemoryFeeEstimator` → 4.1-D, ORM-CHECK-дрейф → backlog).
+- **Активный шаг чек-листа:** **C.11 — PR-готовность.**
 - **В работе:** —.
-- **Дальше:** C.8—C.11 (см. `docs/current_tasks.md`). Если C.7.* считать достаточным для PR — отдельным коммитом `chore: remove AGENT_HANDOFF before PR` удалить этот файл, обновить `docs/history.md` + `docs/current_tasks.md` под PR-метаданные, открыть PR. Перед мерджем — дождаться зелёного CI.
+- **Дальше:** **C.11.a** — отдельный коммит `chore: remove AGENT_HANDOFF before PR` (удалить этот файл). Затем **C.11.b** — `git_pr(action="fetch_template")` → `git_pr(action="create")` с PR-template-based body, head=`devin/1778438123-sprint-4-1-C-lot-generator`, base=`main`. Затем **C.11.c** — `git pr_checks(repo, pull_number, wait_mode="all")` дождаться зелёного GitHub CI.
 
 ## Что нужно знать следующему агенту, если меня прервёт
 
