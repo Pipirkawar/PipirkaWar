@@ -1212,10 +1212,10 @@ class _FakeGeneratePrizeLotsUseCase:
     проверки error-swallow-семантики callback-а.
     """
 
-    commands: list[object] = field(default_factory=list)
+    commands: list[GeneratePrizeLotsCommand] = field(default_factory=list)
     raise_exc: BaseException | None = None
 
-    async def execute(self, command):  # type: ignore[no-untyped-def]
+    async def execute(self, command: GeneratePrizeLotsCommand) -> None:
         self.commands.append(command)
         if self.raise_exc is not None:
             raise self.raise_exc
