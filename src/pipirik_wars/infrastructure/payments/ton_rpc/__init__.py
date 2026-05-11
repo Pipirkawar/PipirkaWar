@@ -41,6 +41,7 @@ from pipirik_wars.infrastructure.payments.ton_rpc.errors import (
 from pipirik_wars.infrastructure.payments.ton_rpc.fee_estimator import (
     TonRpcFeeEstimator,
 )
+from pipirik_wars.infrastructure.payments.ton_rpc.http_client import TonRpcHttpClient
 from pipirik_wars.infrastructure.payments.ton_rpc.jetton import (
     JettonTransferPayload,
     JettonUsdtProvider,
@@ -56,6 +57,7 @@ __all__ = [
     "TonRpcAdapter",
     "TonRpcCallError",
     "TonRpcFeeEstimator",
+    "TonRpcHttpClient",
     "TonRpcSettings",
     "TonRpcTimeoutError",
     "UnsupportedPayoutCurrencyError",
