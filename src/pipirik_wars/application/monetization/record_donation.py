@@ -59,8 +59,14 @@ UoW (in line с конвенцией `IAuditLogger`).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
+from pipirik_wars.application.monetization.generate_prize_lots import (
+    GeneratePrizeLots,
+    GeneratePrizeLotsCommand,
+)
 from pipirik_wars.domain.monetization.entities import PrizePool
 from pipirik_wars.domain.monetization.ports import IPrizePoolRepository
 from pipirik_wars.domain.monetization.value_objects import Currency, IdempotencyKey
@@ -88,6 +94,41 @@ _DONATION_DIVISOR = 10
 # Пишется в `AuditEntry.reason`; admin-handler-ы 4.1-E фильтруют
 # по этой строке для отчёта `/prize_pool history`.
 _REASON_PRIZE_POOL_INCREMENT = "prize_pool_increment"
+
+# Порог «крупного» доната, запускающего внеочередной вызов
+# `GeneratePrizeLots` сразу после донат-инкремента пула (Спринт 4.1-C / C.7.d).
+# Без этого триггера лоты нарежутся только через hourly cron (C.7.b) —
+# при крупном донате в TON/USDT это до 60 минут задержки «игрок бросил
+# 1 USDT — в рулетке лот появится только через час» — плохой UX.
+#
+# Пороги эквивалентны 1 min-лоту по ГДД §12.6.3 (см. `_MIN_USD_NATIVE` в
+# `generate_prize_lots.py`): 0.5 TON = 500_000_000 TON_NANO; 1 USDT = 1_000_000 USDT_DECIMAL.
+# STARS — `None`, т. е. без триггера: STARS-донаты накапливаются медленно
+# (50 ⭐ = 0.5 USD; 100 ⭐ на лот = ~50 платежей в худшем случае), hourly cron их
+# собирает без вреда для UX. На 4.1-D пороги переедут в `balance.yaml`.
+_DONATION_TRIGGER_THRESHOLD: Mapping[Currency, int | None] = MappingProxyType(
+    {
+        Currency.STARS: None,
+        Currency.TON_NANO: 500_000_000,
+        Currency.USDT_DECIMAL: 1_000_000,
+    }
+)
+
+# Идемпотентность триггера обеспечивается **переиспользованием**
+# `command.idempotency_key` платежа: `RecordDonation` пробрасывает его
+# в `GeneratePrizeLotsCommand.idempotency_key` без изменений. Внутри
+# `GeneratePrizeLots._idempotency.build(...)` ключ упакован в namespace
+# `prize_lot_generator:<currency>|<original key>` — изолирован от
+# cron-формата (`prize_lot_generator:<currency>|prize_lot_generator:cron:<...>`)
+# и от любых других потенциальных вызовов use-case-а. Повторный
+# `RecordDonation.execute(...)` с тем же платежом → тот же derived key
+# → `GeneratePrizeLots` вернёт `idempotent=True` без повторной нарезки.
+#
+# Почему **не** добавляем свой префикс (`donation:<key>`): VO
+# `IdempotencyKey` ограничен `[A-Za-z0-9_\-:]{1,64}`. Платежные ключи
+# `paid_roulette:<player_id>:<tg_payment_charge_id>` могут быть близки
+# к 64-символьному пределу (TG `charge_id` — UUID-like, ~30+ символов);
+# добавление префикса дало бы переполнение `IdempotencyKey.__post_init__`.
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,7 +188,7 @@ class RecordDonation:
     Только репозиторий пула, audit-логгер, часы и чистая арифметика.
     """
 
-    __slots__ = ("_audit", "_clock", "_pool_repo")
+    __slots__ = ("_audit", "_clock", "_generate_prize_lots", "_pool_repo")
 
     def __init__(
         self,
@@ -155,6 +196,7 @@ class RecordDonation:
         prize_pool_repository: IPrizePoolRepository,
         audit_logger: IAuditLogger,
         clock: IClock,
+        generate_prize_lots: GeneratePrizeLots,
     ) -> None:
         """DI-конструктор.
 
@@ -168,10 +210,16 @@ class RecordDonation:
                 unit-тестах — `FakeAuditLogger`.
             clock: часы (`IClock`). Источник `occurred_at` для audit-
                 записи. В unit-тестах — `FakeClock`.
+            generate_prize_lots: use-case `GeneratePrizeLots` (Спринт
+                4.1-C / C.7.d) — внеочередной триггер нарезки лотов
+                при «крупном» донате. Вызывается в той же UoW, что и
+                донат-инкремент пула (ambient-UoW-паттерн `GeneratePrizeLots`),
+                идемпотентен по `command.idempotency_key`.
         """
         self._pool_repo = prize_pool_repository
         self._audit = audit_logger
         self._clock = clock
+        self._generate_prize_lots = generate_prize_lots
 
     async def execute(self, command: RecordDonationCommand) -> RecordDonationResult:
         """Выполнить расчёт + инкремент пула + audit-запись.
@@ -223,6 +271,22 @@ class RecordDonation:
                 source=AuditSource.PRIZE_POOL_INCREMENT,
             )
         )
+
+        # Шаг C.7.d: внеочередной триггер `GeneratePrizeLots`. Без
+        # триггера крупный донат (`>= 0.5 TON` / `>= 1 USDT`) ждал бы
+        # до 60 минут hourly cron-а — пользователь не увидит лот в
+        # рулетке сразу. STARS — без триггера (порог = `None`):
+        # 100 ⭐ накапливаются медленно, hourly cron справится.
+        # Идемпотентность: пробрасываем `command.idempotency_key`
+        # платежа as-is — детальная аргументация выше в module-scope.
+        threshold = _DONATION_TRIGGER_THRESHOLD[command.currency]
+        if threshold is not None and donation_amount_native >= threshold:
+            await self._generate_prize_lots.execute(
+                GeneratePrizeLotsCommand(
+                    currency=command.currency,
+                    idempotency_key=command.idempotency_key,
+                )
+            )
 
         return RecordDonationResult(
             donation_amount_native=donation_amount_native,

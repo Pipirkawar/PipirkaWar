@@ -29,8 +29,9 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TypeVar
+from typing import TypeVar, cast
 
 import pytest
 
@@ -39,6 +40,10 @@ from pipirik_wars.application.monetization import (
     RecordDonation,
     SpinPaidRoulette,
     SpinPaidRouletteCommand,
+)
+from pipirik_wars.application.monetization.generate_prize_lots import (
+    GeneratePrizeLots,
+    GeneratePrizeLotsCommand,
 )
 from pipirik_wars.application.progression import AddLength
 from pipirik_wars.domain.balance.config import (
@@ -89,6 +94,24 @@ _NOW = datetime(2026, 5, 8, 12, 0, tzinfo=UTC)
 # --------------------------------------------------------------------------- #
 # Test doubles
 # --------------------------------------------------------------------------- #
+
+
+@dataclass
+class _NoopGeneratePrizeLots:
+    """Stub `GeneratePrizeLots` для `SpinPaidRoulette`-fixture-а.
+
+    `SpinPaidRoulette`-тесты не покрывают C.7.d-триггер (это область
+    `test_record_donation.py::TestPrizeLotGeneratorTrigger`). Здесь
+    стандартный платёж 1⋆/9⋆ заведомо ниже trigger-threshold-а для
+    STARS (`None`), так что use-case не зовёт `execute`. Стаб не пишет
+    в audit, не открывает UoW — просто молча проглатывает вызов на
+    случай, если тесты прокидывают более крупные платежи в будущем.
+    """
+
+    commands: list[GeneratePrizeLotsCommand] = field(default_factory=list)
+
+    async def execute(self, command: GeneratePrizeLotsCommand) -> None:
+        self.commands.append(command)
 
 
 class _ScriptedRandom(IRandom):
@@ -240,6 +263,7 @@ def _build_use_case(
         prize_pool_repository=used_prize_pool,
         audit_logger=audit,
         clock=clock,
+        generate_prize_lots=cast(GeneratePrizeLots, _NoopGeneratePrizeLots()),
     )
     use_case = SpinPaidRoulette(
         uow=uow,

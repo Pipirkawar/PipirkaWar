@@ -1195,12 +1195,12 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     # 10-step flow-а вызывает `record_donation.execute(...)` с тем же
     # `idempotency_key`, что и у платежа.
     prize_pool_repo = SqlAlchemyPrizePoolRepository(uow=uow)
-    record_donation = RecordDonation(
-        prize_pool_repository=prize_pool_repo,
-        audit_logger=audit,
-        clock=clock,
-    )
     # 4.1-C / C.7.a + C.7.b: cron `GeneratePrizeLots` 1×/час per currency.
+    # 4.1-C / C.7.d: тот же use-case прокидывается в `RecordDonation` как
+    # внеочередной триггер «крупного» доната (>= 0.5 TON / >= 1 USDT),
+    # вложенный в open-UoW `SpinPaidRoulette` через ambient-UoW-паттерн
+    # (`GeneratePrizeLots` сам решает — открывать UoW или переиспользовать
+    # caller-овский, см. `is_active`-проверку в `GeneratePrizeLots.execute`).
     # `InMemoryFeeEstimator` — stateless константная реализация
     # (STARS=0, TON_NANO=10_000_000=0.01 TON, USDT_DECIMAL=200_000=0.2 USDT);
     # на 4.1-D подменится `TonRpcFeeEstimator` (P95 за 7 дней). Передаётся в
@@ -1216,6 +1216,12 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit_logger=audit,
         idempotency=idempotency,
         clock=clock,
+    )
+    record_donation = RecordDonation(
+        prize_pool_repository=prize_pool_repo,
+        audit_logger=audit,
+        clock=clock,
+        generate_prize_lots=generate_prize_lots,
     )
     spin_paid_roulette = SpinPaidRoulette(
         uow=uow,

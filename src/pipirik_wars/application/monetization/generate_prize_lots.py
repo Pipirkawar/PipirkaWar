@@ -12,10 +12,18 @@ audit-запись `PRIZE_LOT_GENERATED` per lot.
   (single-flight семантика: повторный вызов с тем же ключом
   не генерирует лоты повторно, возвращает `idempotent=True` +
   пустой `generated_lots=()` + текущий снапшот пула).
-* Транзакционно: use-case **сам открывает** `async with self._uow` —
-  это top-level use-case (вызывается из cron-а в C.7 и/или триггера
-  после `RecordDonation` C.7), а не sub-step другого use-case-а
-  (в отличие от `RecordDonation`, который вложен в `SpinPaidRoulette`).
+* Транзакционно: use-case использует **ambient-UoW**-паттерн
+  (см. `domain/shared/ports/uow.py::IUnitOfWork`-docstring). Если
+  caller ещё не открыл `async with self._uow:` (типичный случай —
+  hourly cron в `C.7.b`), use-case открывает свой собственный
+  контекст и сам коммитит. Если caller уже внутри своей транзакции
+  (типичный случай — триггер из `RecordDonation.execute(...)` C.7.d,
+  вложенный в `SpinPaidRoulette`-UoW), use-case переиспользует
+  ambient-UoW (запись лотов, декремент пула, audit и idempotency-`mark`
+  попадают в общую транзакцию caller-а; commit/rollback — на caller-е).
+  Это сохраняет инвариант «один контекст — одна транзакция»
+  (см. `IUnitOfWork.__aenter__`-контракт) и одновременно даёт
+  атомарность донат-инкремента пула и нарезки лотов в одном PR-flow.
 
 Алгоритм нарезки (ГДД §12.6.3):
 
@@ -231,85 +239,96 @@ class GeneratePrizeLots:
 
     async def execute(self, command: GeneratePrizeLotsCommand) -> GeneratePrizeLotsResult:
         """Выполнить нарезку. Контракт — в docstring-е модуля."""
+        # Ambient-UoW-паттерн (см. `IUnitOfWork`-docstring): если caller
+        # уже открыл свою транзакцию (триггер из `RecordDonation`-flow
+        # C.7.d), переиспользуем её и не пытаемся открыть вложенную
+        # (`SqlAlchemyUnitOfWork.__aenter__` запрещает nested). При
+        # самостоятельном вызове (cron в C.7.b) — открываем сами.
+        if self._uow.is_active:
+            return await self._run(command)
         async with self._uow:
-            root_key = self._idempotency.build(
-                _NAMESPACE,
-                [command.currency.value, command.idempotency_key.value],
+            return await self._run(command)
+
+    async def _run(self, command: GeneratePrizeLotsCommand) -> GeneratePrizeLotsResult:
+        """Тело use-case-а, выполняемое внутри уже открытой UoW."""
+        root_key = self._idempotency.build(
+            _NAMESPACE,
+            [command.currency.value, command.idempotency_key.value],
+        )
+        if await self._idempotency.is_seen(root_key):
+            current_pool = await self._pool_repo.get_current()
+            return GeneratePrizeLotsResult(
+                generated_lots=(),
+                pool_after=current_pool,
+                lots_generated_count=0,
+                idempotent=True,
             )
-            if await self._idempotency.is_seen(root_key):
-                current_pool = await self._pool_repo.get_current()
-                return GeneratePrizeLotsResult(
-                    generated_lots=(),
-                    pool_after=current_pool,
-                    lots_generated_count=0,
-                    idempotent=True,
-                )
 
-            pool = await self._pool_repo.get_current()
-            free_balance = pool.balance_for(command.currency)
-            max_usd_native = _MAX_USD_NATIVE[command.currency]
-            min_usd_native = _MIN_USD_NATIVE[command.currency]
+        pool = await self._pool_repo.get_current()
+        free_balance = pool.balance_for(command.currency)
+        max_usd_native = _MAX_USD_NATIVE[command.currency]
+        min_usd_native = _MIN_USD_NATIVE[command.currency]
 
-            # Выбор режима: max-mode если хватает на хотя бы один max-лот,
-            # иначе min-mode если хватает на хотя бы один min-лот.
-            target_usd_native: int | None
-            if free_balance >= max_usd_native:
-                target_usd_native = max_usd_native
-            elif free_balance >= min_usd_native:
-                target_usd_native = min_usd_native
-            else:
-                target_usd_native = None
+        # Выбор режима: max-mode если хватает на хотя бы один max-лот,
+        # иначе min-mode если хватает на хотя бы один min-лот.
+        target_usd_native: int | None
+        if free_balance >= max_usd_native:
+            target_usd_native = max_usd_native
+        elif free_balance >= min_usd_native:
+            target_usd_native = min_usd_native
+        else:
+            target_usd_native = None
 
-            generated_lots: list[PrizeLot] = []
-            now = self._clock.now()
+        generated_lots: list[PrizeLot] = []
+        now = self._clock.now()
 
-            if target_usd_native is not None:
-                fee_native = await self._fee_estimator.estimate_fee(
-                    currency=command.currency,
-                    target_amount_native=target_usd_native,
-                )
-                # Sanity check: комиссия не должна превышать таргет — иначе
-                # net_amount <= 0 и лот деградировал. Защита от спайков газа.
-                if fee_native < target_usd_native:
-                    lot_amount = target_usd_native + fee_native
-                    fee_buffer = FeeBufferAmount(fee_native)
-                    while free_balance >= lot_amount:
-                        lot = PrizeLot.freshly_generated(
-                            currency=command.currency,
-                            amount_native=lot_amount,
-                            fee_buffer_native=fee_buffer,
-                            created_at=now,
+        if target_usd_native is not None:
+            fee_native = await self._fee_estimator.estimate_fee(
+                currency=command.currency,
+                target_amount_native=target_usd_native,
+            )
+            # Sanity check: комиссия не должна превышать таргет — иначе
+            # net_amount <= 0 и лот деградировал. Защита от спайков газа.
+            if fee_native < target_usd_native:
+                lot_amount = target_usd_native + fee_native
+                fee_buffer = FeeBufferAmount(fee_native)
+                while free_balance >= lot_amount:
+                    lot = PrizeLot.freshly_generated(
+                        currency=command.currency,
+                        amount_native=lot_amount,
+                        fee_buffer_native=fee_buffer,
+                        created_at=now,
+                    )
+                    saved_lot = await self._lot_repo.add(lot=lot)
+                    pool = await self._pool_repo.apply_increment(
+                        currency=command.currency,
+                        amount_native=-lot_amount,
+                    )
+                    await self._audit.record(
+                        AuditEntry(
+                            action=AuditAction.PRIZE_LOT_GENERATED,
+                            actor_id=None,
+                            target_kind="prize_lot",
+                            target_id=(f"{root_key}:lot:{len(generated_lots)}"),
+                            before=None,
+                            after={
+                                "lot_id": saved_lot.id,
+                                "currency": command.currency.value,
+                                "amount_native": saved_lot.amount_native,
+                                "fee_buffer_native": (saved_lot.fee_buffer_native.value),
+                                "net_amount_native": (saved_lot.net_amount_native),
+                                "pool_after_native": pool.balance_for(command.currency),
+                            },
+                            reason=_REASON_LOT_GENERATED,
+                            idempotency_key=(f"{root_key}:lot:{len(generated_lots)}"),
+                            occurred_at=now,
+                            source=AuditSource.PRIZE_LOT_GENERATED,
                         )
-                        saved_lot = await self._lot_repo.add(lot=lot)
-                        pool = await self._pool_repo.apply_increment(
-                            currency=command.currency,
-                            amount_native=-lot_amount,
-                        )
-                        await self._audit.record(
-                            AuditEntry(
-                                action=AuditAction.PRIZE_LOT_GENERATED,
-                                actor_id=None,
-                                target_kind="prize_lot",
-                                target_id=(f"{root_key}:lot:{len(generated_lots)}"),
-                                before=None,
-                                after={
-                                    "lot_id": saved_lot.id,
-                                    "currency": command.currency.value,
-                                    "amount_native": saved_lot.amount_native,
-                                    "fee_buffer_native": (saved_lot.fee_buffer_native.value),
-                                    "net_amount_native": (saved_lot.net_amount_native),
-                                    "pool_after_native": pool.balance_for(command.currency),
-                                },
-                                reason=_REASON_LOT_GENERATED,
-                                idempotency_key=(f"{root_key}:lot:{len(generated_lots)}"),
-                                occurred_at=now,
-                                source=AuditSource.PRIZE_LOT_GENERATED,
-                            )
-                        )
-                        generated_lots.append(saved_lot)
-                        free_balance = pool.balance_for(command.currency)
+                    )
+                    generated_lots.append(saved_lot)
+                    free_balance = pool.balance_for(command.currency)
 
-            await self._idempotency.mark(root_key, namespace=_NAMESPACE)
+        await self._idempotency.mark(root_key, namespace=_NAMESPACE)
 
         return GeneratePrizeLotsResult(
             generated_lots=tuple(generated_lots),

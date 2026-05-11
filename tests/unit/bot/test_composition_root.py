@@ -84,6 +84,7 @@ from pipirik_wars.application.forest import (
 from pipirik_wars.application.i18n import IMessageBundle
 from pipirik_wars.application.inventory import EnchantItem, GetInventory
 from pipirik_wars.application.monetization import RecordDonation, SpinPaidRoulette
+from pipirik_wars.application.monetization.generate_prize_lots import GeneratePrizeLots
 from pipirik_wars.application.mountains import (
     FinishMountainRun,
     StartMountainRun,
@@ -187,6 +188,7 @@ from pipirik_wars.infrastructure.db.services import (
     SqlAlchemyIdempotencyService,
 )
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
+from pipirik_wars.infrastructure.fees import InMemoryFeeEstimator
 from pipirik_wars.infrastructure.i18n import FluentMessageBundle
 from pipirik_wars.infrastructure.random import RealRandom
 from pipirik_wars.infrastructure.rate_limit import (
@@ -996,10 +998,25 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
     # реальный use-case на фейк-репозитории (пробрасывается в
     # `SpinPaidRoulette` Step 5b 10-step flow-а).
     prize_pool_repo_fake: IPrizePoolRepository = FakePrizePoolRepository()
+    # Спринт 4.1-C / C.7.d: `RecordDonation` теперь получает
+    # `GeneratePrizeLots` для внеочередного триггера нарезки лотов
+    # при «крупном» донате. В смок-тесте Container-а реальных вызовов
+    # нет — собираем use-case на тех же фейках, чтобы инстанцируемость
+    # проходила через mypy/runtime.
+    generate_prize_lots_uc = GeneratePrizeLots(
+        uow=uow,
+        prize_pool_repository=prize_pool_repo_fake,
+        prize_lot_repository=prize_lot_repo_fake,
+        fee_estimator=InMemoryFeeEstimator(),
+        audit_logger=audit,
+        idempotency=idempotency,
+        clock=clock,
+    )
     record_donation_uc = RecordDonation(
         prize_pool_repository=prize_pool_repo_fake,
         audit_logger=audit,
         clock=clock,
+        generate_prize_lots=generate_prize_lots_uc,
     )
     spin_paid_roulette_uc = SpinPaidRoulette(
         uow=uow,
