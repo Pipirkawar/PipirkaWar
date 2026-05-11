@@ -4,6 +4,9 @@ Use-case-ы и DTO-комманды для платных операций. Re-e
 символов:
 
     from pipirik_wars.application.monetization import (
+        ClaimPrize,
+        ClaimPrizeCommand,
+        ClaimPrizeResult,
         GeneratePrizeLots,
         GeneratePrizeLotsCommand,
         GeneratePrizeLotsResult,
@@ -17,6 +20,11 @@ Use-case-ы и DTO-комманды для платных операций. Re-e
     )
 """
 
+from pipirik_wars.application.monetization.claim_prize import (
+    ClaimPrize,
+    ClaimPrizeCommand,
+    ClaimPrizeResult,
+)
 from pipirik_wars.application.monetization.generate_prize_lots import (
     GeneratePrizeLots,
     GeneratePrizeLotsCommand,
@@ -35,6 +43,9 @@ from pipirik_wars.application.monetization.spin_paid_roulette import (
 )
 
 __all__ = [
+    "ClaimPrize",
+    "ClaimPrizeCommand",
+    "ClaimPrizeResult",
     "GeneratePrizeLots",
     "GeneratePrizeLotsCommand",
     "GeneratePrizeLotsResult",

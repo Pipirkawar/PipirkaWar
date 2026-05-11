@@ -6,7 +6,7 @@
 
 Whitelist первоначально создан в миграции 0007 и расширяется
 последующими миграциями. Тест читает whitelist из **последней расширяющей
-миграции** — 0031 (`prize_lot_refunded`, Спринт 4.1-C / C.4).
+миграции** — 0034 (`wallet_linked`, Спринт 4.1-D).
 """
 
 from __future__ import annotations
@@ -21,17 +21,17 @@ def _load_migration_whitelist() -> tuple[str, ...]:
     """Грузим whitelist прямо из файла последней расширяющей миграции.
 
     Файл миграции назван с timestamp-префиксом
-    (`20260511_0032_audit_source_prize_lot_reserved.py`), что не валиден
+    (`20260511_0034_audit_source_wallet_linked.py`), что не валиден
     как Python-идентификатор; обычный `import` не работает.
     """
     repo_root = Path(__file__).resolve().parents[5]
     migration_path = (
         repo_root
         / "src/pipirik_wars/infrastructure/db/migrations/versions"
-        / "20260511_0032_audit_source_prize_lot_reserved.py"
+        / "20260511_0034_audit_source_wallet_linked.py"
     )
     spec = importlib.util.spec_from_file_location(
-        "_migration_0032_audit_source_prize_lot_reserved",
+        "_migration_0034_audit_source_wallet_linked",
         migration_path,
     )
     assert spec is not None and spec.loader is not None

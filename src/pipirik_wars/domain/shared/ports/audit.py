@@ -187,6 +187,10 @@ class AuditAction(str, enum.Enum):
     # НЕ будет — вместо неё use-case подменит outcome на LengthGain
     # (C.6.d).
     PRIZE_LOT_RESERVED = "prize_lot_reserved"
+    # ── Спринт 4.1-D (выплата лота, ГДД §12.6.4) ──
+    PRIZE_LOT_CLAIMED = "prize_lot_claimed"
+    # ── Спринт 4.1-D (привязка кошелька, ГДД §12.6.4) ──
+    WALLET_LINKED = "wallet_linked"
 
 
 class AuditSource(str, enum.Enum):
@@ -297,6 +301,10 @@ class AuditSource(str, enum.Enum):
     # DB-whitelist (`audit_log_source_whitelist`) расширяется Alembic-
     # миграцией `0032_audit_source_prize_lot_reserved` (шаг C.6.a).
     PRIZE_LOT_RESERVED = "prize_lot_reserved"
+    # ── Спринт 4.1-D (выплата лота, ГДД §12.6.4) ──
+    PRIZE_LOT_CLAIMED = "prize_lot_claimed"
+    # ── Спринт 4.1-D (привязка кошелька, ГДД §12.6.4) ──
+    WALLET_LINKED = "wallet_linked"
     UNKNOWN = "unknown"
 
 
