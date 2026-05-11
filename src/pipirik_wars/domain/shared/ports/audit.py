@@ -145,6 +145,48 @@ class AuditAction(str, enum.Enum):
     # (донат < 10 native-юнитов, no-op инкремент) audit **не** пишется —
     # инвариант «нет нулевых-дельт в audit-логе».
     PRIZE_POOL_INCREMENT = "prize_pool_increment"
+    # ── Спринт 4.1-C (лот-генератор, ГДД §12.6.3) ──
+    # Каждый свежесгенерированный `PrizeLot` пишется одной audit-записью
+    # в той же транзакции UoW, что и `IPrizeLotRepository.add(lot)` +
+    # `IPrizePoolRepository.apply_increment(currency, -lot.amount_native)`.
+    # `target_kind="prize_lot"`, `target_id="<root_key>:lot:<idx>"`, `after={
+    # "lot_id": <int>, "currency": ..., "amount_native": <gross>, "fee_buffer_native":
+    # <int>, "net_amount_native": <gross-fee>, "pool_after_native": <остаток пула>}`.
+    # Парного `before`-снапшота не пишем (delta + after однозначно
+    # восстанавливают before). Источник — `AuditSource.PRIZE_LOT_GENERATED`.
+    # Пишется use-case-ом `GeneratePrizeLots`.
+    PRIZE_LOT_GENERATED = "prize_lot_generated"
+    # ── Спринт 4.1-C (refund-flow лота, ГДД §12.6.4) ──
+    # Каждый refund лота (`PrizeLot.status: ACTIVE|RESERVED → REFUNDED`)
+    # пишется одной audit-записью в той же транзакции UoW, что и
+    # `IPrizeLotRepository.update_status(lot_id, REFUNDED)` + `IPrizePoolRepository.
+    # apply_increment(currency, +lot.amount_native)` (возврат средств в пул).
+    # `target_kind="prize_lot"`, `target_id="<lot_id>:refund"`, `after={
+    # "lot_id": <int>, "currency": ..., "amount_native": <gross>,
+    # "prev_status": "active"|"reserved", "pool_after_native": <пул после возврата>,
+    # "reason": "timeout"|"player_decline"|"admin"|"…"}`. Парного
+    # `before`-снапшота не пишем. Источник — `AuditSource.PRIZE_LOT_REFUNDED`.
+    # Пишется будущим use-case-ом `RefundPrizeLot` (запланировано
+    # в 4.1-C / Шаг C.6 «race-резервирование + fallback» и 4.1-D /
+    # `ClaimPrize` для timeout-refund-а).
+    PRIZE_LOT_REFUNDED = "prize_lot_refunded"
+    # ── Спринт 4.1-C (резервирование лота на спине, ГДД §12.6.5) ──
+    # Каждое успешное резервирование лота (`PrizeLot.status: ACTIVE →
+    # RESERVED`) пишется одной audit-записью в той же транзакции UoW,
+    # что и `IPrizeLotRepository.update_status(lot_id, RESERVED)`. Зовётся
+    # из `SpinPaidRoulette` / `SpinFreeRoulette`, когда picker рулетки
+    # вернул `RouletteOutcome.crypto_lot(lot_id=...)`. `target_kind=
+    # "prize_lot"`, `target_id="<lot_id>:reserved"`, `after={"lot_id":
+    # <int>, "currency": ..., "amount_native": <gross>, "prev_status":
+    # "active", "reserved_at": <utc-iso>, "player_id": <int>,
+    # "spin_kind": "paid"|"free"}`. Парного `before`-снапшота не пишем
+    # (prev_status однозначен — всегда `active`). Источник —
+    # `AuditSource.PRIZE_LOT_RESERVED`. Пишется в C.6.c use-case-ами
+    # спинов сразу после выпадения CRYPTO_LOT-исхода. При проигранном
+    # race (другой игрок забронировал тот же лот первым) этой записи
+    # НЕ будет — вместо неё use-case подменит outcome на LengthGain
+    # (C.6.d).
+    PRIZE_LOT_RESERVED = "prize_lot_reserved"
 
 
 class AuditSource(str, enum.Enum):
@@ -224,6 +266,37 @@ class AuditSource(str, enum.Enum):
     # `tribe_bonus_sources` (это пул-внутренний бухгалтерский маркер,
     # не length-source).
     PRIZE_POOL_INCREMENT = "prize_pool_increment"
+    # ── Спринт 4.1-C (лот-генератор, ГДД §12.6.3) ──
+    # `PRIZE_LOT_GENERATED` — source-маркер audit-записи «вырезали лот из пула».
+    # Пишется use-case-ом `GeneratePrizeLots` внутри той же UoW, что и
+    # `add(lot)` + `apply_increment(currency, -amount)`. Парного «cost»-source-а
+    # нет (декремент пула — это уже интернальная проводка, безвыплаты игроку).
+    # `PRIZE_LOT_GENERATED` **НЕ** входит в `anticheat.organic_sources` /
+    # `donate_sources` / `tribe_bonus_sources` (не length-source, это
+    # пул-внутренний бухгалтерский маркер). DB-whitelist (`audit_log_source_whitelist`)
+    # расширен Alembic-миграцией `0029_audit_source_prize_lot_generated` (шаг C.2).
+    PRIZE_LOT_GENERATED = "prize_lot_generated"
+    # `PRIZE_LOT_REFUNDED` — source-маркер audit-записи «вернули лот в пул».
+    # Пишется будущим use-case-ом `RefundPrizeLot` (запланирован в 4.1-C / Шаг C.6
+    # «race-резервирование + fallback» и 4.1-D / `ClaimPrize` для timeout-refund-а)
+    # внутри той же UoW, что и `update_status(lot_id, REFUNDED)` + `apply_increment(
+    # currency, +amount)`. Парного «cost»-source-а нет (инкремент пула — внутренняя
+    # проводка, без выплаты игроку). `PRIZE_LOT_REFUNDED` **НЕ** входит в
+    # `anticheat.organic_sources` / `donate_sources` / `tribe_bonus_sources`
+    # (не length-source, это пул-внутренний бухгалтерский маркер). DB-whitelist
+    # (`audit_log_source_whitelist`) расширяется Alembic-миграцией
+    # `0031_audit_source_prize_lot_refunded` (шаг C.4).
+    PRIZE_LOT_REFUNDED = "prize_lot_refunded"
+    # `PRIZE_LOT_RESERVED` — source-маркер audit-записи «зарезервировали лот
+    # на спине». Пишется use-case-ами `SpinPaidRoulette` / `SpinFreeRoulette`
+    # (C.6.c) внутри той же UoW, что и `IPrizeLotRepository.update_status(
+    # lot_id, ACTIVE → RESERVED)`. Парного «cost»-source-а нет (декремент
+    # пула уже произошёл в `GeneratePrizeLots`). `PRIZE_LOT_RESERVED` **НЕ**
+    # входит в `anticheat.organic_sources` / `donate_sources` /
+    # `tribe_bonus_sources` (не length-source, это статус-маркер).
+    # DB-whitelist (`audit_log_source_whitelist`) расширяется Alembic-
+    # миграцией `0032_audit_source_prize_lot_reserved` (шаг C.6.a).
+    PRIZE_LOT_RESERVED = "prize_lot_reserved"
     UNKNOWN = "unknown"
 
 

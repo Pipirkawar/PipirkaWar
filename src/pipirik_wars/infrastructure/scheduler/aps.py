@@ -18,11 +18,12 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Final
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from pipirik_wars.application.bosses import (
     BossFightFinished,
@@ -73,6 +74,10 @@ from pipirik_wars.application.forest import (
     ForestRunFinished,
     IForestFinishNotifier,
 )
+from pipirik_wars.application.monetization import (
+    GeneratePrizeLots,
+    GeneratePrizeLotsCommand,
+)
 from pipirik_wars.application.mountains import (
     FinishMountainRun,
     IMountainFinishNotifier,
@@ -91,6 +96,7 @@ from pipirik_wars.application.referral import (
 from pipirik_wars.domain.clan import IClanRepository
 from pipirik_wars.domain.dungeon import DungeonRunNotFoundError
 from pipirik_wars.domain.forest import ForestRunNotFoundError
+from pipirik_wars.domain.monetization.value_objects import Currency, IdempotencyKey
 from pipirik_wars.domain.mountains import MountainRunNotFoundError
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from pipirik_wars.domain.shared.ports import IDelayedJobScheduler
@@ -120,6 +126,13 @@ _WEEKLY_REFERRAL_SUMMARY_DAY_OF_WEEK: Final[str] = "sun"
 _WEEKLY_REFERRAL_SUMMARY_HOUR: Final[int] = 18
 _WEEKLY_REFERRAL_SUMMARY_MINUTE: Final[int] = 0
 _WEEKLY_REFERRAL_SUMMARY_TIMEZONE: Final[str] = "UTC"
+# 4.1-C / C.7.b: cron-entry `GeneratePrizeLots` per currency (1×/час).
+# 3 параллельных job-а (STARS / TON_NANO / USDT_DECIMAL) — каждый 1×/час
+# режет свой баланс пула на лоты. Idempotency-key привязан к UTC-часу:
+# повторный fire в тот же час → `GeneratePrizeLots` выходит no-op через ranged
+# `IIdempotencyKey.is_seen`-проверку.
+_PRIZE_LOT_GENERATOR_CRON_JOB_PREFIX: Final[str] = "prize_lot_generator_cron:"
+_PRIZE_LOT_GENERATOR_CRON_INTERVAL_HOURS: Final[int] = 1
 
 
 def _job_id(run_id: int) -> str:
@@ -172,6 +185,30 @@ def _boss_round_tick_job_id(boss_fight_id: int) -> str:
 
 def _boss_fight_finish_job_id(boss_fight_id: int) -> str:
     return f"{_BOSS_FIGHT_FINISH_JOB_PREFIX}{boss_fight_id}"
+
+
+def _prize_lot_generator_cron_job_id(currency: Currency) -> str:
+    """Стабильный APScheduler-id per currency (4.1-C / C.7.b).
+
+    Префикс + `currency.value` (`stars` / `ton_nano` / `usdt_decimal`).
+    Алфанумерический + `_` — валидный APScheduler-id. Нужен для
+    `replace_existing=True`-идемпотентности при recovery-вызовах.
+    """
+    return f"{_PRIZE_LOT_GENERATOR_CRON_JOB_PREFIX}{currency.value}"
+
+
+def _prize_lot_generator_period_id(now: datetime) -> str:
+    """`period_id` для cron-idempotency-key-а (4.1-C / C.7.b).
+
+    Формат `YYYY-MM-DDTHH` — UTC-час-бакет (`strftime("%Y-%m-%dT%H")`).
+    Два fire-а в тот же час (напр. APScheduler misfire-recovery + grace-time)
+    → одини `period_id` → один и тот же `IdempotencyKey` → `GeneratePrizeLots`
+    повторно выйдет с `idempotent=True` (без побочных эффектов).
+
+    Никаких точек / пробелов: символы `0-9 - T` все входят в
+    вайтлист `IdempotencyKey.value` `[A-Za-z0-9_\\-:]{1,64}`.
+    """
+    return now.strftime("%Y-%m-%dT%H")
 
 
 class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
@@ -242,6 +279,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         "_mountain_finish_factory",
         "_mountain_notifier",
         "_notifier",
+        "_prize_lot_generator_factory",
         "_scheduler",
         "_weekly_referral_summary_factory",
         "_weekly_referral_summary_notifier",
@@ -276,6 +314,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         boss_round_tick_notifier: IBossRoundTickNotifier | None = None,
         boss_fight_finish_notifier: IBossFightFinishNotifier | None = None,
         clans: IClanRepository | None = None,
+        prize_lot_generator_factory: Callable[[], GeneratePrizeLots] | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._scheduler = scheduler
@@ -304,6 +343,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._boss_round_tick_notifier = boss_round_tick_notifier
         self._boss_fight_finish_notifier = boss_fight_finish_notifier
         self._clans = clans
+        self._prize_lot_generator_factory = prize_lot_generator_factory
         self._logger = logger or logging.getLogger(__name__)
 
     async def schedule_finish_forest_run(
@@ -954,6 +994,99 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         """Остановить APScheduler. Вызывается из `run()` в `finally`-блоке."""
         if self._scheduler.running:
             self._scheduler.shutdown(wait=wait)
+
+    def schedule_prize_lot_generator_cron(self) -> None:
+        """Зарегистрировать cron `GeneratePrizeLots` per currency 1×/час (4.1-C / C.7.b).
+
+        3 параллельных `IntervalTrigger(hours=1)`-job-а — по одному на
+        `STARS` / `TON_NANO` / `USDT_DECIMAL`. Каждый дёргает свежий
+        `GeneratePrizeLots`-инстанс через `prize_lot_generator_factory`
+        (late-bound: фабрика резолвится в момент срабатывания job-а, поэтому
+        Container к этому моменту уже собран) и зовёт `execute(...)` с
+        `GeneratePrizeLotsCommand(currency=..., idempotency_key=...)`.
+
+        Idempotency-key привязан к UTC-часу (`prize_lot_generator:cron:<currency>:<period_id>`,
+        где `period_id = strftime("%Y-%m-%dT%H")`): повторный fire в тот же
+        час (misfire-recovery / grace-time) → `GeneratePrizeLots` выйдет
+        no-op-ом через `is_seen`-проверку.
+
+        Идемпотентен на регистрацию (`replace_existing=True`): можно
+        дёргать сколько угодно раз, в job-store-е останется один job
+        per currency.
+
+        Если `prize_lot_generator_factory` не подвязана (например, в
+        unit-тестах самого APScheduler-а) — логируем warning и тихо
+        выходим без регистрации.
+
+        Триггер `RecordDonation` после крупного зачисления — отдельный
+        механизм (C.7.d), не покрывается этим методом.
+        """
+        if self._prize_lot_generator_factory is None:
+            self._logger.warning(
+                "prize_lot_generator_cron: factory not wired",
+            )
+            return
+        for currency in Currency:
+            self._scheduler.add_job(
+                self._run_prize_lot_generator_cron_job,
+                trigger=IntervalTrigger(
+                    hours=_PRIZE_LOT_GENERATOR_CRON_INTERVAL_HOURS,
+                ),
+                args=(currency.value,),
+                id=_prize_lot_generator_cron_job_id(currency),
+                replace_existing=True,
+                misfire_grace_time=None,
+            )
+
+    async def _run_prize_lot_generator_cron_job(self, currency_value: str) -> None:
+        """Callback hourly-cron-а `GeneratePrizeLots` per currency (4.1-C / C.7.b).
+
+        APScheduler передаёт `currency_value` как `str` (а не как `Currency`-
+        enum), потому что in-memory `JobStore` сериализует аргументы; на
+        случай миграции в `SQLAlchemyJobStore` (Спринт 1.3.D) — пара
+        `(str, IdempotencyKey)` остаётся pickle-safe.
+
+        Алгоритм:
+        1. Resolve `Currency(currency_value)` (`StrEnum`); невалидное
+           значение → `ValueError`, проглатывается общим `except`-блоком.
+        2. Построить `period_id` от текущего UTC-часа
+           (`strftime("%Y-%m-%dT%H")`).
+        3. Построить `IdempotencyKey(f"prize_lot_generator:cron:<currency>:<period_id>")`.
+           Whitelist VO (`[A-Za-z0-9_\\-:]{1,64}`) допускает все символы.
+        4. Дёрнуть use-case через `prize_lot_generator_factory()` и
+           `execute(GeneratePrizeLotsCommand(currency, idempotency_key))`.
+
+        Любые исключения логируются и проглатываются — иначе APScheduler
+        пометит job-у как `failed` и оставит её в job-store-е.
+        """
+        if self._prize_lot_generator_factory is None:
+            self._logger.warning(
+                "prize_lot_generator_cron: factory not wired",
+                extra={"currency": currency_value},
+            )
+            return
+        try:
+            currency = Currency(currency_value)
+            period_id = _prize_lot_generator_period_id(datetime.now(UTC))
+            idempotency_key = IdempotencyKey(
+                f"prize_lot_generator:cron:{currency.value}:{period_id}",
+            )
+            use_case = self._prize_lot_generator_factory()
+            await use_case.execute(
+                GeneratePrizeLotsCommand(
+                    currency=currency,
+                    idempotency_key=idempotency_key,
+                ),
+            )
+        except Exception as exc:
+            self._logger.exception(
+                "prize_lot_generator_cron: unexpected error",
+                extra={
+                    "currency": currency_value,
+                    "error": type(exc).__name__,
+                },
+            )
+            return
 
     def schedule_daily_head_reschedule_cron(self) -> None:
         """Зарегистрировать ежедневный cron `00:01 МСК` для перепланирования

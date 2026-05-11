@@ -48,9 +48,16 @@ Use-case — оркестратор всех побочных эффектов �
 6. **Pick исхода `n` раз** (`n=1` для `SINGLE`, `n=pack10_spins`
    для `PACK_10`) через чистый picker
    `domain.roulette.services.pick_paid_outcome(config, random,
-   crypto_pool_empty=True)`. На 4.1-A крипто-пул всегда пуст
-   (крипто-инфраструктура — Спринты 4.1-D / 4.1-E). Picker возвращает
-   `RouletteOutcome(kind, length_cm)`.
+   active_lots=...)`. **С Шага C.6.b** use-case вызывает
+   `IPrizeLotRepository.list_active(currency=Currency.STARS)` один раз
+   перед пикер-лупом и передаёт результат в `active_lots`
+   на каждой итерации лупа. Пустой список — picker
+   перевыронит `CRYPTO_LOT` в `LENGTH` (ГДД §12.5.2: 0.020
+   + 0.550 = 0.570). Непустой — picker может вернуть
+   `RouletteOutcome.crypto_lot(lot_id=...)`. Резервирование
+   (`update_status(lot_id, RESERVED)` + audit `PRIZE_LOT_RESERVED`)
+   придёт в C.6.c в том же lop-блоке.
+   Picker возвращает `RouletteOutcome(kind, length_cm?, lot_id?)`.
 
    Каждый спин — **независимый ролл** picker-а (как и при `n=1`),
    статистические гарантии E[CM | spin, paid] ≈ 26.7 см распространяются
@@ -113,8 +120,9 @@ from pipirik_wars.application.monetization.record_donation import (
     RecordDonationCommand,
 )
 from pipirik_wars.domain.balance.ports import IBalanceConfig
-from pipirik_wars.domain.monetization.entities import Payment, PaymentStatus
-from pipirik_wars.domain.monetization.ports import IPaymentLedger
+from pipirik_wars.domain.monetization.entities import Payment, PaymentStatus, PrizeLotStatus
+from pipirik_wars.domain.monetization.errors import PrizeLotStatusTransitionError
+from pipirik_wars.domain.monetization.ports import IPaymentLedger, IPrizeLotRepository
 from pipirik_wars.domain.monetization.value_objects import Currency, IdempotencyKey
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
@@ -124,6 +132,7 @@ from pipirik_wars.domain.roulette import (
     RouletteOutcome,
     RouletteOutcomeKind,
     RouletteSpin,
+    pick_length_only_outcome,
     pick_paid_outcome,
 )
 from pipirik_wars.domain.roulette.errors import RouletteThicknessGateError
@@ -233,6 +242,7 @@ class SpinPaidRoulette:
         "_length_granter",
         "_payments",
         "_players",
+        "_prize_lots",
         "_random",
         "_record_donation",
         "_roulette_spins",
@@ -245,6 +255,7 @@ class SpinPaidRoulette:
         uow: IUnitOfWork,
         players: IPlayerRepository,
         roulette_spins: IRouletteSpinRepository,
+        prize_lots: IPrizeLotRepository,
         payments: IPaymentLedger,
         length_granter: ILengthGranter,
         balance: IBalanceConfig,
@@ -257,6 +268,7 @@ class SpinPaidRoulette:
         self._uow = uow
         self._players = players
         self._roulette_spins = roulette_spins
+        self._prize_lots = prize_lots
         self._payments = payments
         self._length_granter = length_granter
         self._balance = balance
@@ -266,7 +278,9 @@ class SpinPaidRoulette:
         self._clock = clock
         self._record_donation = record_donation
 
-    async def execute(self, command: SpinPaidRouletteCommand) -> SpinPaidRouletteResult:
+    async def execute(  # noqa: PLR0912 — pack-loop + reservation/fallback branches
+        self, command: SpinPaidRouletteCommand
+    ) -> SpinPaidRouletteResult:
         """Прокрутить платную рулетку. Полное описание контракта — в docstring модуля."""
         async with self._uow:
             root_key = self._idempotency.build(
@@ -369,16 +383,64 @@ class SpinPaidRoulette:
 
             # Step 6–9 — `n_spins` независимых роллов picker-а с записью
             # в event-log, audit и (для LENGTH-исхода) грантом награды.
+            # Шаг C.6.b: реальный запрос активных лотов из репозитория —
+            # один раз перед picker-лупом. PACK_10 либо не получит
+            # CRYPTO_LOT-исход либо получит пик-из-списка — резервирование
+            # и фильтрация уже взятых лотов придут в C.6.c.
+            active_lots = await self._prize_lots.list_active(currency=Currency.STARS)
+
             outcomes_list: list[RouletteOutcome] = []
             for i in range(n_spins):
                 outcome = pick_paid_outcome(
                     config=paid_cfg,
                     random=self._random,
-                    crypto_pool_empty=True,
+                    active_lots=active_lots,
                 )
-                outcomes_list.append(outcome)
 
                 spin_idem = f"{command.idempotency_key.value}:{i}"
+
+                # Шаг C.6.c/d: резервирование лота при CRYPTO_LOT-исходе
+                # спина (в той же UoW). При
+                # `PrizeLotStatusTransitionError` из `update_status`
+                # — подменяем outcome на LengthGain (C.6.d).
+                if outcome.kind is RouletteOutcomeKind.CRYPTO_LOT:
+                    assert outcome.lot_id is not None
+                    try:
+                        reserved_lot = await self._prize_lots.update_status(
+                            lot_id=outcome.lot_id,
+                            new_status=PrizeLotStatus.RESERVED,
+                        )
+                    except PrizeLotStatusTransitionError:
+                        outcome = pick_length_only_outcome(
+                            length_buckets=paid_cfg.length_buckets,
+                            random=self._random,
+                        )
+                    else:
+                        await self._audit.record(
+                            AuditEntry(
+                                action=AuditAction.PRIZE_LOT_RESERVED,
+                                actor_id=player.tg_id,
+                                target_kind="prize_lot",
+                                target_id=f"{reserved_lot.id}:reserved",
+                                before=None,
+                                after={
+                                    "lot_id": reserved_lot.id,
+                                    "currency": reserved_lot.currency.value,
+                                    "amount_native": reserved_lot.amount_native,
+                                    "prev_status": PrizeLotStatus.ACTIVE.value,
+                                    "reserved_at": now.isoformat(),
+                                    "player_id": player.id,
+                                    "spin_kind": "paid",
+                                },
+                                reason="paid_roulette_reserve_lot",
+                                idempotency_key=(f"{root_key}:spin:{i}:reserve:{reserved_lot.id}"),
+                                occurred_at=now,
+                                source=AuditSource.PRIZE_LOT_RESERVED,
+                            )
+                        )
+
+                outcomes_list.append(outcome)
+
                 spin = RouletteSpin(
                     player_id=player.id,
                     occurred_at=now,
@@ -390,6 +452,8 @@ class SpinPaidRoulette:
                 spin_after: dict[str, object] = {"kind": outcome.kind.value}
                 if outcome.length_cm is not None:
                     spin_after["length_cm"] = outcome.length_cm
+                if outcome.lot_id is not None:
+                    spin_after["lot_id"] = outcome.lot_id
                 await self._audit.record(
                     AuditEntry(
                         action=AuditAction.ROULETTE_SPIN,

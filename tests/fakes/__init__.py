@@ -58,6 +58,7 @@ from tests.fakes.delayed_job_scheduler import (
 from tests.fakes.duel_log_templates import FakeDuelLogTemplateProvider
 from tests.fakes.duel_repo import FakeDuelRepository
 from tests.fakes.dungeon_run_repo import FakeDungeonRunRepository
+from tests.fakes.fee_estimator import FakeFeeEstimator
 from tests.fakes.forest_run_repo import FakeForestRunRepository
 from tests.fakes.global_lobby_repo import FakeGlobalLobbyRepository
 from tests.fakes.idempotency import FakeIdempotencyKey
@@ -72,6 +73,7 @@ from tests.fakes.oracle import (
 from tests.fakes.payment_ledger import FakePaymentLedger
 from tests.fakes.player_locale_resolver import FakePlayerLocaleResolver
 from tests.fakes.player_repo import FakePlayerRepository
+from tests.fakes.prize_lot_repo import FakePrizeLotRepository
 from tests.fakes.prize_pool_repo import (
     FakePrizePoolApplyIncrementCall,
     FakePrizePoolRepository,
@@ -119,6 +121,7 @@ __all__ = [
     "FakeDuelLogTemplateProvider",
     "FakeDuelRepository",
     "FakeDungeonRunRepository",
+    "FakeFeeEstimator",
     "FakeForestRunRepository",
     "FakeGlobalLobbyRepository",
     "FakeIdempotencyKey",
@@ -130,6 +133,7 @@ __all__ = [
     "FakePaymentLedger",
     "FakePlayerLocaleResolver",
     "FakePlayerRepository",
+    "FakePrizeLotRepository",
     "FakePrizePoolApplyIncrementCall",
     "FakePrizePoolRepository",
     "FakeRandom",

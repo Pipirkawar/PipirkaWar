@@ -28,9 +28,17 @@
    аналогично `dungeon/finish_run.py` для loss-исходов.
 6. **Pick исхода** через чистый picker
    `domain.roulette.services.pick_roulette_outcome(config, random,
-   crypto_pool_empty=True)`. На 3.5-C крипто-пул всегда пуст
-   (крипто-инфраструктура — Phase 4). Picker возвращает
-   `RouletteOutcome(kind, length_cm)`.
+   active_lots=...)`. **С Шага C.6.b** use-case вызывает
+   `IPrizeLotRepository.list_active(currency=Currency.STARS)` перед
+   picker-ом и передаёт результат в `active_lots`. Пустой список
+   равносилен «крипто-пул пуст» — picker перевыронит `CRYPTO_LOT`
+   в `LENGTH`. Непустой — picker может вернуть
+   `RouletteOutcome.crypto_lot(lot_id=...)`. **Открытый вопрос C.6.b:**
+   валюта лота для free-рулетки — MVP-выбор `STARS` (тот же что в
+   paid; ГДД §12.4.2 — уточнить). Резервирование
+   (`update_status(lot_id, RESERVED)` + audit `PRIZE_LOT_RESERVED`)
+   придёт в C.6.c туда же после picker-а.
+   Picker возвращает `RouletteOutcome(kind, length_cm?, lot_id?)`.
 7. **Запись в event-log** `roulette_spins` через
    `IRouletteSpinRepository.record(spin=...)` (append-only,
    идемпотентность по `idempotency_key` на уровне БД).
@@ -63,6 +71,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pipirik_wars.domain.balance.ports import IBalanceConfig
+from pipirik_wars.domain.monetization.entities import PrizeLotStatus
+from pipirik_wars.domain.monetization.errors import PrizeLotStatusTransitionError
+from pipirik_wars.domain.monetization.ports import IPrizeLotRepository
+from pipirik_wars.domain.monetization.value_objects import Currency
 from pipirik_wars.domain.player import IPlayerRepository, Length
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from pipirik_wars.domain.progression.length_granter import ILengthGranter
@@ -71,6 +83,7 @@ from pipirik_wars.domain.roulette import (
     RouletteOutcome,
     RouletteOutcomeKind,
     RouletteSpin,
+    pick_length_only_outcome,
     pick_roulette_outcome,
 )
 from pipirik_wars.domain.roulette.errors import (
@@ -141,6 +154,7 @@ class SpinFreeRoulette:
         "_idempotency",
         "_length_granter",
         "_players",
+        "_prize_lots",
         "_random",
         "_roulette_spins",
         "_uow",
@@ -152,6 +166,7 @@ class SpinFreeRoulette:
         uow: IUnitOfWork,
         players: IPlayerRepository,
         roulette_spins: IRouletteSpinRepository,
+        prize_lots: IPrizeLotRepository,
         length_granter: ILengthGranter,
         balance: IBalanceConfig,
         audit: IAuditLogger,
@@ -162,6 +177,7 @@ class SpinFreeRoulette:
         self._uow = uow
         self._players = players
         self._roulette_spins = roulette_spins
+        self._prize_lots = prize_lots
         self._length_granter = length_granter
         self._balance = balance
         self._audit = audit
@@ -224,11 +240,61 @@ class SpinFreeRoulette:
             )
 
             # Step 6: pick outcome.
+            # Шаг C.6.b: реальный запрос активных лотов из репозитория.
+            # MVP-валюта free-рулетки — `Currency.STARS` (открытый вопрос
+            # C.6.b: ГДД §12.4.2/§12.5.2 — уточнить, какую валюту даёт
+            # free CRYPTO_LOT). Пустой результат — picker перевыронит
+            # `CRYPTO_LOT → LENGTH` (совпадение с C.5-поведением).
+            active_lots = await self._prize_lots.list_active(currency=Currency.STARS)
             outcome = pick_roulette_outcome(
                 config=roulette_cfg,
                 random=self._random,
-                crypto_pool_empty=True,
+                active_lots=active_lots,
             )
+
+            # Шаг C.6.c/d: резервирование лота при CRYPTO_LOT-исходе.
+            # `update_status(lot_id, RESERVED)` в той же UoW что и спин +
+            # audit запись `PRIZE_LOT_RESERVED` с shape по C.6.a.
+            # C.6.d race-fallback: если `update_status` бросает
+            # `PrizeLotStatusTransitionError` (другой игрок забронировал
+            # этот же лот между `list_active` и `update_status`),
+            # подменяем outcome на LengthGain (без retry-loop — детерминистично).
+            if outcome.kind is RouletteOutcomeKind.CRYPTO_LOT:
+                assert outcome.lot_id is not None
+                try:
+                    reserved_lot = await self._prize_lots.update_status(
+                        lot_id=outcome.lot_id,
+                        new_status=PrizeLotStatus.RESERVED,
+                    )
+                except PrizeLotStatusTransitionError:
+                    # C.6.d: лот уже забронирован — подменяем выигрыш на LengthGain.
+                    outcome = pick_length_only_outcome(
+                        length_buckets=roulette_cfg.length_buckets,
+                        random=self._random,
+                    )
+                else:
+                    await self._audit.record(
+                        AuditEntry(
+                            action=AuditAction.PRIZE_LOT_RESERVED,
+                            actor_id=player.tg_id,
+                            target_kind="prize_lot",
+                            target_id=f"{reserved_lot.id}:reserved",
+                            before=None,
+                            after={
+                                "lot_id": reserved_lot.id,
+                                "currency": reserved_lot.currency.value,
+                                "amount_native": reserved_lot.amount_native,
+                                "prev_status": PrizeLotStatus.ACTIVE.value,
+                                "reserved_at": now.isoformat(),
+                                "player_id": player.id,
+                                "spin_kind": "free",
+                            },
+                            reason="free_roulette_reserve_lot",
+                            idempotency_key=f"{root_key}:reserve:{reserved_lot.id}",
+                            occurred_at=now,
+                            source=AuditSource.PRIZE_LOT_RESERVED,
+                        )
+                    )
 
             # Step 7: запись в event-log `roulette_spins`.
             spin = RouletteSpin(
@@ -243,6 +309,8 @@ class SpinFreeRoulette:
             spin_after: dict[str, object] = {"kind": outcome.kind.value}
             if outcome.length_cm is not None:
                 spin_after["length_cm"] = outcome.length_cm
+            if outcome.lot_id is not None:
+                spin_after["lot_id"] = outcome.lot_id
             await self._audit.record(
                 AuditEntry(
                     action=AuditAction.ROULETTE_SPIN,

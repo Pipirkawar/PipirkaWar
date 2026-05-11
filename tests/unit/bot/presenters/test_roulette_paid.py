@@ -300,7 +300,7 @@ class TestRoulettePaidPresenterResultSingle:
         assert text == "en:roulette-paid-result-single-scroll-blessed[spent_stars=1]"
 
     def test_render_result_single_crypto_lot(self) -> None:
-        outcome = RouletteOutcome(kind=RouletteOutcomeKind.CRYPTO_LOT, length_cm=None)
+        outcome = RouletteOutcome(kind=RouletteOutcomeKind.CRYPTO_LOT, lot_id=1)
         result = _result(pack=PaidRoulettePack.SINGLE, outcomes=(outcome,), spent_stars=1)
         text = _presenter().render_result(result=result, locale=Locale("ru"))
         assert text == "ru:roulette-paid-result-single-crypto-lot[spent_stars=1]"

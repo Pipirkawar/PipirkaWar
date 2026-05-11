@@ -24,6 +24,7 @@ from pipirik_wars.domain.roulette.errors import (
 )
 from pipirik_wars.domain.roulette.ports import IRouletteSpinRepository
 from pipirik_wars.domain.roulette.services import (
+    pick_length_only_outcome,
     pick_paid_outcome,
     pick_roulette_outcome,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "RouletteSpin",
     "RouletteThicknessGateError",
     "RouletteVariant",
+    "pick_length_only_outcome",
     "pick_paid_outcome",
     "pick_roulette_outcome",
 ]

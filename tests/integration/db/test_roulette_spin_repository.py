@@ -106,10 +106,15 @@ class TestSqlAlchemyRouletteSpinRepositoryRoundTripNonLength:
         assert player.id is not None
         repo = _make_repo(uow)
 
+        outcome = (
+            RouletteOutcome(kind=kind, lot_id=1)
+            if kind is RouletteOutcomeKind.CRYPTO_LOT
+            else RouletteOutcome(kind=kind, length_cm=None)
+        )
         spin = RouletteSpin(
             player_id=player.id,
             occurred_at=NOW,
-            outcome=RouletteOutcome(kind=kind, length_cm=None),
+            outcome=outcome,
             idempotency_key=f"roulette_free:{player.id}:nonlen-{kind.value}",
         )
         async with uow:

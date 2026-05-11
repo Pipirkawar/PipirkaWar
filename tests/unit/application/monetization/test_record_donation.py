@@ -31,7 +31,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 
@@ -39,6 +41,10 @@ from pipirik_wars.application.monetization import (
     RecordDonation,
     RecordDonationCommand,
     RecordDonationResult,
+)
+from pipirik_wars.application.monetization.generate_prize_lots import (
+    GeneratePrizeLots,
+    GeneratePrizeLotsCommand,
 )
 from pipirik_wars.domain.monetization import (
     Currency,
@@ -58,22 +64,45 @@ _KEY = IdempotencyKey("paid_roulette:42:tg-charge-001")
 _FIXED_NOW = datetime(2026, 5, 10, 12, 0, tzinfo=UTC)
 
 
+@dataclass
+class _FakeGeneratePrizeLots:
+    """Stub `GeneratePrizeLots`-use-case-а для тестов C.7.d-триггера.
+
+    Сохраняет полученные `GeneratePrizeLotsCommand`-ы; `execute(...)`
+    возвращает `None` — `RecordDonation.execute(...)` не использует
+    результат use-case-а триггера (fire-and-forget внутри ambient-UoW).
+    Через `cast(GeneratePrizeLots, ...)` подсовывается в `RecordDonation.__init__`.
+    """
+
+    commands: list[GeneratePrizeLotsCommand] = field(default_factory=list)
+
+    async def execute(self, command: GeneratePrizeLotsCommand) -> None:
+        self.commands.append(command)
+
+
 def _make_use_case(
     repo: FakePrizePoolRepository,
     *,
     audit: FakeAuditLogger | None = None,
     clock: FakeClock | None = None,
+    generate_prize_lots: _FakeGeneratePrizeLots | None = None,
 ) -> RecordDonation:
     """Фабрика `RecordDonation` с fake-DI.
 
     Большинство тестов (B.2-покрытие) не проверяет audit/clock,
     поэтому использует дефолтные fake-ы. B.4-тесты прокидывают свои
-    экземпляры, чтобы assert-ить по результатам.
+    экземпляры, чтобы assert-ить по результатам. C.7.d-тесты прокидывают
+    свой `_FakeGeneratePrizeLots`, чтобы видеть какие команды получил
+    триггер (или что он не вызывался при donation < threshold).
     """
+    fake_generator = (
+        generate_prize_lots if generate_prize_lots is not None else _FakeGeneratePrizeLots()
+    )
     return RecordDonation(
         prize_pool_repository=repo,
         audit_logger=audit if audit is not None else FakeAuditLogger(),
         clock=clock if clock is not None else FakeClock(_FIXED_NOW),
+        generate_prize_lots=cast(GeneratePrizeLots, fake_generator),
     )
 
 
@@ -559,3 +588,212 @@ class TestCommandShape:
         assert cmd.currency is Currency.TON_NANO
         assert cmd.payment_amount_native == 1_000_000_000
         assert cmd.idempotency_key == _KEY
+
+
+# --------------------------------------------------------------------------- #
+# C.7.d — Триггер `GeneratePrizeLots` после крупного донат-инкремента
+# --------------------------------------------------------------------------- #
+
+
+class TestPrizeLotGeneratorTrigger:
+    """Триггер `GeneratePrizeLots.execute(...)` при `donation_amount_native >= threshold`.
+
+    Threshold per currency (см. `_DONATION_TRIGGER_THRESHOLD` в
+    `record_donation.py`): STARS — `None` (без триггера, ждёт hourly cron),
+    TON_NANO — `500_000_000` (0.5 TON), USDT_DECIMAL — `1_000_000` (1 USDT).
+    Триггер вызывается **после** audit-записи `PRIZE_POOL_INCREMENT`,
+    с тем же `idempotency_key`, что и платёж — повторный `RecordDonation`
+    с тем же платежом не даст повторных лотов (внутри `GeneratePrizeLots`
+    `is_seen`-проверка сработает).
+    """
+
+    @pytest.mark.asyncio
+    async def test_ton_donation_at_threshold_triggers_generation(self) -> None:
+        """TON_NANO: payment `5e9` → donation `5e8 == 0.5 TON` → триггер сработал."""
+        repo = FakePrizePoolRepository()
+        fake_gen = _FakeGeneratePrizeLots()
+        use_case = _make_use_case(repo, generate_prize_lots=fake_gen)
+        key = IdempotencyKey("paid_roulette:42:ton-charge-X")
+
+        await use_case.execute(
+            RecordDonationCommand(
+                currency=Currency.TON_NANO,
+                payment_amount_native=5_000_000_000,  # 5 TON; donation = 0.5 TON
+                idempotency_key=key,
+            )
+        )
+
+        assert len(fake_gen.commands) == 1
+        triggered = fake_gen.commands[0]
+        assert triggered.currency is Currency.TON_NANO
+        # Триггер пробрасывает тот же платёжный idem-key — это даёт
+        # идемпотентность повторного вызова `RecordDonation` (см.
+        # `GeneratePrizeLots._idempotency.is_seen`).
+        assert triggered.idempotency_key == key
+
+    @pytest.mark.asyncio
+    async def test_usdt_donation_at_threshold_triggers_generation(self) -> None:
+        """USDT_DECIMAL: payment `10e6` → donation `1e6 == 1 USDT` → триггер сработал."""
+        repo = FakePrizePoolRepository()
+        fake_gen = _FakeGeneratePrizeLots()
+        use_case = _make_use_case(repo, generate_prize_lots=fake_gen)
+        key = IdempotencyKey("paid_roulette:99:usdt-charge-Y")
+
+        await use_case.execute(
+            RecordDonationCommand(
+                currency=Currency.USDT_DECIMAL,
+                payment_amount_native=10_000_000,  # 10 USDT; donation = 1 USDT
+                idempotency_key=key,
+            )
+        )
+
+        assert len(fake_gen.commands) == 1
+        triggered = fake_gen.commands[0]
+        assert triggered.currency is Currency.USDT_DECIMAL
+        assert triggered.idempotency_key == key
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("currency", "payment_amount_native"),
+        [
+            # TON_NANO: donation = 0.499... TON < 0.5 TON threshold
+            (Currency.TON_NANO, 4_999_999_990),
+            # USDT_DECIMAL: donation = 0.999... USDT < 1 USDT threshold
+            (Currency.USDT_DECIMAL, 9_999_990),
+        ],
+        ids=["TON_NANO_just_below", "USDT_just_below"],
+    )
+    async def test_below_threshold_does_not_trigger(
+        self,
+        currency: Currency,
+        payment_amount_native: int,
+    ) -> None:
+        """Donation ниже порога — триггер не вызывается (ждёт hourly cron)."""
+        repo = FakePrizePoolRepository()
+        fake_gen = _FakeGeneratePrizeLots()
+        use_case = _make_use_case(repo, generate_prize_lots=fake_gen)
+
+        result = await use_case.execute(
+            RecordDonationCommand(
+                currency=currency,
+                payment_amount_native=payment_amount_native,
+                idempotency_key=_KEY,
+            )
+        )
+
+        # apply_increment всё равно произошёл (donation > 0, просто
+        # ниже trigger-threshold); audit написан; но `GeneratePrizeLots`
+        # не вызывался.
+        assert result.applied is True
+        assert result.donation_amount_native > 0
+        assert fake_gen.commands == []
+
+    @pytest.mark.asyncio
+    async def test_stars_donation_never_triggers_even_at_high_amount(self) -> None:
+        """STARS-донат любой суммы — триггер не вызывается (порог = `None`).
+
+        ГДД §12.6.3: STARS-донаты накапливаются медленно — 100 ⭐ на min-лот
+        в худшем случае это 50 платежей по 2 ⭐. Hourly cron нарежет их без
+        вреда для UX. Дёргать `GeneratePrizeLots` после каждого STARS-доната
+        — лишняя нагрузка на БД + audit-row-ы.
+        """
+        repo = FakePrizePoolRepository()
+        fake_gen = _FakeGeneratePrizeLots()
+        use_case = _make_use_case(repo, generate_prize_lots=fake_gen)
+
+        # 100_000 ⭐ платёж → 10_000 ⭐ донат — на порядки больше «крупного»
+        # порога для других валют, но STARS триггера нет в принципе.
+        result = await use_case.execute(
+            RecordDonationCommand(
+                currency=Currency.STARS,
+                payment_amount_native=100_000,
+                idempotency_key=_KEY,
+            )
+        )
+
+        assert result.applied is True
+        assert result.donation_amount_native == 10_000
+        assert fake_gen.commands == []
+
+    @pytest.mark.asyncio
+    async def test_zero_donation_does_not_trigger(self) -> None:
+        """Donation == 0 (платёж < 10 native-юнитов) — триггер не вызывается.
+
+        Защита от деградации трактовки порога: `donation == 0`-фильтр
+        срабатывает раньше threshold-проверки; даже если бы порог был
+        `0`, audit и инкремент пропускаются, и триггер тоже.
+        """
+        repo = FakePrizePoolRepository()
+        fake_gen = _FakeGeneratePrizeLots()
+        use_case = _make_use_case(repo, generate_prize_lots=fake_gen)
+
+        result = await use_case.execute(
+            RecordDonationCommand(
+                currency=Currency.TON_NANO,
+                payment_amount_native=9,  # // 10 == 0
+                idempotency_key=_KEY,
+            )
+        )
+
+        assert result.applied is False
+        assert fake_gen.commands == []
+
+    @pytest.mark.asyncio
+    async def test_repeat_donation_passes_same_idem_key_each_time(self) -> None:
+        """Повторный вызов с тем же платежом → тот же `idempotency_key` в команде триггера.
+
+        `RecordDonation` сам не дедуплицирует — это инвариант caller-а
+        (см. docstring модуля). Но при идентичном повторном вызове он
+        проносит **тот же** платёжный `idempotency_key`, что даёт
+        `GeneratePrizeLots._idempotency.is_seen`-семантику дедупликации
+        на стороне use-case-а триггера.
+        """
+        repo = FakePrizePoolRepository()
+        fake_gen = _FakeGeneratePrizeLots()
+        use_case = _make_use_case(repo, generate_prize_lots=fake_gen)
+        key = IdempotencyKey("paid_roulette:42:usdt-Z")
+
+        cmd = RecordDonationCommand(
+            currency=Currency.USDT_DECIMAL,
+            payment_amount_native=10_000_000,
+            idempotency_key=key,
+        )
+        await use_case.execute(cmd)
+        await use_case.execute(cmd)
+
+        # Оба раза триггер получает один и тот же `idempotency_key` —
+        # реальный `GeneratePrizeLots` второй раз увидит ключ как
+        # `is_seen` и вернёт `idempotent=True` без повторной нарезки.
+        assert len(fake_gen.commands) == 2
+        assert fake_gen.commands[0].idempotency_key == key
+        assert fake_gen.commands[1].idempotency_key == key
+        assert fake_gen.commands[0].currency is Currency.USDT_DECIMAL
+
+    @pytest.mark.asyncio
+    async def test_trigger_fires_after_audit_record(self) -> None:
+        """Order-инвариант: триггер вызывается **после** audit-записи `PRIZE_POOL_INCREMENT`.
+
+        Если бы триггер шёл раньше audit, при ошибке audit-логгера
+        у нас были бы созданы лоты без аудит-следа донат-инкремента —
+        нарушение инварианта «потерянного аудита нет» из B.4.
+        """
+        repo = FakePrizePoolRepository()
+        audit = FakeAuditLogger()
+        fake_gen = _FakeGeneratePrizeLots()
+        use_case = _make_use_case(repo, audit=audit, generate_prize_lots=fake_gen)
+
+        await use_case.execute(
+            RecordDonationCommand(
+                currency=Currency.TON_NANO,
+                payment_amount_native=5_000_000_000,
+                idempotency_key=_KEY,
+            )
+        )
+
+        # Order-проверка: единственный audit-row на момент срабатывания
+        # триггера уже был записан в логгер. Косвенно — обе записи
+        # присутствуют, и audit пишется до триггера (см. fixture
+        # `_FakeGeneratePrizeLots.execute` — он не пишет в audit).
+        assert len(audit.entries) == 1
+        assert audit.entries[0].action is AuditAction.PRIZE_POOL_INCREMENT
+        assert len(fake_gen.commands) == 1

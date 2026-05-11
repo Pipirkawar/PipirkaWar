@@ -61,6 +61,9 @@ from pipirik_wars.infrastructure.db.repositories.payments import (
 from pipirik_wars.infrastructure.db.repositories.player import (
     SqlAlchemyPlayerRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.prize_lot import (
+    SqlAlchemyPrizeLotRepository,
+)
 from pipirik_wars.infrastructure.db.repositories.prize_pool import (
     SqlAlchemyPrizePoolRepository,
 )
@@ -107,6 +110,7 @@ __all__ = [
     "SqlAlchemyOracleHistoryRepository",
     "SqlAlchemyPaymentLedger",
     "SqlAlchemyPlayerRepository",
+    "SqlAlchemyPrizeLotRepository",
     "SqlAlchemyPrizePoolRepository",
     "SqlAlchemyReferralRepository",
     "SqlAlchemyRouletteSpinRepository",

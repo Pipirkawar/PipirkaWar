@@ -35,6 +35,7 @@ from enum import StrEnum
 
 __all__ = [
     "Currency",
+    "FeeBufferAmount",
     "IdempotencyKey",
     "StarsAmount",
     "StarsPoolBalance",
@@ -171,6 +172,36 @@ class UsdtDecimalAmount:
         if self.value < 0:
             raise ValueError(
                 f"UsdtDecimalAmount.value must be >= 0, got {self.value}",
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class FeeBufferAmount:
+    """Неотрицательный целочисленный буфер комиссии лота (ГДД §12.6.3, Спринт 4.1-C).
+
+    Поле `value: int` — заложенный в `PrizeLot` буфер на оплату сетевой
+    комиссии (`>= 0`; для STARS-лотов обычно `0`, для TON / USDT —
+    P95-аппроксимация газа за последние 7 дней, источник —
+    `IFeeEstimator.estimate_fee(...)`).
+
+    Семантика на уровне `PrizeLot`: invariant
+    `amount_native > fee_buffer_native >= 0` гарантирует, что при
+    выводе приза в 4.1-D на руки игроку остаётся `amount_native -
+    fee_buffer_native >= 1`-натив-юнит после удержания комиссии.
+
+    Frozen + slots → VO без identity, hashable, безопасно сравнивать `==`.
+    """
+
+    value: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, int) or isinstance(self.value, bool):
+            raise TypeError(
+                f"FeeBufferAmount.value must be int, got {type(self.value).__name__}",
+            )
+        if self.value < 0:
+            raise ValueError(
+                f"FeeBufferAmount.value must be >= 0, got {self.value}",
             )
 
 

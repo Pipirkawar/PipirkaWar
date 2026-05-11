@@ -1,4 +1,4 @@
-"""Тесты доменного picker-а платной рулетки `pick_paid_outcome` (Спринт 4.1-A).
+"""Тесты доменного picker-а платной рулетки `pick_paid_outcome` (Спринт 4.1-A / 4.1-C).
 
 Структура повторяет `tests/unit/domain/roulette/test_picker.py` (free-рулетка):
 тот же `_bernoulli_bounds`-приём (3σ + аддитивный флор `±10`), тот же набор
@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 from collections import Counter
+from datetime import UTC, datetime
 
 import pytest
 
@@ -26,12 +27,41 @@ from pipirik_wars.domain.balance.config import (
     RouletteOutcomeWeight,
     RoulettePaidConfig,
 )
+from pipirik_wars.domain.monetization import (
+    Currency,
+    FeeBufferAmount,
+    PrizeLot,
+    PrizeLotStatus,
+)
 from pipirik_wars.domain.roulette import (
     InvalidRouletteConfigError,
     RouletteOutcome,
     pick_paid_outcome,
 )
 from tests.fakes.random import FakeRandom
+
+_DUMMY_NOW = datetime(2026, 5, 11, 12, 0, 0, tzinfo=UTC)
+
+
+def _dummy_lot(*, lot_id: int = 1, currency: Currency = Currency.STARS) -> PrizeLot:
+    """Persisted-лот под picker-тесты («not empty» сигнал).
+
+    Для проверки фреквенции / «пул не пуст» пикеру хватает одного
+    лота (из последовательности `random.choice` всё равно выберет его).
+    Сумма / буфер / валюта пикеру не важны — он использует только `id`.
+    Paid-конфиг в этом файле связан со Stars (4.1-A), поэтому
+    дефолтная валюта лота — `Currency.STARS`.
+    """
+    return PrizeLot(
+        id=lot_id,
+        currency=currency,
+        amount_native=10,
+        fee_buffer_native=FeeBufferAmount(0),
+        status=PrizeLotStatus.ACTIVE,
+        created_at=_DUMMY_NOW,
+        claimed_at=None,
+    )
+
 
 _ROLLS = 10_000
 
@@ -105,7 +135,7 @@ class TestForcedOutcomeKinds:
         outcome = pick_paid_outcome(
             config=cfg,
             random=FakeRandom(seed=1),
-            crypto_pool_empty=False,
+            active_lots=(_dummy_lot(),),
         )
         assert outcome == RouletteOutcome(kind=RouletteOutcomeKind.ITEM)
 
@@ -114,7 +144,7 @@ class TestForcedOutcomeKinds:
         outcome = pick_paid_outcome(
             config=cfg,
             random=FakeRandom(seed=1),
-            crypto_pool_empty=False,
+            active_lots=(_dummy_lot(),),
         )
         assert outcome.kind is RouletteOutcomeKind.SCROLL_REGULAR
         assert outcome.length_cm is None
@@ -124,7 +154,7 @@ class TestForcedOutcomeKinds:
         outcome = pick_paid_outcome(
             config=cfg,
             random=FakeRandom(seed=1),
-            crypto_pool_empty=False,
+            active_lots=(_dummy_lot(),),
         )
         assert outcome.kind is RouletteOutcomeKind.SCROLL_BLESSED
 
@@ -133,9 +163,11 @@ class TestForcedOutcomeKinds:
         outcome = pick_paid_outcome(
             config=cfg,
             random=FakeRandom(seed=1),
-            crypto_pool_empty=False,
+            active_lots=(_dummy_lot(lot_id=42),),
         )
         assert outcome.kind is RouletteOutcomeKind.CRYPTO_LOT
+        assert outcome.lot_id == 42
+        assert outcome.length_cm is None
 
     def test_forced_length_picks_bucket_and_random_int(self) -> None:
         cfg = self._config_with_only_kind(RouletteOutcomeKind.LENGTH)
@@ -143,7 +175,7 @@ class TestForcedOutcomeKinds:
             outcome = pick_paid_outcome(
                 config=cfg,
                 random=FakeRandom(seed=seed),
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             assert outcome.kind is RouletteOutcomeKind.LENGTH
             assert outcome.length_cm is not None
@@ -166,7 +198,7 @@ class TestKindFrequenciesOnDefaultPaidWeights:
             outcome = pick_paid_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             counter[outcome.kind] += 1
         weight_by_kind = {o.kind: o.weight for o in cfg.outcomes}
@@ -185,7 +217,7 @@ class TestKindFrequenciesOnDefaultPaidWeights:
             outcome = pick_paid_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             counter[outcome.kind] += 1
         assert sum(counter.values()) == _ROLLS
@@ -219,7 +251,7 @@ class TestLengthBucketFrequencies:
             outcome = pick_paid_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             assert outcome.kind is RouletteOutcomeKind.LENGTH
             assert outcome.length_cm is not None
@@ -252,7 +284,7 @@ class TestCryptoPoolDrain:
             outcome = pick_paid_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=True,
+                active_lots=(),
             )
             counter[outcome.kind] += 1
         assert counter[RouletteOutcomeKind.CRYPTO_LOT] == 0
@@ -269,7 +301,7 @@ class TestCryptoPoolDrain:
             outcome = pick_paid_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=True,
+                active_lots=(),
             )
             counter[outcome.kind] += 1
         low, high = _bernoulli_bounds(expected_length_p)
@@ -288,7 +320,7 @@ class TestCryptoPoolDrain:
             outcome = pick_paid_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             counter[outcome.kind] += 1
         low, high = _bernoulli_bounds(crypto_weight)
@@ -335,7 +367,7 @@ class TestZeroWeightFiltering:
             outcome = pick_paid_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             seen.add(outcome.kind)
         assert seen == {RouletteOutcomeKind.LENGTH, RouletteOutcomeKind.ITEM}
@@ -365,7 +397,7 @@ class TestZeroWeightFiltering:
             outcome = pick_paid_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             assert outcome.kind is RouletteOutcomeKind.LENGTH
             assert outcome.length_cm is not None
@@ -399,7 +431,7 @@ class TestInvalidConfigDefence:
             pick_paid_outcome(
                 config=cfg,
                 random=FakeRandom(seed=31),
-                crypto_pool_empty=True,
+                active_lots=(),
             )
 
 
@@ -427,7 +459,7 @@ class TestExpectedCmGain:
             outcome = pick_paid_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             if outcome.kind is RouletteOutcomeKind.LENGTH:
                 assert outcome.length_cm is not None

@@ -26,6 +26,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
 from pipirik_wars.application.daily_head import (
     RunDailyHeadCron,
@@ -36,6 +37,10 @@ from pipirik_wars.application.forest import (
     FinishForestRun,
     ForestRunFinished,
     IForestFinishNotifier,
+)
+from pipirik_wars.application.monetization import (
+    GeneratePrizeLots,
+    GeneratePrizeLotsCommand,
 )
 from pipirik_wars.application.pvp import ForceResolveMassDuel, ResolveAfkRound
 from pipirik_wars.application.referral import (
@@ -49,6 +54,7 @@ from pipirik_wars.domain.forest import (
     ForestRunStatus,
     NoDrop,
 )
+from pipirik_wars.domain.monetization.value_objects import Currency
 from pipirik_wars.domain.player import Player, PlayerNotFoundError, Username
 from pipirik_wars.infrastructure.scheduler import APSchedulerDelayedJobScheduler
 
@@ -1192,4 +1198,182 @@ class TestDungeonFinishCallback:
         logger = MagicMock(spec=logging.Logger)
         adapter = _build_pve_adapter(logger=logger)
         await adapter._run_dungeon_finish_job(run_id=11)
+        assert logger.warning.called
+
+
+# ── 4.1-C / C.7.b: prize_lot_generator hourly cron ──
+
+
+@dataclass
+class _FakeGeneratePrizeLotsUseCase:
+    """Stub `GeneratePrizeLots`-use-case-а для тестов callback-а C.7.b.
+
+    Сохраняет полученные команды + опционально кидает исключение для
+    проверки error-swallow-семантики callback-а.
+    """
+
+    commands: list[GeneratePrizeLotsCommand] = field(default_factory=list)
+    raise_exc: BaseException | None = None
+
+    async def execute(self, command: GeneratePrizeLotsCommand) -> None:
+        self.commands.append(command)
+        if self.raise_exc is not None:
+            raise self.raise_exc
+        # Возвращаем None — callback не смотрит на result.
+
+
+class TestPrizeLotGeneratorCron:
+    """`schedule_prize_lot_generator_cron` + `_run_prize_lot_generator_cron_job` (4.1-C / C.7.b).
+
+    3 параллельных `IntervalTrigger(hours=1)`-job-а (STARS / TON_NANO /
+    USDT_DECIMAL). Каждый при срабатывании зовёт `GeneratePrizeLots.execute(...)`
+    с per-hour `IdempotencyKey`-ом.
+    """
+
+    @pytest.mark.asyncio
+    async def test_schedule_registers_three_jobs_one_per_currency(self) -> None:
+        fake_uc = _FakeGeneratePrizeLotsUseCase()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            prize_lot_generator_factory=lambda: cast(GeneratePrizeLots, fake_uc),
+        )
+        adapter.start()
+        try:
+            # Идемпотентно: второй вызов перепишет те же 3 job-ы.
+            adapter.schedule_prize_lot_generator_cron()
+            adapter.schedule_prize_lot_generator_cron()
+            jobs = [
+                j
+                for j in adapter._scheduler.get_jobs()
+                if j.id.startswith("prize_lot_generator_cron:")
+            ]
+            assert len(jobs) == 3
+            # cron-id уникален per currency и содержит value валюты.
+            ids = {j.id for j in jobs}
+            assert ids == {f"prize_lot_generator_cron:{c.value}" for c in Currency}
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_schedule_uses_interval_trigger_one_hour(self) -> None:
+        fake_uc = _FakeGeneratePrizeLotsUseCase()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            prize_lot_generator_factory=lambda: cast(GeneratePrizeLots, fake_uc),
+        )
+        adapter.start()
+        try:
+            adapter.schedule_prize_lot_generator_cron()
+            jobs = [
+                j
+                for j in adapter._scheduler.get_jobs()
+                if j.id.startswith("prize_lot_generator_cron:")
+            ]
+            for job in jobs:
+                assert isinstance(job.trigger, IntervalTrigger)
+                # 1 час в секундах = 3600.
+                assert job.trigger.interval.total_seconds() == 3600.0
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_schedule_no_factory_logs_warning_and_skips(self) -> None:
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            logger=logger,
+        )
+        adapter.schedule_prize_lot_generator_cron()
+        assert logger.warning.called
+        # Ни одной job-ы не зарегистрировано.
+        jobs = [
+            j for j in adapter._scheduler.get_jobs() if j.id.startswith("prize_lot_generator_cron:")
+        ]
+        assert jobs == []
+
+    @pytest.mark.asyncio
+    async def test_callback_invokes_use_case_with_hourly_key(self) -> None:
+        fake_uc = _FakeGeneratePrizeLotsUseCase()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            prize_lot_generator_factory=lambda: cast(GeneratePrizeLots, fake_uc),
+        )
+        await adapter._run_prize_lot_generator_cron_job(Currency.TON_NANO.value)
+        assert len(fake_uc.commands) == 1
+        cmd = fake_uc.commands[0]
+        assert isinstance(cmd, GeneratePrizeLotsCommand)
+        assert cmd.currency is Currency.TON_NANO
+        # Idempotency-key: `prize_lot_generator:cron:<currency>:<YYYY-MM-DDTHH>`.
+        assert cmd.idempotency_key.value.startswith(
+            "prize_lot_generator:cron:ton_nano:",
+        )
+        # period_id — 13 символов "YYYY-MM-DDTHH".
+        period_id = cmd.idempotency_key.value.rsplit(":", 1)[-1]
+        assert len(period_id) == 13
+        assert period_id[4] == "-"
+        assert period_id[7] == "-"
+        assert period_id[10] == "T"
+
+    @pytest.mark.asyncio
+    async def test_callback_uses_unique_key_per_currency(self) -> None:
+        fake_uc = _FakeGeneratePrizeLotsUseCase()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            prize_lot_generator_factory=lambda: cast(GeneratePrizeLots, fake_uc),
+        )
+        for currency in Currency:
+            await adapter._run_prize_lot_generator_cron_job(currency.value)
+        assert len(fake_uc.commands) == 3
+        # currency-сегмент ключа уникален per currency.
+        currencies_seen = {cmd.currency for cmd in fake_uc.commands}
+        assert currencies_seen == set(Currency)
+        # ключи различаются между собой (хотя бы по currency-сегменту).
+        keys = {cmd.idempotency_key.value for cmd in fake_uc.commands}
+        assert len(keys) == 3
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_use_case_error(self) -> None:
+        fake_uc = _FakeGeneratePrizeLotsUseCase(raise_exc=RuntimeError("kaboom"))
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            prize_lot_generator_factory=lambda: cast(GeneratePrizeLots, fake_uc),
+            logger=logger,
+        )
+        # Не должно бросить — callback логирует и тихо выходит.
+        await adapter._run_prize_lot_generator_cron_job(Currency.STARS.value)
+        assert logger.exception.called
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_invalid_currency(self) -> None:
+        # APScheduler-args передаются как `str`; неверная строка должна
+        # быть проглочена без падения job-ы.
+        fake_uc = _FakeGeneratePrizeLotsUseCase()
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            prize_lot_generator_factory=lambda: cast(GeneratePrizeLots, fake_uc),
+            logger=logger,
+        )
+        await adapter._run_prize_lot_generator_cron_job("nonexistent_currency")
+        # Use-case ни разу не вызывался — ValueError упал до execute().
+        assert fake_uc.commands == []
+        assert logger.exception.called
+
+    @pytest.mark.asyncio
+    async def test_callback_no_factory_logs_warning(self) -> None:
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            logger=logger,
+        )
+        await adapter._run_prize_lot_generator_cron_job(Currency.USDT_DECIMAL.value)
         assert logger.warning.called

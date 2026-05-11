@@ -54,6 +54,10 @@ Free-to-play рулетка (Спринт 3.5.B):
 
 Призовой пул (Спринт 4.1-B):
 - `PrizePoolBalanceORM` — таблица `prize_pool_balance` (одна строка per-currency).
+
+Лоты крипто-приза (Спринт 4.1-C):
+- `PrizeLotORM` — таблица `prize_lots` (одна строка на лот, машина
+  состояний `active → reserved → claimed|refunded`).
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
@@ -74,6 +78,7 @@ from pipirik_wars.infrastructure.db.models.items import ItemORM
 from pipirik_wars.infrastructure.db.models.oracle import OracleInvocationORM
 from pipirik_wars.infrastructure.db.models.payments import PaymentORM
 from pipirik_wars.infrastructure.db.models.player import UserORM
+from pipirik_wars.infrastructure.db.models.prize_lot import PrizeLotORM
 from pipirik_wars.infrastructure.db.models.prize_pool import PrizePoolBalanceORM
 from pipirik_wars.infrastructure.db.models.pve_runs import (
     DungeonRunORM,
@@ -117,6 +122,7 @@ __all__ = [
     "MountainRunORM",
     "OracleInvocationORM",
     "PaymentORM",
+    "PrizeLotORM",
     "PrizePoolBalanceORM",
     "PvpDuelORM",
     "PvpDuelRoundORM",

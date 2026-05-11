@@ -9,6 +9,8 @@
         IdempotencyKey,
         Payment,
         PaymentStatus,
+        PrizeLot,
+        PrizeLotStatus,
         StarsAmount,
     )
 
@@ -19,19 +21,27 @@
 from pipirik_wars.domain.monetization.entities import (
     Payment,
     PaymentStatus,
+    PrizeLot,
+    PrizeLotStatus,
     PrizePool,
 )
 from pipirik_wars.domain.monetization.errors import (
     IdempotencyConflictError,
     MonetizationDomainError,
+    PrizeLotInvariantError,
+    PrizeLotNotFoundError,
+    PrizeLotStatusTransitionError,
     PrizePoolAmountInvariantError,
 )
 from pipirik_wars.domain.monetization.ports import (
+    IFeeEstimator,
     IPaymentLedger,
+    IPrizeLotRepository,
     IPrizePoolRepository,
 )
 from pipirik_wars.domain.monetization.value_objects import (
     Currency,
+    FeeBufferAmount,
     IdempotencyKey,
     StarsAmount,
     StarsPoolBalance,
@@ -41,13 +51,21 @@ from pipirik_wars.domain.monetization.value_objects import (
 
 __all__ = [
     "Currency",
+    "FeeBufferAmount",
+    "IFeeEstimator",
     "IPaymentLedger",
+    "IPrizeLotRepository",
     "IPrizePoolRepository",
     "IdempotencyConflictError",
     "IdempotencyKey",
     "MonetizationDomainError",
     "Payment",
     "PaymentStatus",
+    "PrizeLot",
+    "PrizeLotInvariantError",
+    "PrizeLotNotFoundError",
+    "PrizeLotStatus",
+    "PrizeLotStatusTransitionError",
     "PrizePool",
     "PrizePoolAmountInvariantError",
     "StarsAmount",

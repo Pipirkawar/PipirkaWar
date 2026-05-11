@@ -33,15 +33,23 @@ SQLAlchemy-implementation; тесты use-case-ов (Спринт 4.1-A) —
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Protocol
 
-from pipirik_wars.domain.monetization.entities import Payment, PaymentStatus, PrizePool
+from pipirik_wars.domain.monetization.entities import (
+    Payment,
+    PaymentStatus,
+    PrizeLot,
+    PrizeLotStatus,
+    PrizePool,
+)
 from pipirik_wars.domain.monetization.value_objects import Currency, IdempotencyKey
 
 __all__ = [
+    "IFeeEstimator",
     "IPaymentLedger",
+    "IPrizeLotRepository",
     "IPrizePoolRepository",
 ]
 
@@ -220,5 +228,162 @@ class IPrizePoolRepository(Protocol):
 
         Поднимает `PrizePoolAmountInvariantError` если
         `current_balance + amount_native < 0`.
+        """
+        ...
+
+
+class IPrizeLotRepository(Protocol):
+    """Порт репозитория крипто-лотов (ГДД §12.6, Спринт 4.1-C).
+
+    Лоты — нарезанные «куски» призового пула, сохранённые в таблице
+    `prize_lots` (миграция `0029_prize_lots` — persistence создаётся в
+    шаге C.3). Жизненный цикл — машина состояний `ACTIVE → RESERVED →
+    CLAIMED|REFUNDED` (`PrizeLotStatus`).
+
+    Все методы — асинхронные, выполняются в открытой `IUnitOfWork`-сессии.
+    Композиционный root (`bot/main.py` Спринт 4.1-C, шаг C.9)
+    пробрасывает SQLAlchemy-implementation; тесты use-case-ов
+    (`GeneratePrizeLots` шаг C.2, picker C.5) — `FakePrizeLotRepository`
+    (in-memory словарь с тем же контрактом).
+
+    Семантика операций:
+
+    * `add(lot)` — записать свежесгенерированный лот (с `id=None`,
+      `status=ACTIVE`). Возвращает тот же лот, но с `id`, проставленным
+      БД через `DEFAULT nextval('prize_lots_id_seq')`. Атомарность —
+      одна `INSERT ... RETURNING id`.
+    * `get_by_id(lot_id)` — точечный SELECT по id. На несуществующем
+      id возвращает `None` (не бросает `PrizeLotNotFoundError` —
+      caller сам решает, что делать с `None`).
+    * `list_active(currency)` — все `status=ACTIVE`-лоты указанной
+      валюты. Используется picker-ом крипто-приза (шаг C.5): из
+      возвращённой коллекции picker берёт первый детерминированно
+      (детерминизм — для аудита и для воспроизводимости в тестах).
+      Пустой результат → picker должен выкатить fallback-исход
+      (например, перенаправить в free-рулетку другой outcome,
+      или `RouletteOutcomeKind.SCROLL`).
+    * `update_status(lot_id, new_status, claimed_at?)` — атомарная
+      смена статуса с проверкой исходного состояния. Реализация
+      использует SQL `UPDATE prize_lots SET status=:new_status,
+      claimed_at=:claimed_at WHERE id=:lot_id AND status IN (...)`,
+      где `(...)` — `_PRIZE_LOT_TRANSITIONS[old_status]` для каждого
+      возможного `old_status`. `rows_affected=1` → перешли; `0` →
+      либо лота нет (`PrizeLotNotFoundError`), либо статус уже не тот
+      (`PrizeLotStatusTransitionError` с `from_status` из текущего
+      SELECT). Различение этих двух случаев — отдельный SELECT
+      после неудачного `UPDATE`.
+
+      На `new_status=CLAIMED` параметр `claimed_at` обязан быть
+      выставлен; на остальных — игнорируется (или используется как
+      «момент refund-а», если caller передал — это нормально).
+    """
+
+    async def add(self, *, lot: PrizeLot) -> PrizeLot:
+        """Записать новый лот в `prize_lots`.
+
+        Параметры:
+        - `lot: PrizeLot` — с `id=None`, `status=ACTIVE`,
+          `claimed_at=None` (свежесгенерированный через
+          `PrizeLot.freshly_generated(...)`).
+
+        Возвращает: тот же `PrizeLot`, но с `id`, проставленным БД.
+        """
+        ...
+
+    async def get_by_id(self, *, lot_id: int) -> PrizeLot | None:
+        """Получить лот по `id` или `None` (если не существует).
+
+        Идемпотентен (SELECT, без побочных эффектов).
+        """
+        ...
+
+    async def list_active(self, *, currency: Currency) -> Sequence[PrizeLot]:
+        """Все `status=ACTIVE`-лоты указанной валюты.
+
+        Порядок результата — стабильный (`ORDER BY id ASC` в SQL-
+        реализации, для in-memory Fake — insertion order). Это нужно
+        picker-у (шаг C.5) для детерминированного выбора лота.
+        Пустой результат — нормально (если в пуле нет активных лотов
+        этой валюты, picker делает fallback).
+        """
+        ...
+
+    async def update_status(
+        self,
+        *,
+        lot_id: int,
+        new_status: PrizeLotStatus,
+        claimed_at: datetime | None = None,
+    ) -> PrizeLot:
+        """Атомарно перевести лот в `new_status` с проверкой машины состояний.
+
+        Параметры:
+        - `lot_id` — id лота в `prize_lots`.
+        - `new_status` — целевой статус (`RESERVED` / `CLAIMED` /
+          `REFUNDED`; `ACTIVE` не валидный target — лоты в `ACTIVE`
+          создаются через `add(...)`).
+        - `claimed_at` — TZ-aware момент claim-а; обязателен на
+          `new_status=CLAIMED`, на остальных — `None`.
+
+        Возвращает: обновлённый `PrizeLot`-снапшот.
+
+        Поднимает:
+        - `PrizeLotNotFoundError` — если `lot_id` не существует.
+        - `PrizeLotStatusTransitionError` — если текущий статус
+          не разрешает переход в `new_status` (см.
+          `_PRIZE_LOT_TRANSITIONS`).
+        """
+        ...
+
+
+class IFeeEstimator(Protocol):
+    """Порт оценки сетевой комиссии для лота (ГДД §12.6.3, Спринт 4.1-C).
+
+    Зачем: при генерации лотов из `PrizePool` (`GeneratePrizeLots`,
+    шаг C.2) сервис закладывает в каждый лот `fee_buffer_native` —
+    запас на оплату gas-а при будущей выплате в TON / USDT-сети.
+    Реальная комиссия меняется минута-к-минуте; буфер
+    проксимируется P95-аппроксимацией газа за последние 7 дней.
+
+    На 4.1-C реализация — in-memory константная (шаг C.8): возвращает
+    fixed-значение per-currency, читаемое из `domain/balance/config.py`.
+    На 4.1-D появится реальная имплементация на базе TON RPC
+    (`InfrastructureFeeEstimator`), которая дёргает on-chain-API
+    (`runGetMethod('getJettonData')` для USDT-jetton-фи / `tonapi.io`-
+    эндпоинт для TON-передачи). Контракт порта — единый, реализации
+    подменяемы через composition root.
+
+    Все методы — асинхронные (на 4.1-D понадобится HTTP-вызов, поэтому
+    на 4.1-C async-сигнатура — на вырост).
+
+    Семантика:
+    * STARS-валюта: всегда возвращает `0` (TG-сторона не берёт
+      gas-а — комиссия TG Stars уже учтена в `payments`-таблице).
+    * TON_NANO / USDT_DECIMAL: возвращает положительный или нулевой
+      int — буфер в native-юнитах. Гарантирует `<= target_amount_native`
+      не гарантирует (caller — `GeneratePrizeLots` — обязан сам
+      проверить invariant `amount_native > fee_buffer_native`,
+      иначе `PrizeLotInvariantError` на конструировании лота).
+    """
+
+    async def estimate_fee(
+        self,
+        *,
+        currency: Currency,
+        target_amount_native: int,
+    ) -> int:
+        """Оценить буфер комиссии для будущей выплаты лота.
+
+        Параметры:
+        - `currency` — валюта будущей выплаты.
+        - `target_amount_native` — потенциальный размер лота в
+          native-юнитах (`>= 1`). Используется на 4.1-D в подсказку
+          fee-estimator-у (для больших переводов USDT-jetton-комиссия
+          выше, чем для маленьких); на 4.1-C реализация игнорирует.
+
+        Returns:
+        - `int >= 0` — оценка буфера в native-юнитах. Для STARS —
+          всегда `0`. Для TON_NANO / USDT_DECIMAL — позитивный
+          (P95-аппроксимация газа).
         """
         ...
