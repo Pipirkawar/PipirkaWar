@@ -86,10 +86,12 @@
 
 > Сюда пиши **дельту** к плану: что именно меняешь, какие use-cases / порты / handler-ы / тесты затронуты.
 
-**Следующий PR — 4.1-D «TON Connect + USDT + ClaimPrize»** — четвёртый PR Спринта 4.1 (Фаза 4 «Монетизация и масштаб»). Стартует от свежего `main` после мерджа PR 4.1-C (закрытие лот-генератора + крипто-приза в рулетке).
+**Активный PR — 4.1-D «TON Connect + USDT + ClaimPrize»** — четвёртый PR Спринта 4.1 (Фаза 4 «Монетизация и масштаб»).
+- **Ветка:** `devin/1778501374-sprint-4-1-D-ton-connect-usdt-claim-prize` от `main` = `db8e630` (merge PR #131 4.1-C).
 - **На `main` (после 4.1-C):** Фаза 3 закрыта полностью (3.1–3.6), Спринт 4.1: A, B и C закрыты.
+- **Текущая позиция:** D.1 завершён (domain Wallet aggregate + VO + ports + errors + 37 unit-тестов). Следующий — D.2 (Application use-case `ClaimPrize`).
 - **Скоуп 4.1-D:** domain `Wallet` + VO `TonAddress`/`UsdtJettonAddress` + порт `IWalletRepository`; application use-case `LinkWallet` (TON Connect signature verify) + `ClaimPrize` (выплата зарезервированного лота через TON SDK с anti-fraud-проверкой `recipient_address` и refund-в-пул при `actual_fee > fee_buffer`); persistence `wallets` + Alembic; infrastructure `TonRpcAdapter` + `TonRpcFeeEstimator` (P95 газа за 7 дней, заменяет `InMemoryFeeEstimator`); jetton-USDT-провайдер; bot-handlers `/link_wallet` + `/claim_prize <lot_id>`; signature-верификация TG Stars payload-а (вывод 4.1-A handler-а в продакшн); refund-таймауты `RESERVED → ACTIVE` (cron/поллер по `lot_ttl_seconds`); composition root.
-- **Открытые решения (на ревью на старте 4.1-D):** `lot_ttl_seconds` для `RESERVED`-таймаута; формат `payload_json` для audit `PRIZE_LOT_CLAIMED`/`PRIZE_LOT_REFUNDED`; ORM-CHECK whitelist-sync test guard (см. C.6.e — backlog); ORM-`SCROLL_DROP` write-through в инвентарь (наследие до 4.1, см. блокеры ниже).
+- **Открытые решения:** `lot_ttl_seconds` для `RESERVED`-таймаута; формат `payload_json` для audit `PRIZE_LOT_CLAIMED`/`PRIZE_LOT_REFUNDED`; ORM-CHECK whitelist-sync test guard (см. C.6.e — backlog).
 - **После мерджа PR 4.1-D:** старт **Спринта 4.1-E** «Админ-команды + лимиты выплат» (задачи 4.1.10, 4.1.11).
 
 ---

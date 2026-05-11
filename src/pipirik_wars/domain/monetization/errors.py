@@ -33,6 +33,8 @@ __all__ = [
     "PrizeLotNotFoundError",
     "PrizeLotStatusTransitionError",
     "PrizePoolAmountInvariantError",
+    "WalletAlreadyLinkedError",
+    "WalletNotLinkedError",
 ]
 
 
@@ -235,3 +237,52 @@ class PrizeLotNotFoundError(MonetizationDomainError):
     def __init__(self, *, lot_id: int) -> None:
         self.lot_id = lot_id
         super().__init__(f"PrizeLot(id={lot_id}) not found")
+
+
+class WalletNotLinkedError(MonetizationDomainError):
+    """Игрок не привязал кошелёк для указанной валюты (Спринт 4.1-D).
+
+    Бросается use-case-ом ``ClaimPrize``, когда игрок пытается забрать
+    крипто-приз, но ``IWalletRepository.get_by_player_and_currency(...)``
+    вернул ``None``.
+
+    Аттрибуты:
+    - ``player_id: int``
+    - ``currency: Currency``
+    """
+
+    def __init__(self, *, player_id: int, currency: Currency) -> None:
+        self.player_id = player_id
+        self.currency = currency
+        super().__init__(
+            f"Player(id={player_id}) has no linked wallet for currency {currency.value!r}",
+        )
+
+
+class WalletAlreadyLinkedError(MonetizationDomainError):
+    """Кошелёк уже привязан и попытка привязки дублирует адрес (Спринт 4.1-D).
+
+    Бросается use-case-ом ``LinkWallet``, когда игрок пытается
+    привязать тот же самый адрес, который уже привязан.
+
+    Аттрибуты:
+    - ``player_id: int``
+    - ``currency: Currency``
+    - ``existing_address: str``
+    """
+
+    def __init__(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+        existing_address: str,
+    ) -> None:
+        self.player_id = player_id
+        self.currency = currency
+        self.existing_address = existing_address
+        super().__init__(
+            f"Player(id={player_id}) already has wallet "
+            f"for currency {currency.value!r} "
+            f"with same address {existing_address!r}",
+        )

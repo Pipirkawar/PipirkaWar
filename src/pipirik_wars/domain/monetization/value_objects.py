@@ -39,8 +39,10 @@ __all__ = [
     "IdempotencyKey",
     "StarsAmount",
     "StarsPoolBalance",
+    "TonAddress",
     "TonNanoAmount",
     "UsdtDecimalAmount",
+    "UsdtJettonAddress",
 ]
 
 
@@ -239,4 +241,68 @@ class IdempotencyKey:
         if not _IDEMPOTENCY_KEY_RE.fullmatch(self.value):
             raise ValueError(
                 f"IdempotencyKey.value must match [A-Za-z0-9_-:]{{1,64}}, got {self.value!r}",
+            )
+
+
+# ---------------------------------------------------------------------------
+# TON-адреса  (ГДД §12.6.4, Спринт 4.1-D)
+# ---------------------------------------------------------------------------
+
+# User-friendly TON-address: 48 base64url characters (0:[32 bytes hex] raw
+# form is 66 chars, but user-friendly is always 48 chars base64url, starting
+# with 'E' / 'U' / '0' etc.).  We accept both raw (`0:hex{64}`) and
+# user-friendly (48-char base64url) formats.
+_TON_RAW_RE: re.Pattern[str] = re.compile(r"^-?[0-9]+:[0-9a-fA-F]{64}$")
+_TON_FRIENDLY_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_\-+/]{48}$")
+
+
+@dataclass(frozen=True, slots=True)
+class TonAddress:
+    """Адрес TON-кошелька игрока (ГДД §12.6.4, Спринт 4.1-D).
+
+    Принимает два формата:
+    * Raw — ``<workchain>:<hex64>`` (e.g. ``0:abcdef...``);
+    * User-friendly — 48-символьный base64url (e.g.
+      ``EQD...``).
+
+    Frozen + slots → VO без identity, hashable, безопасно сравнивать ``==``.
+    """
+
+    value: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, str):
+            raise TypeError(
+                f"TonAddress.value must be str, got {type(self.value).__name__}",
+            )
+        if not (_TON_RAW_RE.fullmatch(self.value) or _TON_FRIENDLY_RE.fullmatch(self.value)):
+            raise ValueError(
+                f"TonAddress.value must be a valid TON address "
+                f"(raw or user-friendly), got {self.value!r}",
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class UsdtJettonAddress:
+    """Адрес USDT-jetton-кошелька на сети TON (ГДД §12.6.4, Спринт 4.1-D).
+
+    Формат идентичен ``TonAddress`` (USDT на TON — это jetton, кошелёк
+    которого адресуется стандартным TON-адресом). Отдельный VO для
+    type-safety: caller не может случайно подставить ``TonAddress``
+    вместо ``UsdtJettonAddress`` (Liskov violation предотвращён).
+
+    Frozen + slots → VO без identity, hashable, безопасно сравнивать ``==``.
+    """
+
+    value: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, str):
+            raise TypeError(
+                f"UsdtJettonAddress.value must be str, got {type(self.value).__name__}",
+            )
+        if not (_TON_RAW_RE.fullmatch(self.value) or _TON_FRIENDLY_RE.fullmatch(self.value)):
+            raise ValueError(
+                f"UsdtJettonAddress.value must be a valid TON address "
+                f"(raw or user-friendly), got {self.value!r}",
             )

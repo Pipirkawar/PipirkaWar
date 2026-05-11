@@ -41,8 +41,10 @@ from pipirik_wars.domain.monetization.value_objects import (
     FeeBufferAmount,
     IdempotencyKey,
     StarsPoolBalance,
+    TonAddress,
     TonNanoAmount,
     UsdtDecimalAmount,
+    UsdtJettonAddress,
 )
 
 __all__ = [
@@ -51,6 +53,7 @@ __all__ = [
     "PrizeLot",
     "PrizeLotStatus",
     "PrizePool",
+    "Wallet",
 ]
 
 
@@ -538,3 +541,67 @@ class PrizeLot:
             created_at=self.created_at,
             claimed_at=self.claimed_at,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class Wallet:
+    """Привязанный TON-кошелёк игрока (ГДД §12.6.4, Спринт 4.1-D).
+
+    Один игрок — один кошелёк per-currency (ГДД §12.6.5: «один
+    TG-аккаунт = один TON-адрес для выплат»). При повторной привязке
+    старый адрес заменяется (use-case ``LinkWallet``).
+
+    Поля:
+
+    * ``player_id: int`` — id игрока (FK → ``users.id``). ``> 0``.
+    * ``address: str`` — строковый адрес кошелька. Конкретный
+      формат зависит от ``currency``:
+
+      - ``Currency.TON_NANO`` → raw / user-friendly TON-address
+        (валидируется через ``TonAddress`` VO);
+      - ``Currency.USDT_DECIMAL`` → raw / user-friendly TON-address
+        (jetton-кошелёк; валидируется через ``UsdtJettonAddress`` VO);
+      - ``Currency.STARS`` → не требуется (выплата Stars идёт через
+        Telegram Bot API ``payments.refund`` на tg_id игрока;
+        ``LinkWallet`` для Stars — `ValueError`).
+
+    * ``currency: Currency`` — к какой валюте привязан адрес.
+    * ``linked_at: datetime`` — TZ-aware момент привязки.
+
+    Frozen + slots → VO / entity без мутаций. Identity на уровне
+    домена — ``(player_id, currency)``. ``address`` может измениться
+    при повторной привязке (``LinkWallet`` делает ``add_or_replace``).
+    """
+
+    player_id: int
+    address: str
+    currency: Currency
+    linked_at: datetime
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.player_id, int) or isinstance(self.player_id, bool):
+            raise TypeError(
+                f"Wallet.player_id must be int, got {type(self.player_id).__name__}",
+            )
+        if self.player_id <= 0:
+            raise ValueError(
+                f"Wallet.player_id must be > 0, got {self.player_id}",
+            )
+        if not isinstance(self.address, str) or not self.address:
+            raise ValueError(
+                "Wallet.address must be a non-empty str",
+            )
+        if self.currency is Currency.STARS:
+            raise ValueError(
+                "Wallet does not support Currency.STARS — Stars payouts "
+                "go through Telegram Bot API refund, no wallet needed",
+            )
+        if self.currency is Currency.TON_NANO:
+            TonAddress(self.address)
+        elif self.currency is Currency.USDT_DECIMAL:
+            UsdtJettonAddress(self.address)
+        if self.linked_at.tzinfo is None:
+            raise ValueError(
+                "Wallet.linked_at must be timezone-aware "
+                "(naïve datetime would lose UTC offset on persistence)",
+            )

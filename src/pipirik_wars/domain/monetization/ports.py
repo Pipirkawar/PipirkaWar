@@ -34,6 +34,7 @@ SQLAlchemy-implementation; тесты use-case-ов (Спринт 4.1-A) —
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
@@ -43,6 +44,7 @@ from pipirik_wars.domain.monetization.entities import (
     PrizeLot,
     PrizeLotStatus,
     PrizePool,
+    Wallet,
 )
 from pipirik_wars.domain.monetization.value_objects import Currency, IdempotencyKey
 
@@ -51,6 +53,9 @@ __all__ = [
     "IPaymentLedger",
     "IPrizeLotRepository",
     "IPrizePoolRepository",
+    "ITonConnectVerifier",
+    "ITonPayoutAdapter",
+    "IWalletRepository",
 ]
 
 
@@ -387,3 +392,78 @@ class IFeeEstimator(Protocol):
           (P95-аппроксимация газа).
         """
         ...
+
+
+class IWalletRepository(Protocol):
+    """Порт репозитория кошельков (ГДД §12.6.4, Спринт 4.1-D).
+
+    Один игрок — один кошелёк per-currency. ``add_or_replace`` —
+    upsert: если у игрока уже есть кошелёк данной валюты, адрес
+    обновляется. Все методы — async, выполняются в ``IUnitOfWork``.
+    """
+
+    async def add_or_replace(self, *, wallet: Wallet) -> Wallet:
+        """Upsert кошелёк: вставить или заменить адрес.
+
+        Возвращает сохранённый ``Wallet``.
+        """
+        ...
+
+    async def get_by_player_and_currency(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+    ) -> Wallet | None:
+        """Получить кошелёк или ``None``."""
+        ...
+
+
+class ITonConnectVerifier(Protocol):
+    """Порт верификации TON Connect proof (Спринт 4.1-D).
+
+    Проверяет, что ``proof`` (подпись ``ton_proof``) действительно
+    принадлежит ``address`` — защита от подмены адреса другим
+    игроком. Реализация — infrastructure-слой (HTTP-вызов к
+    TON Connect verification endpoint или локальная проверка).
+    """
+
+    async def verify(
+        self,
+        *,
+        address: str,
+        proof: str,
+    ) -> bool:
+        """``True`` если proof валидный для данного address."""
+        ...
+
+
+class ITonPayoutAdapter(Protocol):
+    """Порт выплаты TON / USDT на кошелёк игрока (Спринт 4.1-D).
+
+    Отправляет native-юниты ``amount_native`` валюты ``currency``
+    на ``recipient_address``. Возвращает ``PayoutResult`` с
+    ``tx_hash`` и ``actual_fee_native``.
+    """
+
+    async def payout(
+        self,
+        *,
+        currency: Currency,
+        amount_native: int,
+        recipient_address: str,
+    ) -> PayoutResult:
+        """Выплатить приз. Возвращает ``PayoutResult``."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class PayoutResult:
+    """Результат выплаты через ``ITonPayoutAdapter`` (Спринт 4.1-D).
+
+    * ``tx_hash: str`` — хэш транзакции в TON-сети.
+    * ``actual_fee_native: int`` — фактическая комиссия в native-юнитах.
+    """
+
+    tx_hash: str
+    actual_fee_native: int

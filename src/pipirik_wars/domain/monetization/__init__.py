@@ -12,6 +12,7 @@
         PrizeLot,
         PrizeLotStatus,
         StarsAmount,
+        Wallet,
     )
 
 Это идентично конвенции `domain/roulette/__init__.py` (Спринт 3.5-A) и
@@ -24,6 +25,7 @@ from pipirik_wars.domain.monetization.entities import (
     PrizeLot,
     PrizeLotStatus,
     PrizePool,
+    Wallet,
 )
 from pipirik_wars.domain.monetization.errors import (
     IdempotencyConflictError,
@@ -32,12 +34,18 @@ from pipirik_wars.domain.monetization.errors import (
     PrizeLotNotFoundError,
     PrizeLotStatusTransitionError,
     PrizePoolAmountInvariantError,
+    WalletAlreadyLinkedError,
+    WalletNotLinkedError,
 )
 from pipirik_wars.domain.monetization.ports import (
     IFeeEstimator,
     IPaymentLedger,
     IPrizeLotRepository,
     IPrizePoolRepository,
+    ITonConnectVerifier,
+    ITonPayoutAdapter,
+    IWalletRepository,
+    PayoutResult,
 )
 from pipirik_wars.domain.monetization.value_objects import (
     Currency,
@@ -45,8 +53,10 @@ from pipirik_wars.domain.monetization.value_objects import (
     IdempotencyKey,
     StarsAmount,
     StarsPoolBalance,
+    TonAddress,
     TonNanoAmount,
     UsdtDecimalAmount,
+    UsdtJettonAddress,
 )
 
 __all__ = [
@@ -56,11 +66,15 @@ __all__ = [
     "IPaymentLedger",
     "IPrizeLotRepository",
     "IPrizePoolRepository",
+    "ITonConnectVerifier",
+    "ITonPayoutAdapter",
+    "IWalletRepository",
     "IdempotencyConflictError",
     "IdempotencyKey",
     "MonetizationDomainError",
     "Payment",
     "PaymentStatus",
+    "PayoutResult",
     "PrizeLot",
     "PrizeLotInvariantError",
     "PrizeLotNotFoundError",
@@ -70,6 +84,11 @@ __all__ = [
     "PrizePoolAmountInvariantError",
     "StarsAmount",
     "StarsPoolBalance",
+    "TonAddress",
     "TonNanoAmount",
     "UsdtDecimalAmount",
+    "UsdtJettonAddress",
+    "Wallet",
+    "WalletAlreadyLinkedError",
+    "WalletNotLinkedError",
 ]
