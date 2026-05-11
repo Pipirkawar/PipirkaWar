@@ -1,4 +1,4 @@
-# AGENT HANDOFF — Спринт 4.1-D (шаг D.2/D.15)
+# AGENT HANDOFF — Спринт 4.1-D (шаг D.3/D.15)
 
 > Этот файл — временный safety-net. Обновляется в том же коммите, что и основные изменения, и лежит в ветке пока есть незаконченная работа. Удали его отдельным коммитом перед открытием PR-а.
 
@@ -7,10 +7,11 @@
 - D.1: Domain `Wallet(player_id, address, currency, linked_at)` aggregate (frozen+slots) + VO `TonAddress` / `UsdtJettonAddress` (raw + user-friendly formats) + порт `IWalletRepository(add_or_replace, get_by_player_and_currency)` + `ITonConnectVerifier(verify)` + `ITonPayoutAdapter(payout) -> PayoutResult` + ошибки `WalletNotLinkedError` / `WalletAlreadyLinkedError` + 37 unit-тестов.
 - D.2: Application use-case `ClaimPrize(player_id, lot_id, recipient_address) -> ClaimPrizeResult` + `AuditAction.PRIZE_LOT_CLAIMED` / `AuditSource.PRIZE_LOT_CLAIMED` + `AuditAction.WALLET_LINKED` / `AuditSource.WALLET_LINKED` + 2 Alembic-миграции (0033, 0034: source whitelist) + ORM whitelist sync + 6 unit-тестов.
 
+- D.3: Application use-case `LinkWallet` + `ITonConnectVerifier` proof verification + audit `WALLET_LINKED` + 4 unit-тестов.
+
 ## На каком файле/задаче остановился
-- Файл: закончил D.2; следующий — D.3 `application/monetization/link_wallet.py`.
-- Что планировал дальше: Application use-case `LinkWallet` + `ITonConnectVerifier` + audit `WALLET_LINKED`.
-- Где брать ТЗ: `docs/development_plan.md` §7 / Спринт 4.1 / задача 4.1.9; `docs/game_design.md` §12.6.4; `docs/current_tasks.md` чек-лист D.3.
+- Файл: закончил D.3; следующий — D.4 `Persistence wallets (Alembic + ORM + Repository)`.
+- Где брать ТЗ: `docs/current_tasks.md` чек-лист D.4.
 
 ## Состояние ветки
 - Ветка: `devin/1778501374-sprint-4-1-D-ton-connect-usdt-claim-prize`

@@ -30,6 +30,11 @@ from pipirik_wars.application.monetization.generate_prize_lots import (
     GeneratePrizeLotsCommand,
     GeneratePrizeLotsResult,
 )
+from pipirik_wars.application.monetization.link_wallet import (
+    LinkWallet,
+    LinkWalletCommand,
+    LinkWalletResult,
+)
 from pipirik_wars.application.monetization.record_donation import (
     RecordDonation,
     RecordDonationCommand,
@@ -49,6 +54,9 @@ __all__ = [
     "GeneratePrizeLots",
     "GeneratePrizeLotsCommand",
     "GeneratePrizeLotsResult",
+    "LinkWallet",
+    "LinkWalletCommand",
+    "LinkWalletResult",
     "PaidRoulettePack",
     "RecordDonation",
     "RecordDonationCommand",
