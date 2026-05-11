@@ -61,6 +61,7 @@ from pipirik_wars.domain.roulette.errors import InvalidRouletteConfigError
 from pipirik_wars.domain.shared.ports import IRandom
 
 __all__ = [
+    "pick_length_only_outcome",
     "pick_paid_outcome",
     "pick_roulette_outcome",
 ]
@@ -167,6 +168,32 @@ def pick_paid_outcome(
     if kind is RouletteOutcomeKind.CRYPTO_LOT:
         return _roll_crypto_lot(active_lots=active_lots, random=random)
     return RouletteOutcome(kind=kind)
+
+
+def pick_length_only_outcome(
+    *,
+    length_buckets: tuple[RouletteLengthBucket, ...],
+    random: IRandom,
+) -> RouletteOutcome:
+    """Гарантированно выбрать LENGTH-исход из бакетов.
+
+    Используется в race-fallback use-case-ов спинов (C.6.d): когда
+    `update_status(lot_id, RESERVED)` бросает `PrizeLotStatusTransitionError`
+    (другой игрок забронировал лот первым между `list_active`
+    и `update_status`) — use-case заменяет outcome на
+    `pick_length_only_outcome(...)` и продолжает спин как LengthGain.
+
+    Сигнатура принимает только `length_buckets`, а не полный config,
+    чтобы работать и с free-, и с paid-конфигом одновременно (у обоих есть
+    идентичный по shape блок `length_buckets`).
+
+    Raises:
+    - `InvalidRouletteConfigError` — если все веса бакетов нулевые
+      (pydantic-инвариант такое не должен пропускать).
+    """
+    bucket = _roll_length_bucket(buckets=length_buckets, random=random)
+    length_cm = random.randint(bucket.min_cm, bucket.max_cm)
+    return RouletteOutcome(kind=RouletteOutcomeKind.LENGTH, length_cm=length_cm)
 
 
 def _roll_crypto_lot(

@@ -121,6 +121,7 @@ from pipirik_wars.application.monetization.record_donation import (
 )
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.monetization.entities import Payment, PaymentStatus, PrizeLotStatus
+from pipirik_wars.domain.monetization.errors import PrizeLotStatusTransitionError
 from pipirik_wars.domain.monetization.ports import IPaymentLedger, IPrizeLotRepository
 from pipirik_wars.domain.monetization.value_objects import Currency, IdempotencyKey
 from pipirik_wars.domain.player import IPlayerRepository
@@ -131,6 +132,7 @@ from pipirik_wars.domain.roulette import (
     RouletteOutcome,
     RouletteOutcomeKind,
     RouletteSpin,
+    pick_length_only_outcome,
     pick_paid_outcome,
 )
 from pipirik_wars.domain.roulette.errors import RouletteThicknessGateError
@@ -276,7 +278,9 @@ class SpinPaidRoulette:
         self._clock = clock
         self._record_donation = record_donation
 
-    async def execute(self, command: SpinPaidRouletteCommand) -> SpinPaidRouletteResult:
+    async def execute(  # noqa: PLR0912 — pack-loop + reservation/fallback branches
+        self, command: SpinPaidRouletteCommand
+    ) -> SpinPaidRouletteResult:
         """Прокрутить платную рулетку. Полное описание контракта — в docstring модуля."""
         async with self._uow:
             root_key = self._idempotency.build(
@@ -392,40 +396,50 @@ class SpinPaidRoulette:
                     random=self._random,
                     active_lots=active_lots,
                 )
-                outcomes_list.append(outcome)
 
                 spin_idem = f"{command.idempotency_key.value}:{i}"
 
-                # Шаг C.6.c: резервирование лота при CRYPTO_LOT-исходе
-                # спина (в той же UoW). Race-fallback — C.6.d.
+                # Шаг C.6.c/d: резервирование лота при CRYPTO_LOT-исходе
+                # спина (в той же UoW). При
+                # `PrizeLotStatusTransitionError` из `update_status`
+                # — подменяем outcome на LengthGain (C.6.d).
                 if outcome.kind is RouletteOutcomeKind.CRYPTO_LOT:
                     assert outcome.lot_id is not None
-                    reserved_lot = await self._prize_lots.update_status(
-                        lot_id=outcome.lot_id,
-                        new_status=PrizeLotStatus.RESERVED,
-                    )
-                    await self._audit.record(
-                        AuditEntry(
-                            action=AuditAction.PRIZE_LOT_RESERVED,
-                            actor_id=player.tg_id,
-                            target_kind="prize_lot",
-                            target_id=f"{outcome.lot_id}:reserved",
-                            before=None,
-                            after={
-                                "lot_id": outcome.lot_id,
-                                "currency": reserved_lot.currency.value,
-                                "amount_native": reserved_lot.amount_native,
-                                "prev_status": PrizeLotStatus.ACTIVE.value,
-                                "reserved_at": now.isoformat(),
-                                "player_id": player.id,
-                                "spin_kind": "paid",
-                            },
-                            reason="paid_roulette_reserve_lot",
-                            idempotency_key=f"{root_key}:spin:{i}:reserve:{outcome.lot_id}",
-                            occurred_at=now,
-                            source=AuditSource.PRIZE_LOT_RESERVED,
+                    try:
+                        reserved_lot = await self._prize_lots.update_status(
+                            lot_id=outcome.lot_id,
+                            new_status=PrizeLotStatus.RESERVED,
                         )
-                    )
+                    except PrizeLotStatusTransitionError:
+                        outcome = pick_length_only_outcome(
+                            length_buckets=paid_cfg.length_buckets,
+                            random=self._random,
+                        )
+                    else:
+                        await self._audit.record(
+                            AuditEntry(
+                                action=AuditAction.PRIZE_LOT_RESERVED,
+                                actor_id=player.tg_id,
+                                target_kind="prize_lot",
+                                target_id=f"{reserved_lot.id}:reserved",
+                                before=None,
+                                after={
+                                    "lot_id": reserved_lot.id,
+                                    "currency": reserved_lot.currency.value,
+                                    "amount_native": reserved_lot.amount_native,
+                                    "prev_status": PrizeLotStatus.ACTIVE.value,
+                                    "reserved_at": now.isoformat(),
+                                    "player_id": player.id,
+                                    "spin_kind": "paid",
+                                },
+                                reason="paid_roulette_reserve_lot",
+                                idempotency_key=(f"{root_key}:spin:{i}:reserve:{reserved_lot.id}"),
+                                occurred_at=now,
+                                source=AuditSource.PRIZE_LOT_RESERVED,
+                            )
+                        )
+
+                outcomes_list.append(outcome)
 
                 spin = RouletteSpin(
                     player_id=player.id,

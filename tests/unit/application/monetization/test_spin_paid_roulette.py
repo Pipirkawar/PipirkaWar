@@ -1092,3 +1092,67 @@ class TestPrizeLotReservation:
             f"roulette_paid:1|paid_roulette:1:tg-charge-001:spin:0:reserve:{stored.id}"
         )
         assert reserve_audit.source is AuditSource.PRIZE_LOT_RESERVED
+
+    @pytest.mark.asyncio
+    async def test_race_fallback_substitutes_length_outcome_when_update_status_raises(
+        self,
+    ) -> None:
+        """C.6.d: `PrizeLotStatusTransitionError` из `update_status` → LengthGain-fallback в paid.
+
+        Сценарий: пул содержит 1 STARS-лот, picker возвращает CRYPTO_LOT,
+        но `update_status` бросает `PrizeLotStatusTransitionError`
+        (race). Use-case подменяет outcome на LENGTH через
+        `pick_length_only_outcome`. audit `PRIZE_LOT_RESERVED` не пишется,
+        `RouletteSpin.outcome.kind == LENGTH`, награда через `LengthGranter`.
+        """
+        balance = _balance_with_paid_kind(RouletteOutcomeKind.CRYPTO_LOT)
+
+        class _RaceRandom(_ScriptedRandom):
+            def choice(self, items: Sequence[_T]) -> _T:
+                if not items:
+                    raise ValueError("choice from empty sequence")
+                return items[0]
+
+        random = _RaceRandom(fixed_length_cm=42)
+        prize_lots = FakePrizeLotRepository(raise_status_transition_on_update=True)
+        await prize_lots.add(
+            lot=PrizeLot.freshly_generated(
+                currency=Currency.STARS,
+                amount_native=1000,
+                fee_buffer_native=FeeBufferAmount(0),
+                created_at=_NOW,
+            )
+        )
+        use_case, players, spins, _, audit, _, _, _, _, _ = _build_use_case(
+            balance=balance,
+            random=random,
+            prize_lots=prize_lots,
+        )
+        await _seed_player(players)
+
+        result = await use_case.execute(
+            SpinPaidRouletteCommand(
+                player_id=1,
+                pack=PaidRoulettePack.SINGLE,
+                idempotency_key=_key("paid_roulette:1:tg-charge-race"),
+                provider_payment_id="tg-charge-race",
+            ),
+        )
+
+        # Outcome подменён на LENGTH с fallback_cm.
+        assert len(result.outcomes) == 1
+        outcome = result.outcomes[0]
+        assert outcome.kind is RouletteOutcomeKind.LENGTH
+        assert outcome.length_cm == 42
+        assert outcome.lot_id is None
+
+        # update_status вызван ровно один раз (без retry).
+        assert len(prize_lots.update_status_calls) == 1
+
+        # audit `PRIZE_LOT_RESERVED` отсутствует.
+        actions = [e.action for e in audit.entries]
+        assert AuditAction.PRIZE_LOT_RESERVED not in actions
+
+        # spin записан в event-log с LENGTH-исходом.
+        assert len(spins.rows) == 1
+        assert spins.rows[0].outcome.kind is RouletteOutcomeKind.LENGTH

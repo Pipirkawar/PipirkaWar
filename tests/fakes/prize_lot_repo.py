@@ -27,7 +27,10 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 from pipirik_wars.domain.monetization.entities import PrizeLot, PrizeLotStatus
-from pipirik_wars.domain.monetization.errors import PrizeLotNotFoundError
+from pipirik_wars.domain.monetization.errors import (
+    PrizeLotNotFoundError,
+    PrizeLotStatusTransitionError,
+)
 from pipirik_wars.domain.monetization.ports import IPrizeLotRepository
 from pipirik_wars.domain.monetization.value_objects import Currency
 
@@ -53,6 +56,11 @@ class FakePrizeLotRepository(IPrizeLotRepository):
     update_status_calls: list[tuple[int, PrizeLotStatus, datetime | None]] = field(
         default_factory=list
     )
+    # C.6.d test hook: при `True` `update_status` **до** изменения хранилища
+    # выкидывает `PrizeLotStatusTransitionError` (имитация race-condition,
+    # когда другой игрок забронировал лот первым между `list_active()` и
+    # `update_status()`). Use-case обязан подменить outcome на LengthGain.
+    raise_status_transition_on_update: bool = False
 
     async def add(self, *, lot: PrizeLot) -> PrizeLot:
         """Назначить `id`, сохранить лот, вернуть копию с проставленным `id`."""
@@ -90,6 +98,12 @@ class FakePrizeLotRepository(IPrizeLotRepository):
         current = self._storage.get(lot_id)
         if current is None:
             raise PrizeLotNotFoundError(lot_id=lot_id)
+        if self.raise_status_transition_on_update:
+            raise PrizeLotStatusTransitionError(
+                lot_id=lot_id,
+                from_status=current.status,
+                to_status=new_status,
+            )
 
         if new_status is PrizeLotStatus.RESERVED:
             updated = current.reserve()

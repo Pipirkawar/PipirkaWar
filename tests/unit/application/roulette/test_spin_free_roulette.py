@@ -688,6 +688,69 @@ class TestCryptoPoolDrainage:
         assert reserve_audit.idempotency_key == f"roulette_free:1|msg:99:reserve:{stored.id}"
         assert reserve_audit.source is AuditSource.PRIZE_LOT_RESERVED
 
+    @pytest.mark.asyncio
+    async def test_race_fallback_substitutes_length_outcome_when_update_status_raises(
+        self,
+    ) -> None:
+        """C.6.d: `PrizeLotStatusTransitionError` из `update_status` → LengthGain-fallback.
+
+        Сценарий: пул содержит 1 STARS-лот, picker возвращает CRYPTO_LOT,
+        но между `list_active()` и `update_status()` другой игрок забронировал
+        тот же лот первым. `FakePrizeLotRepository.raise_status_transition_on_update=True`
+        имитирует это поведение. Use-case подменяет outcome на
+        `pick_length_only_outcome(...)` (LENGTH-исход), audit
+        `PRIZE_LOT_RESERVED` **не** пишется, `RouletteSpin.outcome.kind`
+        == `LENGTH` + `LengthGranter.grant(...)` вызывается.
+        """
+        balance = _balance_with_only_kind(RouletteOutcomeKind.CRYPTO_LOT)
+
+        class _RaceRandom(_ScriptedRandom):
+            def choice(self, items: Sequence[_T]) -> _T:
+                if not items:
+                    raise ValueError("choice from empty sequence")
+                return items[0]
+
+        random = _RaceRandom(fixed_length_cm=42)
+        prize_lots = FakePrizeLotRepository(raise_status_transition_on_update=True)
+        await prize_lots.add(
+            lot=PrizeLot.freshly_generated(
+                currency=Currency.STARS,
+                amount_native=500,
+                fee_buffer_native=FeeBufferAmount(0),
+                created_at=_NOW,
+            )
+        )
+        use_case, players, spins, audit, _, _, _, _ = _build_use_case(
+            balance=balance, random=random, prize_lots=prize_lots
+        )
+        player = await _seed_player(players, length_cm=500)
+
+        result = await use_case.execute(
+            SpinFreeRouletteCommand(player_id=1, idempotency_key="msg:race"),
+        )
+
+        # Outcome подменён на LENGTH с fallback_cm.
+        assert result.outcome is not None
+        assert result.outcome.kind is RouletteOutcomeKind.LENGTH
+        assert result.outcome.length_cm == 42
+        assert result.outcome.lot_id is None
+
+        # update_status был вызван ровно один раз (без retry-loop).
+        assert len(prize_lots.update_status_calls) == 1
+
+        # audit `PRIZE_LOT_RESERVED` **не** записан (резервирование провалилось).
+        actions = [e.action for e in audit.entries]
+        assert AuditAction.PRIZE_LOT_RESERVED not in actions
+
+        # spin записан в event-log с LENGTH-исходом.
+        assert len(spins.rows) == 1
+        assert spins.rows[0].outcome.kind is RouletteOutcomeKind.LENGTH
+
+        # Игрок получил длину через LengthGranter (player.length увеличен на 42).
+        updated = await players.get_by_id(player_id=player.id or 0)
+        assert updated is not None
+        assert updated.length.cm == 500 - 100 + 42  # cost - reward
+
 
 # --------------------------------------------------------------------------- #
 # UoW transactional behaviour
