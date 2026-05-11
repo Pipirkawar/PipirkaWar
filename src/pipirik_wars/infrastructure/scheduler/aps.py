@@ -75,6 +75,7 @@ from pipirik_wars.application.forest import (
     IForestFinishNotifier,
 )
 from pipirik_wars.application.monetization import (
+    ExpireReservedPrizeLots,
     GeneratePrizeLots,
     GeneratePrizeLotsCommand,
 )
@@ -133,6 +134,15 @@ _WEEKLY_REFERRAL_SUMMARY_TIMEZONE: Final[str] = "UTC"
 # `IIdempotencyKey.is_seen`-проверку.
 _PRIZE_LOT_GENERATOR_CRON_JOB_PREFIX: Final[str] = "prize_lot_generator_cron:"
 _PRIZE_LOT_GENERATOR_CRON_INTERVAL_HOURS: Final[int] = 1
+
+# 4.1-D / D.9.d: cron-entry `ExpireReservedPrizeLots` (1×/час).
+# Один job на весь use-case (обход `for c in Currency:` внутри
+# `execute()`) — в отличие от `GeneratePrizeLots`, который разбит на
+# 3 job-а ради равномерного распределения по UTC-часу. Рефанд-бэтч
+# в MVP-потоке (десятки лотов/час) укладывается в секунды, поэтому
+# разделение по валютам не оправдано.
+_EXPIRE_RESERVED_PRIZE_LOTS_CRON_JOB_ID: Final[str] = "expire_reserved_prize_lots_cron"
+_EXPIRE_RESERVED_PRIZE_LOTS_CRON_INTERVAL_HOURS: Final[int] = 1
 
 
 def _job_id(run_id: int) -> str:
@@ -273,6 +283,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         "_dungeon_notifier",
         "_escalate_factory",
         "_expire_factory",
+        "_expire_reserved_prize_lots_factory",
         "_finish_factory",
         "_logger",
         "_mass_duel_afk_factory",
@@ -315,6 +326,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         boss_fight_finish_notifier: IBossFightFinishNotifier | None = None,
         clans: IClanRepository | None = None,
         prize_lot_generator_factory: Callable[[], GeneratePrizeLots] | None = None,
+        expire_reserved_prize_lots_factory: Callable[[], ExpireReservedPrizeLots] | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._scheduler = scheduler
@@ -344,6 +356,7 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
         self._boss_fight_finish_notifier = boss_fight_finish_notifier
         self._clans = clans
         self._prize_lot_generator_factory = prize_lot_generator_factory
+        self._expire_reserved_prize_lots_factory = expire_reserved_prize_lots_factory
         self._logger = logger or logging.getLogger(__name__)
 
     async def schedule_finish_forest_run(
@@ -1085,6 +1098,72 @@ class APSchedulerDelayedJobScheduler(IDelayedJobScheduler):
                     "currency": currency_value,
                     "error": type(exc).__name__,
                 },
+            )
+            return
+
+    def schedule_expire_reserved_prize_lots_cron(self) -> None:
+        """Зарегистрировать cron `ExpireReservedPrizeLots` 1×/час (4.1-D / D.9.d).
+
+        Один `IntervalTrigger(hours=1)`-job на весь use-case: внутри
+        `execute()` use-case сам проходит `for c in Currency:`. Pagination
+        внутри `execute()` (см. `expire_reserved_prize_lots.py::_BATCH_SIZE`)
+        обрабатывает все просроченные RESERVED-лоты в одну UoW.
+
+        Идемпотентен на регистрацию (`replace_existing=True`); идемпотентен
+        и на повторный fire — natural через state-machine
+        `RESERVED → REFUNDED` (refunded-лоты выпадают из выборки
+        `list_expired_reserved` в следующем проходе).
+
+        Если `expire_reserved_prize_lots_factory` не подвязана (например, в
+        unit-тестах самого APScheduler-а) — логируем warning и тихо
+        выходим без регистрации.
+        """
+        if self._expire_reserved_prize_lots_factory is None:
+            self._logger.warning(
+                "expire_reserved_prize_lots_cron: factory not wired",
+            )
+            return
+        self._scheduler.add_job(
+            self._run_expire_reserved_prize_lots_cron_job,
+            trigger=IntervalTrigger(
+                hours=_EXPIRE_RESERVED_PRIZE_LOTS_CRON_INTERVAL_HOURS,
+            ),
+            id=_EXPIRE_RESERVED_PRIZE_LOTS_CRON_JOB_ID,
+            replace_existing=True,
+            misfire_grace_time=None,
+        )
+
+    async def _run_expire_reserved_prize_lots_cron_job(self) -> None:
+        """Callback hourly-cron-а `ExpireReservedPrizeLots` (4.1-D / D.9.d).
+
+        Алгоритм:
+        1. Resolve фабрики (поздняя проверка, на случай асинхронной
+           отвязки фабрики в shutdown-flow-е).
+        2. Построить use-case и вызвать `execute()` — use-case сам читает
+           `balance.prize_lot.reserved_ttl_seconds`, считает cutoff,
+           проходит все валюты в pagination-loop-е, рефандит лоты + audit.
+        3. Любые исключения логируются и проглатываются (как и в других
+           cron-callback-ах) — APScheduler не пометит job как `failed`.
+        """
+        if self._expire_reserved_prize_lots_factory is None:
+            self._logger.warning(
+                "expire_reserved_prize_lots_cron: factory not wired",
+            )
+            return
+        try:
+            use_case = self._expire_reserved_prize_lots_factory()
+            result = await use_case.execute()
+            self._logger.info(
+                "expire_reserved_prize_lots_cron: refund batch finished",
+                extra={
+                    "total_refunded": result.total_refunded,
+                    "cutoff_iso": result.cutoff_iso,
+                },
+            )
+        except Exception as exc:
+            self._logger.exception(
+                "expire_reserved_prize_lots_cron: unexpected error",
+                extra={"error": type(exc).__name__},
             )
             return
 

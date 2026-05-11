@@ -114,6 +114,7 @@ from pipirik_wars.application.forest import (
 from pipirik_wars.application.i18n import IMessageBundle, IPlayerLocaleResolver
 from pipirik_wars.application.inventory import EnchantItem, GetInventory
 from pipirik_wars.application.monetization import (
+    ExpireReservedPrizeLots,
     GeneratePrizeLots,
     RecordDonation,
     SpinPaidRoulette,
@@ -925,6 +926,9 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         # собирается ниже по файлу после `record_donation`; лямбда
         # резолвится в момент срабатывания cron-каллбэка).
         prize_lot_generator_factory=lambda: generate_prize_lots,
+        # 4.1-D / D.9.d: late-bound фабрика `ExpireReservedPrizeLots`
+        # (собирается ниже по файлу рядом с `generate_prize_lots`).
+        expire_reserved_prize_lots_factory=lambda: expire_reserved_prize_lots,
     )
     start_forest_run = StartForestRun(
         uow=uow,
@@ -1222,6 +1226,18 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         audit_logger=audit,
         clock=clock,
         generate_prize_lots=generate_prize_lots,
+    )
+    # 4.1-D / D.9.c + D.9.d: refund RESERVED-лотов по TTL
+    # (`balance.prize_lot.reserved_ttl_seconds`, дефолт 48 h). Дёргается
+    # из APScheduler-а 1×/час через `expire_reserved_prize_lots_factory`
+    # late-bound лямбду (см. выше в инициализации scheduler-а).
+    expire_reserved_prize_lots = ExpireReservedPrizeLots(
+        uow=uow,
+        prize_lot_repository=prize_lot_repo,
+        prize_pool_repository=prize_pool_repo,
+        audit_logger=audit,
+        balance_config=balance,
+        clock=clock,
     )
     spin_paid_roulette = SpinPaidRoulette(
         uow=uow,
@@ -2061,6 +2077,9 @@ async def run(
         # 4.1-C / C.7.b: hourly cron `GeneratePrizeLots` per currency
         # (3 инстанса IntervalTrigger(hours=1) — STARS / TON_NANO / USDT_DECIMAL).
         scheduler.schedule_prize_lot_generator_cron()
+        # 4.1-D / D.9.d: hourly cron `ExpireReservedPrizeLots` (1 инстанс,
+        # обход валют внутри use-case-а).
+        scheduler.schedule_expire_reserved_prize_lots_cron()
     try:
         await dispatcher.start_polling(
             bot,

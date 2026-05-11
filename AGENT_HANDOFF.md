@@ -70,10 +70,10 @@
 ## Состояние ветки
 - Ветка: `devin/1778501374-sprint-4-1-D-ton-connect-usdt-claim-prize`
 - База: `main` (= `db8e630 Merge pull request #131`)
-- Предыдущий коммит: `e3d7923 feat(4.1-D): D.9.b — IPrizeLotRepository.list_expired_reserved + SQLAlchemy + index + integration-tests`.
-- Последний коммит (этот): `feat(4.1-D): D.9.c — ExpireReservedPrizeLots use-case + audit + 17 unit-tests`.
+- Предыдущий коммит: `ae4e9d3 feat(4.1-D): D.9.c — ExpireReservedPrizeLots use-case + audit + 17 unit-tests`.
+- Последний коммит (этот): `feat(4.1-D): D.9.d — APScheduler cron expire_reserved_prize_lots + DI + 7 unit-tests`.
 - Незакоммиченные изменения: нет (после коммита).
-- CI прогонялся локально: ЧАСТИЧНО — `make lint` и `make typecheck` зелёные; новые 17 тестов D.9.c все passed, coverage `expire_reserved_prize_lots.py` = 100%. Полный `make ci` на этом коммите не прогнан после добавления D.9.c (экономия токенов; предыдущий прогон на `e3d7923` был 6056 passed + 2 skipped, 95.61% cov) — следующий агент должен выполнить `make ci` в рамках шага приёмки.
+- CI прогонялся локально: ЧАСТИЧНО — `make lint` и `make typecheck` зелёные; новые 7 тестов D.9.d все passed, весь `tests/unit/infrastructure/scheduler/test_aps.py` 74 passed. Полный `make ci` на этом коммите не прогнан после добавления D.9.c+D.9.d (экономия токенов; предыдущий прогон на `e3d7923` был 6056 passed + 2 skipped, 95.61% cov) — следующий агент должен выполнить `make ci` в рамках шага приёмки.
 - GitHub CI: не открыт PR (по протоколу — PR откроется после D.13/D.14). Прежний прогон D.6 на GitHub не нужен — workflow `paths-ignore: ['docs/**', '**.md', 'AGENT_HANDOFF.md']` ignored docs-коммиты, а функциональные пуши до открытия PR-а в `on: pull_request`-trigger не попадают.
 
 ## Команды для следующего агента
@@ -88,7 +88,8 @@
 - Запустить только D.9.a-тесты: `pytest tests/unit/domain/balance/test_prize_lot_config.py tests/unit/infrastructure/test_balance_loader.py -q --no-cov`.
 - Запустить только D.9.b-тесты: `pytest tests/unit/domain/monetization/test_prize_lot.py tests/integration/db/test_prize_lot_repository.py -q --no-cov`.
 - Запустить только D.9.c-тесты: `pytest tests/unit/application/monetization/test_expire_reserved_prize_lots.py -q --no-cov`.
-- Следующий шаг (**D.9.d — cron-entry `ExpireReservedPrizeLots` в APScheduler**): `infrastructure/scheduler/aps.py::schedule_expire_reserved_prize_lots_cron()` (паттерн как `schedule_prize_lot_generator_cron`, но **без** per-currency split — один job, `IntervalTrigger(hours=1)`) + `_run_expire_reserved_prize_lots_cron_job` (callback). DI-фабрика `expire_reserved_prize_lots_factory` в `__init__` APScheduler-сервиса; проводка в `bot/main.py::Container`. Тесты в `tests/unit/infrastructure/scheduler/test_aps.py`. Затем **D.10.a–D.10.d** (TON RPC реальные выплаты, signed BOC вместо стаба).
+- Запустить только D.9.d-тесты: `pytest tests/unit/infrastructure/scheduler/test_aps.py::TestExpireReservedPrizeLotsCron -q --no-cov`.
+- Следующий шаг (**D.10.a–D.10.d — TON RPC real payouts**): реальные USDT-jetton выплаты вместо стаба. D.10.a — `TonRpcFeeEstimator` (P95 газа за 7 дней, заменяет `InMemoryFeeEstimator`); D.10.b — BOC-signing-клиент (`ITonPayoutClient`); D.10.c — реальный jetton-USDT-transfer-provider; D.10.d — виринг в `ClaimPrize`-handler-е + финальные e2e-тесты.
 
 ## Известные блокеры / открытые вопросы
 - `reserved_ttl_seconds` для RESERVED-таймаута (D.9.a) — зафиксирован в `config/balance.yaml::prize_lot.reserved_ttl_seconds = 172800` (48 h). Pydantic-границы `[60, 30 d]`. На ревью геймдиза можем поменять — `hot-reload` без рестарта (см. `TestReloadPrizeLot.test_reload_picks_up_new_reserved_ttl`).
