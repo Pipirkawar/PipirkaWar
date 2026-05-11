@@ -88,6 +88,7 @@ class SqlAlchemyPrizeLotRepository(IPrizeLotRepository):
             fee_buffer_native=Decimal(lot.fee_buffer_native.value),
             status=lot.status.value,
             created_at=lot.created_at,
+            reserved_at=lot.reserved_at,
             claimed_at=lot.claimed_at,
         )
         session.add(orm)
@@ -99,6 +100,7 @@ class SqlAlchemyPrizeLotRepository(IPrizeLotRepository):
             fee_buffer_native=lot.fee_buffer_native,
             status=lot.status,
             created_at=lot.created_at,
+            reserved_at=lot.reserved_at,
             claimed_at=lot.claimed_at,
         )
 
@@ -131,6 +133,7 @@ class SqlAlchemyPrizeLotRepository(IPrizeLotRepository):
         *,
         lot_id: int,
         new_status: PrizeLotStatus,
+        reserved_at: datetime | None = None,
         claimed_at: datetime | None = None,
     ) -> PrizeLot:
         """Атомарно перевести лот в `new_status`."""
@@ -138,6 +141,15 @@ class SqlAlchemyPrizeLotRepository(IPrizeLotRepository):
             raise ValueError(
                 "PrizeLotRepository.update_status: ACTIVE is not a valid target "
                 "(lots are created in ACTIVE via add(...))",
+            )
+        if new_status is PrizeLotStatus.RESERVED and reserved_at is None:
+            raise ValueError(
+                "PrizeLotRepository.update_status: reserved_at is required for RESERVED",
+            )
+        if new_status is not PrizeLotStatus.RESERVED and reserved_at is not None:
+            raise ValueError(
+                f"PrizeLotRepository.update_status: reserved_at must be None for "
+                f"{new_status.value!r}",
             )
         if new_status is PrizeLotStatus.CLAIMED and claimed_at is None:
             raise ValueError(
@@ -153,13 +165,24 @@ class SqlAlchemyPrizeLotRepository(IPrizeLotRepository):
         valid_sources = _VALID_SOURCES_FOR_TARGET[new_status]
         valid_source_values = tuple(status.value for status in valid_sources)
 
+        # На RESERVED-переходе пишем выставляем reserved_at; на CLAIMED /
+        # REFUNDED — не трогаем это поле (сохраняется существующее
+        # значение; для пути RESERVED → CLAIMED/REFUNDED оно было
+        # выставлено на RESERVED-переходе; для пути ACTIVE → REFUNDED
+        # оно продолжает быть NULL).
+        values: dict[str, object] = {"status": new_status.value}
+        if new_status is PrizeLotStatus.RESERVED:
+            values["reserved_at"] = reserved_at
+        if new_status is PrizeLotStatus.CLAIMED:
+            values["claimed_at"] = claimed_at
+
         stmt = (
             update(PrizeLotORM)
             .where(
                 PrizeLotORM.id == lot_id,
                 PrizeLotORM.status.in_(valid_source_values),
             )
-            .values(status=new_status.value, claimed_at=claimed_at)
+            .values(**values)
         )
         result = await session.execute(stmt)
         if not isinstance(result, CursorResult):  # pragma: no cover  (защита от изменений API)
@@ -180,6 +203,28 @@ class SqlAlchemyPrizeLotRepository(IPrizeLotRepository):
             to_status=new_status,
         )
 
+    async def list_expired_reserved(
+        self,
+        *,
+        currency: Currency,
+        expired_before: datetime,
+        limit: int = 100,
+    ) -> Sequence[PrizeLot]:
+        """Все RESERVED-лоты `currency` с `reserved_at <= expired_before`."""
+        session = self._uow.session
+        stmt = (
+            select(PrizeLotORM)
+            .where(
+                PrizeLotORM.status == PrizeLotStatus.RESERVED.value,
+                PrizeLotORM.currency == currency.value,
+                PrizeLotORM.reserved_at <= expired_before,
+            )
+            .order_by(PrizeLotORM.reserved_at.asc(), PrizeLotORM.id.asc())
+            .limit(limit)
+        )
+        result = await session.execute(stmt)
+        return tuple(_orm_to_domain(orm) for orm in result.scalars().all())
+
 
 def _orm_to_domain(orm: PrizeLotORM) -> PrizeLot:
     """Собрать `PrizeLot`-VO из ORM-строки.
@@ -198,6 +243,7 @@ def _orm_to_domain(orm: PrizeLotORM) -> PrizeLot:
         fee_buffer_native=FeeBufferAmount(int(orm.fee_buffer_native)),
         status=PrizeLotStatus(orm.status),
         created_at=_ensure_utc(orm.created_at),
+        reserved_at=_ensure_utc(orm.reserved_at) if orm.reserved_at is not None else None,
         claimed_at=_ensure_utc(orm.claimed_at) if orm.claimed_at is not None else None,
     )
 

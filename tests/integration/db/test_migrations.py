@@ -331,6 +331,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260511_0033_audit_source_prize_lot_claimed.py",
             "20260511_0034_audit_source_wallet_linked.py",
             "20260511_0035_wallets.py",
+            "20260511_0036_prize_lots_reserved_at.py",
         ]
 
     def test_upgrade_head_creates_all_tables(

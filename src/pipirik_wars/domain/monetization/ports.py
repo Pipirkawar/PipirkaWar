@@ -323,6 +323,7 @@ class IPrizeLotRepository(Protocol):
         *,
         lot_id: int,
         new_status: PrizeLotStatus,
+        reserved_at: datetime | None = None,
         claimed_at: datetime | None = None,
     ) -> PrizeLot:
         """Атомарно перевести лот в `new_status` с проверкой машины состояний.
@@ -332,6 +333,9 @@ class IPrizeLotRepository(Protocol):
         - `new_status` — целевой статус (`RESERVED` / `CLAIMED` /
           `REFUNDED`; `ACTIVE` не валидный target — лоты в `ACTIVE`
           создаются через `add(...)`).
+        - `reserved_at` — TZ-aware момент резервирования; обязателен на
+          `new_status=RESERVED`, на остальных — `None` (на CLAIMED /
+          REFUNDED сохраняется существующий `reserved_at` лота).
         - `claimed_at` — TZ-aware момент claim-а; обязателен на
           `new_status=CLAIMED`, на остальных — `None`.
 
@@ -342,6 +346,36 @@ class IPrizeLotRepository(Protocol):
         - `PrizeLotStatusTransitionError` — если текущий статус
           не разрешает переход в `new_status` (см.
           `_PRIZE_LOT_TRANSITIONS`).
+        """
+        ...
+
+    async def list_expired_reserved(
+        self,
+        *,
+        currency: Currency,
+        expired_before: datetime,
+        limit: int = 100,
+    ) -> Sequence[PrizeLot]:
+        """Все `status=RESERVED`-лоты `currency`, у которых `reserved_at <= expired_before`.
+
+        Используется expire-cron-ом `ExpireReservedPrizeLots` (D.9.c) —
+        который вычисляет `expired_before = now - reserved_ttl_seconds`
+        (D.9.a balance-config) и просит репозиторий вернуть все
+        просроченные лоты пачкой `limit` штук (страничный обход).
+
+        Порядок — стабильный `ORDER BY reserved_at ASC, id ASC`
+        (сначала самые старые — справедливый refund-порядок). Composite-
+        индекс `(status, reserved_at)` в Alembic-миграции
+        `0036_prize_lots_reserved_at` покрывает этот запрос.
+
+        Параметры:
+        - `currency` — фильтр валюты (один cron-entry на каждую).
+        - `expired_before` — TZ-aware момент-cutoff
+          (обычно `clock.now() - timedelta(seconds=reserved_ttl_seconds)`).
+        - `limit` — макс. размер пачки (default `100`); use-case
+          вызывает несколько раз в цикле пока возвращается полная пачка.
+
+        Возвращает: tuple из `PrizeLot` (может быть пустым — нормально).
         """
         ...
 

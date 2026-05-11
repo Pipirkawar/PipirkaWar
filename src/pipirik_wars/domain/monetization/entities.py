@@ -360,6 +360,13 @@ class PrizeLot:
     * `status: PrizeLotStatus` — текущий статус (см. enum-docstring).
     * `created_at: datetime` — момент `IPrizeLotRepository.add(...)`
       (TZ-aware; валидируется).
+    * `reserved_at: datetime | None` — момент резервирования (TZ-aware).
+      На `ACTIVE` — `None`. На `RESERVED` — обязан быть выставлен.
+      На `CLAIMED` — сохраняется из `RESERVED` (референс на момент
+      брони; D.9-flow использует для expire-cron-а `now - reserved_at
+      > reserved_ttl_seconds`). На `REFUNDED` — `None` если лот пришёл
+      из `ACTIVE` (admin /refund_lot, 4.1-E); выставлен если из `RESERVED`
+      (timeout-refund, 4.1-D D.9).
     * `claimed_at: datetime | None` — момент `ClaimPrize` (TZ-aware).
       На моменте `ACTIVE` / `RESERVED` / `REFUNDED` — `None`. На моменте
       `CLAIMED` — обязан быть выставлен (валидируется).
@@ -369,11 +376,14 @@ class PrizeLot:
        игроку обязан остаться `>= 1` минимальная единица валюты.
     2. `status == CLAIMED ⇒ claimed_at is not None` (и наоборот:
        `claimed_at is not None ⇒ status == CLAIMED`).
-    3. Status transition: `ACTIVE → RESERVED|REFUNDED`,
+    3. `status == ACTIVE ⇒ reserved_at is None`; `status == RESERVED
+       ⇒ reserved_at is not None`. Для `CLAIMED` / `REFUNDED` поле может
+       быть любым (зависит от пути в state-machine).
+    4. Status transition: `ACTIVE → RESERVED|REFUNDED`,
        `RESERVED → CLAIMED|REFUNDED`, `CLAIMED|REFUNDED` — terminal.
        Нарушение → `PrizeLotStatusTransitionError`.
 
-    Frozen + slots → агрегат без мутаций; `reserve()` / `claim(...)` /
+    Frozen + slots → агрегат без мутаций; `reserve(...)` / `claim(...)` /
     `refund()` возвращают новый инстанс (старый не мутируется).
     Convention идентична `domain/caravan/entities.py::Caravan.mark_*`.
     """
@@ -384,6 +394,7 @@ class PrizeLot:
     fee_buffer_native: FeeBufferAmount
     status: PrizeLotStatus
     created_at: datetime
+    reserved_at: datetime | None = None
     claimed_at: datetime | None = None
 
     def __post_init__(self) -> None:
@@ -404,6 +415,18 @@ class PrizeLot:
             raise ValueError(
                 "PrizeLot.created_at must be timezone-aware "
                 "(naïve datetime would lose UTC offset on persistence)",
+            )
+        if self.reserved_at is not None and self.reserved_at.tzinfo is None:
+            raise ValueError(
+                "PrizeLot.reserved_at must be timezone-aware",
+            )
+        if self.status is PrizeLotStatus.ACTIVE and self.reserved_at is not None:
+            raise ValueError(
+                f"PrizeLot(status=ACTIVE) must have reserved_at=None, got {self.reserved_at!r}",
+            )
+        if self.status is PrizeLotStatus.RESERVED and self.reserved_at is None:
+            raise ValueError(
+                "PrizeLot(status=RESERVED) requires reserved_at to be set",
             )
         if self.claimed_at is not None and self.claimed_at.tzinfo is None:
             raise ValueError(
@@ -448,6 +471,7 @@ class PrizeLot:
             fee_buffer_native=fee_buffer_native,
             status=PrizeLotStatus.ACTIVE,
             created_at=created_at,
+            reserved_at=None,
             claimed_at=None,
         )
 
@@ -475,15 +499,40 @@ class PrizeLot:
         """
         return self.amount_native - self.fee_buffer_native.value
 
-    def reserve(self) -> PrizeLot:
-        """Перевести `ACTIVE → RESERVED`. Невалидный source → ошибка.
+    def reserve(self, *, reserved_at: datetime) -> PrizeLot:
+        """Перевести `ACTIVE → RESERVED` с пометкой времени резервирования.
 
         Используется на доменном уровне для in-memory моделирования
         резервирования (например, в Fake-репозитории unit-тестов).
         В production-flow атомарность гарантируется SQL-репозиторием
         (`UPDATE ... WHERE status='active'`, шаг C.3).
+
+        `reserved_at` — TZ-aware момент резервирования (обычно
+        `IClock.now()` из use-case-а спина). D.9-flow использует
+        для expire-cron-а: если `now - reserved_at > reserved_ttl_seconds`
+        (баланс-конфиг D.9.a), лот возвращается в `REFUNDED` + сумма
+        в пул.
         """
-        return self._transition_to(PrizeLotStatus.RESERVED)
+        if reserved_at.tzinfo is None:
+            raise ValueError(
+                "PrizeLot.reserve(reserved_at=...) must be timezone-aware",
+            )
+        if self.status is not PrizeLotStatus.ACTIVE:
+            raise PrizeLotStatusTransitionError(
+                lot_id=self.id,
+                from_status=self.status,
+                to_status=PrizeLotStatus.RESERVED,
+            )
+        return PrizeLot(
+            id=self.id,
+            currency=self.currency,
+            amount_native=self.amount_native,
+            fee_buffer_native=self.fee_buffer_native,
+            status=PrizeLotStatus.RESERVED,
+            created_at=self.created_at,
+            reserved_at=reserved_at,
+            claimed_at=None,
+        )
 
     def claim(self, *, claimed_at: datetime) -> PrizeLot:
         """Перевести `RESERVED → CLAIMED` с пометкой времени выплаты.
@@ -508,6 +557,7 @@ class PrizeLot:
             fee_buffer_native=self.fee_buffer_native,
             status=PrizeLotStatus.CLAIMED,
             created_at=self.created_at,
+            reserved_at=self.reserved_at,
             claimed_at=claimed_at,
         )
 
@@ -539,6 +589,7 @@ class PrizeLot:
             fee_buffer_native=self.fee_buffer_native,
             status=new_status,
             created_at=self.created_at,
+            reserved_at=self.reserved_at,
             claimed_at=self.claimed_at,
         )
 

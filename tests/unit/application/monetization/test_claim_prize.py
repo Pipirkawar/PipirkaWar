@@ -91,6 +91,7 @@ def _make_reserved_lot(
         fee_buffer_native=FeeBufferAmount(fee_buffer),
         status=PrizeLotStatus.RESERVED,
         created_at=_NOW,
+        reserved_at=_NOW,
         claimed_at=None,
     )
 

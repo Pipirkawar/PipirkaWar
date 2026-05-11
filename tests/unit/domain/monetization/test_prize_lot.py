@@ -201,11 +201,12 @@ class TestPrizeLotClaimedAtStatusInvariant:
 
     def test_non_claimed_with_claimed_at_raises(self) -> None:
         claimed_at = _NOW + timedelta(hours=1)
-        for status in (
-            PrizeLotStatus.ACTIVE,
-            PrizeLotStatus.RESERVED,
-            PrizeLotStatus.REFUNDED,
-        ):
+        cases: tuple[tuple[PrizeLotStatus, datetime | None], ...] = (
+            (PrizeLotStatus.ACTIVE, None),
+            (PrizeLotStatus.RESERVED, _NOW),
+            (PrizeLotStatus.REFUNDED, None),
+        )
+        for status, reserved_at in cases:
             with pytest.raises(ValueError, match="must have claimed_at=None"):
                 PrizeLot(
                     id=1,
@@ -214,6 +215,7 @@ class TestPrizeLotClaimedAtStatusInvariant:
                     fee_buffer_native=FeeBufferAmount(0),
                     status=status,
                     created_at=_NOW,
+                    reserved_at=reserved_at,
                     claimed_at=claimed_at,
                 )
 
@@ -245,12 +247,123 @@ class TestPrizeLotIdInvariant:
             _make_active_lot(lot_id=True)
 
 
+class TestPrizeLotReservedAtInvariant:
+    """`reserved_at`: TZ-aware + согласованность со `status` (D.9.b)."""
+
+    def test_active_with_reserved_at_raises(self) -> None:
+        with pytest.raises(ValueError, match=r"ACTIVE.*must have reserved_at=None"):
+            PrizeLot(
+                id=1,
+                currency=Currency.STARS,
+                amount_native=100,
+                fee_buffer_native=FeeBufferAmount(0),
+                status=PrizeLotStatus.ACTIVE,
+                created_at=_NOW,
+                reserved_at=_NOW,
+                claimed_at=None,
+            )
+
+    def test_reserved_without_reserved_at_raises(self) -> None:
+        with pytest.raises(ValueError, match=r"RESERVED\) requires reserved_at to be set"):
+            PrizeLot(
+                id=1,
+                currency=Currency.STARS,
+                amount_native=100,
+                fee_buffer_native=FeeBufferAmount(0),
+                status=PrizeLotStatus.RESERVED,
+                created_at=_NOW,
+                reserved_at=None,
+                claimed_at=None,
+            )
+
+    def test_reserved_with_naive_reserved_at_raises(self) -> None:
+        naive = datetime(2025, 11, 1, 13, 0, 0)
+        with pytest.raises(ValueError, match="reserved_at must be timezone-aware"):
+            PrizeLot(
+                id=1,
+                currency=Currency.STARS,
+                amount_native=100,
+                fee_buffer_native=FeeBufferAmount(0),
+                status=PrizeLotStatus.RESERVED,
+                created_at=_NOW,
+                reserved_at=naive,
+                claimed_at=None,
+            )
+
+    def test_refunded_allows_either_reserved_at(self) -> None:
+        # REFUNDED от ACTIVE: reserved_at=None
+        lot_from_active = PrizeLot(
+            id=1,
+            currency=Currency.STARS,
+            amount_native=100,
+            fee_buffer_native=FeeBufferAmount(0),
+            status=PrizeLotStatus.REFUNDED,
+            created_at=_NOW,
+            reserved_at=None,
+            claimed_at=None,
+        )
+        assert lot_from_active.reserved_at is None
+
+        # REFUNDED от RESERVED (D.9 timeout-flow): reserved_at сохранён
+        lot_from_reserved = PrizeLot(
+            id=1,
+            currency=Currency.STARS,
+            amount_native=100,
+            fee_buffer_native=FeeBufferAmount(0),
+            status=PrizeLotStatus.REFUNDED,
+            created_at=_NOW,
+            reserved_at=_NOW,
+            claimed_at=None,
+        )
+        assert lot_from_reserved.reserved_at == _NOW
+
+    def test_freshly_generated_has_reserved_at_none(self) -> None:
+        lot = PrizeLot.freshly_generated(
+            currency=Currency.STARS,
+            amount_native=100,
+            fee_buffer_native=FeeBufferAmount(0),
+            created_at=_NOW,
+        )
+        assert lot.reserved_at is None
+        assert lot.status is PrizeLotStatus.ACTIVE
+
+    def test_reserve_sets_reserved_at(self) -> None:
+        moment = _NOW + timedelta(seconds=30)
+        lot = _make_active_lot(lot_id=1).reserve(reserved_at=moment)
+        assert lot.reserved_at == moment
+
+    def test_reserve_with_naive_reserved_at_raises(self) -> None:
+        naive = datetime(2025, 11, 1, 13, 0, 0)
+        with pytest.raises(ValueError, match="reserve.*must be timezone-aware"):
+            _make_active_lot(lot_id=1).reserve(reserved_at=naive)
+
+    def test_claim_preserves_reserved_at(self) -> None:
+        reserved_at = _NOW + timedelta(seconds=10)
+        claimed_at = _NOW + timedelta(hours=1)
+        lot = (
+            _make_active_lot(lot_id=7).reserve(reserved_at=reserved_at).claim(claimed_at=claimed_at)
+        )
+        assert lot.reserved_at == reserved_at
+        assert lot.claimed_at == claimed_at
+
+    def test_refund_from_reserved_preserves_reserved_at(self) -> None:
+        reserved_at = _NOW + timedelta(seconds=10)
+        lot = _make_active_lot(lot_id=7).reserve(reserved_at=reserved_at).refund()
+        assert lot.reserved_at == reserved_at
+        assert lot.status is PrizeLotStatus.REFUNDED
+
+    def test_refund_from_active_keeps_reserved_at_none(self) -> None:
+        lot = _make_active_lot(lot_id=7).refund()
+        assert lot.reserved_at is None
+        assert lot.status is PrizeLotStatus.REFUNDED
+
+
 class TestPrizeLotReserveTransition:
     """`reserve()` — `ACTIVE → RESERVED`."""
 
     def test_active_can_reserve(self) -> None:
         lot = _make_active_lot(lot_id=1)
-        reserved = lot.reserve()
+        reserved = lot.reserve(reserved_at=_NOW)
         assert reserved.status is PrizeLotStatus.RESERVED
         assert reserved.is_reserved
         assert not reserved.is_active
@@ -266,23 +379,23 @@ class TestPrizeLotReserveTransition:
         assert lot.status is PrizeLotStatus.ACTIVE
 
     def test_reserved_cannot_reserve_again(self) -> None:
-        lot = _make_active_lot(lot_id=42).reserve()
+        lot = _make_active_lot(lot_id=42).reserve(reserved_at=_NOW)
         with pytest.raises(PrizeLotStatusTransitionError) as exc_info:
-            lot.reserve()
+            lot.reserve(reserved_at=_NOW)
         err = exc_info.value
         assert err.lot_id == 42
         assert err.from_status is PrizeLotStatus.RESERVED
         assert err.to_status is PrizeLotStatus.RESERVED
 
     def test_claimed_cannot_reserve(self) -> None:
-        lot = _make_active_lot(lot_id=1).reserve().claim(claimed_at=_NOW)
+        lot = _make_active_lot(lot_id=1).reserve(reserved_at=_NOW).claim(claimed_at=_NOW)
         with pytest.raises(PrizeLotStatusTransitionError):
-            lot.reserve()
+            lot.reserve(reserved_at=_NOW)
 
     def test_refunded_cannot_reserve(self) -> None:
         lot = _make_active_lot(lot_id=1).refund()
         with pytest.raises(PrizeLotStatusTransitionError):
-            lot.reserve()
+            lot.reserve(reserved_at=_NOW)
 
 
 class TestPrizeLotClaimTransition:
@@ -290,7 +403,7 @@ class TestPrizeLotClaimTransition:
 
     def test_reserved_can_claim(self) -> None:
         claim_time = _NOW + timedelta(hours=1)
-        lot = _make_active_lot(lot_id=7).reserve().claim(claimed_at=claim_time)
+        lot = _make_active_lot(lot_id=7).reserve(reserved_at=_NOW).claim(claimed_at=claim_time)
         assert lot.status is PrizeLotStatus.CLAIMED
         assert lot.claimed_at == claim_time
         assert lot.is_terminal
@@ -305,7 +418,7 @@ class TestPrizeLotClaimTransition:
         assert err.to_status is PrizeLotStatus.CLAIMED
 
     def test_claimed_cannot_claim_again(self) -> None:
-        lot = _make_active_lot(lot_id=1).reserve().claim(claimed_at=_NOW)
+        lot = _make_active_lot(lot_id=1).reserve(reserved_at=_NOW).claim(claimed_at=_NOW)
         with pytest.raises(PrizeLotStatusTransitionError):
             lot.claim(claimed_at=_NOW)
 
@@ -316,7 +429,7 @@ class TestPrizeLotClaimTransition:
 
     def test_claim_with_naive_datetime_raises(self) -> None:
         naive = datetime(2025, 11, 1, 13, 0, 0)
-        lot = _make_active_lot(lot_id=1).reserve()
+        lot = _make_active_lot(lot_id=1).reserve(reserved_at=_NOW)
         with pytest.raises(ValueError, match="claim.*must be timezone-aware"):
             lot.claim(claimed_at=naive)
 
@@ -331,12 +444,12 @@ class TestPrizeLotRefundTransition:
         assert lot.claimed_at is None
 
     def test_reserved_can_refund(self) -> None:
-        lot = _make_active_lot(lot_id=1).reserve().refund()
+        lot = _make_active_lot(lot_id=1).reserve(reserved_at=_NOW).refund()
         assert lot.status is PrizeLotStatus.REFUNDED
         assert lot.is_terminal
 
     def test_claimed_cannot_refund(self) -> None:
-        lot = _make_active_lot(lot_id=1).reserve().claim(claimed_at=_NOW)
+        lot = _make_active_lot(lot_id=1).reserve(reserved_at=_NOW).claim(claimed_at=_NOW)
         with pytest.raises(PrizeLotStatusTransitionError) as exc_info:
             lot.refund()
         err = exc_info.value
@@ -359,7 +472,7 @@ class TestPrizeLotImmutability:
 
     def test_reserve_returns_new_instance(self) -> None:
         before = _make_active_lot(lot_id=1)
-        after = before.reserve()
+        after = before.reserve(reserved_at=_NOW)
         assert after is not before
         # Исходный лот не мутирован.
         assert before.status is PrizeLotStatus.ACTIVE

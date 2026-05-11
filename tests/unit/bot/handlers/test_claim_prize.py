@@ -134,6 +134,8 @@ def _lot(
     fee_buffer: int = 100_000_000,
 ) -> PrizeLot:
     claimed_at = _NOW if status is PrizeLotStatus.CLAIMED else None
+    # CLAIMED ⇒ был RESERVED, поэтому reserved_at сохранён; для ACTIVE — None.
+    reserved_at = _NOW if status in (PrizeLotStatus.RESERVED, PrizeLotStatus.CLAIMED) else None
     return PrizeLot(
         id=lot_id,
         currency=currency,
@@ -141,6 +143,7 @@ def _lot(
         fee_buffer_native=FeeBufferAmount(fee_buffer),
         status=status,
         created_at=_NOW,
+        reserved_at=reserved_at,
         claimed_at=claimed_at,
     )
 

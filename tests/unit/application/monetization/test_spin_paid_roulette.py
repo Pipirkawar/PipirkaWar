@@ -1090,7 +1090,7 @@ class TestPrizeLotReservation:
 
         # Резервирование: ровно один вызов update_status(stored.id, RESERVED).
         assert prize_lots.update_status_calls == [
-            (stored.id, PrizeLotStatus.RESERVED, None),
+            (stored.id, PrizeLotStatus.RESERVED, _NOW, None),
         ]
         reserved = await prize_lots.get_by_id(lot_id=stored.id or 0)
         assert reserved is not None

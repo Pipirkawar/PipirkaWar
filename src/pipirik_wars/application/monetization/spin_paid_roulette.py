@@ -409,6 +409,7 @@ class SpinPaidRoulette:
                         reserved_lot = await self._prize_lots.update_status(
                             lot_id=outcome.lot_id,
                             new_status=PrizeLotStatus.RESERVED,
+                            reserved_at=now,
                         )
                     except PrizeLotStatusTransitionError:
                         outcome = pick_length_only_outcome(
