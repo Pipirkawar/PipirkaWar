@@ -468,15 +468,19 @@ def _crc16_xmodem(data: bytes) -> int:
 def serialize_boc(root: Cell) -> bytes:
     """Сериализовать cell-дерево в минимальный TON BoC (single-root).
 
-    Формат: ``size_bytes=1`` (≤256 cells), ``off_bytes=1`` (≤256 bytes
-    суммарной cell-data), без has_idx / без has_crc / без cache_bits.
-    Этот формат соответствует ``Cell.to_boc(has_idx=False, hash_crc32=False,
+    Формат: ``size_bytes=1`` (≤256 cells), ``off_bytes`` адаптивный (1 или 2
+    байта), без has_idx / без has_crc / без cache_bits. Этот формат
+    совместим с ``Cell.to_boc(has_idx=False, hash_crc32=False,
     has_cache_bits=False, flags=0)`` из ``tonsdk`` (cross-checked в
-    golden-тестах).
+    golden-тестах для off_bytes=1).
 
-    Поднимает ``ValueError`` при > 256 cells или > 256 bytes data —
-    в наших use-cases (wallet-v3R2 + TEP-74 jetton-transfer) это даёт
-    запас в ×10+.
+    `off_bytes` подбирается по минимально-необходимому: ``1`` если
+    ``tot_cells_size ≤ 255``, иначе ``2`` (поддержка до ~64 KB cell-data,
+    достаточно для wallet-v3R2 + TEP-74 jetton-transfer и более сложных
+    message-ей).
+
+    Поднимает ``ValueError`` при ``> 255`` cells (size_bytes=1 limit) или
+    ``> 65535`` bytes cell-data (off_bytes=2 limit).
     """
     # 1. Топологическая сортировка: каждая cell идёт после своих refs.
     #    Однако TON-формат хранит references как «индекс в массиве cells,
@@ -492,7 +496,7 @@ def serialize_boc(root: Cell) -> bytes:
         )
 
     # 2. Сериализуем data-секцию: для каждой cell — d1, d2, finalized-data,
-    #    рефы-индексы (1 байт каждый).
+    #    рефы-индексы (1 байт каждый, т.к. size_bytes=1).
     cells_bytes = bytearray()
     for cell in ordered:
         d1, d2 = cell._descriptor_bytes()
@@ -503,22 +507,30 @@ def serialize_boc(root: Cell) -> bytes:
             ref_index = index_by_id[id(ref)]
             cells_bytes.append(ref_index)
     tot_cells_size = len(cells_bytes)
-    if tot_cells_size > 0xFF:
+
+    # 3. Выбираем минимальный off_bytes для упаковки tot_cells_size.
+    if tot_cells_size <= 0xFF:
+        off_bytes = 1
+    elif tot_cells_size <= 0xFFFF:
+        off_bytes = 2
+    else:
         raise ValueError(
-            f"serialize_boc: tot_cells_size={tot_cells_size} > 255; off_bytes=1 cannot fit",
+            f"serialize_boc: tot_cells_size={tot_cells_size} > 65535; "
+            "off_bytes=2 cannot fit (need >=3, не поддерживаем в minimal-encoder)",
         )
 
-    # 3. Header (минимальный):
+    # 4. Header (минимальный):
     #    magic(4) || flag_byte(1) || off_bytes(1) || cells_num(1) ||
-    #    roots_num(1) || absent_num(1) || tot_cells_size(1) || root_idx(1).
+    #    roots_num(1) || absent_num(1) || tot_cells_size(off_bytes) ||
+    #    root_idx(1).
     header = bytearray(_BOC_MAGIC)
     # flag_byte: has_idx=0, hash_crc32=0, has_cache_bits=0, flags=0, size_bytes=1.
     header.append(0b0000_0001)
-    header.append(1)  # off_bytes
+    header.append(off_bytes)
     header.append(cells_num)
     header.append(1)  # roots_num = 1
     header.append(0)  # absent_num = 0
-    header.append(tot_cells_size)
+    header.extend(tot_cells_size.to_bytes(off_bytes, byteorder="big"))
     header.append(index_by_id[id(root)])  # root index (== 0 после нашего обхода)
 
     return bytes(header) + bytes(cells_bytes)

@@ -601,19 +601,8 @@ class TestTep74Body:
 
 
 class TestBocCapacity:
-    def test_data_overflow_size_bytes_1(self) -> None:
-        """Дерево с > 255 байт total data → отказ (size_bytes=1)."""
-        # Соберём дерево из 30 cell-ов по ~127 бит — суммарно > 256 байт.
-        leaf = CellBuilder().store_bits(b"\xff" * 100, 800).end_cell()
-        # На каждый ref добавляется 1 байт (index). leaf data = 100 байт.
-        # 3 leaf-а + 1 байт refs-индекса каждый + d1+d2 на каждый = ~310 байт.
-        builder = CellBuilder()
-        for _ in range(3):
-            builder.store_ref(leaf)
-        big_root = builder.end_cell()
-        # 3 ref-а + leaf — итого 2 cells (leaf shared) или 4 (если разные).
-        # Здесь shared leaf → 2 cells. tot_cells_size = (2 + 0 + 3) + (2 + 100) = 107. OK.
-        # Это пройдёт, а вот нужно > 256 байт. Сделаем без shared.
+    def test_off_bytes_2_used_when_size_exceeds_255(self) -> None:
+        """Дерево с > 255 байт total data → off_bytes=2, успешно сериализуется."""
         leaves = [CellBuilder().store_bits(b"\xff" * 100, 800).end_cell() for _ in range(3)]
         builder = CellBuilder()
         for ll in leaves:
@@ -621,5 +610,30 @@ class TestBocCapacity:
         big_root = CellBuilder().store_ref(builder.end_cell()).end_cell()
         # cells = 1 (root) + 1 (mid) + 3 leaves = 5. tot_cells_size =
         # (root: 2 + 0 + 1) + (mid: 2 + 0 + 3) + 3 * (2 + 100 + 0) = 3 + 5 + 306 = 314.
-        with pytest.raises(ValueError, match="tot_cells_size"):
-            serialize_boc(big_root)
+        raw = serialize_boc(big_root)
+        # Header: magic(4) flag(1) off_bytes(1) cells_num(1) roots(1) absent(1)
+        #         tot_cells_size(off_bytes) root_idx(1)
+        assert raw[:4].hex() == "b5ee9c72"
+        # off_bytes byte at index 5.
+        assert raw[5] == 2  # off_bytes = 2 для tot_cells_size > 255
+        # tot_cells_size 16-bit BE at index 9-10.
+        tot_size = int.from_bytes(raw[9:11], byteorder="big")
+        assert tot_size == 314
+
+    def test_too_many_cells_raises(self) -> None:
+        """`size_bytes=1` limit — 255 cells."""
+        # 256 уникальных leaf-ов (разные uint32-значения), затем 4-arity-дерево
+        # над ними → 256 + 64 + 16 + 4 + 1 = 341 cells > 255.
+        unique_leaves = [CellBuilder().store_uint(i, 32).end_cell() for i in range(256)]
+        level = unique_leaves
+        while len(level) > 1:
+            next_level: list[Cell] = []
+            for i in range(0, len(level), 4):
+                b = CellBuilder()
+                for c in level[i : i + 4]:
+                    b.store_ref(c)
+                next_level.append(b.end_cell())
+            level = next_level
+        root = level[0]
+        with pytest.raises(ValueError, match="too many cells"):
+            serialize_boc(root)

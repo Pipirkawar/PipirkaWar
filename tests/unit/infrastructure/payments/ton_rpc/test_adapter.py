@@ -1,19 +1,26 @@
-"""Unit-тесты `TonRpcAdapter` (Спринт 4.1-D, шаг D.5).
+"""Unit-тесты `TonRpcAdapter` (Спринт 4.1-D, шаги D.5 + D.10.b-3).
 
 Контракт `ITonPayoutAdapter`:
-* `TON_NANO` payout: собирает TON-выплату, шлёт BOC, возвращает
+* `TON_NANO` payout: фетчит seqno, собирает TEP-67/wallet-v3R2
+  external-message в BoC + Ed25519-signature, шлёт BoC, возвращает
   `PayoutResult(tx_hash, actual_fee_native)`.
-* `USDT_DECIMAL` payout: резолвит jetton-wallet через
-  `JettonUsdtProvider`, шлёт BOC jetton-transfer-а, возвращает
-  `PayoutResult`.
-* `STARS` → `UnsupportedPayoutCurrencyError`.
+* `USDT_DECIMAL` payout: резолвит jetton-wallet через `JettonUsdtProvider`,
+  фетчит seqno, собирает TEP-74-jetton-transfer-body, оборачивает в
+  TEP-67/wallet-v3R2 external-message + Ed25519-signature, шлёт BoC.
+* `STARS` → `UnsupportedPayoutCurrencyError` (fail-fast, без RPC).
 * Невалидные входы (`amount < 1`, пустой recipient) → `ValueError`.
 * Пустой `payout_wallet_address` → `ValueError` (fail-closed).
 * Сетевые ошибки клиента — пробрасываются.
+
+Тесты D.10.b-3 не проверяют конкретное содержимое BoC-байт (это делает
+`test_adapter_boc.py` — golden-vectors); здесь — поведенческие тесты:
+порядок RPC-вызовов, валидация input, error-propagation, идемпотент-
+ность query_id (blake2b от полной payout-tuple).
 """
 
 from __future__ import annotations
 
+import base64
 import inspect
 
 import pytest
@@ -28,9 +35,16 @@ from pipirik_wars.infrastructure.payments.ton_rpc.errors import (
 )
 from pipirik_wars.infrastructure.payments.ton_rpc.jetton import JettonUsdtProvider
 from pipirik_wars.infrastructure.payments.ton_rpc.settings import TonRpcSettings
-from tests.unit.infrastructure.payments.ton_rpc._fakes import FakeTonRpcClient
+from tests.unit.infrastructure.payments.ton_rpc._fakes import (
+    FakeTonMessageSigner,
+    FakeTonRpcClient,
+)
 
+_TON_BOC_MAGIC_HEX = "b5ee9c72"
 _FAKE_PAYOUT_WALLET = "0:4444444444444444444444444444444444444444444444444444444444444444"
+# `_FAKE_USDT_MASTER` — friendly base64url-form, валидируется только
+# `JettonUsdtProvider` (он не парсит адрес — просто кладёт в RPC-payload),
+# поэтому подойдёт любой 48-char base64url-string.
 _FAKE_USDT_MASTER = "EQAusdtmasterzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
 _FAKE_RECIPIENT_TON = "0:5555555555555555555555555555555555555555555555555555555555555555"
 _FAKE_RECIPIENT_JETTON_WALLET = "0:6666666666666666666666666666666666666666666666666666666666666666"
@@ -46,6 +60,7 @@ def _make_settings(**overrides: object) -> TonRpcSettings:
         "fee_window_days": 7,
         "fallback_fee_buffer_ton_nano": 10_000_000,
         "fallback_fee_buffer_usdt_decimal": 200_000,
+        "wallet_subwallet_id": 698_983_191,
     }
     defaults.update(overrides)
     return TonRpcSettings(**defaults)  # type: ignore[arg-type]
@@ -54,17 +69,24 @@ def _make_settings(**overrides: object) -> TonRpcSettings:
 def _make_adapter(
     client: FakeTonRpcClient | None = None,
     settings: TonRpcSettings | None = None,
+    *,
+    signer: FakeTonMessageSigner | None = None,
+    fixed_now: float | None = None,
 ) -> tuple[TonRpcAdapter, FakeTonRpcClient]:
     real_client = client or FakeTonRpcClient()
     real_settings = settings or _make_settings()
+    real_signer = signer or FakeTonMessageSigner()
     jetton_provider = JettonUsdtProvider(
         client=real_client,
         jetton_master_address=real_settings.usdt_jetton_master,
     )
+    clock = (lambda: fixed_now) if fixed_now is not None else None
     adapter = TonRpcAdapter(
         client=real_client,
         settings=real_settings,
         jetton_provider=jetton_provider,
+        signer=real_signer,
+        clock=clock,
     )
     return adapter, real_client
 
@@ -75,12 +97,24 @@ def _assert_implements_protocol(adapter: ITonPayoutAdapter) -> None:
     assert adapter is not None
 
 
+def _assert_is_valid_boc_base64(boc_b64: str) -> bytes:
+    """Декодирует base64 → проверяет TON BoC magic → возвращает raw bytes."""
+    raw = base64.b64decode(boc_b64)
+    assert raw[:4].hex() == _TON_BOC_MAGIC_HEX, (
+        f"BoC must start with magic {_TON_BOC_MAGIC_HEX}; got {raw[:4].hex()}"
+    )
+    return raw
+
+
 class TestTonRpcAdapterTonPayout:
     @pytest.mark.asyncio
     async def test_ton_payout_happy_path(self) -> None:
         client = FakeTonRpcClient()
+        # 1) seqno fetch returns 42.
+        client.queue_run_get_method(exit_code=0, stack=("42",))
+        # 2) send_boc returns tx-hash + fee.
         client.queue_send_boc(tx_hash="0xdeadbeef", actual_fee_native=4_200_000)
-        adapter, _ = _make_adapter(client)
+        adapter, _ = _make_adapter(client, fixed_now=1_700_000_000.0)
 
         result = await adapter.payout(
             currency=Currency.TON_NANO,
@@ -91,23 +125,54 @@ class TestTonRpcAdapterTonPayout:
         assert isinstance(result, PayoutResult)
         assert result.tx_hash == "0xdeadbeef"
         assert result.actual_fee_native == 4_200_000
-        # Один call: send_boc — никаких run_get_method для TON-перевода.
+        # 1 seqno-вызов, 0 jetton-resolution, 1 send_boc.
+        assert len(client.calls_run_get_method) == 1
+        seqno_call = client.calls_run_get_method[0]
+        assert seqno_call.address == _FAKE_PAYOUT_WALLET
+        assert seqno_call.method == "seqno"
+        assert seqno_call.stack == ()
         assert len(client.calls_send_boc) == 1
-        assert len(client.calls_run_get_method) == 0
         boc = client.calls_send_boc[0].signed_boc_base64
-        assert "ton-payout" in boc
-        assert _FAKE_RECIPIENT_TON in boc
-        assert _FAKE_PAYOUT_WALLET in boc
-        assert "amount=500000000" in boc
+        _assert_is_valid_boc_base64(boc)
+
+    @pytest.mark.asyncio
+    async def test_ton_payout_propagates_seqno_failure(self) -> None:
+        client = FakeTonRpcClient()
+        client.queue_run_get_method(exit_code=255, stack=())
+        adapter, _ = _make_adapter(client)
+        with pytest.raises(TonRpcCallError, match="seqno"):
+            await adapter.payout(
+                currency=Currency.TON_NANO,
+                amount_native=100,
+                recipient_address=_FAKE_RECIPIENT_TON,
+            )
+        # send_boc даже не пробовали.
+        assert client.calls_send_boc == []
+
+    @pytest.mark.asyncio
+    async def test_ton_payout_propagates_empty_seqno_stack(self) -> None:
+        client = FakeTonRpcClient()
+        client.queue_run_get_method(exit_code=0, stack=())
+        adapter, _ = _make_adapter(client)
+        with pytest.raises(TonRpcCallError, match="empty stack"):
+            await adapter.payout(
+                currency=Currency.TON_NANO,
+                amount_native=100,
+                recipient_address=_FAKE_RECIPIENT_TON,
+            )
 
 
 class TestTonRpcAdapterUsdtPayout:
     @pytest.mark.asyncio
     async def test_usdt_payout_resolves_jetton_wallet_and_sends_boc(self) -> None:
         client = FakeTonRpcClient()
+        # 1) jetton-wallet resolution.
         client.queue_run_get_method(exit_code=0, stack=(_FAKE_RECIPIENT_JETTON_WALLET,))
+        # 2) seqno fetch.
+        client.queue_run_get_method(exit_code=0, stack=("7",))
+        # 3) send_boc.
         client.queue_send_boc(tx_hash="0xabcdef", actual_fee_native=100_000)
-        adapter, _ = _make_adapter(client)
+        adapter, _ = _make_adapter(client, fixed_now=1_700_000_000.0)
 
         result = await adapter.payout(
             currency=Currency.USDT_DECIMAL,
@@ -117,21 +182,19 @@ class TestTonRpcAdapterUsdtPayout:
 
         assert result.tx_hash == "0xabcdef"
         assert result.actual_fee_native == 100_000
-        # run_get_method вызван против jetton-master с owner=recipient.
-        assert len(client.calls_run_get_method) == 1
-        call = client.calls_run_get_method[0]
-        assert call.address == _FAKE_USDT_MASTER
-        assert call.method == "get_wallet_address"
-        assert call.stack == (_FAKE_RECIPIENT_TON,)
-        # send_boc payload — jetton-transfer с зарезолвленным jetton-wallet-ом.
+        # Сначала jetton-master, потом payout-wallet (seqno).
+        assert len(client.calls_run_get_method) == 2
+        call0, call1 = client.calls_run_get_method
+        assert call0.address == _FAKE_USDT_MASTER
+        assert call0.method == "get_wallet_address"
+        assert call0.stack == (_FAKE_RECIPIENT_TON,)
+        assert call1.address == _FAKE_PAYOUT_WALLET
+        assert call1.method == "seqno"
+        assert call1.stack == ()
+        # send_boc — валидный TON BoC base64.
         assert len(client.calls_send_boc) == 1
         boc = client.calls_send_boc[0].signed_boc_base64
-        assert "jetton-transfer" in boc
-        assert _FAKE_RECIPIENT_JETTON_WALLET in boc  # destination jetton wallet
-        assert _FAKE_PAYOUT_WALLET in boc  # response destination (excess TON)
-        assert "amount=5000000" in boc
-        assert "fwd_ton=50000000" in boc
-        assert "op=0xf8a7ea5" in boc
+        _assert_is_valid_boc_base64(boc)
 
     @pytest.mark.asyncio
     async def test_usdt_payout_jetton_resolution_failure_propagates(self) -> None:
@@ -145,8 +208,9 @@ class TestTonRpcAdapterUsdtPayout:
                 amount_native=1_000_000,
                 recipient_address=_FAKE_RECIPIENT_TON,
             )
-        # send_boc даже не пробовали.
+        # send_boc даже не пробовали; seqno тоже не пытались.
         assert client.calls_send_boc == []
+        assert len(client.calls_run_get_method) == 1
 
 
 class TestTonRpcAdapterValidation:
@@ -162,7 +226,7 @@ class TestTonRpcAdapterValidation:
             )
 
         assert exc_info.value.currency == "stars"
-        # клиента не дёргали — fail-fast.
+        # Клиента не дёргали — fail-fast.
         assert client.calls_send_boc == []
         assert client.calls_run_get_method == []
 
@@ -211,6 +275,7 @@ class TestTonRpcAdapterNetworkErrors:
     @pytest.mark.asyncio
     async def test_send_boc_failure_propagates(self) -> None:
         client = FakeTonRpcClient()
+        client.queue_run_get_method(exit_code=0, stack=("0",))
         client.raise_on_send_boc(TonRpcCallError("rpc down", method="sendBoc"))
         adapter, _ = _make_adapter(client)
 
@@ -220,6 +285,71 @@ class TestTonRpcAdapterNetworkErrors:
                 amount_native=100,
                 recipient_address=_FAKE_RECIPIENT_TON,
             )
+
+
+class TestTonRpcAdapterQueryIdDerivation:
+    """`_derive_query_id` через blake2b — стабилен и детерминирован."""
+
+    def test_query_id_is_deterministic(self) -> None:
+        q1 = TonRpcAdapter._derive_query_id(
+            currency=Currency.TON_NANO,
+            recipient_address=_FAKE_RECIPIENT_TON,
+            amount_native=12345,
+        )
+        q2 = TonRpcAdapter._derive_query_id(
+            currency=Currency.TON_NANO,
+            recipient_address=_FAKE_RECIPIENT_TON,
+            amount_native=12345,
+        )
+        assert q1 == q2
+
+    def test_query_id_changes_with_currency(self) -> None:
+        q1 = TonRpcAdapter._derive_query_id(
+            currency=Currency.TON_NANO,
+            recipient_address=_FAKE_RECIPIENT_TON,
+            amount_native=100,
+        )
+        q2 = TonRpcAdapter._derive_query_id(
+            currency=Currency.USDT_DECIMAL,
+            recipient_address=_FAKE_RECIPIENT_TON,
+            amount_native=100,
+        )
+        assert q1 != q2
+
+    def test_query_id_changes_with_recipient(self) -> None:
+        q1 = TonRpcAdapter._derive_query_id(
+            currency=Currency.TON_NANO,
+            recipient_address=_FAKE_RECIPIENT_TON,
+            amount_native=100,
+        )
+        q2 = TonRpcAdapter._derive_query_id(
+            currency=Currency.TON_NANO,
+            recipient_address=_FAKE_RECIPIENT_JETTON_WALLET,
+            amount_native=100,
+        )
+        assert q1 != q2
+
+    def test_query_id_changes_with_amount(self) -> None:
+        q1 = TonRpcAdapter._derive_query_id(
+            currency=Currency.TON_NANO,
+            recipient_address=_FAKE_RECIPIENT_TON,
+            amount_native=100,
+        )
+        q2 = TonRpcAdapter._derive_query_id(
+            currency=Currency.TON_NANO,
+            recipient_address=_FAKE_RECIPIENT_TON,
+            amount_native=101,
+        )
+        assert q1 != q2
+
+    def test_query_id_fits_in_64_bits(self) -> None:
+        for amount in (1, 1_000, 1_000_000_000, 2**62):
+            q = TonRpcAdapter._derive_query_id(
+                currency=Currency.TON_NANO,
+                recipient_address=_FAKE_RECIPIENT_TON,
+                amount_native=amount,
+            )
+            assert 0 <= q < (1 << 64)
 
 
 class TestTonRpcAdapterContract:

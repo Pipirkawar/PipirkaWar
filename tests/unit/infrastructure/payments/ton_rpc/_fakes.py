@@ -22,6 +22,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections import deque
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -37,10 +38,49 @@ from pipirik_wars.infrastructure.payments.ton_rpc.errors import (
 )
 
 __all__ = [
+    "FakeTonMessageSigner",
     "FakeTonRpcClient",
     "RecordedRunGetMethodCall",
     "RecordedSendBocCall",
 ]
+
+
+class FakeTonMessageSigner:
+    """Тестовый двойник `ITonMessageSigner` (Спринт 4.1-D, шаг D.10.b-3).
+
+    Имитирует Ed25519-сигнатуру без реальной криптографии: возвращает
+    детерминированную 64-байтовую sha256-derived "signature" (sha256(seed
+    || message) + sha256(message || seed)). Достаточно для unit-тестов
+    `TonRpcAdapter._build_signed_external_message_boc(...)` — проверяем
+    структуру BoC, не криптографию (это покрывают тесты `signer.py`).
+
+    `public_key` — детерминированные 32 байта (sha256(seed)), не реальный
+    Ed25519-pubkey — но тесты только сверяют bytes.
+    """
+
+    __slots__ = ("_seed",)
+
+    def __init__(self, *, seed: bytes = b"\x01" * 32) -> None:
+        if len(seed) != 32:
+            raise ValueError(
+                f"FakeTonMessageSigner.seed must be exactly 32 bytes; got {len(seed)}",
+            )
+        self._seed = bytes(seed)
+
+    @property
+    def public_key(self) -> bytes:
+        """Детерминированный 32-byte псевдо-публичный ключ."""
+        return hashlib.sha256(self._seed).digest()
+
+    def sign(self, *, message: bytes) -> bytes:
+        """64-byte псевдо-Ed25519-signature: sha256(seed || msg) || sha256(msg || seed)."""
+        if not isinstance(message, bytes | bytearray):
+            raise TypeError(
+                f"FakeTonMessageSigner.sign(message=): bytes-like required, "
+                f"got {type(message).__name__}",
+            )
+        msg = bytes(message)
+        return hashlib.sha256(self._seed + msg).digest() + hashlib.sha256(msg + self._seed).digest()
 
 
 @dataclass(frozen=True, slots=True)

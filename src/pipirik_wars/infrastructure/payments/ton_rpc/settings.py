@@ -127,6 +127,16 @@ class TonRpcSettings(BaseSettings):
             "выровнен с `InMemoryFeeEstimator` (0.2 USDT)."
         ),
     )
+    wallet_subwallet_id: int = Field(
+        default=698_983_191,
+        ge=0,
+        description=(
+            "`subwallet_id` для wallet-v3R2 external-message-а (TEP-67-wrap). "
+            "Default `698983191` — стандартный mainnet basechain wallet_id "
+            "(см. wallet-v3R2 reference в @ton/ton). "
+            "Production может переопределить через `TON_RPC_WALLET_SUBWALLET_ID`."
+        ),
+    )
 
     @field_validator("endpoint", mode="after")
     @classmethod
