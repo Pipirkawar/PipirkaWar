@@ -10,19 +10,20 @@
 - D.4: Persistence wallets — Alembic 0035 (таблица `wallets`, составной PK + CHECK) + `WalletORM` + `SqlAlchemyWalletRepository` (upsert через ON CONFLICT для Postgres+SQLite) + 6 integration-тестов.
 - D.5: Infrastructure TON-RPC адаптеры. Новый пакет `src/pipirik_wars/infrastructure/payments/ton_rpc/` (`client.py`, `errors.py`, `settings.py`, `jetton.py`, `fee_estimator.py`, `adapter.py`) + тесты на `FakeTonRpcClient` (56 unit-тестов). Сборка signed-BOC — текстовый стаб до D.10.
 - D.6: Bot-handler `/link_wallet` (личка-only) + callback `link_wallet:select:<ton|usdt>` + `/link_wallet_confirm <currency> <address> <proof>` + `LinkWalletPresenter` + 20 ключей `link-wallet-*` в RU/EN-локалях + 54 unit-теста.
-- **Передача работы 2026-05-11 (этот docs-коммит):** новый агент принял ветку у предыдущего; sticky-HANDOFF обновлён; чек-лист D.7–D.15 пере-декомпозирован на 14 микрошагов (D.7.a-d, D.8.a-c, D.9.a-d, D.10.a-d) для уменьшения размера коммитов под сокращённые лимиты агентских токенов.
+- **Передача работы 2026-05-11 (docs-коммит `921c9c3`):** новый агент принял ветку у предыдущего; sticky-HANDOFF обновлён; чек-лист D.7–D.15 пере-декомпозирован на 14 микрошагов (D.7.a-d, D.8.a-c, D.9.a-d, D.10.a-d) для уменьшения размера коммитов под сокращённые лимиты агентских токенов.
+- **D.7.a (этот коммит):** `ClaimPrizePresenter` (`src/pipirik_wars/bot/presenters/claim_prize.py`) + callback_data API (`claim_prize_callback_data` / `parse_claim_prize_callback_data` + `ClaimPrizeCallbackData(lot_id)`) + 20 ключей `claim-prize-*` в `locales/{ru,en}.ftl` (prompt + кнопка + 6 error-веток + success / refund + invalid-callback + toast) + 33 unit-теста (`tests/unit/bot/presenters/test_claim_prize.py`).
 
 ## На каком файле / задаче остановился
-- Файл: закончил D.6; следующий — **D.7.a «`ClaimPrizePresenter` + callback_data + RU/EN-локали + presenter-тесты»** (`src/pipirik_wars/bot/presenters/claim_prize.py` + `locales/ru.ftl` + `locales/en.ftl` + `tests/unit/bot/presenters/test_claim_prize.py`).
+- Файл: закончил D.7.a; следующий — **D.7.b «`/claim_prize <lot_id>` handler + handler-тесты»** (`src/pipirik_wars/bot/handlers/claim_prize.py` + `tests/unit/bot/handlers/test_claim_prize.py`).
 - Где брать ТЗ: `docs/current_tasks.md` чек-лист D.7.a–D.7.d; ГДД §12.6.5 «Забрать приз»; `docs/development_plan.md` Спринт 4.1, задача 4.1.9.
 - Composition root (`bot/main.py`) — пока не трогаем: подключение `TonRpcAdapter` / `TonRpcFeeEstimator` / `JettonUsdtProvider` + `link_wallet` + `claim_prize` + expire-cron отложено на **D.10.c** (composition-root-коммит).
 
 ## Состояние ветки
 - Ветка: `devin/1778501374-sprint-4-1-D-ton-connect-usdt-claim-prize`
 - База: `main` (= `db8e630 Merge pull request #131`)
-- Последний коммит: `feat(4.1-D): D.6 — Bot-handler /link_wallet + TON Connect deeplink + callback + 54 unit-тестов` (= `0f312da` на момент приёмки).
-- Незакоммиченные изменения: будут в текущем docs-коммите (`docs/current_tasks.md` + `AGENT_HANDOFF.md`).
-- CI прогонялся локально: ДА, **make ci зелёный 2026-05-11** (5848 passed, 2 skipped, coverage 95.64%).
+- Последний коммит: `feat(4.1-D): D.7.a — ClaimPrizePresenter + callback_data + RU/EN-локали + 33 presenter-тестов`.
+- Незакоммиченные изменения: нет (после коммита).
+- CI прогонялся локально: ДА, **make ci зелёный 2026-05-11** (5848 passed, 2 skipped, coverage 95.64% на момент приёмки). После D.7.a — ruff/format/mypy/import-linter зелёные точечно; полный `make ci` отложен на D.11.
 - GitHub CI: не открыт PR (по протоколу — PR откроется после D.13/D.14). Прежний прогон D.6 на GitHub не нужен — workflow `paths-ignore: ['docs/**', '**.md', 'AGENT_HANDOFF.md']` ignored docs-коммиты, а функциональные пуши до открытия PR-а в `on: pull_request`-trigger не попадают.
 
 ## Команды для следующего агента

@@ -1468,3 +1468,51 @@ link-wallet-confirm-linked =
 
 link-wallet-confirm-relinked =
     ✅ Address for `{ $currency }` is now `{ $address }`. New prize lots will be paid to the new address.
+
+# /claim_prize <lot_id> (Sprint 4.1-D, D.7).
+claim-prize-group = `/claim_prize` is only available in the bot DM. Open the private chat.
+claim-prize-other = `/claim_prize` is only available in the bot DM.
+claim-prize-not-registered = Sign up first — press /start in the bot DM.
+
+claim-prize-usage =
+    Usage: `/claim_prize <lot_id>`.
+
+    `lot_id` is the id of the reserved lot from a roulette result. Payout goes to the linked wallet.
+
+claim-prize-invalid-lot-id = `lot_id` must be a positive integer. Got: `{ $raw }`.
+
+claim-prize-prompt =
+    🎁 <b>Crypto prize reserved — lot #{ $lot_id }</b>
+
+    Currency: `{ $currency }`. Amount: `{ $amount }` (native units).
+    Tap the button below to withdraw to the linked wallet (or run /link_wallet first).
+
+claim-prize-button = Claim prize
+
+claim-prize-not-found = Lot #{ $lot_id } not found. Either it was already claimed or it does not exist.
+
+claim-prize-already-claimed = Lot #{ $lot_id } has already been paid out. It cannot be claimed again.
+
+claim-prize-not-reserved =
+    Lot #{ $lot_id } is currently in status `{ $status }`, not `reserved`.
+    Only reserved lots can be withdrawn via `/claim_prize`.
+
+claim-prize-wallet-not-linked =
+    No wallet linked for currency `{ $currency }`. Run /link_wallet first and then come back to claim the lot.
+
+claim-prize-not-owner = Lot #{ $lot_id } does not belong to you.
+
+claim-prize-success =
+    ✅ <b>Payout sent — lot #{ $lot_id }</b>
+
+    Currency: `{ $currency }`. Amount: `{ $amount }`.
+    Network fee: `{ $actual_fee }`. Wallet: `{ $address }`.
+    Transaction hash: `{ $tx_hash }`.
+
+claim-prize-refund =
+    ⚠ <b>Lot #{ $lot_id } refunded to the pool</b>
+
+    Network fee `{ $actual_fee }` exceeded the buffer `{ $fee_buffer }` for `{ $currency } { $amount }`. The lot will return to the pool and re-appear once fees drop.
+
+claim-prize-invalid-callback = The button does not work. Run `/claim_prize <lot_id>` manually.
+claim-prize-toast-invalid = Button expired. Use `/claim_prize <lot_id>`.

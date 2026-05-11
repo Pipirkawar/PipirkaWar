@@ -1472,3 +1472,51 @@ link-wallet-confirm-linked =
 
 link-wallet-confirm-relinked =
     ✅ Адрес для `{ $currency }` заменён на `{ $address }`. Новые призовые лоты придут на новый адрес.
+
+# /claim_prize <lot_id> (Спринт 4.1-D, D.7).
+claim-prize-group = Команда `/claim_prize` доступна только в личке бота. Зайди в ЛС.
+claim-prize-other = Команда `/claim_prize` доступна только в личке бота.
+claim-prize-not-registered = Сначала зарегистрируйся — нажми /start в личке бота.
+
+claim-prize-usage =
+    Использование: `/claim_prize <lot_id>`.
+
+    `lot_id` — id зарезервированного лота из результата рулетки. Призовая выплата уйдёт на привязанный адрес.
+
+claim-prize-invalid-lot-id = `lot_id` должен быть положительным целым. Получено: `{ $raw }`.
+
+claim-prize-prompt =
+    🎁 <b>Крипто-приз зарезервирован — лот #{ $lot_id }</b>
+
+    Валюта: `{ $currency }`. Сумма: `{ $amount }` (нативные единицы валюты).
+    Нажми кнопку ниже, чтобы вывести на привязанный кошелёк (или сначала пройди /link_wallet).
+
+claim-prize-button = Забрать приз
+
+claim-prize-not-found = Лот #{ $lot_id } не найден. Возможно, ты уже забрал его или он не существует.
+
+claim-prize-already-claimed = Лот #{ $lot_id } уже выплачен. Повторно забрать нельзя.
+
+claim-prize-not-reserved =
+    Лот #{ $lot_id } сейчас в статусе `{ $status }`, а не `reserved`.
+    Только зарезервированные лоты можно вывести через `/claim_prize`.
+
+claim-prize-wallet-not-linked =
+    Кошелёк для валюты `{ $currency }` не привязан. Запусти /link_wallet и привяжи кошелёк, потом возвращайся к лоту.
+
+claim-prize-not-owner = Лот #{ $lot_id } не принадлежит тебе.
+
+claim-prize-success =
+    ✅ <b>Выплата отправлена — лот #{ $lot_id }</b>
+
+    Валюта: `{ $currency }`. Сумма: `{ $amount }`.
+    Комиссия сети: `{ $actual_fee }`. Кошелёк: `{ $address }`.
+    Хеш транзакции: `{ $tx_hash }`.
+
+claim-prize-refund =
+    ⚠ <b>Лот #{ $lot_id } возвращён в пул</b>
+
+    Комиссия сети `{ $actual_fee }` превысила резерв `{ $fee_buffer }` для `{ $currency } { $amount }`. Лот вернётся в пул и появится снова, когда комиссия упадёт.
+
+claim-prize-invalid-callback = Что-то пошло не так с кнопкой. Запусти `/claim_prize <lot_id>` руками.
+claim-prize-toast-invalid = Кнопка устарела. Используй `/claim_prize <lot_id>`.
