@@ -85,6 +85,9 @@ from pipirik_wars.infrastructure.db.repositories.scrolls import (
 from pipirik_wars.infrastructure.db.repositories.signup_queue import (
     SqlAlchemySignupQueueRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.wallet import (
+    SqlAlchemyWalletRepository,
+)
 
 __all__ = [
     "SqlAlchemyActivityLockRepository",
@@ -116,4 +119,5 @@ __all__ = [
     "SqlAlchemyRouletteSpinRepository",
     "SqlAlchemyScrollRepository",
     "SqlAlchemySignupQueueRepository",
+    "SqlAlchemyWalletRepository",
 ]

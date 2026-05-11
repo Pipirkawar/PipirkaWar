@@ -1,4 +1,4 @@
-# AGENT HANDOFF — Спринт 4.1-D (шаг D.3/D.15)
+# AGENT HANDOFF — Спринт 4.1-D (шаг D.4/D.15)
 
 > Этот файл — временный safety-net. Обновляется в том же коммите, что и основные изменения, и лежит в ветке пока есть незаконченная работа. Удали его отдельным коммитом перед открытием PR-а.
 
@@ -8,10 +8,11 @@
 - D.2: Application use-case `ClaimPrize(player_id, lot_id, recipient_address) -> ClaimPrizeResult` + `AuditAction.PRIZE_LOT_CLAIMED` / `AuditSource.PRIZE_LOT_CLAIMED` + `AuditAction.WALLET_LINKED` / `AuditSource.WALLET_LINKED` + 2 Alembic-миграции (0033, 0034: source whitelist) + ORM whitelist sync + 6 unit-тестов.
 
 - D.3: Application use-case `LinkWallet` + `ITonConnectVerifier` proof verification + audit `WALLET_LINKED` + 4 unit-тестов.
+- D.4: Persistence wallets — Alembic 0035 (таблица `wallets`, составной PK + CHECK) + `WalletORM` + `SqlAlchemyWalletRepository` (upsert через ON CONFLICT для Postgres+SQLite) + 6 integration-тестов.
 
 ## На каком файле/задаче остановился
-- Файл: закончил D.3; следующий — D.4 `Persistence wallets (Alembic + ORM + Repository)`.
-- Где брать ТЗ: `docs/current_tasks.md` чек-лист D.4.
+- Файл: закончил D.4; следующий — D.5 Infrastructure TonRpcAdapter + TonRpcFeeEstimator + jetton-USDT.
+- Где брать ТЗ: `docs/current_tasks.md` чек-лист D.5.
 
 ## Состояние ветки
 - Ветка: `devin/1778501374-sprint-4-1-D-ton-connect-usdt-claim-prize`

@@ -58,6 +58,10 @@ Free-to-play рулетка (Спринт 3.5.B):
 Лоты крипто-приза (Спринт 4.1-C):
 - `PrizeLotORM` — таблица `prize_lots` (одна строка на лот, машина
   состояний `active → reserved → claimed|refunded`).
+
+Кошельки (Спринт 4.1-D):
+- `WalletORM` — таблица `wallets` (одна строка на пару `(player_id,
+  currency)`, составной PK).
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
@@ -101,6 +105,7 @@ from pipirik_wars.infrastructure.db.models.security import (
     IdempotencyKeyORM,
 )
 from pipirik_wars.infrastructure.db.models.signup_queue import SignupQueueORM
+from pipirik_wars.infrastructure.db.models.wallet import WalletORM
 
 __all__ = [
     "ActivityLockORM",
@@ -135,4 +140,5 @@ __all__ = [
     "ScrollORM",
     "SignupQueueORM",
     "UserORM",
+    "WalletORM",
 ]
