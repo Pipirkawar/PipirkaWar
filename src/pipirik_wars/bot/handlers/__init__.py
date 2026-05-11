@@ -25,6 +25,7 @@ from pipirik_wars.bot.handlers.admin_setup_totp import router as admin_setup_tot
 from pipirik_wars.bot.handlers.admin_support import router as admin_support_router
 from pipirik_wars.bot.handlers.boss import router as boss_router
 from pipirik_wars.bot.handlers.caravan import router as caravan_router
+from pipirik_wars.bot.handlers.claim_prize import router as claim_prize_router
 from pipirik_wars.bot.handlers.clan_head import router as clan_head_router
 from pipirik_wars.bot.handlers.clan_history import router as clan_history_router
 from pipirik_wars.bot.handlers.clantop import router as clantop_router
@@ -90,6 +91,11 @@ def register_routers(dispatcher: Dispatcher) -> None:
     # проводит spin на `successful_payment`. Spin выполняется через
     # `SpinPaidRoulette` с идемпотентностью по `tg_payment_charge_id`.
     dispatcher.include_router(roulette_paid_router)
+    # Спринт 4.1-D.7: `/claim_prize <lot_id>` (личка-only) — забрать
+    # зарезервированный CRYPTO_LOT-приз. Префикс callback_data —
+    # `claim_prize:`. Callback handler приходит от inline-кнопки
+    # «Забрать приз» в результате roulette-спина.
+    dispatcher.include_router(claim_prize_router)
     dispatcher.include_router(upgrade_router)
     dispatcher.include_router(duel_router)
     dispatcher.include_router(mass_duel_router)

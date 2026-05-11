@@ -13,10 +13,11 @@
 - **Передача работы 2026-05-11 (docs-коммит `921c9c3`):** новый агент принял ветку у предыдущего; sticky-HANDOFF обновлён; чек-лист D.7–D.15 пере-декомпозирован на 14 микрошагов (D.7.a-d, D.8.a-c, D.9.a-d, D.10.a-d) для уменьшения размера коммитов под сокращённые лимиты агентских токенов.
 - D.7.a (commit `632f6a1`): `ClaimPrizePresenter` (`src/pipirik_wars/bot/presenters/claim_prize.py`) + callback_data API (`claim_prize_callback_data` / `parse_claim_prize_callback_data` + `ClaimPrizeCallbackData(lot_id)`) + 20 ключей `claim-prize-*` в `locales/{ru,en}.ftl` (prompt + кнопка + 6 error-веток + success / refund + invalid-callback + toast) + 33 unit-теста (`tests/unit/bot/presenters/test_claim_prize.py`).
 - D.7.b (commit `f91c18c`): `/claim_prize <lot_id>` handler — личка-only, pre-loads лот/кошелёк, вызывает ClaimPrize, рендерит success/refund + race-condition защита + 23 handler-теста.
-- **D.7.c (этот коммит):** callback `claim_prize:<lot_id>` handler (парсит callback_data, снимает клавиатуру, делегирует в `_process_claim`) + кнопка «Забрать приз» в roulette handlers (free: `_set_message_text` + `reply_markup` при CRYPTO_LOT; paid: `_build_crypto_keyboard` + `build_claim_prize_keyboard_multi` для PACK_10). `ClaimPrizePresenter.button_text(locale)` для локализованного текста кнопки. 29 handler-тестов (23 message + 5 callback + 1 keyboard).
+- D.7.c (commit `541f89c`): callback `claim_prize:<lot_id>` handler + кнопка «Забрать приз» в roulette handlers + 29 handler-тестов.
+- **D.7.d (этот коммит):** регистрация `claim_prize_router` в `__init__.py` (после `roulette_paid_router`) + 3 smoke-теста в `test_register_routers.py`. **D.7 завершён.**
 
 ## На каком файле / задаче остановился
-- Файл: закончил D.7.c; следующий — **D.7.d «Регистрация `claim_prize_router`»** в `src/pipirik_wars/bot/handlers/__init__.py` + smoke-тест.
+- Файл: закончил D.7.d; D.7 полностью завершён. Следующий — **D.8.a «Domain VO `StarsPayload` + port `ITgStarsPayloadVerifier`»**.
 - *Note for D.10.c:* refund-ветка пока рендерит `actual_fee_native=0` (placeholder) — `ClaimPrizeResult.refund_*` контракт расширим в D.10.c.
 - Где брать ТЗ: `docs/current_tasks.md` чек-лист D.7.a–D.7.d; ГДД §12.6.5 «Забрать приз»; `docs/development_plan.md` Спринт 4.1, задача 4.1.9.
 - Composition root (`bot/main.py`) — пока не трогаем: подключение `TonRpcAdapter` / `TonRpcFeeEstimator` / `JettonUsdtProvider` + `link_wallet` + `claim_prize` + expire-cron отложено на **D.10.c** (composition-root-коммит).
@@ -24,7 +25,7 @@
 ## Состояние ветки
 - Ветка: `devin/1778501374-sprint-4-1-D-ton-connect-usdt-claim-prize`
 - База: `main` (= `db8e630 Merge pull request #131`)
-- Последний коммит: `feat(4.1-D): D.7.c — callback claim_prize:<lot_id> + кнопка «Забрать приз» в roulette-result`.
+- Последний коммит: `feat(4.1-D): D.7.d — регистрация claim_prize_router + smoke-тесты`.
 - Незакоммиченные изменения: нет (после коммита).
 - CI прогонялся локально: ДА, **make ci зелёный 2026-05-11** (5848 passed, 2 skipped, coverage 95.64% на момент приёмки). После D.7.a — ruff/format/mypy/import-linter зелёные точечно; полный `make ci` отложен на D.11.
 - GitHub CI: не открыт PR (по протоколу — PR откроется после D.13/D.14). Прежний прогон D.6 на GitHub не нужен — workflow `paths-ignore: ['docs/**', '**.md', 'AGENT_HANDOFF.md']` ignored docs-коммиты, а функциональные пуши до открытия PR-а в `on: pull_request`-trigger не попадают.
