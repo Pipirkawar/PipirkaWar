@@ -46,13 +46,18 @@ from pipirik_wars.domain.monetization.entities import (
     PrizePool,
     Wallet,
 )
-from pipirik_wars.domain.monetization.value_objects import Currency, IdempotencyKey
+from pipirik_wars.domain.monetization.value_objects import (
+    Currency,
+    IdempotencyKey,
+    StarsPayload,
+)
 
 __all__ = [
     "IFeeEstimator",
     "IPaymentLedger",
     "IPrizeLotRepository",
     "IPrizePoolRepository",
+    "ITgStarsPayloadVerifier",
     "ITonConnectVerifier",
     "ITonPayoutAdapter",
     "IWalletRepository",
@@ -467,3 +472,77 @@ class PayoutResult:
 
     tx_hash: str
     actual_fee_native: int
+
+
+class ITgStarsPayloadVerifier(Protocol):
+    """Порт серверной верификации Telegram Stars `invoice_payload` (Спринт 4.1-D, шаг D.8).
+
+    Skeleton-handler ``/roulette_paid`` (4.1-A) принимал `invoice_payload`
+    голой строкой формата ``paid_roulette:<pack>``. Из коробки это
+    небезопасно: между ``bot.send_invoice(...)`` и ``successful_payment``-
+    callback-ом любой компрометированный middleware может подменить
+    payload — попросить «pack_10» по цене single, либо «зачесть»
+    в чужой `idempotency_key`.
+
+    Этот порт закрывает риск: реализация (``HmacTgStarsPayloadVerifier``
+    из D.8.b) при создании invoice-а кладёт в payload server-side
+    HMAC-SHA256-подпись поверх `(provider_id, idempotency_key,
+    amount, currency)`-кортежа, а при разборе на ``successful_payment``-
+    callback-е пересчитывает HMAC поверх тех же полей (значения берутся
+    из update-а от Telegram, который сам — trusted) и сравнивает с
+    подписью в payload-е.
+
+    Метод ``verify(...)``:
+
+    * **success** → возвращает ``StarsPayload(pack_value, idempotency_seed)``,
+      handler 4.1-A (после D.8.c-wire) маппит `pack_value` в
+      ``PaidRoulettePack`` и идёт в ``SpinPaidRoulette.execute(...)``;
+    * **fail** → бросает ``InvalidStarsPayloadError`` с machine-readable
+      `reason` (``"empty"`` / ``"too_long"`` / ``"malformed"`` /
+      ``"bad_pack"`` / ``"bad_seed"`` / ``"hmac_mismatch"``).
+
+    Порт **sync** (HMAC-проверка не требует I/O); это намеренное
+    отличие от ``ITonConnectVerifier.verify`` (там нужен HTTP-вызов к
+    TON Connect verification endpoint-у, поэтому ``async``).
+
+    Реализация — ``infrastructure/payments/tg_stars/`` (шаг D.8.b);
+    тесты handler-а ``successful_payment`` (шаг D.8.c) используют
+    ``FakeTgStarsPayloadVerifier``.
+    """
+
+    def verify(
+        self,
+        *,
+        raw_payload: str | None,
+        provider_payment_id: str,
+        amount_native: int,
+        currency: Currency,
+    ) -> StarsPayload:
+        """Сверить HMAC raw_payload-а и вернуть распарсенный ``StarsPayload``.
+
+        Параметры — всё, что Telegram присылает в `successful_payment`-callback-е,
+        и что мы используем как «контекст» HMAC-подписи:
+
+        * ``raw_payload`` — `message.successful_payment.invoice_payload`
+          (либо ``None`` если update пришёл без payload-а — тогда
+          реализация бросает ``InvalidStarsPayloadError(reason="empty")``).
+        * ``provider_payment_id`` — `message.successful_payment.telegram_payment_charge_id`
+          (стабильный id платежа от Telegram). Используется как одна
+          из компонент HMAC-контекста — payload, подписанный для
+          одного `provider_payment_id`-а, не пройдёт верификацию
+          в callback-е с другим id.
+        * ``amount_native`` — `message.successful_payment.total_amount`
+          (для TG Stars — целое количество ⭐). Tampering суммы между
+          invoice-ом и callback-ом ловится через несовпадение HMAC.
+        * ``currency`` — валюта платежа (``Currency.STARS`` для всего
+          4.1-A skeleton-flow; параметр оставлен на будущее, когда
+          этот же порт может верифицировать платежи в других валютах).
+
+        Returns:
+        * ``StarsPayload`` — распарсенный и верифицированный payload.
+
+        Raises:
+        * ``InvalidStarsPayloadError`` — payload пуст / превышает лимит /
+          malformed / bad pack / bad seed / HMAC-mismatch.
+        """
+        ...
