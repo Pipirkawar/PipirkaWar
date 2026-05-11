@@ -1,4 +1,4 @@
-"""Юнит-тесты `/claim_prize <lot_id>` handler-а (Спринт 4.1-D, D.7.b).
+"""Юнит-тесты `/claim_prize <lot_id>` + callback `claim_prize:<lot_id>` (D.7.b/D.7.c).
 
 Покрываем:
 
@@ -16,6 +16,11 @@
 12. Race-condition: PrizeLotStatusTransitionError(CLAIMED) →
     `claim-prize-already-claimed`.
 13. Race-condition: WalletNotLinkedError → `claim-prize-wallet-not-linked`.
+14. Callback `claim_prize:42` → happy-path (success).
+15. Callback с битым callback_data → toast_invalid + strip keyboard.
+16. Callback без tg_identity → silent return.
+17. Callback, не-зарегистрированный игрок → not-registered.
+18. `build_claim_prize_keyboard` возвращает InlineKeyboardMarkup.
 """
 
 from __future__ import annotations
@@ -26,7 +31,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiogram.filters.command import CommandObject
-from aiogram.types import Chat, Message
+from aiogram.types import CallbackQuery, Chat, InlineKeyboardMarkup, Message
 
 from pipirik_wars.application.i18n import IMessageBundle, Locale
 from pipirik_wars.application.monetization.claim_prize import (
@@ -34,7 +39,11 @@ from pipirik_wars.application.monetization.claim_prize import (
     ClaimPrizeResult,
 )
 from pipirik_wars.application.player import GetProfile, ProfileView
-from pipirik_wars.bot.handlers.claim_prize import handle_claim_prize
+from pipirik_wars.bot.handlers.claim_prize import (
+    build_claim_prize_keyboard,
+    handle_claim_prize,
+    handle_claim_prize_callback,
+)
 from pipirik_wars.bot.middlewares.auth import TgIdentity
 from pipirik_wars.domain.monetization.entities import (
     PrizeLot,
@@ -433,3 +442,103 @@ class TestClaimPrizeRaceConditions:
         )
         text = msg.answer.call_args[0][0]
         assert "claim-prize-wallet-not-linked" in text
+
+
+# ───────────────── callback handler ──────────────────────
+
+
+def _callback(data: str = "claim_prize:42") -> MagicMock:
+    cb = MagicMock(spec=CallbackQuery)
+    cb.data = data
+    inner = MagicMock()
+    inner.answer = AsyncMock()
+    inner.edit_reply_markup = AsyncMock()
+    cb.message = inner
+    cb.answer = AsyncMock()
+    return cb
+
+
+async def _call_callback(
+    *,
+    data: str = "claim_prize:42",
+    tg_identity: TgIdentity | None = None,
+    get_profile: MagicMock | None = None,
+    claim_prize: MagicMock | None = None,
+    lot_repo: MagicMock | None = None,
+    wallet_repo: MagicMock | None = None,
+    locale: Locale | None = None,
+) -> MagicMock:
+    cb = _callback(data)
+    tg = tg_identity or _identity("private")
+    bundle = cast(IMessageBundle, FakeMessageBundle())
+    gp = get_profile or _get_profile()
+    cp = claim_prize or _claim_prize_use_case()
+    lr = lot_repo or _lot_repo(_lot())
+    wr = wallet_repo or _wallet_repo(_wallet())
+
+    await handle_claim_prize_callback(
+        cast(CallbackQuery, cb),
+        tg,
+        cast(GetProfile, gp),
+        cast(ClaimPrize, cp),
+        cast(IPrizeLotRepository, lr),
+        cast(IWalletRepository, wr),
+        bundle,
+        locale,
+    )
+    return cb
+
+
+@pytest.mark.asyncio
+class TestClaimPrizeCallbackHandler:
+    async def test_callback_success(self) -> None:
+        cb = await _call_callback()
+        text = cb.message.answer.call_args[0][0]
+        assert "claim-prize-success" in text
+        assert "tx_hash=abc123" in text
+
+    async def test_callback_invalid_data_toasts(self) -> None:
+        cb = await _call_callback(data="claim_prize:bad")
+        cb.answer.assert_awaited_once()
+        toast_text = cb.answer.call_args[0][0]
+        assert "claim-prize-toast-invalid" in toast_text
+        text = cb.message.answer.call_args[0][0]
+        assert "claim-prize-invalid-callback" in text
+
+    async def test_callback_strips_keyboard(self) -> None:
+        cb = await _call_callback()
+        cb.message.edit_reply_markup.assert_awaited_once()
+
+    async def test_callback_no_tg_identity(self) -> None:
+        cb = _callback("claim_prize:42")
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+        gp = _get_profile()
+        cp = _claim_prize_use_case()
+        lr = _lot_repo(_lot())
+        wr = _wallet_repo(_wallet())
+
+        await handle_claim_prize_callback(
+            cast(CallbackQuery, cb),
+            None,
+            cast(GetProfile, gp),
+            cast(ClaimPrize, cp),
+            cast(IPrizeLotRepository, lr),
+            cast(IWalletRepository, wr),
+            bundle,
+            None,
+        )
+        cb.message.answer.assert_not_awaited()
+
+    async def test_callback_not_registered(self) -> None:
+        cb = await _call_callback(get_profile=_get_profile(found=False))
+        text = cb.message.answer.call_args[0][0]
+        assert "claim-prize-not-registered" in text
+
+
+class TestBuildClaimPrizeKeyboard:
+    def test_returns_inline_keyboard(self) -> None:
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+        kb = build_claim_prize_keyboard(bundle=bundle, locale=Locale("ru"), lot_id=99)
+        assert isinstance(kb, InlineKeyboardMarkup)
+        btn = kb.inline_keyboard[0][0]
+        assert btn.callback_data == "claim_prize:99"

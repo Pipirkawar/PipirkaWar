@@ -149,8 +149,12 @@ class ClaimPrizePresenter:
             amount=amount_native,
         )
 
+    def button_text(self, *, locale: Locale) -> str:
+        """Локализованный текст кнопки «Забрать приз»."""
+        return self._bundle.format(_KEY_BUTTON, locale=locale)
+
     def prompt_keyboard(self, *, locale: Locale, lot_id: int) -> InlineKeyboardMarkup:
-        button_label = self._bundle.format(_KEY_BUTTON, locale=locale)
+        button_label = self.button_text(locale=locale)
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [

@@ -72,15 +72,20 @@ from typing import Final
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message, PreCheckoutQuery
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message, PreCheckoutQuery
 
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.application.monetization import (
     PaidRoulettePack,
     SpinPaidRoulette,
     SpinPaidRouletteCommand,
+    SpinPaidRouletteResult,
 )
 from pipirik_wars.application.player import GetProfile
+from pipirik_wars.bot.handlers.claim_prize import (
+    build_claim_prize_keyboard,
+    build_claim_prize_keyboard_multi,
+)
 from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters import (
     TG_STARS_CURRENCY,
@@ -92,7 +97,7 @@ from pipirik_wars.bot.presenters import (
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.monetization import IdempotencyKey
 from pipirik_wars.domain.player import PlayerNotFoundError
-from pipirik_wars.domain.roulette import RouletteThicknessGateError
+from pipirik_wars.domain.roulette import RouletteOutcomeKind, RouletteThicknessGateError
 
 router = Router(name="roulette_paid")
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
@@ -415,9 +420,34 @@ async def handle_successful_payment(
         await message.answer(presenter.toast_error(locale=effective_locale))
         return
 
-    await message.answer(
-        presenter.render_result(result=result, locale=effective_locale),
-    )
+    result_text = presenter.render_result(result=result, locale=effective_locale)
+    reply_markup = _build_crypto_keyboard(result, effective_locale, bundle)
+    if reply_markup is not None:
+        await message.answer(result_text, reply_markup=reply_markup)
+    else:
+        await message.answer(result_text)
+
+
+def _build_crypto_keyboard(
+    result: SpinPaidRouletteResult,
+    locale: Locale,
+    bundle: IMessageBundle,
+) -> InlineKeyboardMarkup | None:
+    """Собрать inline-клавиатуру «Забрать приз» для CRYPTO_LOT-исходов.
+
+    Для idempotent-ответа / пустых outcome-ов / отсутствия CRYPTO_LOT-ов
+    возвращает ``None``.
+    """
+    lot_ids = [
+        o.lot_id
+        for o in result.outcomes
+        if o.kind is RouletteOutcomeKind.CRYPTO_LOT and o.lot_id is not None
+    ]
+    if not lot_ids:
+        return None
+    if len(lot_ids) == 1:
+        return build_claim_prize_keyboard(bundle=bundle, locale=locale, lot_id=lot_ids[0])
+    return build_claim_prize_keyboard_multi(bundle=bundle, locale=locale, lot_ids=lot_ids)
 
 
 async def _strip_keyboard(callback: CallbackQuery) -> None:
