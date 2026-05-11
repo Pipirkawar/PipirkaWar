@@ -73,7 +73,7 @@
 - Предыдущий коммит: `ae4e9d3 feat(4.1-D): D.9.c — ExpireReservedPrizeLots use-case + audit + 17 unit-tests`.
 - Последний коммит (этот): `feat(4.1-D): D.9.d — APScheduler cron expire_reserved_prize_lots + DI + 7 unit-tests`.
 - Незакоммиченные изменения: нет (после коммита).
-- CI прогонялся локально: ЧАСТИЧНО — `make lint` и `make typecheck` зелёные; новые 7 тестов D.9.d все passed, весь `tests/unit/infrastructure/scheduler/test_aps.py` 74 passed. Полный `make ci` на этом коммите не прогнан после добавления D.9.c+D.9.d (экономия токенов; предыдущий прогон на `e3d7923` был 6056 passed + 2 skipped, 95.61% cov) — следующий агент должен выполнить `make ci` в рамках шага приёмки.
+- CI прогонялся локально: ✅ ПОЛНОСТЬЮ — `make ci` зелёный на этом коммите: **6081 passed + 2 skipped, 95.63% cov** (8m9s). Регрессий нет; `expire_reserved_prize_lots.py` 100%, `TestExpireReservedPrizeLotsCron` все 7 тестов passed. 2 skipped — известные семантические `pytest.skip` (thickness=1 минимум; seed-зависимый boss-round-early-finish).
 - GitHub CI: не открыт PR (по протоколу — PR откроется после D.13/D.14). Прежний прогон D.6 на GitHub не нужен — workflow `paths-ignore: ['docs/**', '**.md', 'AGENT_HANDOFF.md']` ignored docs-коммиты, а функциональные пуши до открытия PR-а в `on: pull_request`-trigger не попадают.
 
 ## Команды для следующего агента
