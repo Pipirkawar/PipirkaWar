@@ -7,6 +7,8 @@ Use-case-ы и DTO-комманды для платных операций. Re-e
         ClaimPrize,
         ClaimPrizeCommand,
         ClaimPrizeResult,
+        ExpireReservedPrizeLots,
+        ExpireReservedPrizeLotsResult,
         GeneratePrizeLots,
         GeneratePrizeLotsCommand,
         GeneratePrizeLotsResult,
@@ -24,6 +26,10 @@ from pipirik_wars.application.monetization.claim_prize import (
     ClaimPrize,
     ClaimPrizeCommand,
     ClaimPrizeResult,
+)
+from pipirik_wars.application.monetization.expire_reserved_prize_lots import (
+    ExpireReservedPrizeLots,
+    ExpireReservedPrizeLotsResult,
 )
 from pipirik_wars.application.monetization.generate_prize_lots import (
     GeneratePrizeLots,
@@ -51,6 +57,8 @@ __all__ = [
     "ClaimPrize",
     "ClaimPrizeCommand",
     "ClaimPrizeResult",
+    "ExpireReservedPrizeLots",
+    "ExpireReservedPrizeLotsResult",
     "GeneratePrizeLots",
     "GeneratePrizeLotsCommand",
     "GeneratePrizeLotsResult",
