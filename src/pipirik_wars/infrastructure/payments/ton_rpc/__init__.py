@@ -28,6 +28,12 @@ jetton-master-у. Внутри используется абстракция `IT
 """
 
 from pipirik_wars.infrastructure.payments.ton_rpc.adapter import TonRpcAdapter
+from pipirik_wars.infrastructure.payments.ton_rpc.boc import (
+    Cell,
+    CellBuilder,
+    parse_address,
+    serialize_boc,
+)
 from pipirik_wars.infrastructure.payments.ton_rpc.client import (
     ITonRpcClient,
     RecentFee,
@@ -53,6 +59,8 @@ from pipirik_wars.infrastructure.payments.ton_rpc.signer import (
 )
 
 __all__ = [
+    "Cell",
+    "CellBuilder",
     "Ed25519MessageSigner",
     "ITonMessageSigner",
     "ITonRpcClient",
@@ -67,4 +75,6 @@ __all__ = [
     "TonRpcSettings",
     "TonRpcTimeoutError",
     "UnsupportedPayoutCurrencyError",
+    "parse_address",
+    "serialize_boc",
 ]
