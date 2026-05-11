@@ -170,6 +170,23 @@ class AuditAction(str, enum.Enum):
     # в 4.1-C / Шаг C.6 «race-резервирование + fallback» и 4.1-D /
     # `ClaimPrize` для timeout-refund-а).
     PRIZE_LOT_REFUNDED = "prize_lot_refunded"
+    # ── Спринт 4.1-C (резервирование лота на спине, ГДД §12.6.5) ──
+    # Каждое успешное резервирование лота (`PrizeLot.status: ACTIVE →
+    # RESERVED`) пишется одной audit-записью в той же транзакции UoW,
+    # что и `IPrizeLotRepository.update_status(lot_id, RESERVED)`. Зовётся
+    # из `SpinPaidRoulette` / `SpinFreeRoulette`, когда picker рулетки
+    # вернул `RouletteOutcome.crypto_lot(lot_id=...)`. `target_kind=
+    # "prize_lot"`, `target_id="<lot_id>:reserved"`, `after={"lot_id":
+    # <int>, "currency": ..., "amount_native": <gross>, "prev_status":
+    # "active", "reserved_at": <utc-iso>, "player_id": <int>,
+    # "spin_kind": "paid"|"free"}`. Парного `before`-снапшота не пишем
+    # (prev_status однозначен — всегда `active`). Источник —
+    # `AuditSource.PRIZE_LOT_RESERVED`. Пишется в C.6.c use-case-ами
+    # спинов сразу после выпадения CRYPTO_LOT-исхода. При проигранном
+    # race (другой игрок забронировал тот же лот первым) этой записи
+    # НЕ будет — вместо неё use-case подменит outcome на LengthGain
+    # (C.6.d).
+    PRIZE_LOT_RESERVED = "prize_lot_reserved"
 
 
 class AuditSource(str, enum.Enum):
@@ -270,6 +287,16 @@ class AuditSource(str, enum.Enum):
     # (`audit_log_source_whitelist`) расширяется Alembic-миграцией
     # `0031_audit_source_prize_lot_refunded` (шаг C.4).
     PRIZE_LOT_REFUNDED = "prize_lot_refunded"
+    # `PRIZE_LOT_RESERVED` — source-маркер audit-записи «зарезервировали лот
+    # на спине». Пишется use-case-ами `SpinPaidRoulette` / `SpinFreeRoulette`
+    # (C.6.c) внутри той же UoW, что и `IPrizeLotRepository.update_status(
+    # lot_id, ACTIVE → RESERVED)`. Парного «cost»-source-а нет (декремент
+    # пула уже произошёл в `GeneratePrizeLots`). `PRIZE_LOT_RESERVED` **НЕ**
+    # входит в `anticheat.organic_sources` / `donate_sources` /
+    # `tribe_bonus_sources` (не length-source, это статус-маркер).
+    # DB-whitelist (`audit_log_source_whitelist`) расширяется Alembic-
+    # миграцией `0032_audit_source_prize_lot_reserved` (шаг C.6.a).
+    PRIZE_LOT_RESERVED = "prize_lot_reserved"
     UNKNOWN = "unknown"
 
 

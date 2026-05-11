@@ -21,17 +21,17 @@ def _load_migration_whitelist() -> tuple[str, ...]:
     """Грузим whitelist прямо из файла последней расширяющей миграции.
 
     Файл миграции назван с timestamp-префиксом
-    (`20260510_0031_audit_source_prize_lot_refunded.py`), что не валиден
+    (`20260511_0032_audit_source_prize_lot_reserved.py`), что не валиден
     как Python-идентификатор; обычный `import` не работает.
     """
     repo_root = Path(__file__).resolve().parents[5]
     migration_path = (
         repo_root
         / "src/pipirik_wars/infrastructure/db/migrations/versions"
-        / "20260510_0031_audit_source_prize_lot_refunded.py"
+        / "20260511_0032_audit_source_prize_lot_reserved.py"
     )
     spec = importlib.util.spec_from_file_location(
-        "_migration_0031_audit_source_prize_lot_refunded",
+        "_migration_0032_audit_source_prize_lot_reserved",
         migration_path,
     )
     assert spec is not None and spec.loader is not None
