@@ -28,9 +28,16 @@
   - **Локали:** новый ключ `roulette-paid-payment-invalid` в `locales/{ru,en}.ftl` с user-facing-generic-текстом (machine-readable reason — только в structured-log).
   - **Тесты:** 6 новых unit-тестов в `tests/unit/bot/handlers/test_roulette_paid.py` (idempotency_seed fresh-per-call + 4 ветки `InvalidStarsPayloadError` + legacy-v0-payload reject) + 2 новых в presenter-тестах (`payment_invalid` RU/EN) + 4 новых для v1-format в `parse_invoice_payload` + DI-aware existing tests. Добавлен `tests/fakes/tg_stars_verifier.FakeTgStarsPayloadVerifier` (детерминированный fake, error-injection).
   - **`make ci` зелёный:** 6014 passed + 2 skipped, coverage 95.63%, ruff/mypy/imports все зелёные.
+- **Передача работы 2026-05-11 (этот коммит):** новый агент принял ветку у предыдущего; выполнил все 7 шагов приёмки по CONTRIBUTING.md (HANDOFF → git fetch → доки → `make ci` зелёный 6014 passed, 95.62% cov на `5ab5212` → sticky-обновление HANDOFF → current_tasks.md). Сразу в том же коммите — D.9.a.
+- **D.9.a (этот коммит):** Domain-конфиг `PrizeLotConfig.reserved_ttl_seconds: int` (балансируемый refund-TTL для RESERVED-лота). Изменения:
+  - **`domain/balance/config.py`:** новый `_Frozen`-подкласс `PrizeLotConfig` (поле `reserved_ttl_seconds: int = Field(ge=60, le=30 d)`); добавлен в `BalanceConfig` как обязательное поле `prize_lot: PrizeLotConfig` (после `roulette`, до `items_catalog`). Константа `_PRIZE_LOT_RESERVED_TTL_MAX_SECONDS = 30 * 24 * 3600` с пояснением «зачем 30 д. — sanity-cap, чтобы лот не зависал дольше P95-окна `IFeeEstimator` (7 d, §12.6.4)».
+  - **`config/balance.yaml`:** добавлен корневой блок `prize_lot: { reserved_ttl_seconds: 172800 }` (48 h) с подробным комментарием-сценарием «выигрыш → reserve → claim/expire».
+  - **`tests/unit/domain/balance/factories.py`:** в `valid_balance_payload()` добавлен `"prize_lot": {"reserved_ttl_seconds": 172_800}` — все 85 тестов через factory автоматически подхватили новое поле без изменений.
+  - **Тесты:** 21 unit-тест в новом `tests/unit/domain/balance/test_prize_lot_config.py` (smoke-парсинг live-yaml + границы `[60, 30 d]` + 6 параметризованных valid-значений + типы int/float/str/bool/None + `extra="forbid"` + frozen). 1 hot-reload-тест в `tests/unit/infrastructure/test_balance_loader.py::TestReloadPrizeLot.test_reload_picks_up_new_reserved_ttl` (yaml `172_800 → 3600`, новый снимок подхватывает свежее значение, старый остаётся frozen).
+  - **`make ci` зелёный:** 6036 passed + 2 skipped, coverage стабильна, ruff/mypy/import-linter все зелёные.
 
 ## На каком файле / задаче остановился
-- Закончил D.8.c; D.7 + D.8.a + D.8.b + D.8.c готовы. Следующий — **D.9.a «Domain reserved_ttl_seconds + Wallet expire-config»**: добавить в `IBalanceConfig` или новый `IPrizeConfig` параметр `reserved_ttl_seconds` (RESERVED-таймаут для PrizeLot перед expire). Гипотеза `48h = 172_800`, финал — на ревью. Затем D.9.b (use-case `ExpireReservedLots`), D.9.c (Alembic + repo-расширение), D.9.d (cron-job в scheduler).
+- Закончил D.9.a; D.7 + D.8 + D.9.a готовы. Следующий — **D.9.b «`IPrizeLotRepository.list_expired_reserved(now, ttl_seconds)`»**: добавить в порт + `SqlAlchemyPrizeLotRepository` метод поиска лотов в `RESERVED`, у которых `reserved_at <= now - ttl_seconds`. Нужен composite-индекс на `(status, reserved_at)` — отдельная Alembic-миграция в D.9.b или в D.9.c. 4+ integration-теста (sqlite + postgres). Затем D.9.c (use-case `ExpireReservedPrizeLots`), D.9.d (cron-entry).
 - *Note for D.9.a:* pre-checkout-HMAC-валидация (handler `handle_pre_checkout_query`, `roulette_paid.py:~302`) перенесена в 4.1-E (см. plan); сейчас pre-checkout валидирует только `parse_invoice_payload` + amount, без HMAC.
 - *Note for D.10.c:* refund-ветка пока рендерит `actual_fee_native=0` (placeholder) — `ClaimPrizeResult.refund_*` контракт расширим в D.10.c.
 - *Note for D.10.c:* composition-root (`bot/main.py::Container`) пока не трогаем — `HmacTgStarsPayloadVerifier`-инстанс не собран; handler-параметр `tg_stars_verifier` пока бросит `MissingDependencyError` при реальном вызове, но это сборочный issue, не функциональный. Окончательная сборка в D.10.c.
@@ -39,10 +46,10 @@
 ## Состояние ветки
 - Ветка: `devin/1778501374-sprint-4-1-D-ton-connect-usdt-claim-prize`
 - База: `main` (= `db8e630 Merge pull request #131`)
-- Предыдущий коммит: `ede95dd feat(4.1-D): D.8.b — Infrastructure HmacTgStarsPayloadVerifier + TgStarsSettings + 51 тест`.
-- Последний коммит (этот): `feat(4.1-D): D.8.c — Wire ITgStarsPayloadVerifier into roulette_paid.py (serialize + verify) + 6 unit-тестов`.
+- Предыдущий коммит: `5ab5212 feat(4.1-D): D.8.c — Wire ITgStarsPayloadVerifier into roulette_paid.py (serialize + verify) + 6 unit-тестов`.
+- Последний коммит (этот): `feat(4.1-D): D.9.a — Balance prize_lot.reserved_ttl_seconds + Pydantic-схема + loader-hot-reload-тест`.
 - Незакоммиченные изменения: нет (после коммита).
-- CI прогонялся локально: ДА, `make ci` зелёный на текущем коммите (D.8.c): **6014 passed, 2 skipped, coverage 95.63%**, ruff/mypy/import-linter все зелёные.
+- CI прогонялся локально: ДА, `make ci` зелёный на текущем коммите (D.9.a): **6036 passed, 2 skipped**, ruff/mypy/import-linter все зелёные.
 - GitHub CI: не открыт PR (по протоколу — PR откроется после D.13/D.14). Прежний прогон D.6 на GitHub не нужен — workflow `paths-ignore: ['docs/**', '**.md', 'AGENT_HANDOFF.md']` ignored docs-коммиты, а функциональные пуши до открытия PR-а в `on: pull_request`-trigger не попадают.
 
 ## Команды для следующего агента
@@ -54,10 +61,11 @@
 - Запустить только D.8.a-тесты: `pytest tests/unit/domain/monetization/test_stars_payload.py -q --no-cov`.
 - Запустить только D.8.b-тесты: `pytest tests/unit/infrastructure/payments/tg_stars/ -q --no-cov`.
 - Запустить только D.8.c-тесты: `pytest tests/unit/bot/handlers/test_roulette_paid.py tests/unit/bot/presenters/test_roulette_paid.py -q --no-cov`.
-- Следующий шаг (**D.9.a — Domain `reserved_ttl_seconds` config**): добавить параметр `reserved_ttl_seconds: int` (≥ 0, дефолт 172_800 = 48h) в `IBalanceConfig` или новый `IPrizeConfig` (TBD), обновить `BalanceConfig` (`infrastructure/config/balance.py`) + соответствующие fake-ы, прокинуть в use-case `GeneratePrizeLots` / `ClaimPrize` для будущего expire-cron-а. Затем D.9.b (use-case `ExpireReservedLots`), D.9.c (Alembic + repo `find_expired_reserved_lots`), D.9.d (cron-job через APS). Полный гайд — в `docs/current_tasks.md`.
+- Запустить только D.9.a-тесты: `pytest tests/unit/domain/balance/test_prize_lot_config.py tests/unit/infrastructure/test_balance_loader.py -q --no-cov`.
+- Следующий шаг (**D.9.b — `IPrizeLotRepository.list_expired_reserved`**): добавить в порт `IPrizeLotRepository` метод `list_expired_reserved(*, currency, now, ttl_seconds, limit=100) -> list[PrizeLot]` (используем `reserved_at <= now - ttl_seconds AND status == RESERVED`). Реализация в `SqlAlchemyPrizeLotRepository` с composite-индексом на `(status, reserved_at)` (новая Alembic-миграция). 4+ integration-теста (создаём `RESERVED`-лот, прокручиваем clock, проверяем выборку). Затем D.9.c (use-case `ExpireReservedPrizeLots`), D.9.d (cron-entry через APS, DI в `bot/main.py::Container`). Полный гайд — в `docs/current_tasks.md`.
 
 ## Известные блокеры / открытые вопросы
-- `lot_ttl_seconds` для RESERVED-таймаута (D.9.a) — пока не зафиксирован; стартую с гипотезы `48h = 172_800`, на ревью можем поменять.
+- `reserved_ttl_seconds` для RESERVED-таймаута (D.9.a) — зафиксирован в `config/balance.yaml::prize_lot.reserved_ttl_seconds = 172800` (48 h). Pydantic-границы `[60, 30 d]`. На ревью геймдиза можем поменять — `hot-reload` без рестарта (см. `TestReloadPrizeLot.test_reload_picks_up_new_reserved_ttl`).
 - `tg_stars.secret` (D.8.b) — ожидается env-переменной (предложение: `TG_STARS_PAYLOAD_HMAC_SECRET`, alias по ENV_PREFIX `pipirik_tg_stars__`). В settings хранится как `SecretStr`; реальный secret пробросится в ops/runbook-е в D.12.
 - ORM-CHECK whitelist-sync test guard — backlog из 4.1-C.
 - **D.5 design notes для следующих шагов (D.10):**

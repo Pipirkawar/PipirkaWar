@@ -1426,6 +1426,63 @@ _MIN_ITEMS_CATALOG_SIZE: int = 40
 _MIN_NAMES_CATALOG_SIZE: int = 30
 """Минимальный размер `names_catalog` (ГДД §1.3.5: «≥ 30 имён в каталоге»)."""
 
+_PRIZE_LOT_RESERVED_TTL_MAX_SECONDS: int = 30 * 24 * 3600
+"""Верхняя граница `prize_lot.reserved_ttl_seconds` (30 суток).
+
+Защита от ляпа в `balance.yaml`: при `reserved_ttl_seconds > 30 d`
+крипто-лот может «зависнуть» в `RESERVED` дольше, чем ёмкость
+audit-log-а (90 дней по ГДД §0.7) или, что хуже, дольше срока
+обновления `IFeeEstimator`-снимка (7 дней по ГДД §12.6.4). Это
+поломает refund-математику. Жёсткий предел тут — sanity-check.
+"""
+
+
+class PrizeLotConfig(_Frozen):
+    """Конфиг крипто-лотов (ГДД §12.6.3-§12.6.4, Спринт 4.1-D).
+
+    Параметры, общие для всех валют (Stars / TON / USDT) — пер-валютные
+    лимиты (`min_lot_usd_equivalent` / `max_lot_usd_equivalent`) живут
+    в коде use-case-а `GeneratePrizeLots` (Спринт 4.1-C); сюда выносятся
+    только балансируемые таймауты / гейты, которые могут менять оператор
+    через `/balance_set` без релиза.
+
+    Поля:
+
+    * `reserved_ttl_seconds` — сколько секунд лот может быть в статусе
+      `RESERVED` до auto-refund-а cron-ом `ExpireReservedPrizeLots`
+      (Спринт 4.1-D, D.9.b–d). Стартовая гипотеза — `172_800` (`48 h`),
+      финал — на ревью геймдиза. Нижняя граница `60` (`1 min`) —
+      чтобы не оставлять foot-gun в виде `0`-а, который сразу
+      возвращал бы каждый только что-резервированный лот; верхняя
+      граница — `_PRIZE_LOT_RESERVED_TTL_MAX_SECONDS` (30 суток),
+      см. её docstring.
+
+      Семантика «выигрыш в рулетке → reserve → claim/expire»:
+
+      - игрок крутит платную/free-рулетку и выигрывает крипто-приз
+        (`RouletteOutcome.crypto_lot(lot_id)`) — use-case `Spin*Roulette`
+        переводит лот `ACTIVE → RESERVED` + audit `PRIZE_LOT_RESERVED`;
+      - у игрока есть `reserved_ttl_seconds` секунд, чтобы выполнить
+        `ClaimPrize(lot_id, recipient_address)` (Спринт 4.1-D, D.2);
+      - если за это время `ClaimPrize` не выполнен (бот молчит, игрок
+        не привязал кошелёк, отвалился TON-RPC и пр.), cron
+        `ExpireReservedPrizeLots` (D.9.d) переводит лот
+        `RESERVED → ACTIVE` + `apply_increment(currency, amount)`
+        обратно в `PrizePool` + audit `PRIZE_LOT_REFUNDED` (audit-source
+        был добавлен ещё в 4.1-C, C.4: Alembic `0031`).
+
+      Pydantic-инвариант: после загрузки `PrizeLotConfig` неизменяем.
+      Hot-reload в `YamlBalanceLoader.reload()` атомарно создаёт новый
+      объект; уже запланированные cron-job-ы пере-читывают значение
+      через `IBalanceConfig.get()` на каждом тике (LSP по
+      `IBalanceConfig` — реализация безопасна для read-side use-case-ов).
+    """
+
+    reserved_ttl_seconds: int = Field(
+        ge=60,
+        le=_PRIZE_LOT_RESERVED_TTL_MAX_SECONDS,
+    )
+
 
 class BalanceConfig(_Frozen):
     """Корневая конфигурация баланса игры.
@@ -1461,6 +1518,7 @@ class BalanceConfig(_Frozen):
     content_policy: ContentPolicy
     enchantment: EnchantmentConfig
     roulette: RouletteConfig
+    prize_lot: PrizeLotConfig
     items_catalog: tuple[ItemEntry, ...] = Field(min_length=_MIN_ITEMS_CATALOG_SIZE)
     names_catalog: tuple[str, ...] = Field(min_length=_MIN_NAMES_CATALOG_SIZE)
 

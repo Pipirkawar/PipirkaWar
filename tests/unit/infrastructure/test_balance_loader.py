@@ -205,3 +205,32 @@ class TestRealConfigBalanceYaml:
         assert isinstance(cfg, BalanceConfig)
         assert cfg.display_names[0].from_cm == 0
         assert cfg.display_names[-1].to_cm is None
+
+
+class TestReloadPrizeLot:
+    """Acceptance Спринта 4.1-D, D.9.a: hot-reload подменяет
+    `prize_lot.reserved_ttl_seconds` без рестарта бота.
+
+    Cron-job `ExpireReservedPrizeLots` (D.9.d) читает TTL через
+    `IBalanceConfig.get().prize_lot.reserved_ttl_seconds` на каждом
+    тике — оператор может через `/balance_set prize_lot.reserved_ttl_seconds <N>`
+    + `/balance_reload` динамически менять refund-таймаут без релиза.
+    Этот тест гарантирует, что `YamlBalanceLoader.reload()` действительно
+    подменяет значение в свежем снимке, а старый снимок остаётся валидным.
+    """
+
+    def test_reload_picks_up_new_reserved_ttl(self, tmp_path: Path) -> None:
+        path = tmp_path / "balance.yaml"
+        _write_yaml(path, valid_balance_payload())
+        loader = YamlBalanceLoader(path)
+        old = loader.get()
+        assert old.prize_lot.reserved_ttl_seconds == 172_800
+
+        changed = valid_balance_payload()
+        changed["prize_lot"] = {"reserved_ttl_seconds": 3600}  # «короткий» 1 h
+        _write_yaml(path, changed)
+
+        new = loader.reload()
+        assert new.prize_lot.reserved_ttl_seconds == 3600
+        # Старый снимок остался валидным (frozen).
+        assert old.prize_lot.reserved_ttl_seconds == 172_800

@@ -290,6 +290,9 @@ def valid_balance_payload() -> dict[str, Any]:
         },
         "enchantment": _build_valid_enchantment(),
         "roulette": _build_valid_roulette(),
+        "prize_lot": {
+            "reserved_ttl_seconds": 172_800,
+        },
         "items_catalog": _build_valid_items_catalog(),
         "names_catalog": _build_valid_names_catalog(),
     }
