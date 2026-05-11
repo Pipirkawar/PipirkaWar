@@ -113,7 +113,11 @@ from pipirik_wars.application.forest import (
 )
 from pipirik_wars.application.i18n import IMessageBundle, IPlayerLocaleResolver
 from pipirik_wars.application.inventory import EnchantItem, GetInventory
-from pipirik_wars.application.monetization import RecordDonation, SpinPaidRoulette
+from pipirik_wars.application.monetization import (
+    GeneratePrizeLots,
+    RecordDonation,
+    SpinPaidRoulette,
+)
 from pipirik_wars.application.mountains import (
     FinishMountainRun,
     IMountainFinishNotifier,
@@ -284,6 +288,7 @@ from pipirik_wars.infrastructure.db.services import (
     SqlAlchemyIdempotencyService,
 )
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
+from pipirik_wars.infrastructure.fees import InMemoryFeeEstimator
 from pipirik_wars.infrastructure.i18n import (
     FluentMessageBundle,
     PlayerLocaleResolverDB,
@@ -916,6 +921,10 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         boss_round_tick_notifier=boss_round_tick_notifier,
         boss_fight_finish_notifier=boss_fight_finish_notifier,
         clans=clans,
+        # 4.1-C / C.7.b: late-bound фабрика `GeneratePrizeLots` (use-case
+        # собирается ниже по файлу после `record_donation`; лямбда
+        # резолвится в момент срабатывания cron-каллбэка).
+        prize_lot_generator_factory=lambda: generate_prize_lots,
     )
     start_forest_run = StartForestRun(
         uow=uow,
@@ -1189,6 +1198,23 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     record_donation = RecordDonation(
         prize_pool_repository=prize_pool_repo,
         audit_logger=audit,
+        clock=clock,
+    )
+    # 4.1-C / C.7.a + C.7.b: cron `GeneratePrizeLots` 1×/час per currency.
+    # `InMemoryFeeEstimator` — stateless константная реализация
+    # (STARS=0, TON_NANO=10_000_000=0.01 TON, USDT_DECIMAL=200_000=0.2 USDT);
+    # на 4.1-D подменится `TonRpcFeeEstimator` (P95 за 7 дней). Передаётся в
+    # `APSchedulerDelayedJobScheduler` через late-bound лямбду
+    # `prize_lot_generator_factory=lambda: generate_prize_lots` (инициали-
+    # зация scheduler-а выше по файлу — резолвится при срабатывании cron-а).
+    fee_estimator = InMemoryFeeEstimator()
+    generate_prize_lots = GeneratePrizeLots(
+        uow=uow,
+        prize_pool_repository=prize_pool_repo,
+        prize_lot_repository=prize_lot_repo,
+        fee_estimator=fee_estimator,
+        audit_logger=audit,
+        idempotency=idempotency,
         clock=clock,
     )
     spin_paid_roulette = SpinPaidRoulette(
@@ -2026,6 +2052,9 @@ async def run(
         # Глобальный weekly cron «итоги недели по рефералам клана»
         # (вс. 18:00 UTC, Спринт 2.4.E).
         await scheduler.schedule_weekly_clan_referral_summary_cron()
+        # 4.1-C / C.7.b: hourly cron `GeneratePrizeLots` per currency
+        # (3 инстанса IntervalTrigger(hours=1) — STARS / TON_NANO / USDT_DECIMAL).
+        scheduler.schedule_prize_lot_generator_cron()
     try:
         await dispatcher.start_polling(
             bot,
