@@ -28,7 +28,7 @@
    аналогично `dungeon/finish_run.py` для loss-исходов.
 6. **Pick исхода** через чистый picker
    `domain.roulette.services.pick_roulette_outcome(config, random,
-   crypto_pool_empty=True)`. На 3.5-C крипто-пул всегда пуст
+   active_lots=())`. На 3.5-C / 4.1-A/B `active_lots` всегда пуст
    (крипто-инфраструктура — Phase 4). Picker возвращает
    `RouletteOutcome(kind, length_cm)`.
 7. **Запись в event-log** `roulette_spins` через
@@ -227,7 +227,7 @@ class SpinFreeRoulette:
             outcome = pick_roulette_outcome(
                 config=roulette_cfg,
                 random=self._random,
-                crypto_pool_empty=True,
+                active_lots=(),
             )
 
             # Step 7: запись в event-log `roulette_spins`.
@@ -243,6 +243,8 @@ class SpinFreeRoulette:
             spin_after: dict[str, object] = {"kind": outcome.kind.value}
             if outcome.length_cm is not None:
                 spin_after["length_cm"] = outcome.length_cm
+            if outcome.lot_id is not None:
+                spin_after["lot_id"] = outcome.lot_id
             await self._audit.record(
                 AuditEntry(
                     action=AuditAction.ROULETTE_SPIN,

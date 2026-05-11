@@ -8,12 +8,14 @@
 `domain/balance/config`).
 
 `RouletteOutcome` — frozen-VO с распакованным результатом одного спина:
-тип исхода + (для `LENGTH`) разыгранное количество сантиметров. Для
-других типов `length_cm = None` — конкретный приз/предмет/скролл
-выкатывается в use-case-е (Спринт 3.5-C/D), picker возвращает только
-тип. Это сделано, чтобы picker оставался чистой функцией от
-`(config, random, crypto_pool_empty)` без зависимостей от каталога
-предметов / пула скроллов / внешних крипто-API.
+тип исхода + (для `LENGTH`) разыгранное количество сантиметров +
+(для `CRYPTO_LOT`, Спринт 4.1-C) id выбранного `PrizeLot`-а. Для
+остальных типов (`ITEM` / `SCROLL_REGULAR` / `SCROLL_BLESSED`)
+каталог-зависимый резолв конкретного приза откладывается в use-case
+(Спринт 3.5-C/D), picker возвращает только тип. Это сделано, чтобы
+picker оставался чистой функцией от `(config, random, active_lots)`
+без зависимостей от каталога предметов / пула скроллов / внешних
+крипто-API.
 
 `RouletteSpin` (Спринт 3.5-B) — иммутабельная запись одной прокрутки
 для аудит-таблицы `roulette_spins`: `(player_id, occurred_at, outcome,
@@ -27,6 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import Self
 
 from pipirik_wars.domain.balance.config import RouletteOutcomeKind
 
@@ -60,23 +63,34 @@ class RouletteVariant(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class RouletteOutcome:
-    """Результат одного спина рулетки (ГДД §12.4.2).
+    """Результат одного спина рулетки (ГДД §12.4.2 / §12.5.2).
 
-    Возвращается чистой функцией `pick_roulette_outcome(...)`. Для
-    `kind == LENGTH` поле `length_cm` обязано быть положительным `int`
-    (бакет уже выбран и `uniform` уже разыгран); для остальных типов —
-    `None` (конкретный приз/скролл/лот выкатывается в use-case-е,
-    Спринт 3.5-C/D).
+    Возвращается чистой функцией `pick_roulette_outcome(...)` /
+    `pick_paid_outcome(...)`. Поля:
 
-    Инвариант проверяется в `__post_init__`:
-    - `kind == LENGTH` ⇒ `length_cm is not None and length_cm >= 1`;
-    - `kind != LENGTH` ⇒ `length_cm is None`.
+    * `kind` — тип исхода (`LENGTH` / `ITEM` / `SCROLL_REGULAR` /
+      `SCROLL_BLESSED` / `CRYPTO_LOT`).
+    * `length_cm` — для `kind == LENGTH` обязан быть положительным `int`
+      (бакет уже выбран и `randint` уже разыгран); для остальных типов —
+      `None`.
+    * `lot_id` — для `kind == CRYPTO_LOT` обязан быть `int >= 1`
+      (id выбранного `PrizeLot`-а из активного пула, Спринт 4.1-C);
+      для остальных типов — `None`. Конкретный приз/скролл/предмет
+      для других типов резолвится в use-case-е (Спринт 3.5-C/D).
+
+    Инварианты `__post_init__`:
+    - `kind == LENGTH` ⇒ `length_cm is not None and length_cm >= 1`
+      and `lot_id is None`;
+    - `kind == CRYPTO_LOT` ⇒ `lot_id is not None and lot_id >= 1`
+      and `length_cm is None`;
+    - иначе — оба поля `None`.
 
     Frozen + slots — VO без identity, безопасно сравнивать `==` / хэшировать.
     """
 
     kind: RouletteOutcomeKind
     length_cm: int | None = None
+    lot_id: int | None = None
 
     def __post_init__(self) -> None:
         if self.kind is RouletteOutcomeKind.LENGTH:
@@ -88,11 +102,47 @@ class RouletteOutcome:
                 raise ValueError(
                     f"RouletteOutcome(kind=LENGTH).length_cm must be >= 1, got {self.length_cm}",
                 )
-        elif self.length_cm is not None:
-            raise ValueError(
-                f"RouletteOutcome(kind={self.kind.value!r}) must have "
-                f"length_cm=None, got {self.length_cm}",
-            )
+            if self.lot_id is not None:
+                raise ValueError(
+                    f"RouletteOutcome(kind=LENGTH) must have lot_id=None, got {self.lot_id}",
+                )
+        elif self.kind is RouletteOutcomeKind.CRYPTO_LOT:
+            if self.lot_id is None:
+                raise ValueError(
+                    "RouletteOutcome(kind=CRYPTO_LOT) requires lot_id to be set",
+                )
+            if self.lot_id < 1:
+                raise ValueError(
+                    f"RouletteOutcome(kind=CRYPTO_LOT).lot_id must be >= 1, got {self.lot_id}",
+                )
+            if self.length_cm is not None:
+                raise ValueError(
+                    f"RouletteOutcome(kind=CRYPTO_LOT) must have length_cm=None, "
+                    f"got {self.length_cm}",
+                )
+        else:
+            if self.length_cm is not None:
+                raise ValueError(
+                    f"RouletteOutcome(kind={self.kind.value!r}) must have "
+                    f"length_cm=None, got {self.length_cm}",
+                )
+            if self.lot_id is not None:
+                raise ValueError(
+                    f"RouletteOutcome(kind={self.kind.value!r}) must have "
+                    f"lot_id=None, got {self.lot_id}",
+                )
+
+    @classmethod
+    def crypto_lot(cls, *, lot_id: int) -> Self:
+        """Фабрика `RouletteOutcome(kind=CRYPTO_LOT, lot_id=...)` (Спринт 4.1-C).
+
+        Используется в picker-е (`domain.roulette.services`) и в callers-ах,
+        которые хотят выразить «крипто-приз с конкретным лотом» одной
+        строкой. Стандартный конструктор тоже разрешён, но эта фабрика
+        строже типизирована: `lot_id: int` обязателен (а не
+        `int | None`), что снимает один runtime-check у вызывающих.
+        """
+        return cls(kind=RouletteOutcomeKind.CRYPTO_LOT, lot_id=lot_id)
 
 
 @dataclass(frozen=True, slots=True)

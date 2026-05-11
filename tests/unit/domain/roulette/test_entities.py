@@ -44,7 +44,6 @@ class TestRouletteOutcomePostInit:
             RouletteOutcomeKind.ITEM,
             RouletteOutcomeKind.SCROLL_REGULAR,
             RouletteOutcomeKind.SCROLL_BLESSED,
-            RouletteOutcomeKind.CRYPTO_LOT,
         ],
     )
     def test_non_length_kind_without_length_cm_ok(
@@ -54,6 +53,7 @@ class TestRouletteOutcomePostInit:
         outcome = RouletteOutcome(kind=kind)
         assert outcome.kind is kind
         assert outcome.length_cm is None
+        assert outcome.lot_id is None
 
     @pytest.mark.parametrize(
         "kind",
@@ -69,7 +69,75 @@ class TestRouletteOutcomePostInit:
         kind: RouletteOutcomeKind,
     ) -> None:
         with pytest.raises(ValueError, match="must have length_cm=None"):
-            RouletteOutcome(kind=kind, length_cm=10)
+            RouletteOutcome(
+                kind=kind,
+                length_cm=10,
+                lot_id=1 if kind is RouletteOutcomeKind.CRYPTO_LOT else None,
+            )
+
+
+class TestRouletteOutcomeCryptoLotInvariants:
+    """Спринт 4.1-C: `CRYPTO_LOT` требует `lot_id >= 1`.
+
+    Проверяет новые invariant-ы `__post_init__` и фабрику
+    `RouletteOutcome.crypto_lot(lot_id=...)`.
+    """
+
+    def test_crypto_lot_with_lot_id_ok(self) -> None:
+        outcome = RouletteOutcome(kind=RouletteOutcomeKind.CRYPTO_LOT, lot_id=42)
+        assert outcome.kind is RouletteOutcomeKind.CRYPTO_LOT
+        assert outcome.lot_id == 42
+        assert outcome.length_cm is None
+
+    def test_crypto_lot_without_lot_id_raises(self) -> None:
+        with pytest.raises(ValueError, match="requires lot_id"):
+            RouletteOutcome(kind=RouletteOutcomeKind.CRYPTO_LOT)
+
+    @pytest.mark.parametrize("bad", [0, -1, -100])
+    def test_crypto_lot_with_non_positive_lot_id_raises(self, bad: int) -> None:
+        with pytest.raises(ValueError, match="lot_id must be >= 1"):
+            RouletteOutcome(kind=RouletteOutcomeKind.CRYPTO_LOT, lot_id=bad)
+
+    def test_crypto_lot_with_length_cm_raises(self) -> None:
+        with pytest.raises(ValueError, match="must have length_cm=None"):
+            RouletteOutcome(
+                kind=RouletteOutcomeKind.CRYPTO_LOT,
+                lot_id=1,
+                length_cm=10,
+            )
+
+    def test_length_kind_with_lot_id_raises(self) -> None:
+        with pytest.raises(ValueError, match="must have lot_id=None"):
+            RouletteOutcome(
+                kind=RouletteOutcomeKind.LENGTH,
+                length_cm=42,
+                lot_id=1,
+            )
+
+    @pytest.mark.parametrize(
+        "kind",
+        [
+            RouletteOutcomeKind.ITEM,
+            RouletteOutcomeKind.SCROLL_REGULAR,
+            RouletteOutcomeKind.SCROLL_BLESSED,
+        ],
+    )
+    def test_non_crypto_kind_with_lot_id_raises(
+        self,
+        kind: RouletteOutcomeKind,
+    ) -> None:
+        with pytest.raises(ValueError, match="must have lot_id=None"):
+            RouletteOutcome(kind=kind, lot_id=1)
+
+    def test_crypto_lot_factory_classmethod(self) -> None:
+        outcome = RouletteOutcome.crypto_lot(lot_id=99)
+        assert outcome.kind is RouletteOutcomeKind.CRYPTO_LOT
+        assert outcome.lot_id == 99
+        assert outcome.length_cm is None
+
+    def test_crypto_lot_factory_rejects_non_positive_lot_id(self) -> None:
+        with pytest.raises(ValueError, match="lot_id must be >= 1"):
+            RouletteOutcome.crypto_lot(lot_id=0)
 
 
 class TestRouletteOutcomeImmutability:

@@ -252,7 +252,10 @@ class TestRoulettePresenterFakeBundle:
         self, kind: RouletteOutcomeKind, key_suffix: str
     ) -> None:
         presenter = RoulettePresenter(bundle=FakeMessageBundle())
-        outcome = RouletteOutcome(kind=kind)
+        if kind is RouletteOutcomeKind.CRYPTO_LOT:
+            outcome = RouletteOutcome(kind=kind, lot_id=1)
+        else:
+            outcome = RouletteOutcome(kind=kind)
         result = SpinResult(outcome=outcome, spent_cm=100, idempotent=False)
         text = presenter.render_result(result=result, cost_cm=100, locale=_RU)
         assert text == f"ru:roulette-free-result-{key_suffix}[cost_cm=100]"

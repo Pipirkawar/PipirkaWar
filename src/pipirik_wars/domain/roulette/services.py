@@ -1,37 +1,51 @@
-"""Чистые picker-ы рулеток (ГДД §12.4.2 free + §12.5.2 paid, Спринт 4.1-A).
+"""Чистые picker-ы рулеток (ГДД §12.4.2 free + §12.5.2 paid, Спринт 4.1-A/4.1-C).
 
 Две доменных функции:
 
 - `pick_roulette_outcome` — free-рулетка (Спринт 3.5-A, ГДД §12.4.2).
 - `pick_paid_outcome` — платная рулетка (Спринт 4.1-A, ГДД §12.5.2).
 
-Обе возвращают `RouletteOutcome` с `kind` (один из 5 типов исхода) и —
-для `LENGTH` — конкретным `length_cm`. Все остальные типы (`item` /
-`scroll_regular` / `scroll_blessed` / `crypto_lot`) дальше резолвятся
-в use-case-е (Спринт 3.5-C/D / 4.1-C-D), потому что им нужен доступ к
-каталогу предметов / пулу скроллов / крипто-API.
+Обе возвращают `RouletteOutcome` с `kind` (один из 5 типов исхода), для
+`LENGTH` — конкретным `length_cm`, для `CRYPTO_LOT` — `lot_id` выбранного
+из `active_lots` лота. Каталог-зависимые типы (`item` /
+`scroll_regular` / `scroll_blessed`) дальше резолвятся в use-case-е
+(Спринт 3.5-C/D), потому что им нужен доступ к каталогу предметов /
+пулу скроллов.
 
 Алгоритм (одинаковый для free и paid):
 
 1. Считаются итоговые веса исходов с учётом перетекания
-   `crypto_lot` → `length` при пустом крипто-пуле (флаг
-   `crypto_pool_empty` задаётся вызывающим use-case-ом).
+   `crypto_lot` → `length`, когда пул активных лотов `active_lots`
+   пуст. Сигнал «крипто-пул пуст» = `len(active_lots) == 0`
+   (задаётся вызывающим use-case-ом через `IPrizeLotRepository
+   .list_active(currency)`). На 4.1-A/B `active_lots=()` всегда,
+   поэтому `crypto_lot` перетекает в `length`; в 4.1-C/D
+   use-case-ы начнут передавать реальный список.
 2. `IRandom.weighted_choice(kinds, int_weights)` выбирает один тип.
 3. Если `kind == LENGTH` — выбирается бакет
    `IRandom.weighted_choice(buckets, int_weights)`,
    затем `IRandom.randint(min_cm, max_cm)` даёт конкретное число
    сантиметров.
+4. Если `kind == CRYPTO_LOT` — `IRandom.choice(active_lots)`
+   выбирает один лот из `active_lots`; `lot.id` идёт в
+   `RouletteOutcome.lot_id`. Бросать в `active_lots` неперсистивные
+   лоты (`lot.id is None`) запрещено: контракт use-case-а —
+   `IPrizeLotRepository.list_active(currency)` возвращает только
+   сохранённые лоты. defense-in-depth —
+   `InvalidRouletteConfigError`.
 
 Различие — только в конфиге (free vs paid веса). Внутренние хелперы
-`_roll_kind` / `_roll_length_bucket` / `_weighted_choice` шарятся.
+`_roll_kind` / `_roll_length_bucket` / `_roll_crypto_lot` / `_weighted_choice`
+шарятся между free и paid.
 
-Picker — чистая функция от `(config, random, crypto_pool_empty)`.
-В тестах `IRandom` подменяется на `FakeRandom(seed=...)`, что даёт
-детерминированный 3σ-Bernoulli-контроль частот всех веток.
+Picker — чистая функция от `(config, random, active_lots)`. В тестах
+`IRandom` подменяется на `FakeRandom(seed=...)`, что даёт детерминированный
+3σ-Bernoulli-контроль частот всех веток.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TypeVar
 
 from pipirik_wars.domain.balance.config import (
@@ -41,6 +55,7 @@ from pipirik_wars.domain.balance.config import (
     RouletteOutcomeWeight,
     RoulettePaidConfig,
 )
+from pipirik_wars.domain.monetization.entities import PrizeLot
 from pipirik_wars.domain.roulette.entities import RouletteOutcome
 from pipirik_wars.domain.roulette.errors import InvalidRouletteConfigError
 from pipirik_wars.domain.shared.ports import IRandom
@@ -63,7 +78,7 @@ def pick_roulette_outcome(
     *,
     config: RouletteFreeConfig,
     random: IRandom,
-    crypto_pool_empty: bool,
+    active_lots: Sequence[PrizeLot],
 ) -> RouletteOutcome:
     """Разыграть один исход free-рулетки.
 
@@ -72,21 +87,26 @@ def pick_roulette_outcome(
       гарантирует: сумма весов исходов = 1.0 ± ε, сумма весов бакетов
       = 1.0 ± ε, бакеты длины не перекрываются и `min_cm <= max_cm`).
     - `random` — DI-источник случайности (`IRandom`).
-    - `crypto_pool_empty` — флаг от use-case-а: если `True`, вес
-      `CRYPTO_LOT` перетекает на `LENGTH` (ГДД §12.4.2: «если крипто-пул
-      пуст → вес `crypto_lot` перетекает на `length`»). На 3.5-A крипто-пул
-      всегда пуст (крипто-инфраструктура — Спринт 4.x), use-case
-      `SpinFreeRoulette` (3.5-C) пока всегда передаёт `True`.
+    - `active_lots` — список активных `PrizeLot`-ов (Спринт 4.1-C);
+      формируется use-case-ом из `IPrizeLotRepository.list_active(currency)`.
+      Пустой список равносилен «крипто-пул пуст»: вес `CRYPTO_LOT`
+      перетекает на `LENGTH` (ГДД §12.4.2). При непустом списке и
+      выпавшем весе `CRYPTO_LOT` — `random.choice(active_lots)` выбирает
+      один лот, его `id` идёт в `RouletteOutcome.lot_id`.
 
     Returns:
-    - `RouletteOutcome(kind, length_cm)`, где для `kind == LENGTH`
+    - `RouletteOutcome(kind, length_cm, lot_id)`, где для `kind == LENGTH`
       `length_cm` — целое число в `[bucket.min_cm, bucket.max_cm]`,
-      для остальных типов `length_cm = None`.
+      `lot_id = None`; для `kind == CRYPTO_LOT` `lot_id = chosen.id`,
+      `length_cm = None`; для остальных типов — оба `None`.
 
     Raises:
     - `InvalidRouletteConfigError` — defence-in-depth, если все веса
-      нулевые (pydantic-инвариант не должен такое пропустить).
+      нулевые (pydantic-инвариант не должен такое пропустить) или если
+      в `active_lots` попал лот с `id is None` (нарушен контракт
+      `IPrizeLotRepository.list_active`).
     """
+    crypto_pool_empty = len(active_lots) == 0
     kind = _roll_kind(
         outcomes=config.outcomes,
         random=random,
@@ -99,6 +119,8 @@ def pick_roulette_outcome(
         )
         length_cm = random.randint(bucket.min_cm, bucket.max_cm)
         return RouletteOutcome(kind=kind, length_cm=length_cm)
+    if kind is RouletteOutcomeKind.CRYPTO_LOT:
+        return _roll_crypto_lot(active_lots=active_lots, random=random)
     return RouletteOutcome(kind=kind)
 
 
@@ -106,7 +128,7 @@ def pick_paid_outcome(
     *,
     config: RoulettePaidConfig,
     random: IRandom,
-    crypto_pool_empty: bool,
+    active_lots: Sequence[PrizeLot],
 ) -> RouletteOutcome:
     """Разыграть один исход платной рулетки (ГДД §12.5.2, Спринт 4.1-A).
 
@@ -115,19 +137,21 @@ def pick_paid_outcome(
     крипто, см. §12.5.2).
 
     Returns:
-    - `RouletteOutcome(kind, length_cm)`, где для `kind == LENGTH`
-      `length_cm` — целое число в `[bucket.min_cm, bucket.max_cm]`,
-      для остальных типов `length_cm = None`.
+    - `RouletteOutcome(kind, length_cm, lot_id)` — семантика идентична
+      `pick_roulette_outcome` (см. выше).
 
     Raises:
     - `InvalidRouletteConfigError` — defence-in-depth, если все веса
-      нулевые (pydantic-инвариант не должен такое пропустить).
+      нулевые (pydantic-инвариант не должен такое пропустить) или если
+      в `active_lots` попал лот с `id is None`.
 
-    Использование: вызывается из use-case `SpinPaidRoulette` (4.1-A).
-    Как и для free-рулетки, `crypto_pool_empty=True` на 4.1-A до
-    Спринта 4.1-D (когда появится `IPrizePool` порт). До тех пор вес
-    `crypto_lot` (0.020) перетекает на `length` (становится 0.570).
+    Использование: вызывается из use-case `SpinPaidRoulette` (4.1-A). На
+    4.1-A/B use-case передаёт `active_lots=()` всегда — `CRYPTO_LOT`
+    всегда перетекает в `LENGTH` (по ГДД §12.5.2: 0.020 + 0.550 = 0.570).
+    Реальный вызов `IPrizeLotRepository.list_active(STARS)` появится в
+    Спринте 4.1-C (шаг C.6, резервирование лота при выпадении).
     """
+    crypto_pool_empty = len(active_lots) == 0
     kind = _roll_kind(
         outcomes=config.outcomes,
         random=random,
@@ -140,7 +164,34 @@ def pick_paid_outcome(
         )
         length_cm = random.randint(bucket.min_cm, bucket.max_cm)
         return RouletteOutcome(kind=kind, length_cm=length_cm)
+    if kind is RouletteOutcomeKind.CRYPTO_LOT:
+        return _roll_crypto_lot(active_lots=active_lots, random=random)
     return RouletteOutcome(kind=kind)
+
+
+def _roll_crypto_lot(
+    *,
+    active_lots: Sequence[PrizeLot],
+    random: IRandom,
+) -> RouletteOutcome:
+    """Выбрать один лот из `active_lots` через `IRandom.choice`.
+
+    Должно вызываться только при непустом `active_lots`: в пустом
+    случае picker раньше выбирает `LENGTH` (через `crypto_pool_empty
+    → перетекание` в `_roll_kind`).
+
+    Raises:
+    - `InvalidRouletteConfigError` — если `chosen.id is None`. Контракт
+      use-case-а: `IPrizeLotRepository.list_active` возвращает только
+      сохранённые лоты (`id > 0`). Появление свежесгенерированного
+      лота — контрактная ошибка коллера.
+    """
+    chosen = random.choice(active_lots)
+    if chosen.id is None:
+        raise InvalidRouletteConfigError(
+            reason="active_lots contained a non-persisted PrizeLot (id is None)",
+        )
+    return RouletteOutcome.crypto_lot(lot_id=chosen.id)
 
 
 def _roll_kind(

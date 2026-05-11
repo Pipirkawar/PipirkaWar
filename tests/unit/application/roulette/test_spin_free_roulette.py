@@ -19,7 +19,7 @@
   `ROULETTE_SPIN` со ссылкой на kind, **НЕТ** второго audit
   `LENGTH_GRANT`-а от reward-grant-а.
 * **Crypto-pool empty drains crypto_lot weight to length** (1) —
-  use-case передаёт `crypto_pool_empty=True` в picker, что в Спринте
+  use-case передаёт `active_lots=()` в picker, что в Спринте
   3.5-C сводится к перетеканию веса `CRYPTO_LOT → LENGTH` (см.
   `domain/roulette/services.py::_roll_kind`).
 * **Audit-payload `ROULETTE_SPIN`** (1) — `target_kind`, `target_id`,
@@ -510,13 +510,13 @@ class TestHappyPath:
 class TestCryptoPoolDrainage:
     @pytest.mark.asyncio
     async def test_use_case_drains_crypto_to_length_via_picker(self) -> None:
-        """Use-case всегда передаёт `crypto_pool_empty=True` в picker.
+        """Use-case всегда передаёт `active_lots=()` в picker.
 
         Конфиг ставим: `CRYPTO_LOT.weight=0.5`, `LENGTH.weight=0.5`.
-        При `crypto_pool_empty=True` вес `CRYPTO_LOT` перетекает в `LENGTH`
+        При пустом `active_lots` вес `CRYPTO_LOT` перетекает в `LENGTH`
         — итоговый вес `LENGTH = 1.0`. Стаб `_ScriptedRandom` с одним
         non-zero вариантом → всегда `LENGTH`. Если бы use-case передал
-        `crypto_pool_empty=False`, picker оставил бы оба варианта в
+        непустой `active_lots`, picker оставил бы оба варианта в
         `weighted_choice`, и стаб всё равно вернул бы первый — но тогда
         первый был бы `CRYPTO_LOT` (порядок enum: LENGTH, ITEM,
         SCROLL_REGULAR, SCROLL_BLESSED, CRYPTO_LOT). Ниже мы пропускаем
@@ -548,7 +548,7 @@ class TestCryptoPoolDrainage:
             SpinFreeRouletteCommand(player_id=1, idempotency_key="msg:42"),
         )
 
-        # Use-case передаёт crypto_pool_empty=True → CRYPTO_LOT исключён,
+        # Use-case передаёт active_lots=() → CRYPTO_LOT исключён,
         # остался только LENGTH с весом 1.0.
         assert result.outcome is not None
         assert result.outcome.kind is RouletteOutcomeKind.LENGTH

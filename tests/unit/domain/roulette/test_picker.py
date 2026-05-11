@@ -1,4 +1,4 @@
-"""Тесты доменного picker-а рулетки `pick_roulette_outcome` (Спринт 3.5-A).
+"""Тесты доменного picker-а рулетки `pick_roulette_outcome` (Спринт 3.5-A / 4.1-C).
 
 Структура аналогична `tests/unit/domain/inventory/test_enchant_picker.py`
 (Спринт 3.4-A) — тот же `_bernoulli_bounds`-приём (3σ + аддитивный
@@ -9,18 +9,21 @@
 
 * **Forced-outcome** — конфиг с одним типом исхода `weight=1.0` всегда
   возвращает этот тип. Если `kind == LENGTH`, проверяется ещё и
-  weighted-выбор бакета и `randint(min_cm, max_cm)` диапазон.
+  weighted-выбор бакета и `randint(min_cm, max_cm)` диапазон. Если
+  `kind == CRYPTO_LOT`, проверяется, что при непустом `active_lots`
+  `lot_id` выбирается из доступного списка.
 * **Bernoulli-частоты исходов** — все 5 типов на дефолтном балансе
-  с `crypto_pool_empty=False` (10000 прогонов, 3σ-границы).
+  с непустым `active_lots` (10000 прогонов, 3σ-границы).
 * **Bernoulli-частоты бакетов длины** — после исхода `LENGTH`
   4 бакета попадают в свои 3σ-границы.
 * **`length_cm` в диапазоне выбранного бакета** — `randint(min_cm,
   max_cm)` всегда возвращает целое в `[min_cm, max_cm]`.
-* **Перетекание `crypto_lot → length`** — при `crypto_pool_empty=True`
+* **Перетекание `crypto_lot → length`** — при пустом `active_lots`
   частота `CRYPTO_LOT` строго `0`, а частота `LENGTH` сдвинута на
   weight `crypto_lot` (3σ-bound).
-* **Crypto-pool not empty** — при `crypto_pool_empty=False` частота
-  `CRYPTO_LOT` ≠ 0 (в 3σ-границе исходного веса).
+* **Crypto-pool not empty** — при непустом `active_lots` частота
+  `CRYPTO_LOT` ≠ 0 (в 3σ-границе исходного веса), `lot_id` выбирается
+  из списка лотов.
 * **Zero-weight outcome filtered** — конфиг, где один из исходов
   имеет `weight=0.0`, никогда не возвращает этот исход.
 * **All-zero filter triggers `InvalidRouletteConfigError`** — если
@@ -32,6 +35,7 @@ from __future__ import annotations
 
 import math
 from collections import Counter
+from datetime import UTC, datetime
 
 import pytest
 
@@ -41,6 +45,12 @@ from pipirik_wars.domain.balance.config import (
     RouletteOutcomeKind,
     RouletteOutcomeWeight,
 )
+from pipirik_wars.domain.monetization import (
+    Currency,
+    FeeBufferAmount,
+    PrizeLot,
+    PrizeLotStatus,
+)
 from pipirik_wars.domain.roulette import (
     InvalidRouletteConfigError,
     RouletteOutcome,
@@ -48,6 +58,27 @@ from pipirik_wars.domain.roulette import (
 )
 from tests.fakes.random import FakeRandom
 from tests.unit.domain.balance.factories import build_valid_balance
+
+_DUMMY_NOW = datetime(2026, 5, 11, 12, 0, 0, tzinfo=UTC)
+
+
+def _dummy_lot(*, lot_id: int = 1, currency: Currency = Currency.TON_NANO) -> PrizeLot:
+    """Persisted-лот под picker-тесты («not empty» сигнал).
+
+    Для проверки фреквенции / «пул не пуст» пикеру хватает одного
+    лота (из последовательности `random.choice` всё равно выберет его).
+    Сумма / буфер / валюта пикеру не важны — он использует только `id`.
+    """
+    return PrizeLot(
+        id=lot_id,
+        currency=currency,
+        amount_native=1_000_000_000,
+        fee_buffer_native=FeeBufferAmount(5_000_000),
+        status=PrizeLotStatus.ACTIVE,
+        created_at=_DUMMY_NOW,
+        claimed_at=None,
+    )
+
 
 _ROLLS = 10_000
 
@@ -105,7 +136,7 @@ class TestForcedOutcomeKinds:
         outcome = pick_roulette_outcome(
             config=cfg,
             random=FakeRandom(seed=1),
-            crypto_pool_empty=False,
+            active_lots=(_dummy_lot(),),
         )
         assert outcome == RouletteOutcome(kind=RouletteOutcomeKind.ITEM)
 
@@ -114,7 +145,7 @@ class TestForcedOutcomeKinds:
         outcome = pick_roulette_outcome(
             config=cfg,
             random=FakeRandom(seed=1),
-            crypto_pool_empty=False,
+            active_lots=(_dummy_lot(),),
         )
         assert outcome.kind is RouletteOutcomeKind.SCROLL_REGULAR
         assert outcome.length_cm is None
@@ -124,7 +155,7 @@ class TestForcedOutcomeKinds:
         outcome = pick_roulette_outcome(
             config=cfg,
             random=FakeRandom(seed=1),
-            crypto_pool_empty=False,
+            active_lots=(_dummy_lot(),),
         )
         assert outcome.kind is RouletteOutcomeKind.SCROLL_BLESSED
 
@@ -133,9 +164,11 @@ class TestForcedOutcomeKinds:
         outcome = pick_roulette_outcome(
             config=cfg,
             random=FakeRandom(seed=1),
-            crypto_pool_empty=False,
+            active_lots=(_dummy_lot(lot_id=42),),
         )
         assert outcome.kind is RouletteOutcomeKind.CRYPTO_LOT
+        assert outcome.lot_id == 42
+        assert outcome.length_cm is None
 
     def test_forced_length_picks_bucket_and_random_int(self) -> None:
         cfg = self._config_with_only_kind(RouletteOutcomeKind.LENGTH)
@@ -143,7 +176,7 @@ class TestForcedOutcomeKinds:
             outcome = pick_roulette_outcome(
                 config=cfg,
                 random=FakeRandom(seed=seed),
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             assert outcome.kind is RouletteOutcomeKind.LENGTH
             assert outcome.length_cm is not None
@@ -166,7 +199,7 @@ class TestKindFrequenciesOnDefaultBalance:
             outcome = pick_roulette_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             counter[outcome.kind] += 1
         weight_by_kind = {o.kind: o.weight for o in cfg.outcomes}
@@ -185,7 +218,7 @@ class TestKindFrequenciesOnDefaultBalance:
             outcome = pick_roulette_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             counter[outcome.kind] += 1
         assert sum(counter.values()) == _ROLLS
@@ -217,7 +250,7 @@ class TestLengthBucketFrequencies:
             outcome = pick_roulette_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             assert outcome.kind is RouletteOutcomeKind.LENGTH
             assert outcome.length_cm is not None
@@ -256,7 +289,7 @@ class TestCryptoPoolDrain:
             outcome = pick_roulette_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=True,
+                active_lots=(),
             )
             counter[outcome.kind] += 1
         assert counter[RouletteOutcomeKind.CRYPTO_LOT] == 0
@@ -273,7 +306,7 @@ class TestCryptoPoolDrain:
             outcome = pick_roulette_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=True,
+                active_lots=(),
             )
             counter[outcome.kind] += 1
         low, high = _bernoulli_bounds(expected_length_p)
@@ -292,7 +325,7 @@ class TestCryptoPoolDrain:
             outcome = pick_roulette_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             counter[outcome.kind] += 1
         low, high = _bernoulli_bounds(crypto_weight)
@@ -339,7 +372,7 @@ class TestZeroWeightFiltering:
             outcome = pick_roulette_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             seen.add(outcome.kind)
         assert seen == {RouletteOutcomeKind.LENGTH, RouletteOutcomeKind.ITEM}
@@ -368,7 +401,7 @@ class TestZeroWeightFiltering:
             outcome = pick_roulette_outcome(
                 config=cfg,
                 random=rng,
-                crypto_pool_empty=False,
+                active_lots=(_dummy_lot(),),
             )
             assert outcome.kind is RouletteOutcomeKind.LENGTH
             assert outcome.length_cm is not None
@@ -405,5 +438,5 @@ class TestInvalidConfigDefence:
             pick_roulette_outcome(
                 config=cfg,
                 random=FakeRandom(seed=31),
-                crypto_pool_empty=True,
+                active_lots=(),
             )
