@@ -71,6 +71,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pipirik_wars.domain.balance.ports import IBalanceConfig
+from pipirik_wars.domain.monetization.entities import PrizeLotStatus
 from pipirik_wars.domain.monetization.ports import IPrizeLotRepository
 from pipirik_wars.domain.monetization.value_objects import Currency
 from pipirik_wars.domain.player import IPlayerRepository, Length
@@ -248,6 +249,41 @@ class SpinFreeRoulette:
                 random=self._random,
                 active_lots=active_lots,
             )
+
+            # Шаг C.6.c: резервирование лота при CRYPTO_LOT-исходе.
+            # `update_status(lot_id, RESERVED)` в той же UoW что и спин +
+            # audit запись `PRIZE_LOT_RESERVED` с shape по C.6.a. При
+            # race-ошибке (другой игрок забронировал лот первым)
+            # исключение сейчас пробросится наверх и UoW откатит транзакцию
+            # (кост-списание вернётся). Fallback на LengthGain появится в C.6.d.
+            if outcome.kind is RouletteOutcomeKind.CRYPTO_LOT:
+                assert outcome.lot_id is not None
+                reserved_lot = await self._prize_lots.update_status(
+                    lot_id=outcome.lot_id,
+                    new_status=PrizeLotStatus.RESERVED,
+                )
+                await self._audit.record(
+                    AuditEntry(
+                        action=AuditAction.PRIZE_LOT_RESERVED,
+                        actor_id=player.tg_id,
+                        target_kind="prize_lot",
+                        target_id=f"{outcome.lot_id}:reserved",
+                        before=None,
+                        after={
+                            "lot_id": outcome.lot_id,
+                            "currency": reserved_lot.currency.value,
+                            "amount_native": reserved_lot.amount_native,
+                            "prev_status": PrizeLotStatus.ACTIVE.value,
+                            "reserved_at": now.isoformat(),
+                            "player_id": player.id,
+                            "spin_kind": "free",
+                        },
+                        reason="free_roulette_reserve_lot",
+                        idempotency_key=f"{root_key}:reserve:{outcome.lot_id}",
+                        occurred_at=now,
+                        source=AuditSource.PRIZE_LOT_RESERVED,
+                    )
+                )
 
             # Step 7: запись в event-log `roulette_spins`.
             spin = RouletteSpin(

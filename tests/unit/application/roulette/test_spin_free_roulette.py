@@ -52,7 +52,7 @@ from pipirik_wars.domain.balance.config import (
     BalanceConfig,
     RouletteOutcomeKind,
 )
-from pipirik_wars.domain.monetization.entities import PrizeLot
+from pipirik_wars.domain.monetization.entities import PrizeLot, PrizeLotStatus
 from pipirik_wars.domain.monetization.value_objects import (
     Currency,
     FeeBufferAmount,
@@ -614,10 +614,79 @@ class TestCryptoPoolDrainage:
         spin_audit = next(e for e in audit.entries if e.action is AuditAction.ROULETTE_SPIN)
         assert spin_audit.after is not None
         assert spin_audit.after["lot_id"] == stored.id
-        # C.6.b: резервирования ещё нет — `update_status` ни разу не вызван.
-        assert prize_lots.update_status_calls == []
+        # C.6.c: резервирование вызвано один раз с (lot_id, RESERVED).
+        assert prize_lots.update_status_calls == [
+            (stored.id, PrizeLotStatus.RESERVED, None),
+        ]
         # spin записан в event-log с CRYPTO_LOT-исходом.
         assert len(spins.rows) == 1
+
+    @pytest.mark.asyncio
+    async def test_crypto_lot_outcome_reserves_lot_and_writes_audit(self) -> None:
+        """C.6.c: CRYPTO_LOT-исход → `update_status(lot_id, RESERVED)` + audit `PRIZE_LOT_RESERVED`.
+
+        Конфиг: `CRYPTO_LOT.weight=1.0`. Пул: один STARS-лот (id=1).
+        Picker возвращает `RouletteOutcome.crypto_lot(lot_id=1)`,
+        use-case **в той же UoW** делает резервирование лота через
+        `IPrizeLotRepository.update_status(lot_id=1, RESERVED)` и пишет
+        audit `PRIZE_LOT_RESERVED` с full shape по C.6.a.
+        """
+        balance = _balance_with_only_kind(RouletteOutcomeKind.CRYPTO_LOT)
+
+        class _ChoiceRandom(_ScriptedRandom):
+            def choice(self, items: Sequence[_T]) -> _T:
+                if not items:
+                    raise ValueError("choice from empty sequence")
+                return items[0]
+
+        random = _ChoiceRandom()
+        prize_lots = FakePrizeLotRepository()
+        stored = await prize_lots.add(
+            lot=PrizeLot.freshly_generated(
+                currency=Currency.STARS,
+                amount_native=500,
+                fee_buffer_native=FeeBufferAmount(0),
+                created_at=_NOW,
+            )
+        )
+        use_case, players, _, audit, _, _, _, _ = _build_use_case(
+            balance=balance, random=random, prize_lots=prize_lots
+        )
+        player = await _seed_player(players, length_cm=500)
+        assert player.id is not None
+
+        result = await use_case.execute(
+            SpinFreeRouletteCommand(player_id=1, idempotency_key="msg:99"),
+        )
+
+        # Резервирование выполнено.
+        assert result.outcome is not None
+        assert result.outcome.kind is RouletteOutcomeKind.CRYPTO_LOT
+        assert prize_lots.update_status_calls == [
+            (stored.id, PrizeLotStatus.RESERVED, None),
+        ]
+        reserved = await prize_lots.get_by_id(lot_id=stored.id or 0)
+        assert reserved is not None
+        assert reserved.status is PrizeLotStatus.RESERVED
+
+        # audit `PRIZE_LOT_RESERVED` записан с правильным shape.
+        reserve_audit = next(e for e in audit.entries if e.action is AuditAction.PRIZE_LOT_RESERVED)
+        assert reserve_audit.actor_id == player.tg_id
+        assert reserve_audit.target_kind == "prize_lot"
+        assert reserve_audit.target_id == f"{stored.id}:reserved"
+        assert reserve_audit.before is None
+        assert reserve_audit.after == {
+            "lot_id": stored.id,
+            "currency": Currency.STARS.value,
+            "amount_native": 500,
+            "prev_status": PrizeLotStatus.ACTIVE.value,
+            "reserved_at": _NOW.isoformat(),
+            "player_id": player.id,
+            "spin_kind": "free",
+        }
+        assert reserve_audit.reason == "free_roulette_reserve_lot"
+        assert reserve_audit.idempotency_key == f"roulette_free:1|msg:99:reserve:{stored.id}"
+        assert reserve_audit.source is AuditSource.PRIZE_LOT_RESERVED
 
 
 # --------------------------------------------------------------------------- #

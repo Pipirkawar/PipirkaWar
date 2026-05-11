@@ -52,6 +52,8 @@ from pipirik_wars.domain.monetization import (
     Payment,
     PaymentStatus,
 )
+from pipirik_wars.domain.monetization.entities import PrizeLot, PrizeLotStatus
+from pipirik_wars.domain.monetization.value_objects import FeeBufferAmount
 from pipirik_wars.domain.player import (
     Length,
     Player,
@@ -1003,3 +1005,90 @@ class TestPrizePoolDonation:
 
         assert prize_pool.calls == []
         assert prize_pool.state.stars.value == 0
+
+
+# --------------------------------------------------------------------------- #
+# C.6.c — резервирование лота при CRYPTO_LOT-исходе.
+# --------------------------------------------------------------------------- #
+
+
+class TestPrizeLotReservation:
+    @pytest.mark.asyncio
+    async def test_crypto_lot_outcome_reserves_lot_and_writes_audit(self) -> None:
+        """C.6.c: CRYPTO_LOT-исход → `update_status(lot_id, RESERVED)` + audit `PRIZE_LOT_RESERVED`.
+
+        Конфиг: `paid.outcomes.CRYPTO_LOT.weight=1.0`. Пул: один
+        STARS-лот. Picker возвращает `crypto_lot(lot_id=...)`,
+        use-case в той же UoW делает резервирование +
+        пишет audit `PRIZE_LOT_RESERVED` с полным shape по C.6.a.
+        Pack `SINGLE` (1 спин) — happy-path без race.
+        """
+        balance = _balance_with_paid_kind(RouletteOutcomeKind.CRYPTO_LOT)
+
+        class _ChoiceRandom(_ScriptedRandom):
+            def choice(self, items: Sequence[_T]) -> _T:
+                if not items:
+                    raise ValueError("choice from empty sequence")
+                return items[0]
+
+        random = _ChoiceRandom()
+        prize_lots = FakePrizeLotRepository()
+        stored = await prize_lots.add(
+            lot=PrizeLot.freshly_generated(
+                currency=Currency.STARS,
+                amount_native=1000,
+                fee_buffer_native=FeeBufferAmount(0),
+                created_at=_NOW,
+            )
+        )
+        use_case, players, _, _, audit, _, _, _, _, _ = _build_use_case(
+            balance=balance,
+            random=random,
+            prize_lots=prize_lots,
+        )
+        player = await _seed_player(players)
+        assert player.id is not None
+
+        result = await use_case.execute(
+            SpinPaidRouletteCommand(
+                player_id=1,
+                pack=PaidRoulettePack.SINGLE,
+                idempotency_key=_key("paid_roulette:1:tg-charge-001"),
+                provider_payment_id="tg-charge-001",
+            ),
+        )
+
+        # Outcome — CRYPTO_LOT с lot_id.
+        assert len(result.outcomes) == 1
+        outcome = result.outcomes[0]
+        assert outcome.kind is RouletteOutcomeKind.CRYPTO_LOT
+        assert outcome.lot_id == stored.id
+
+        # Резервирование: ровно один вызов update_status(stored.id, RESERVED).
+        assert prize_lots.update_status_calls == [
+            (stored.id, PrizeLotStatus.RESERVED, None),
+        ]
+        reserved = await prize_lots.get_by_id(lot_id=stored.id or 0)
+        assert reserved is not None
+        assert reserved.status is PrizeLotStatus.RESERVED
+
+        # audit `PRIZE_LOT_RESERVED` с правильным shape.
+        reserve_audit = next(e for e in audit.entries if e.action is AuditAction.PRIZE_LOT_RESERVED)
+        assert reserve_audit.actor_id == player.tg_id
+        assert reserve_audit.target_kind == "prize_lot"
+        assert reserve_audit.target_id == f"{stored.id}:reserved"
+        assert reserve_audit.before is None
+        assert reserve_audit.after == {
+            "lot_id": stored.id,
+            "currency": Currency.STARS.value,
+            "amount_native": 1000,
+            "prev_status": PrizeLotStatus.ACTIVE.value,
+            "reserved_at": _NOW.isoformat(),
+            "player_id": player.id,
+            "spin_kind": "paid",
+        }
+        assert reserve_audit.reason == "paid_roulette_reserve_lot"
+        assert reserve_audit.idempotency_key == (
+            f"roulette_paid:1|paid_roulette:1:tg-charge-001:spin:0:reserve:{stored.id}"
+        )
+        assert reserve_audit.source is AuditSource.PRIZE_LOT_RESERVED

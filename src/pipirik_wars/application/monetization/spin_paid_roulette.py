@@ -120,7 +120,7 @@ from pipirik_wars.application.monetization.record_donation import (
     RecordDonationCommand,
 )
 from pipirik_wars.domain.balance.ports import IBalanceConfig
-from pipirik_wars.domain.monetization.entities import Payment, PaymentStatus
+from pipirik_wars.domain.monetization.entities import Payment, PaymentStatus, PrizeLotStatus
 from pipirik_wars.domain.monetization.ports import IPaymentLedger, IPrizeLotRepository
 from pipirik_wars.domain.monetization.value_objects import Currency, IdempotencyKey
 from pipirik_wars.domain.player import IPlayerRepository
@@ -395,6 +395,38 @@ class SpinPaidRoulette:
                 outcomes_list.append(outcome)
 
                 spin_idem = f"{command.idempotency_key.value}:{i}"
+
+                # Шаг C.6.c: резервирование лота при CRYPTO_LOT-исходе
+                # спина (в той же UoW). Race-fallback — C.6.d.
+                if outcome.kind is RouletteOutcomeKind.CRYPTO_LOT:
+                    assert outcome.lot_id is not None
+                    reserved_lot = await self._prize_lots.update_status(
+                        lot_id=outcome.lot_id,
+                        new_status=PrizeLotStatus.RESERVED,
+                    )
+                    await self._audit.record(
+                        AuditEntry(
+                            action=AuditAction.PRIZE_LOT_RESERVED,
+                            actor_id=player.tg_id,
+                            target_kind="prize_lot",
+                            target_id=f"{outcome.lot_id}:reserved",
+                            before=None,
+                            after={
+                                "lot_id": outcome.lot_id,
+                                "currency": reserved_lot.currency.value,
+                                "amount_native": reserved_lot.amount_native,
+                                "prev_status": PrizeLotStatus.ACTIVE.value,
+                                "reserved_at": now.isoformat(),
+                                "player_id": player.id,
+                                "spin_kind": "paid",
+                            },
+                            reason="paid_roulette_reserve_lot",
+                            idempotency_key=f"{root_key}:spin:{i}:reserve:{outcome.lot_id}",
+                            occurred_at=now,
+                            source=AuditSource.PRIZE_LOT_RESERVED,
+                        )
+                    )
+
                 spin = RouletteSpin(
                     player_id=player.id,
                     occurred_at=now,
