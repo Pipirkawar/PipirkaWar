@@ -63,6 +63,7 @@ from pipirik_wars.infrastructure.db.models import (
 from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyAnticheatRepository,
     SqlAlchemyPlayerRepository,
+    SqlAlchemyPrizeLotRepository,
     SqlAlchemyRouletteSpinRepository,
 )
 from pipirik_wars.infrastructure.db.services import (
@@ -200,6 +201,7 @@ def _build_use_case(
         uow=uow,
         players=players,
         roulette_spins=SqlAlchemyRouletteSpinRepository(uow=uow),
+        prize_lots=SqlAlchemyPrizeLotRepository(uow=uow),
         length_granter=length_granter,
         balance=balance,
         audit=audit,

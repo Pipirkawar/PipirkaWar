@@ -239,6 +239,7 @@ from tests.fakes import (
     FakePaymentLedger,
     FakePlayerLocaleResolver,
     FakePlayerRepository,
+    FakePrizeLotRepository,
     FakePrizePoolRepository,
     FakeRandom,
     FakeReferralRepository,
@@ -968,10 +969,16 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
     # in-memory фейк; `spin_free_roulette_uc` — реальный use-case с
     # фейковыми зависимостями (проверяет инстанцируемость в Container).
     roulette_spins_repo: IRouletteSpinRepository = FakeRouletteSpinRepository()
+    # Спринт 4.1-C / C.6.b: `FakePrizeLotRepository` — in-memory репо для
+    # пикера крипто-приза в use-case-ах спинов (список активных лотов
+    # для конкретной валюты). На C.6.b всегда пустой по умолчанию — в смок-тестах
+    # композиции фактических спинов не происходит.
+    prize_lot_repo_fake = FakePrizeLotRepository()
     spin_free_roulette_uc = SpinFreeRoulette(
         uow=uow,
         players=players,
         roulette_spins=roulette_spins_repo,
+        prize_lots=prize_lot_repo_fake,
         length_granter=add_length,
         balance=balance,
         audit=audit,
@@ -998,6 +1005,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         uow=uow,
         players=players,
         roulette_spins=roulette_spins_repo,
+        prize_lots=prize_lot_repo_fake,
         payments=payment_ledger_repo,
         length_granter=add_length,
         balance=balance,

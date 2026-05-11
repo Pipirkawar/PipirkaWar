@@ -52,6 +52,11 @@ from pipirik_wars.domain.balance.config import (
     BalanceConfig,
     RouletteOutcomeKind,
 )
+from pipirik_wars.domain.monetization.entities import PrizeLot
+from pipirik_wars.domain.monetization.value_objects import (
+    Currency,
+    FeeBufferAmount,
+)
 from pipirik_wars.domain.player import (
     Length,
     Player,
@@ -74,6 +79,7 @@ from tests.fakes import (
     FakeClock,
     FakeIdempotencyKey,
     FakePlayerRepository,
+    FakePrizeLotRepository,
     FakeRouletteSpinRepository,
     FakeUnitOfWork,
 )
@@ -167,6 +173,7 @@ def _build_use_case(
     *,
     balance: FakeBalanceConfig | None = None,
     random: IRandom | None = None,
+    prize_lots: FakePrizeLotRepository | None = None,
 ) -> tuple[
     SpinFreeRoulette,
     FakePlayerRepository,
@@ -175,6 +182,7 @@ def _build_use_case(
     FakeIdempotencyKey,
     FakeUnitOfWork,
     FakeClock,
+    FakePrizeLotRepository,
 ]:
     uow = FakeUnitOfWork()
     players = FakePlayerRepository()
@@ -184,6 +192,7 @@ def _build_use_case(
     clock = FakeClock(_NOW)
     used_balance = balance or FakeBalanceConfig(build_valid_balance())
     used_random = random or _ScriptedRandom()
+    used_prize_lots = prize_lots or FakePrizeLotRepository()
     length_granter = AddLength(
         uow=uow,
         players=players,
@@ -198,6 +207,7 @@ def _build_use_case(
         uow=uow,
         players=players,
         roulette_spins=spins,
+        prize_lots=used_prize_lots,
         length_granter=length_granter,
         balance=used_balance,
         audit=audit,
@@ -205,7 +215,7 @@ def _build_use_case(
         random=used_random,
         clock=clock,
     )
-    return use_case, players, spins, audit, idempotency, uow, clock
+    return use_case, players, spins, audit, idempotency, uow, clock, used_prize_lots
 
 
 async def _seed_player(
@@ -233,7 +243,7 @@ class TestIdempotency:
     @pytest.mark.asyncio
     async def test_first_call_marks_idempotency_and_writes_spin(self) -> None:
         balance = _balance_with_only_kind(RouletteOutcomeKind.ITEM)
-        use_case, players, spins, audit, idempotency, _, _ = _build_use_case(balance=balance)
+        use_case, players, spins, audit, idempotency, _, _, _ = _build_use_case(balance=balance)
         await _seed_player(players)
 
         result = await use_case.execute(
@@ -254,7 +264,7 @@ class TestIdempotency:
     @pytest.mark.asyncio
     async def test_replay_with_same_key_is_no_op(self) -> None:
         balance = _balance_with_only_kind(RouletteOutcomeKind.ITEM)
-        use_case, players, spins, audit, _, uow, _ = _build_use_case(balance=balance)
+        use_case, players, spins, audit, _, uow, _, _ = _build_use_case(balance=balance)
         player = await _seed_player(players)
         length_before_replay = player.length.cm
 
@@ -299,7 +309,7 @@ class TestIdempotency:
 class TestErrors:
     @pytest.mark.asyncio
     async def test_player_not_found_raises(self) -> None:
-        use_case, _, spins, audit, idempotency, uow, _ = _build_use_case()
+        use_case, _, spins, audit, idempotency, uow, _, _ = _build_use_case()
 
         with pytest.raises(PlayerNotFoundError):
             await use_case.execute(
@@ -316,7 +326,7 @@ class TestErrors:
 
     @pytest.mark.asyncio
     async def test_thickness_gate_below_min_raises(self) -> None:
-        use_case, players, spins, audit, idempotency, uow, _ = _build_use_case()
+        use_case, players, spins, audit, idempotency, uow, _, _ = _build_use_case()
         # min_thickness_level=2 в дефолтном балансе → засеваем уровень 1.
         player = await _seed_player(players, thickness_level=1)
 
@@ -341,7 +351,7 @@ class TestErrors:
 
     @pytest.mark.asyncio
     async def test_insufficient_length_below_cost_raises(self) -> None:
-        use_case, players, spins, audit, idempotency, uow, _ = _build_use_case()
+        use_case, players, spins, audit, idempotency, uow, _, _ = _build_use_case()
         # cost_cm=100, длину ставим 50.
         player = await _seed_player(players, length_cm=50, thickness_level=5)
 
@@ -375,7 +385,9 @@ class TestHappyPath:
     async def test_length_outcome_deducts_cost_and_grants_reward(self) -> None:
         balance = _balance_with_only_kind(RouletteOutcomeKind.LENGTH)
         random = _ScriptedRandom(fixed_length_cm=50)
-        use_case, players, spins, audit, _, uow, _ = _build_use_case(balance=balance, random=random)
+        use_case, players, spins, audit, _, uow, _, _ = _build_use_case(
+            balance=balance, random=random
+        )
         player = await _seed_player(players, length_cm=500)
 
         result = await use_case.execute(
@@ -433,7 +445,7 @@ class TestHappyPath:
         self, kind: RouletteOutcomeKind
     ) -> None:
         balance = _balance_with_only_kind(kind)
-        use_case, players, spins, audit, _, _, _ = _build_use_case(balance=balance)
+        use_case, players, spins, audit, _, _, _, _ = _build_use_case(balance=balance)
         player = await _seed_player(players, length_cm=500)
 
         result = await use_case.execute(
@@ -466,7 +478,7 @@ class TestHappyPath:
     async def test_audit_payload_for_roulette_spin_entry(self) -> None:
         balance = _balance_with_only_kind(RouletteOutcomeKind.LENGTH)
         random = _ScriptedRandom(fixed_length_cm=42)
-        use_case, players, _, audit, _, _, _ = _build_use_case(balance=balance, random=random)
+        use_case, players, _, audit, _, _, _, _ = _build_use_case(balance=balance, random=random)
         await _seed_player(players, tg_id=99, length_cm=500)
 
         await use_case.execute(
@@ -489,7 +501,7 @@ class TestHappyPath:
     @pytest.mark.asyncio
     async def test_spin_idempotency_key_matches_command(self) -> None:
         balance = _balance_with_only_kind(RouletteOutcomeKind.ITEM)
-        use_case, players, spins, _, _, _, _ = _build_use_case(balance=balance)
+        use_case, players, spins, _, _, _, _, _ = _build_use_case(balance=balance)
         await _seed_player(players)
 
         await use_case.execute(
@@ -510,14 +522,16 @@ class TestHappyPath:
 class TestCryptoPoolDrainage:
     @pytest.mark.asyncio
     async def test_use_case_drains_crypto_to_length_via_picker(self) -> None:
-        """Use-case всегда передаёт `active_lots=()` в picker.
+        """Пустой `FakePrizeLotRepository` → picker перевыронит CRYPTO_LOT → LENGTH.
 
         Конфиг ставим: `CRYPTO_LOT.weight=0.5`, `LENGTH.weight=0.5`.
-        При пустом `active_lots` вес `CRYPTO_LOT` перетекает в `LENGTH`
-        — итоговый вес `LENGTH = 1.0`. Стаб `_ScriptedRandom` с одним
+        Use-case (C.6.b) вызывает `prize_lots.list_active(STARS)` —
+        дефолтный `FakePrizeLotRepository` пуст, поэтому `active_lots=()`
+        достигает picker-а, вес `CRYPTO_LOT` перетекает в `LENGTH`,
+        итоговый вес `LENGTH = 1.0`. Стаб `_ScriptedRandom` с одним
         non-zero вариантом → всегда `LENGTH`. Если бы use-case передал
         непустой `active_lots`, picker оставил бы оба варианта в
-        `weighted_choice`, и стаб всё равно вернул бы первый — но тогда
+        `weighted_choice`, и стаб вернул бы первый non-zero — но тогда
         первый был бы `CRYPTO_LOT` (порядок enum: LENGTH, ITEM,
         SCROLL_REGULAR, SCROLL_BLESSED, CRYPTO_LOT). Ниже мы пропускаем
         CRYPTO_LOT именно проверкой kind=LENGTH в outcome.
@@ -541,7 +555,7 @@ class TestCryptoPoolDrainage:
         }
         balance = FakeBalanceConfig(BalanceConfig.model_validate(payload))
         random = _ScriptedRandom(fixed_length_cm=50)
-        use_case, players, _, _, _, _, _ = _build_use_case(balance=balance, random=random)
+        use_case, players, _, _, _, _, _, _ = _build_use_case(balance=balance, random=random)
         await _seed_player(players, length_cm=500)
 
         result = await use_case.execute(
@@ -554,6 +568,57 @@ class TestCryptoPoolDrainage:
         assert result.outcome.kind is RouletteOutcomeKind.LENGTH
         assert result.outcome.length_cm == 50
 
+    @pytest.mark.asyncio
+    async def test_use_case_passes_active_lots_from_repository_to_picker(self) -> None:
+        """C.6.b: непустой `FakePrizeLotRepository` → picker возвращает CRYPTO_LOT.
+
+        В пуле один STARS-лот (id=1). Конфиг — `CRYPTO_LOT.weight=1.0`,
+        остальные `0.0`; picker сразу пойдёт по ветке `_roll_crypto_lot`,
+        выберет лот через `_ChoiceRandom.choice` и вернёт
+        `RouletteOutcome.crypto_lot(lot_id=1)`. Резервирование лота
+        (`update_status` + audit `PRIZE_LOT_RESERVED`) ещё **не**
+        вызывается — это C.6.c; use-case на C.6.b пишет только
+        `RouletteSpin.outcome` + audit `ROULETTE_SPIN.after.lot_id`.
+        """
+        balance = _balance_with_only_kind(RouletteOutcomeKind.CRYPTO_LOT)
+
+        class _ChoiceRandom(_ScriptedRandom):
+            def choice(self, items: Sequence[_T]) -> _T:
+                if not items:
+                    raise ValueError("choice from empty sequence")
+                return items[0]
+
+        random = _ChoiceRandom()
+        prize_lots = FakePrizeLotRepository()
+        stored = await prize_lots.add(
+            lot=PrizeLot.freshly_generated(
+                currency=Currency.STARS,
+                amount_native=100,
+                fee_buffer_native=FeeBufferAmount(0),
+                created_at=_NOW,
+            )
+        )
+        use_case, players, spins, audit, _, _, _, _ = _build_use_case(
+            balance=balance, random=random, prize_lots=prize_lots
+        )
+        await _seed_player(players, length_cm=500)
+
+        result = await use_case.execute(
+            SpinFreeRouletteCommand(player_id=1, idempotency_key="msg:42"),
+        )
+
+        assert result.outcome is not None
+        assert result.outcome.kind is RouletteOutcomeKind.CRYPTO_LOT
+        assert result.outcome.lot_id == stored.id
+        # audit `ROULETTE_SPIN.after.lot_id` пробрасывается.
+        spin_audit = next(e for e in audit.entries if e.action is AuditAction.ROULETTE_SPIN)
+        assert spin_audit.after is not None
+        assert spin_audit.after["lot_id"] == stored.id
+        # C.6.b: резервирования ещё нет — `update_status` ни разу не вызван.
+        assert prize_lots.update_status_calls == []
+        # spin записан в event-log с CRYPTO_LOT-исходом.
+        assert len(spins.rows) == 1
+
 
 # --------------------------------------------------------------------------- #
 # UoW transactional behaviour
@@ -564,7 +629,7 @@ class TestUowTransactional:
     @pytest.mark.asyncio
     async def test_happy_path_commits_uow_once(self) -> None:
         balance = _balance_with_only_kind(RouletteOutcomeKind.ITEM)
-        use_case, players, _, _, _, uow, _ = _build_use_case(balance=balance)
+        use_case, players, _, _, _, uow, _, _ = _build_use_case(balance=balance)
         await _seed_player(players)
 
         await use_case.execute(

@@ -28,9 +28,17 @@
    аналогично `dungeon/finish_run.py` для loss-исходов.
 6. **Pick исхода** через чистый picker
    `domain.roulette.services.pick_roulette_outcome(config, random,
-   active_lots=())`. На 3.5-C / 4.1-A/B `active_lots` всегда пуст
-   (крипто-инфраструктура — Phase 4). Picker возвращает
-   `RouletteOutcome(kind, length_cm)`.
+   active_lots=...)`. **С Шага C.6.b** use-case вызывает
+   `IPrizeLotRepository.list_active(currency=Currency.STARS)` перед
+   picker-ом и передаёт результат в `active_lots`. Пустой список
+   равносилен «крипто-пул пуст» — picker перевыронит `CRYPTO_LOT`
+   в `LENGTH`. Непустой — picker может вернуть
+   `RouletteOutcome.crypto_lot(lot_id=...)`. **Открытый вопрос C.6.b:**
+   валюта лота для free-рулетки — MVP-выбор `STARS` (тот же что в
+   paid; ГДД §12.4.2 — уточнить). Резервирование
+   (`update_status(lot_id, RESERVED)` + audit `PRIZE_LOT_RESERVED`)
+   придёт в C.6.c туда же после picker-а.
+   Picker возвращает `RouletteOutcome(kind, length_cm?, lot_id?)`.
 7. **Запись в event-log** `roulette_spins` через
    `IRouletteSpinRepository.record(spin=...)` (append-only,
    идемпотентность по `idempotency_key` на уровне БД).
@@ -63,6 +71,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pipirik_wars.domain.balance.ports import IBalanceConfig
+from pipirik_wars.domain.monetization.ports import IPrizeLotRepository
+from pipirik_wars.domain.monetization.value_objects import Currency
 from pipirik_wars.domain.player import IPlayerRepository, Length
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
 from pipirik_wars.domain.progression.length_granter import ILengthGranter
@@ -141,6 +151,7 @@ class SpinFreeRoulette:
         "_idempotency",
         "_length_granter",
         "_players",
+        "_prize_lots",
         "_random",
         "_roulette_spins",
         "_uow",
@@ -152,6 +163,7 @@ class SpinFreeRoulette:
         uow: IUnitOfWork,
         players: IPlayerRepository,
         roulette_spins: IRouletteSpinRepository,
+        prize_lots: IPrizeLotRepository,
         length_granter: ILengthGranter,
         balance: IBalanceConfig,
         audit: IAuditLogger,
@@ -162,6 +174,7 @@ class SpinFreeRoulette:
         self._uow = uow
         self._players = players
         self._roulette_spins = roulette_spins
+        self._prize_lots = prize_lots
         self._length_granter = length_granter
         self._balance = balance
         self._audit = audit
@@ -224,10 +237,16 @@ class SpinFreeRoulette:
             )
 
             # Step 6: pick outcome.
+            # Шаг C.6.b: реальный запрос активных лотов из репозитория.
+            # MVP-валюта free-рулетки — `Currency.STARS` (открытый вопрос
+            # C.6.b: ГДД §12.4.2/§12.5.2 — уточнить, какую валюту даёт
+            # free CRYPTO_LOT). Пустой результат — picker перевыронит
+            # `CRYPTO_LOT → LENGTH` (совпадение с C.5-поведением).
+            active_lots = await self._prize_lots.list_active(currency=Currency.STARS)
             outcome = pick_roulette_outcome(
                 config=roulette_cfg,
                 random=self._random,
-                active_lots=(),
+                active_lots=active_lots,
             )
 
             # Step 7: запись в event-log `roulette_spins`.

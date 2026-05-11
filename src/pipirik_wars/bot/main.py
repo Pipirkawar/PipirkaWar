@@ -270,6 +270,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPaymentLedger,
     SqlAlchemyPlayerRepository,
+    SqlAlchemyPrizeLotRepository,
     SqlAlchemyPrizePoolRepository,
     SqlAlchemyReferralRepository,
     SqlAlchemyRouletteSpinRepository,
@@ -1149,10 +1150,16 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     # outcome-pick, record, audit, reward-grant, idempotency-mark).
     # `RealRandom()` детерминирует выбор бакета через `IRandom.random()`.
     roulette_spins = SqlAlchemyRouletteSpinRepository(uow=uow)
+    # Спринт 4.1-C / C.6.b: прокинуть `IPrizeLotRepository` в use-case-ы спинов.
+    # Пикер крипто-приза выбирает из `list_active(currency=STARS)`; пустой
+    # результат перевыронит `CRYPTO_LOT` в `LENGTH`. Резервирование лота +
+    # audit `PRIZE_LOT_RESERVED` придут в C.6.c.
+    prize_lot_repo = SqlAlchemyPrizeLotRepository(uow=uow)
     spin_free_roulette = SpinFreeRoulette(
         uow=uow,
         players=players,
         roulette_spins=roulette_spins,
+        prize_lots=prize_lot_repo,
         length_granter=add_length,
         balance=balance,
         audit=audit,
@@ -1188,6 +1195,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         uow=uow,
         players=players,
         roulette_spins=roulette_spins,
+        prize_lots=prize_lot_repo,
         payments=payment_ledger,
         length_granter=add_length,
         balance=balance,
