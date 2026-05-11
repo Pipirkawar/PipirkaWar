@@ -1406,3 +1406,65 @@ roulette-paid-toast-not-registered = Tap /start in the bot DM first.
 roulette-paid-toast-payment-ok = Payment confirmed, roulette spun.
 roulette-paid-toast-already-processed = Already processed.
 roulette-paid-toast-error = Something went wrong.
+
+## /link_wallet + /link_wallet_confirm (Sprint 4.1-D.6, GDD §12.6.4)
+
+# Chat guards.
+link-wallet-group = `/link_wallet` only works in the bot DM. Open the DM and try again.
+link-wallet-other = `/link_wallet` only works in the bot DM.
+link-wallet-not-registered = Register first — tap /start in the bot DM.
+
+# Main prompt with currency selection buttons.
+link-wallet-prompt =
+    💼 <b>Link a TON wallet</b>
+
+    Pick the currency your prize lots will be paid in — this is a one-time setup. You can change the address later by running `/link_wallet` again.
+
+link-wallet-button-ton = Link TON wallet
+link-wallet-button-usdt = Link USDT wallet (TON jetton)
+
+# Instructions after currency is picked.
+link-wallet-instructions-ton =
+    🔗 <b>TON Connect — TON wallet</b>
+
+    1. Open a TON-Connect-compatible wallet (Tonkeeper, MyTonWallet, Tonhub).
+    2. Find the «TON Connect» / «Connect dApp» section and connect to this bot.
+    3. Sign the `tonconnect_proof` — your wallet proves ownership of the address.
+    4. After signing the bot links the address automatically. If it didn't, run `/link_wallet_confirm ton &lt;address&gt; &lt;proof&gt;` manually.
+
+link-wallet-instructions-usdt =
+    🔗 <b>TON Connect — USDT wallet</b>
+
+    1. Open a TON-Connect-compatible wallet (Tonkeeper, MyTonWallet, Tonhub).
+    2. Find the «TON Connect» / «Connect dApp» section and connect to this bot.
+    3. Sign the `tonconnect_proof` — your wallet proves ownership of the TON address that will receive jetton-USDT.
+    4. After signing the bot links the address automatically. If it didn't, run `/link_wallet_confirm usdt &lt;address&gt; &lt;proof&gt;` manually.
+
+link-wallet-invalid-callback = Something is wrong with the button. Tap /link_wallet again.
+link-wallet-toast-invalid = Button expired. Run /link_wallet again.
+
+# `/link_wallet_confirm <currency> <address> <proof>`.
+link-wallet-confirm-group = `/link_wallet_confirm` only works in the bot DM. Open the DM and try again.
+link-wallet-confirm-other = `/link_wallet_confirm` only works in the bot DM.
+link-wallet-confirm-not-registered = Register first — tap /start in the bot DM.
+
+link-wallet-confirm-usage =
+    Usage: `/link_wallet_confirm <currency> <address> <proof>`.
+
+    Here `currency` is `ton` or `usdt`, `address` is your TON address, and `proof` is the TON Connect proof your wallet produced.
+
+link-wallet-confirm-unsupported = Currency `{ $code }` is not supported. Available: `ton`, `usdt`.
+
+link-wallet-confirm-invalid-proof =
+    ❌ TON Connect proof failed verification. The signature is forged or expired.
+
+    Run /link_wallet and sign again.
+
+link-wallet-confirm-already-linked =
+    ℹ Wallet `{ $address }` is already linked for `{ $currency }`. Nothing to do — prize lots go there.
+
+link-wallet-confirm-linked =
+    ✅ Wallet `{ $address }` is linked for `{ $currency }`. Prize lots in this currency will be paid out here.
+
+link-wallet-confirm-relinked =
+    ✅ Address for `{ $currency }` is now `{ $address }`. New prize lots will be paid to the new address.
