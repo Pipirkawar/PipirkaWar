@@ -194,7 +194,12 @@ async def handle_link_wallet(  # noqa: PLR0911 — каждая ветка во�
             nonce=result.nonce,
             domain=result.domain,
             expires_at_minutes=expires_at_minutes,
-            currency_code=currency.value,
+            # Передаём CLI-ключ валюты (`ton`/`usdt`), а не доменный
+            # `Currency.value` (`ton_nano`/`usdt_decimal`) — игроку
+            # надо будет дернуть `/link_wallet_confirm <currency> ...`,
+            # а `_CURRENCY_BY_CLI` в confirm-handler-е принимает именно
+            # CLI-форму.
+            currency_code=currency_raw,
             address=normalized_address,
         ),
     )

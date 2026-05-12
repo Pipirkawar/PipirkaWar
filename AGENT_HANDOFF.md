@@ -1,4 +1,4 @@
-# AGENT HANDOFF — Спринт 4.1-F (шаг F.8.c/F.12)
+# AGENT HANDOFF — Спринт 4.1-F (шаг F.9/F.12)
 
 > Этот файл — временный safety-net. Обновляется в том же коммите, что и основные изменения, и лежит в ветке пока есть незаконченная работа. Удали его отдельным коммитом перед открытием PR-а.
 
@@ -27,23 +27,23 @@
 
 ## На каком файле/задаче остановился
 
-**F.8.a + F.8.b закрыты в этой сессии.** Следующий шаг — **F.8.c** «RU/EN-локали для phase-1»:
-- В `locales/{ru,en}.ftl` обновить плейсхолдер-тексты в ключах `link-wallet-request-usage` / `-invalid-currency` / `-invalid-address` / `-issued` на выверенные русские + английские формулировки.
-- `request-usage` — short usage `/link_wallet <ton|usdt> <address>`.
-- `request-invalid-currency` — поясняет, что валюта `{$code}` не поддерживается.
-- `request-invalid-address` — поясняет, что адрес `{$address}` не является TON-адресом.
-- `request-issued` — полный instructions-блок: «oткрой TonConnect-приложение, подпиши `{$nonce}` по домену `{$domain}` (истекает через `{$expires_at_minutes}` мин), отправь результат через /link_wallet_confirm {$currency} {$address} <proof-json>».
-- Добавить locale-snapshot-тест в `tests/unit/bot/i18n/test_message_bundle_keys.py` или равновесном файле для всех 4 ключей (RU и EN присутствуют + plurals-OK).
+**F.8.a + F.8.b + F.8.c закрыты в этой сессии.** Следующий шаг — **F.9** «smoke-тест production-стека через httpx.MockTransport»:
+- По аналогии с D.10.d (smoke `TonRpcAdapter`/`JettonUsdtProvider`) добавить файл `tests/smoke/test_ton_connect_production.py` (или равновесный в файлах `tests/smoke/`).
+- Assemble production-стек: `TonConnectProductionVerifier` + `SqlAlchemyNonceStore` + `RequestLinkWalletProof` + `LinkWallet` + тест-файловый player + тест-кошелёк (`PrivateKey`/`PublicKey` из `nacl`).
+- Happy-path: `RequestLinkWalletProof.execute(...)` → получить `nonce`; подписать canonical-message (валид-префикс + nonce + timestamp + domain) Ed25519-private-key-ом; собрать `TonProof`-JSON и передать в `LinkWallet.execute(...)`; верификатор должен вернуть success.
+- Replay-detect: повторный `LinkWallet.execute(...)` с тем же proof → `TonProofReplayedError` (нонс уже в `consumed_at`).
+- Использовать real Postgres-fixture (есть в integration-conftest-е) — это тест production-пути.
+- Дополнительно можно добавить expired-nonce смок-тест (frozen-clock в будущем).
 
-**После F.8.c:** F.9 (httpx.MockTransport smoke), F.10 (make ci), F.11 (history.md +1), F.12 (remove AGENT_HANDOFF + open PR).
+**После F.9:** F.10 (`make ci`), F.11 (history.md +1), F.12 (remove AGENT_HANDOFF + open PR).
 
 ## Состояние ветки
 
-- **Last commit (планируемый после push):** `feat(4.1-F): F.8.b — /link_wallet_confirm TonProof-JSON parsing`. До этого: `771684c` (F.8.a) → `ec9569a` (F.7).
-- **Незакоммиченные изменения:** F.8.b-изменения (handler `handle_link_wallet_confirm` + 3 новых теста) + обновление этого файла + `docs/current_tasks.md`.
-- **CI:** `make ci` зелёный после F.8.b: 6861 passed + 2 skipped + 95.50% cov (+3 новых теста F.8.b).
+- **Last commit (планируемый после push):** `feat(4.1-F): F.8.c — RU/EN-локали phase-1 + presenter/snapshot tests`. До этого: `f30ca66` (F.8.b) → `771684c` (F.8.a) → `ec9569a` (F.7).
+- **Незакоммиченные изменения:** F.8.c-изменения (handler-правка currency_raw вместо `Currency.value`; 4 новых presenter-теста в `test_link_wallet.py`; 8 новых snapshot-тестов в `tests/unit/locales/test_link_wallet_request_keys.py`) + обновление этого файла + `docs/current_tasks.md`.
+- **CI:** `make ci` зелёный после F.8.c (проверяется в следующем шаге).
 - **Sticky:** этот файл живёт в ветке до F.12 (отдельный `chore: remove AGENT_HANDOFF` коммит перед открытием PR).
-- **F.8.a + F.8.b выполнены в этой сессии**: F.8.a — phase-1 «/link_wallet»; F.8.b — phase-2 «/link_wallet_confirm» разбирает TonProof-JSON, извлекает nonce=payload + scope, передаёт в `LinkWalletCommand`. `make ci` зелён: 6861 passed + 2 skipped + 95.50% cov.
+- **F.8.a + F.8.b + F.8.c выполнены в этой сессии**: F.8.a — phase-1; F.8.b — TonProof-JSON parsing в phase-2; F.8.c — RU/EN-локали финальные + 4 presenter-теста + 8 FTL-snapshot-тестов + handler-фикс (передаёт CLI-ключ валюты `currency_raw` в `request_issued`-инструкции, а не доменный `Currency.value` — иначе игрок скопирует «ton_nano» в confirm и получит invalid-currency).
 
 ## Что НЕ сделано
 

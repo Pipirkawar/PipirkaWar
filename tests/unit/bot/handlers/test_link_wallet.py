@@ -442,7 +442,10 @@ class TestHandleLinkWallet:
         assert f"nonce={_DEFAULT_NONCE}" in sent
         assert f"domain={_DEFAULT_DOMAIN}" in sent
         assert "expires_at_minutes=10" in sent
-        assert "currency=ton_nano" in sent
+        # F.8.c: в инструкции игрока используется CLI-ключ валюты
+        # (`ton`/`usdt`), а не доменный `Currency.value`, чтобы
+        # `/link_wallet_confirm <currency> ...` принял этот аргумент.
+        assert "currency=ton" in sent
         assert f"address={_RAW_TON_ADDR}" in sent
 
     async def test_request_happy_path_usdt_uses_correct_currency_enum(
