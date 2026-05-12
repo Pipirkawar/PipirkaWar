@@ -9,7 +9,7 @@
 - **Активный PR**: 4.1-E «Админ-команды + лимиты выплат» (пятый PR Спринта 4.1).
 - **Ветка**: `devin/1778559360-sprint-4-1-E-admin-payout-limits` (от свежего main `1601410` — после мерджа PR #132 «4.1-D TON Connect + USDT + ClaimPrize»).
 - **База**: `main = 1601410`.
-- **Сессия**: https://app.devin.ai/sessions/31de1361f63346afa0cbf75425553331 (приёмка + E.5; предыдущая — https://app.devin.ai/sessions/6b5380ef4ab741bb959987c6edf6953c до E.4 включительно)
+- **Сессия**: https://app.devin.ai/sessions/ba3b3f787335465f995742b5aba6799c (приёмка после E.6 + E.7; предыдущая — https://app.devin.ai/sessions/31de1361f63346afa0cbf75425553331 до E.6 включительно)
 
 ## Чек-лист 4.1-E (E.0 → E.20)
 
@@ -21,8 +21,8 @@
 | **E.3** | Domain: `AdminAuditAction.{ADMIN_PRIZE_POOL_VIEWED, ADMIN_REFUND_LOT, ADMIN_FREEZE_PAYOUTS, ADMIN_UNFREEZE_PAYOUTS}` (без Alembic-CHECK — `admin_audit_log.action` не имеет CHECK-constraint-а) + unit-тесты | ✅ done |
 | **E.4** | Domain: `PayoutFreeze` aggregate + `IPayoutFreezeRepository` port | ✅ done |
 | **E.5** | Domain: `PayoutLimitConfig` VO + `IPayoutLimitChecker` port + `config/balance.yaml::monetization.payout_limit` | ✅ done |
-| **E.6** | Application: `EvaluatePayoutLimit(player, currency, amount, now) -> Within \| OverLimit(retry_after)` (rolling-window через `IPrizeLotRepository.sum_claimed_in_window` + `oldest_claimed_at_in_window`) | 🔄 in_progress (этот коммит) |
-| **E.7** | Application: `FreezePayouts(admin_id, reason)` / `UnfreezePayouts(admin_id)` (TOTP-confirmed + audit) | ⏳ pending |
+| **E.6** | Application: `EvaluatePayoutLimit(player, currency, amount, now) -> Within \| OverLimit(retry_after)` (rolling-window через `IPrizeLotRepository.sum_claimed_in_window` + `oldest_claimed_at_in_window`) | ✅ done (`750de27`) |
+| **E.7** | Application: `FreezePayouts(admin_id, reason)` / `UnfreezePayouts(admin_id)` use-cases (RBAC через `AdminCommandKind.FREEZE_PAYOUTS`/`UNFREEZE_PAYOUTS` + audit `ADMIN_FREEZE_PAYOUTS`/`ADMIN_UNFREEZE_PAYOUTS`) | 🔄 in_progress (этот коммит) |
 | **E.8** | Application: `RefundLot(admin_id, lot_id, reason)` (TOTP-confirmed + pool increment + audit) | ⏳ pending |
 | **E.9** | Application: `GetPrizePoolStatus(admin_id) -> StatusReport` (read-only + audit `ADMIN_PRIZE_POOL_VIEWED`) | ⏳ pending |
 | **E.10** | Hook `EvaluatePayoutLimit` + freeze-check в `ClaimPrize.execute(...)` (over-limit → queue; frozen → reject) | ⏳ pending |
