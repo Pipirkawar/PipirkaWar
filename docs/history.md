@@ -23,7 +23,72 @@
 
 ---
 
-## 2026-05-11 — Спринт 4.1-C «Лот-генератор + крипто-приз в рулетке»
+## 2026-05-12 — Спринт 4.1-D «TON Connect + USDT + ClaimPrize»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ГДД §12.6 «Крипто-призовой пул» (§12.6.5 «TON Connect», §12.6.6 «ClaimPrize»), ПД §7 «Фаза 4 — Монетизация и масштаб» (задачи 4.1.1 «Domain Wallet», 4.1.2 «TON Connect», 4.1.3 «ClaimPrize», 4.1.4 «Антифрод/idempotency», 4.1.5 «TG Stars HMAC», 4.1.6 «Refund-таймаут RESERVED → ACTIVE»). `current_tasks.md` чек-лист 4.1-D (D.0–D.15 после декомпозиции — D.7.a-d, D.8.a-c, D.9.a-d, D.10.a-d). Базируется на `main = db8e630` (PR #131 «Спринт 4.1-C Лот-генератор + крипто-приз в рулетке», merge после 4.1-C). **Четвёртый PR Спринта 4.1.** Следующий PR — 4.1-E «TON Connect real verifier + production-runbook» (или 4.1-F — точное название будет определено на старте).
+
+Что сделано (по чек-листу D.0–D.15):
+
+- **D.0 — Pivot `current_tasks.md`** под старт Спринта 4.1-D: «Снимок состояния» пересобран под `main = db8e630`, чек-лист 4.1-D расписан, чек-лист 4.1-C заархивирован. Создан `AGENT_HANDOFF.md` (sticky-режим).
+- **D.1 — Domain `Wallet`** (`src/pipirik_wars/domain/wallets/`): aggregate `Wallet(player_id, address, currency, linked_at)` (frozen+slots) + VO `TonAddress` / `UsdtJettonAddress` (raw + user-friendly base64url-форма с CRC16-XMODEM-checksum) + порт `IWalletRepository(add_or_replace, get_by_player_and_currency)` + `ITonConnectVerifier(verify) -> bool` + `ITonPayoutAdapter(payout) -> PayoutResult` + ошибки `WalletNotLinkedError` / `WalletAlreadyLinkedError`. 37 unit-тестов.
+- **D.2 — Application use-case `ClaimPrize`** (`src/pipirik_wars/application/monetization/claim_prize.py`): `(player_id, lot_id, recipient_address) -> ClaimPrizeResult` (`tx_hash`, `actual_fee_native`, `was_refunded`). Алгоритм: `wallet.get_by_player_and_currency(lot.currency)` → audit `WALLET_NOT_LINKED` если нет → `prize_lots.update_status(ACTIVE → RESERVED)` → `payout_adapter.payout(...)` → если `actual_fee > fee_buffer` — refund на пул через `prize_pool.apply_increment(amount + fee_buffer)` + `prize_lots.update_status(RESERVED → REFUNDED)` + audit `PRIZE_LOT_REFUNDED`; иначе `prize_lots.update_status(RESERVED → CLAIMED)` + audit `PRIZE_LOT_CLAIMED`. Идемпотентен через `IIdempotencyKey.build("claim_prize", [player_id, lot_id])`. Anti-fraud: `recipient_address` обязан совпадать с `wallet.address` (audit `WALLET_RECIPIENT_MISMATCH` если нет). Alembic `0033/0034` — audit-actions/sources whitelist (`PRIZE_LOT_CLAIMED`, `WALLET_LINKED`). 6 unit-тестов.
+- **D.3 — Application use-case `LinkWallet`** (`src/pipirik_wars/application/wallets/link_wallet.py`): `(player_id, currency, address, proof) -> LinkWalletResult`. Алгоритм: `ton_connect_verifier.verify(address, proof)` → если False — `WalletProofInvalidError`; иначе `wallets.add_or_replace(Wallet(...))` + audit `WALLET_LINKED`. 4 unit-теста.
+- **D.4 — Persistence `wallets`** (`src/pipirik_wars/infrastructure/db/`): таблица `wallets` (`player_id BIGINT NOT NULL`, `currency VARCHAR(16) NOT NULL CHECK in (TON_NANO, USDT_DECIMAL)`, `address VARCHAR(256) NOT NULL`, `linked_at TIMESTAMPTZ NOT NULL`, PK `(player_id, currency)`) + Alembic `0035_wallets`; ORM `WalletORM` + `SqlAlchemyWalletRepository` (`add_or_replace` через `ON CONFLICT DO UPDATE` для Postgres + SQLite-фолбэк через `merge`-семантику). 6 integration-тестов.
+- **D.5 — Infrastructure TON-RPC адаптеры (stub-уровень)** — `src/pipirik_wars/infrastructure/payments/ton_rpc/`: `ITonRpcClient`-Protocol, `TonRpcSettings(pydantic-settings)`, `TonRpcAdapter` (`ITonPayoutAdapter`, текстовые stub-BOC до D.10.b), `TonRpcFeeEstimator(IFeeEstimator)` (P95-оценка за 7 дней через `client.recent_fees(...)`), `JettonUsdtProvider(get_wallet_address resolve + jetton-transfer payload assembly)`. 56 unit-тестов на `FakeTonRpcClient`-фейке.
+- **D.6 — Bot-handler `/link_wallet`** (`src/pipirik_wars/bot/handlers/link_wallet.py`): личка-only + callback `link_wallet:select:<ton|usdt>` (выбор валюты) + `/link_wallet_confirm <currency> <address> <proof>` (фоллбэк-команда для manual entry без TON Connect Dialog-а до 4.1-E). Presenter `LinkWalletPresenter` + 20 локалей `link-wallet-*` в RU/EN-bundle-ах. 54 unit-теста.
+- **D.7 — Bot-handler `/claim_prize <lot_id>`** (декомпозирован на микрошаги D.7.a–D.7.d):
+  - **D.7.a — Presenter `ClaimPrizePresenter`** + локали (RU/EN) + 21 unit-тест.
+  - **D.7.b — Handler `/claim_prize <lot_id>`** + `ClaimPrize`-вызов + 12 unit-тестов.
+  - **D.7.c — Handler input-validation** + `IIdempotencyKey`-namespace + 7 unit-тестов.
+  - **D.7.d — Handler error-mapping** + audit-coverage + 10 unit-тестов.
+- **D.8 — Signature-верификация TG Stars payload-а** (декомпозирован на D.8.a–D.8.c):
+  - **D.8.a — Domain `TgStarsPayload`** (`src/pipirik_wars/domain/monetization/`): VO `TgStarsPayload(player_id, lot_id, signature: bytes)` + `ITgStarsPayloadVerifier(verify) -> bool` + 13 unit-тестов.
+  - **D.8.b — Infrastructure `HmacTgStarsPayloadVerifier`** (`src/pipirik_wars/infrastructure/payments/tg_stars/`): HMAC-SHA256(secret, `{player_id}|{lot_id}`), `TgStarsSettings(secret: SecretStr)`. 9 unit-тестов.
+  - **D.8.c — Wire `HmacTgStarsPayloadVerifier`** в handler `/roulette_paid` (закрывает 4.1-A проверку на uplift-в-prod). 11 unit-тестов.
+- **D.9 — Refund-таймауты `RESERVED → ACTIVE`** (декомпозирован на D.9.a–D.9.d):
+  - **D.9.a — Config `prize_lot.reserved_ttl_seconds`** (`config/balance.yaml`, default `172800` = 48 h) + pydantic-загрузчик + `prize_lot_config-section` + 4 unit-теста.
+  - **D.9.b — Repository extension** `IPrizeLotRepository.list_expired_reserved(cutoff: datetime)` + SQL `SELECT WHERE status='reserved' AND reserved_at < cutoff` + 6 integration-тестов.
+  - **D.9.c — Application use-case `ExpireReservedPrizeLots`** + audit `PRIZE_LOT_EXPIRED_REFUND` + 5 unit-тестов.
+  - **D.9.d — Cron-задача APScheduler** (`infrastructure/scheduler/aps.py`) запускающая `ExpireReservedPrizeLots` каждые 5 минут + 4 unit-теста.
+- **D.10 — Real TON-RPC HTTP-стек + composition-root** (декомпозирован на D.10.a–D.10.d):
+  - **D.10.a — `TonRpcHttpClient(httpx)`** (`infrastructure/payments/ton_rpc/http_client.py`): production HTTP-имплементация `ITonRpcClient` поверх TON Center API v2 (`run_get_method`, `send_boc`, `recent_fees`). Errors→`TonRpcCallError`/`TonRpcTimeoutError`. 34 unit-теста через `httpx.MockTransport`. Зависимость `httpx>=0.27,<1` в runtime.
+  - **D.10.b-1 — `ITonMessageSigner` + `Ed25519MessageSigner`** поверх PyNaCl. 43 unit-теста (RFC 8032 §7.1 golden-vectors). Зависимость `pynacl>=1.5,<2` в runtime.
+  - **D.10.b-2 — BoC encoder** (`Cell` / `CellBuilder` / `serialize_boc` / `parse_address` для friendly base64url-48-char CRC16-XMODEM-checked). 82 unit-теста; golden-vectors совпадают 1-в-1 с `tonsdk`. Только stdlib (`hashlib` + `base64` + `struct`).
+  - **D.10.b-3 — Real `TonRpcAdapter._build_*_boc(...)`** через `CellBuilder` (TEP-67 wallet-v3R2 external-message + TEP-74 jetton-transfer-body + Ed25519-подпись через `ITonMessageSigner.sign(body.repr_hash())` + blake2b 64-bit `query_id` + `_fetch_seqno` через `run_get_method("seqno")`). 33 BoC golden-теста + переписан `test_adapter.py` (поведенческие + seqno-fetch-failures). 241 теста в ton_rpc-suite.
+  - **D.10.c — Composition root в `bot/main.py::Container`**: `Settings` расширен `ton_rpc: TonRpcSettings | None` + `tg_stars: TgStarsSettings | None`; `TonRpcSettings.payout_wallet_signing_key_seed: SecretStr` с hex-validator-ом; `build_container(...)` собирает production-цепочку: `TonRpcHttpClient` → `Ed25519MessageSigner` → `JettonUsdtProvider` → `TonRpcAdapter` + `HmacTgStarsPayloadVerifier` + `SandboxTonConnectVerifier` (stub до 4.1-E) + `SqlAlchemyWalletRepository` + use-case-ы `LinkWallet` / `ClaimPrize` / `ExpireReservedPrizeLots`; `Container` dataclass расширен 10 полями; `build_dispatcher(...)` пробрасывает крипто-DI в workflow-data. 12 unit-тестов.
+  - **D.10.d — Smoke-tests** (`tests/smoke/test_ton_rpc_payout.py`): production-цепочка через `httpx.MockTransport` без живой сети. 4 smoke-теста под marker-ом `@pytest.mark.smoke`: (1) TON_NANO payout `success` — `POST /runGetMethod seqno` + `POST /sendBoc` (assert sha256-derived `tx_hash`, BoC начинается с TON-magic `b5ee9c72`); (2) `sendBoc ok=false` → `TonRpcCallError`; (3) USDT_DECIMAL payout `success` — jetton-resolve + seqno + sendBoc (assert порядок); (4) jetton-master `exit_code=5` → `JettonResolutionError` (fail-fast). Marker `smoke` в `pyproject.toml`; `make smoke`-target.
+- **D.11 — Локальный `make ci` зелёный**: lint (ruff) + typecheck (mypy --strict, 1003 source files) + imports (import-linter, 4 contracts kept) + pytest (6290 passed + 2 skipped, 95.56% cov) + `pre-commit run --all-files` все hooks passed.
+- **D.12 — Финальный док-коммит** (этот): запись в `docs/history.md` (эта секция) + пересборка «Снимок состояния» в `docs/current_tasks.md` под `main = <merge-of-4.1-D>` + чек-лист 4.1-E.
+
+Результат / артефакты:
+
+- Domain `Wallet` + VO `TonAddress`/`UsdtJettonAddress` + порты `IWalletRepository` / `ITonConnectVerifier` / `ITonPayoutAdapter` / `ITgStarsPayloadVerifier` / `IPrizeLotRepository.list_expired_reserved`.
+- Application use-cases `LinkWallet` + `ClaimPrize` + `ExpireReservedPrizeLots`.
+- Persistence: таблица `wallets` (Alembic `0035`) + `SqlAlchemyWalletRepository`.
+- Infrastructure: `infrastructure/payments/ton_rpc/` (8 файлов — `client.py`, `errors.py`, `settings.py`, `signer.py`, `http_client.py`, `boc.py`, `jetton.py`, `fee_estimator.py`, `adapter.py`), `infrastructure/payments/tg_stars/` (`verifier.py`, `settings.py`), `infrastructure/payments/ton_connect/__init__.py` (sandbox-stub до 4.1-E).
+- Bot-handlers `/link_wallet` + `/link_wallet_confirm <currency> <address> <proof>` + `/claim_prize <lot_id>` + 20 локалей `link-wallet-*` + 28 локалей `claim-prize-*` в RU/EN.
+- Composition root `bot/main.py::Container` расширен 10 полями + `build_dispatcher(...)` пробрасывает крипто-DI.
+- `pyproject.toml`: новый marker `smoke` в `[tool.pytest.ini_options].markers`.
+- `Makefile`: новый target `smoke: pytest -m smoke tests/smoke/ --no-cov`.
+- Runtime deps: `httpx>=0.27,<1`, `pynacl>=1.5,<2`.
+- Alembic-миграции: `0033_audit_action_prize_lot_claimed`, `0034_audit_source_wallet_linked`, `0035_wallets`.
+- Тесты: +332 unit-теста (D.1 — 37; D.2 — 6; D.3 — 4; D.4 — 6; D.5 — 56; D.6 — 54; D.7 — 50; D.8 — 33; D.9 — 19; D.10.a — 34; D.10.b-1 — 43; D.10.b-2 — 82; D.10.b-3 — 33; D.10.c — 12; D.10.d — 4 smoke + 1 регрессии). На `make ci`: 6290 passed + 2 skipped, 95.56% cov (8m).
+
+Заметки / решения:
+
+- **Composition-root pattern.** `bot/main.py::Container` инстанциирует все крипто-зависимости при старте бота. Optional-секции (`ton_rpc`, `tg_stars`) — `None` при отсутствии env-настроек (unit-tests без env). Production: env-prefix `TON_RPC_` / `PIPIRIK_TG_STARS__`.
+- **`SandboxTonConnectVerifier`** — placeholder до 4.1-E. `is_sandbox=True` → accept non-empty proof; `is_sandbox=False` → fail-closed (returns False + WARNING-log). Реальный TON-Connect-proof-verifier (Ed25519 verify + replay-protection + TON-Connect-protocol-spec) — следующий спринт.
+- **Smoke-tests via `httpx.MockTransport`** — выбор обусловлен отсутствием test-доступа к toncenter testnet и желанием не вводить дополнительных зависимостей (`pytest-httpx`, `respx`). MockTransport — нативный httpx-механизм, не требует extra-libs. Полная production-цепочка валидирована без живой сети.
+- **`reserved_ttl_seconds`** = 172800 (48 h) — гипотеза на ревью геймдиза. Hot-reload через `BalanceLoader` без рестарта бота.
+- **Anti-fraud `recipient_address` mismatch** — audit-event `WALLET_RECIPIENT_MISMATCH` для случая, когда пользователь пытается claim на чужой адрес. Audit-trail сохраняется для дальнейшего mass-investigation-а.
+- **Known production bugs (OUT-OF-SCOPE на 4.1-D, перенесено в 4.1-E backlog):**
+  - `TonRpcAdapter._fetch_seqno` делает `int(result.stack[0])` без `base=0`. TON Center возвращает hex (`"0x..."`) — fix: `int(value, 0)`.
+  - `JettonUsdtProvider.resolve_wallet` сохраняет `result.stack[0]` как plain string. TON Center возвращает slice-base64-cell, а не plain address — fix: парсинг slice → TON-address.
+  - Smoke + unit-tests используют decimal-форму (`"42"`) для seqno, плотно совпадающую с adapter-кодом. Production-fix требует обновления unit-fakes и smoke-mocks одновременно.
+
+
 
 **Автор:** Devin (агент)
 **Тип:** feature
