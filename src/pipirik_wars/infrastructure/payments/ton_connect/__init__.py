@@ -21,7 +21,11 @@ from __future__ import annotations
 
 import structlog
 
-__all__ = ["SandboxTonConnectVerifier"]
+from pipirik_wars.infrastructure.payments.ton_connect.in_memory_nonce_store import (
+    InMemoryNonceStore,
+)
+
+__all__ = ["InMemoryNonceStore", "SandboxTonConnectVerifier"]
 
 _logger = structlog.get_logger(__name__)
 

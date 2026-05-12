@@ -225,6 +225,7 @@ from pipirik_wars.domain.inventory import (
     IScrollRepository,
 )
 from pipirik_wars.domain.monetization import (
+    INonceStore,
     IPaymentLedger,
     IPayoutFreezeRepository,
     IPayoutLimitChecker,
@@ -316,7 +317,10 @@ from pipirik_wars.infrastructure.i18n import (
 )
 from pipirik_wars.infrastructure.payments.tg_stars import HmacTgStarsPayloadVerifier
 from pipirik_wars.infrastructure.payments.tg_stars.settings import TgStarsSettings
-from pipirik_wars.infrastructure.payments.ton_connect import SandboxTonConnectVerifier
+from pipirik_wars.infrastructure.payments.ton_connect import (
+    InMemoryNonceStore,
+    SandboxTonConnectVerifier,
+)
 from pipirik_wars.infrastructure.payments.ton_rpc import (
     Ed25519MessageSigner,
     JettonUsdtProvider,
@@ -517,6 +521,10 @@ class Container:
     payout_limit_checker: IPayoutLimitChecker
     ton_payout_adapter: ITonPayoutAdapter
     ton_connect_verifier: ITonConnectVerifier
+    # Спринт 4.1-F (шаг F.4.b): server-side nonce-store для
+    # TON Connect 2.0 anti-replay. До F.6.b/F.7 — in-memory; затем
+    # `SqlAlchemyNonceStore` (production).
+    nonce_store: INonceStore
     tg_stars_verifier: ITgStarsPayloadVerifier
     generate_prize_lots: GeneratePrizeLots
     link_wallet: LinkWallet
@@ -1394,9 +1402,16 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     ton_connect_verifier: ITonConnectVerifier = SandboxTonConnectVerifier(
         is_sandbox=ton_rpc_settings.is_sandbox,
     )
+    # Спринт 4.1-F (шаг F.4.b): server-side nonce-store для
+    # TON Connect 2.0 anti-replay. `InMemoryNonceStore` — sandbox-
+    # fallback (in-process dict, теряется при рестарте); F.6.b введёт
+    # `SqlAlchemyNonceStore` (persistence + atomic-CAS-update); F.7
+    # переключит между ними через config-flag.
+    nonce_store: INonceStore = InMemoryNonceStore()
     link_wallet = LinkWallet(
         wallet_repository=wallet_repo,
         ton_connect_verifier=ton_connect_verifier,
+        nonce_store=nonce_store,
         audit_logger=audit,
         clock=clock,
     )
@@ -1980,6 +1995,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         payout_limit_checker=payout_limit_checker,
         ton_payout_adapter=ton_payout_adapter,
         ton_connect_verifier=ton_connect_verifier,
+        nonce_store=nonce_store,
         tg_stars_verifier=tg_stars_verifier,
         generate_prize_lots=generate_prize_lots,
         link_wallet=link_wallet,

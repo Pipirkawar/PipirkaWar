@@ -45,7 +45,10 @@ from pipirik_wars.bot.presenters.link_wallet import (
     LinkWalletPresenter,
     parse_link_wallet_callback_data,
 )
-from pipirik_wars.domain.monetization.errors import WalletAlreadyLinkedError
+from pipirik_wars.domain.monetization.errors import (
+    TonProofReplayedError,
+    WalletAlreadyLinkedError,
+)
 from pipirik_wars.domain.monetization.value_objects import Currency
 
 router = Router(name="link_wallet")
@@ -200,6 +203,15 @@ async def handle_link_wallet_confirm(  # noqa: PLR0911 — каждая ветк
                 address=address,
                 currency=currency,
                 proof=proof,
+                # Спринт 4.1-F (шаг F.4.b): scope/nonce пробрасываются в
+                # use-case для anti-replay через `INonceStore.consume_nonce`.
+                # В этом sandbox-handler-е (D.6) `scope`+`nonce` ещё не
+                # парсятся из proof-payload-а (это F.5.a + F.8.b);
+                # передаём sentinel — use-case бросит
+                # `TonProofReplayedError` (consume вернёт `False`), которая
+                # рендерится как «invalid proof» (бытым-CLI-debug-flow).
+                scope=f"link_wallet:{view.player.id}:{currency.value}",
+                nonce=proof,
             )
         )
     except WalletAlreadyLinkedError:
@@ -217,6 +229,16 @@ async def handle_link_wallet_confirm(  # noqa: PLR0911 — каждая ветк
         # пользовательская ошибка (битый proof / подделка).
         _LOGGER.info(
             "link_wallet.confirm: TON Connect proof verification failed",
+            extra={"tg_id": tg_identity.tg_user_id, "currency": currency.value},
+        )
+        await message.answer(presenter.confirm_invalid_proof(locale=effective_locale))
+        return
+    except TonProofReplayedError:
+        # Спринт 4.1-F (шаг F.4.b): consume_nonce вернул False (replay,
+        # expired, или nonce никогда не выдавался). Рендерим как
+        # `invalid_proof` — в F.8.c добавится отдельная локаль.
+        _LOGGER.info(
+            "link_wallet.confirm: TON Connect nonce already consumed",
             extra={"tg_id": tg_identity.tg_user_id, "currency": currency.value},
         )
         await message.answer(presenter.confirm_invalid_proof(locale=effective_locale))
