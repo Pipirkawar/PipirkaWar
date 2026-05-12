@@ -9,7 +9,7 @@
 - **Активный PR**: 4.1-E «Админ-команды + лимиты выплат» (пятый PR Спринта 4.1).
 - **Ветка**: `devin/1778559360-sprint-4-1-E-admin-payout-limits` (от свежего main `1601410` — после мерджа PR #132 «4.1-D TON Connect + USDT + ClaimPrize»).
 - **База**: `main = 1601410`.
-- **Сессия**: https://app.devin.ai/sessions/6b5380ef4ab741bb959987c6edf6953c
+- **Сессия**: https://app.devin.ai/sessions/31de1361f63346afa0cbf75425553331 (приёмка + E.5; предыдущая — https://app.devin.ai/sessions/6b5380ef4ab741bb959987c6edf6953c до E.4 включительно)
 
 ## Чек-лист 4.1-E (E.0 → E.20)
 
@@ -19,8 +19,8 @@
 | **E.1** | **P0 bug-1**: `TonRpcAdapter._fetch_seqno` — поддержка hex/decimal от TON Center (`int(value, 0)` + edge cases) + unit-тесты | ✅ done |
 | **E.2** | **P0 bug-2**: `JettonUsdtProvider.resolve_wallet` — парсинг slice-base64-cell → TON-address через `BocCell`-decoder + unit/integration | ✅ done |
 | **E.3** | Domain: `AdminAuditAction.{ADMIN_PRIZE_POOL_VIEWED, ADMIN_REFUND_LOT, ADMIN_FREEZE_PAYOUTS, ADMIN_UNFREEZE_PAYOUTS}` (без Alembic-CHECK — `admin_audit_log.action` не имеет CHECK-constraint-а) + unit-тесты | ✅ done |
-| **E.4** | Domain: `PayoutFreeze` aggregate + `IPayoutFreezeRepository` port | 🔄 in_progress (этот коммит) |
-| **E.5** | Domain: `PayoutLimitConfig` VO + `IPayoutLimitChecker` port | ⏳ pending |
+| **E.4** | Domain: `PayoutFreeze` aggregate + `IPayoutFreezeRepository` port | ✅ done |
+| **E.5** | Domain: `PayoutLimitConfig` VO + `IPayoutLimitChecker` port + `config/balance.yaml::monetization.payout_limit` | 🔄 in_progress (этот коммит) |
 | **E.6** | Application: `EvaluatePayoutLimit(player, currency, amount, now) -> Within \| OverLimit(retry_after)` (rolling-window через `IPrizeLotRepository`) + balance.yaml-конфиг | ⏳ pending |
 | **E.7** | Application: `FreezePayouts(admin_id, reason)` / `UnfreezePayouts(admin_id)` (TOTP-confirmed + audit) | ⏳ pending |
 | **E.8** | Application: `RefundLot(admin_id, lot_id, reason)` (TOTP-confirmed + pool increment + audit) | ⏳ pending |
@@ -39,7 +39,8 @@
 
 ## Состояние ветки
 
-- **Текущий коммит**: E.4 (этот коммит) — доменный агрегат `PayoutFreeze` (frozen+slots, `is_frozen + frozen_by_admin_id + frozen_at + reason`, фабрики `.unfrozen()` / `.frozen(admin_id, at, reason)`, жёсткие invariant-ы: `is_frozen=True` → все три nullable заполнены; `is_frozen=False` → все три nullable `None`; `frozen_at` TZ-aware; `admin_id > 0`; `reason` непустой) + порт `IPayoutFreezeRepository(get_state, set_frozen(admin_id, at, reason), set_unfrozen())` (singleton, idempotent, async). Экспорты в `domain/monetization/__init__.py` обновлены. +`FakePayoutFreezeRepository` в `tests/fakes/payout_freeze_repo.py` (in-memory, log вызовов). +17 unit-тестов в `test_payout_freeze.py` (фабрики + invariant-ы + immutability + Fake-контракт).
+- **Текущий коммит**: E.5 (этот коммит) — доменные VO результата `IPayoutLimitChecker.check(...)` (`PayoutLimitWithin(remaining_native)` / `PayoutLimitOverLimit(retry_after, exceeded_by_native)` — фрозен-VOи без identity, жёсткие `__post_init__`-invariant-ы: `remaining_native >= 0`, `exceeded_by_native >= 1`, `retry_after` TZ-aware, `bool` в `int`-поле отвергается) + sum-type `PayoutLimitCheckResult = Within | OverLimit` + порт `IPayoutLimitChecker.check(*, player_id, currency, amount_native, now) -> PayoutLimitCheckResult` (Protocol, async, omitted-from-config = unlimited → `Within(sys.maxsize)`) + pydantic-схема `domain/balance/config.py::PayoutLimitConfig`/`PayoutLimitsConfig`/`MonetizationConfig` (`currency ∈ {ton_nano, usdt_decimal}` — STARS отвергается; `window_days ∈ [1, 365]`; `max_amount_native >= 0`; уникальные валюты в `per_currency`; `BalanceConfig.monetization` обязательное поле). Обновлён `config/balance.yaml` (стартовые гипотезы: 50 USDT / 30 d + 10 TON / 30 d) и `tests/unit/domain/balance/factories.py::_build_valid_balance_dict()`. +`FakePayoutLimitChecker` (`tests/fakes/payout_limit_checker.py`, default=unlimited, per_key-override-ы, factory-callback, лог вызовов). +56 unit-тестов (`test_payout_limit_check.py` — 26, `test_payout_limit_config.py` — 25, `tests/unit/fakes/test_payout_limit_checker.py` — 5). Попутно убраны unused `# type: ignore[misc]` на фрозен-dataclass assignments в `test_payout_freeze.py` (mypy 1.20 больше не флагирует это как `misc`-ошибку).
+- **Предыдущий коммит (`7c7acaf`)**: E.4 — доменный агрегат `PayoutFreeze` (frozen+slots, `is_frozen + frozen_by_admin_id + frozen_at + reason`, фабрики `.unfrozen()` / `.frozen(admin_id, at, reason)`, жёсткие invariant-ы: `is_frozen=True` → все три nullable заполнены; `is_frozen=False` → все три nullable `None`; `frozen_at` TZ-aware; `admin_id > 0`; `reason` непустой) + порт `IPayoutFreezeRepository(get_state, set_frozen(admin_id, at, reason), set_unfrozen())` (singleton, idempotent, async). Экспорты в `domain/monetization/__init__.py` обновлены. +`FakePayoutFreezeRepository` в `tests/fakes/payout_freeze_repo.py` (in-memory, log вызовов). +17 unit-тестов в `test_payout_freeze.py` (фабрики + invariant-ы + immutability + Fake-контракт).
 - **Предыдущий коммит (`5fffc6f`)**: E.3 — расширение `AdminAuditAction`-enum 4 новыми значениями + 4 unit-теста.
 - **Предыдущий коммит (`f5a7048`)**: E.2 — BoC-deserializer + `MsgAddressInt addr_std$10`-парсер в `boc.py` (`deserialize_boc(...)`, `parse_msgaddress_int_from_cell(...)`, `format_raw_address(...)` + выведены helper-ы `_parse_boc_header` / `_parse_cell_specs` / `_parse_one_cell_spec` / `_validate_ref_indices` / `_decode_d2` / `_recover_bits_count_and_strip_padding` / `_read_bits` / `_read_bit_slice` для читаемости); `JettonUsdtProvider.resolve_wallet` теперь parse-address-first с fallback на base64-BoC декодинг (+ permissive base64/base64url-decode). +29 новых unit-тестов: 7 на jetton-resolver (`TestJettonUsdtProviderResolveWalletDecodesBoc`), 11 на `deserialize_boc` (round-trip, errors), 6 на `parse_msgaddress_int_from_cell`, 5 на `format_raw_address`. Все 305 тестов пакета `ton_rpc/` зелёные; ruff/mypy/lint-imports зелёные на изменённых файлах.
 - **Baseline CI** (на свежем main + новой ветке без коммитов): **6290 passed + 2 skipped, 96% cov, 8m** — зелёный.
@@ -55,7 +56,13 @@
 
 ## На каком файле / задаче остановился
 
-E.4 завершён локально (`pytest tests/unit/domain/monetization/ tests/unit/application/monetization/ -q` → 415 passed, pre-commit run зелёный). Следующий шаг — **E.5**: доменный VO `PayoutLimitConfig(currency, window_days, max_amount_native)` + порт `IPayoutLimitChecker.check(player_id, currency, amount, now) -> Within(remaining) | OverLimit(retry_after)` + конфиг в `config/balance.yaml::monetization.payout_limit.per_currency`.
+E.5 завершён локально (`make lint typecheck imports` зелёный; полный `pytest -q --no-cov` → 6486 passed, 2 skipped). Следующий шаг — **E.6**: реализация `IPayoutLimitChecker` в application-слое («`EvaluatePayoutLimit`»-адаптер поверх `IPrizeLotRepository.sum_claimed_in_window(...)` + `IBalanceConfig` + `IClock`). Нужно будет:
+
+1. Расширить `IPrizeLotRepository` (`domain/monetization/ports.py`) методом `sum_claimed_in_window(*, player_id: int, currency: Currency, since: datetime) -> int` (возвращает сумму `amount_native` по статусу `CLAIMED` с `claimed_at >= since`). +расширить `FakePrizeLotRepository` и все existing-реализации.
+2. Написать `application/monetization/payout_limit/use_cases.py::EvaluatePayoutLimit` (реализует `IPayoutLimitChecker`). Логика: вытащить `PayoutLimitsConfig.get(currency)` — если `None` → отдать `Within(sys.maxsize)`; иначе `since = now - timedelta(days=cfg.window_days)`, `already = repo.sum_claimed_in_window(...)`, `would_be = already + amount_native`; если `would_be <= max_amount_native` → `Within(remaining = max - would_be)`, иначе вытащить самую старую `claimed_at` в окне (новый метод `oldest_claimed_at_in_window`?) → `OverLimit(retry_after = oldest + window_days, exceeded_by_native = would_be - max)`.
+3. +unit-тесты на use-case (`Within` happy-path, `Within` ровно на границе, `OverLimit` самый первый claim в окне, `OverLimit` после нескольких claim-ов, omitted-currency = unlimited).
+
+Детали: реальный SQL-индекс (`prize_lots(winner_id, currency, status, claimed_at)`) появится в E.11. Для E.6 — в фейке линейный проход по in-memory list-у лотов, в `IPrizeLotRepository`-порте — просто Protocol-сигнатура.
 
 ## Команды для разогрева
 

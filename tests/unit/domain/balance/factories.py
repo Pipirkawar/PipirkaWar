@@ -293,6 +293,22 @@ def valid_balance_payload() -> dict[str, Any]:
         "prize_lot": {
             "reserved_ttl_seconds": 172_800,
         },
+        "monetization": {
+            "payout_limit": {
+                "per_currency": [
+                    {
+                        "currency": "usdt_decimal",
+                        "window_days": 30,
+                        "max_amount_native": 50_000_000,
+                    },
+                    {
+                        "currency": "ton_nano",
+                        "window_days": 30,
+                        "max_amount_native": 10_000_000_000,
+                    },
+                ],
+            },
+        },
         "items_catalog": _build_valid_items_catalog(),
         "names_catalog": _build_valid_names_catalog(),
     }

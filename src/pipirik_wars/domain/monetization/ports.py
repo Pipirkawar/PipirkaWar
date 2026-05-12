@@ -50,6 +50,7 @@ from pipirik_wars.domain.monetization.entities import (
 from pipirik_wars.domain.monetization.value_objects import (
     Currency,
     IdempotencyKey,
+    PayoutLimitCheckResult,
     StarsPayload,
 )
 
@@ -57,6 +58,7 @@ __all__ = [
     "IFeeEstimator",
     "IPaymentLedger",
     "IPayoutFreezeRepository",
+    "IPayoutLimitChecker",
     "IPrizeLotRepository",
     "IPrizePoolRepository",
     "ITgStarsPayloadVerifier",
@@ -698,5 +700,68 @@ class IPayoutFreezeRepository(Protocol):
         Сбрасывает все три nullable-атрибута в ``None``. Идемпотентен:
         повторный ``unfreeze`` на уже-unfrozen-строке — no-op.
         Возвращает свежий ``PayoutFreeze``-снапшот с ``is_frozen=False``.
+        """
+        ...
+
+
+class IPayoutLimitChecker(Protocol):
+    """Порт rolling-window-чекера лимитов выплат на игрока (ГДД §12.6.5, Спринт 4.1-E).
+
+    Отвечает на вопрос: «выплата ``amount_native`` в валюте ``currency``
+    игроку ``player_id`` на момент ``now`` — проходит по лимитам». Исполь-
+    зуется в:
+
+    * ``ClaimPrize.execute(...)`` (E.10) — перед ``payout_adapter.payout(...)``
+      проверяет over-limit-окно; ``Within`` → продолжает выплату,
+      ``OverLimit`` → лот в очередь (E.11).
+    * ``GetPrizePoolStatus`` (E.9) — рендер карточки ``/prize_pool``
+      «игрок X у лимита» (пока опционально в E.9; чекер готов).
+
+    Конфиг лимита пер-currency живёт в ``balance.yaml::
+    monetization.payout_limit.per_currency`` (схема в ``domain/balance/
+    config.py::MonetizationConfig``, валидируется на старте процесса).
+    Реализация порта (шаг E.6) — ``EvaluatePayoutLimit`` use-case-адаптер
+    поверх ``IPrizeLotRepository.sum_claimed_in_window(...)``.
+
+    Семантика «omitted-from-config = unlimited»: если в ``balance.yaml::
+    monetization.payout_limit.per_currency`` нет записи для данной
+    ``currency`` — чекер возвращает ``PayoutLimitWithin(remaining_native=
+    sys.maxsize)``. Это путь для валют, в которых лимит не применим
+    (`STARS` — не крипто-выплата, или `TON_NANO` в будущем, если
+    оператор решит снять лимит).
+
+    Все методы асинхронные (реализация дёргает ``IPrizeLotRepository``
+    через активную ``IUnitOfWork``-сессию).
+    """
+
+    async def check(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+        amount_native: int,
+        now: datetime,
+    ) -> PayoutLimitCheckResult:
+        """Проверить, укладывается ли выплата в rolling-window-лимит.
+
+        Параметры:
+
+        * ``player_id`` — игрок (`> 0`, вызывающий use-case должен уже
+          валидировать ``AuthContext``).
+        * ``currency`` — валюта предполагаемой выплаты. Для currency,
+          отсутствующих в ``balance.yaml::monetization.payout_limit.
+          per_currency``, чекер возвращает «unlimited» (см. docstring класса).
+        * ``amount_native`` — размер выплаты в native-юнитах (`>= 1`,
+          контракт вызывающего use-case-а).
+        * ``now`` — TZ-aware момент (из ``IClock.now()``), относительно
+          которого отсчитывается rolling-window (`since = now - window_days`).
+
+        Возвращает:
+
+        * ``PayoutLimitWithin(remaining_native)`` — выплата укладывается;
+          ``remaining_native`` — сколько ещё native-юнитов можно выплатить
+          в текущем окне (`>= 0`; при omitted-currency = ``sys.maxsize``).
+        * ``PayoutLimitOverLimit(retry_after, exceeded_by_native)`` —
+          лимит превышен, «приходи после ``retry_after``».
         """
         ...

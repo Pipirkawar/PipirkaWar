@@ -19,6 +19,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from pipirik_wars.domain.monetization.value_objects import Currency
 from pipirik_wars.domain.shared.ports.audit import AuditSource
 from pipirik_wars.shared.errors import IntegrityError
 
@@ -1484,6 +1485,128 @@ class PrizeLotConfig(_Frozen):
     )
 
 
+_PAYOUT_LIMIT_WINDOW_DAYS_MAX: int = 365
+"""Верхняя граница `monetization.payout_limit.per_currency[].window_days` (1 год).
+
+Защита от опечатки в `balance.yaml`: rolling-окно `> 365 d` потребует
+индексов по `prize_lots.claimed_at` глубже, чем оптимизирован
+`IPrizeLotRepository.sum_claimed_in_window(...)` (Спринт 4.1-E, шаг E.11
+делает индекс под seek-range `claimed_at >= since`). Жёсткий предел — sanity-check.
+"""
+
+
+class PayoutLimitConfig(_Frozen):
+    """Конфиг rolling-window-лимита выплат на одного игрока, per currency.
+
+    ГДД §12.6.5, Спринт 4.1-E. Защита крипто-пула от выкачивания одним
+    игроком за короткий промежуток (`max 50 USDT-eq за 30 дней` —
+    стартовая гипотеза, финал на ревью геймдиза).
+
+    Семантика «rolling window»:
+
+    * use-case ``EvaluatePayoutLimit`` (E.6) при попытке ``ClaimPrize``
+      запрашивает у ``IPrizeLotRepository.sum_claimed_in_window(...)``
+      сумму успешных выплат за последние ``window_days`` дней в той же
+      ``currency``;
+    * если ``sum + amount_native <= max_amount_native`` → ``Within``;
+    * иначе → ``OverLimit(retry_after = oldest_claim_at + window_days)``
+      (use-case ``ClaimPrize`` (E.10) ставит лот в over-limit-очередь,
+      cron на E.11.d вернёт его в ``ACTIVE``, когда самая старая
+      выплата выпадет из окна).
+
+    Поля:
+
+    * ``currency: Currency`` — валюта (только крипто: ``TON_NANO`` /
+      ``USDT_DECIMAL``; ``STARS`` запрещён валидатором — Stars-выплаты
+      идут отдельным каналом TG-refund-а и не подпадают под этот лимит).
+    * ``window_days: int`` — длина rolling-окна в днях. Pydantic-границы
+      ``[1, 365]``: меньше суток слишком жёстко и плохо тестируется
+      на ``IClock``-jitter-е, больше года — `_PAYOUT_LIMIT_WINDOW_DAYS_MAX`-
+      sanity-check (см. её docstring).
+    * ``max_amount_native: int`` — потолок суммы выплат в native-юнитах
+      валюты за окно. ``>= 0``: ``0`` — kill-switch (никакие выплаты
+      этой валюты не пройдут лимит-чек, использовать вместо
+      ``IPayoutFreezeRepository`` запрещено — для kill-switch есть
+      ``/freeze_payouts``). Положительное значение — фактический лимит.
+
+    Pydantic-инвариант: после загрузки ``PayoutLimitConfig`` неизменяем.
+    Hot-reload в ``YamlBalanceLoader.reload()`` атомарно создаёт новый
+    объект; `IPayoutLimitChecker` пере-читывает значение через
+    ``IBalanceConfig.get()`` на каждом ``check(...)``-вызове.
+    """
+
+    currency: Currency
+    window_days: int = Field(ge=1, le=_PAYOUT_LIMIT_WINDOW_DAYS_MAX)
+    max_amount_native: int = Field(ge=0)
+
+    @field_validator("currency")
+    @classmethod
+    def _validate_crypto_only(cls, value: Currency) -> Currency:
+        if value == Currency.STARS:
+            raise ValueError(
+                "PayoutLimitConfig.currency: STARS is not supported "
+                "(Stars-выплаты идут через TG-refund-канал и не подпадают "
+                "под крипто-лимит per ГДД §12.6.5)",
+            )
+        return value
+
+
+class PayoutLimitsConfig(_Frozen):
+    """Контейнер per-currency лимитов выплат (`monetization.payout_limit`).
+
+    Поле ``per_currency`` — кортеж записей ``PayoutLimitConfig`` (по одной
+    на валюту). Может быть пустым (= лимиты на крипто-выплаты не
+    применяются вообще; ``IPayoutLimitChecker`` всегда возвращает
+    ``PayoutLimitWithin(remaining_native=sys.maxsize)``). Currency, не
+    упомянутая в ``per_currency``, считается «unlimited».
+
+    Валидатор: внутри ``per_currency`` уникальны валюты (двух записей
+    на одну валюту быть не может — поломалась бы математика лимита).
+    """
+
+    per_currency: tuple[PayoutLimitConfig, ...] = Field(default_factory=tuple)
+
+    @model_validator(mode="after")
+    def _validate_unique_currencies(self) -> PayoutLimitsConfig:
+        seen: set[Currency] = set()
+        for entry in self.per_currency:
+            if entry.currency in seen:
+                raise ValueError(
+                    f"monetization.payout_limit.per_currency: duplicate "
+                    f"currency {entry.currency!r}",
+                )
+            seen.add(entry.currency)
+        return self
+
+    def get(self, currency: Currency) -> PayoutLimitConfig | None:
+        """Найти конфиг для валюты или вернуть ``None`` (= unlimited).
+
+        Используется реализациями ``IPayoutLimitChecker`` (шаг E.6).
+        Линейный поиск по короткому кортежу — амортизировано O(1) для
+        2–3 крипто-валют.
+        """
+        for entry in self.per_currency:
+            if entry.currency == currency:
+                return entry
+        return None
+
+
+class MonetizationConfig(_Frozen):
+    """Конфиг монетизации игры (ГДД §12.6, Спринт 4.1-E).
+
+    Группирует под-блоки, относящиеся к крипто-выплатам:
+
+    * ``payout_limit`` — rolling-window-лимиты выплат на игрока
+      (см. ``PayoutLimitsConfig``).
+
+    На будущее: может включать `min_lot_usd_equivalent` /
+    `max_lot_usd_equivalent` per currency (когда геймдиз выведет их
+    из захардкоженного словаря в ``GeneratePrizeLots``).
+    """
+
+    payout_limit: PayoutLimitsConfig
+
+
 class BalanceConfig(_Frozen):
     """Корневая конфигурация баланса игры.
 
@@ -1519,6 +1642,7 @@ class BalanceConfig(_Frozen):
     enchantment: EnchantmentConfig
     roulette: RouletteConfig
     prize_lot: PrizeLotConfig
+    monetization: MonetizationConfig
     items_catalog: tuple[ItemEntry, ...] = Field(min_length=_MIN_ITEMS_CATALOG_SIZE)
     names_catalog: tuple[str, ...] = Field(min_length=_MIN_NAMES_CATALOG_SIZE)
 

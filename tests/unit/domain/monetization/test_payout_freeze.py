@@ -123,7 +123,7 @@ class TestPayoutFreezeInvariants:
     def test_immutable(self) -> None:
         state = PayoutFreeze.unfrozen()
         with pytest.raises(dataclasses.FrozenInstanceError):
-            state.is_frozen = True  # type: ignore[misc]
+            state.is_frozen = True
 
 
 class TestFakePayoutFreezeRepository:
