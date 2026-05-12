@@ -1,4 +1,4 @@
-# AGENT HANDOFF — Спринт 4.1-G (шаг G.6/G.8)
+# AGENT HANDOFF — Спринт 4.1-G (шаг G.7/G.8)
 
 > **Sticky-режим.** Этот файл обновляется в КАЖДОМ коммите этой фичевой ветки до открытия PR-а. Удаляется отдельным коммитом перед `git_pr(action="create")`. См. CONTRIBUTING.md «Уходящий агент».
 
@@ -16,7 +16,7 @@
 
 ## Текущая позиция
 
-**G.5 + G.6 завершены, G.7 готов к началу.** Сделано на ветке:
+**G.7 завершён, G.8 готов к началу.** Сделано на ветке:
 
 - **G.0** (`654fbab`) — pivot `current_tasks.md` под 4.1-G + sticky `AGENT_HANDOFF.md`. Baseline `make ci` зелён.
 - **G.1** (`d35810f`) — `pyproject.toml`: `redis>=5,<7` в `dependencies` (резолвится в `redis-6.4.0`) + `fakeredis>=2.21,<3` в `[project.optional-dependencies].dev` (`fakeredis-2.35.1`). `pip install -e ".[dev]"` прошёл. `pip-audit` — `No known vulnerabilities found`. Smoke-проверка `fakeredis.aioredis.FakeRedis` подтверждает `SET NX PX` атомарность.
@@ -33,10 +33,10 @@
   - `BotSettings.activity_lock_backend: Literal["sql","redis"] = "sql"` (`infrastructure/settings/settings.py`); env-флаг автоматически `BOT_ACTIVITY_LOCK_BACKEND` (`BotSettings.env_prefix="BOT_"`). Default `sql` — backward-compat на momentum мерджа 4.1-G.
   - `bot/main.py::build_container` switch: `redis` → `build_redis_client(settings.redis)` + `RedisActivityLockRepository(client=..., clock=clock)`; `sql` (default) → текущий `SqlAlchemyActivityLockRepository(uow=uow)`. `build_redis_client` ленивый — реальное TCP-подключение произойдёт только при первой команде (`SET`/`DEL`/...). По аналогии с 4.1-F-switch-ем `BOT_TON_CONNECT_VERIFIER_MODE`.
   - +2 composition-root-теста в `tests/unit/bot/test_composition_root.py::TestBuildContainer`: default `sql` → `SqlAlchemyActivityLockRepository`, `activity_lock_backend="redis"` → `RedisActivityLockRepository`.
-- **G.5** (этот коммит) — Integration-тесты `RedisActivityLockRepository` через `fakeredis.aioredis.FakeRedis`:
+- **G.5** (`42696c4`) — Integration-тесты `RedisActivityLockRepository` через `fakeredis.aioredis.FakeRedis`:
   - File: `tests/integration/redis/test_activity_lock_redis.py` (+`__init__.py`).
   - 5 кейсов: жизненный цикл (acquire → block → release → acquire), `asyncio.gather`-race (10 конкурентных try_acquire ⇒ ровно 1 True), expired-lock cleanup, JSON-round-trip через get (reason + acquired_at + expires_at), разные actor_kind-ы не коллидят.
-- **G.6** (этот коммит sanity-check) — `make ci` зелён: **6912 passed + 2 skipped + 96% cov** (было baseline 6876 → +36 тестов: 11 G.2 + 13 G.3 + 2 G.4 + 5 G.5 + 5 сверху — dedup-ин-инварианты). `pre-commit run --all-files` зелён. ruff + mypy --strict (1064 файлов) + import-linter (568 файлов, 4/4 contracts KEPT) все прошли.
+- **G.6** (`42696c4` sanity-check) — `make ci` зелён: **6912 passed + 2 skipped + 96% cov** (было baseline 6876 → +36 тестов: 11 G.2 + 13 G.3 + 2 G.4 + 5 G.5 + 5 сверху — dedup-ин-инварианты). `pre-commit run --all-files` зелён. ruff + mypy --strict (1064 файлов) + import-linter (568 файлов, 4/4 contracts KEPT) все прошли.
 
 Сделано ранее в текущей сессии:
 
@@ -45,10 +45,15 @@
 3. Baseline `make ci` зелён на `d35810f`: **6876 passed + 2 skipped + 95.49% cov** (ruff + mypy --strict 1052 файла + import-linter 562 файла 4/4 contracts + pytest).
 4. `pre-commit install` выполнен.
 
-## Следующие шаги (G.7–G.8)
+## Следующий шаг (G.8)
 
-- **G.7** — Doc-sync: `history.md` +1 запись «Спринт 4.1-G» (рядом с записями 4.1-F / 4.1-E / ...) с выводом про Redis-инфру + ActivityLocks-миграцию; `current_tasks.md` — перенести чек-лист 4.1-G в архив (по аналогии с 4.1-F-блоком) + выставить новый active-PR-плэн 4.1-H (Lobby-миграция). `main`-сха пока остаётся `555a5c5` (определится после мерджа 4.1-G).
-- **G.8** — Убрать `AGENT_HANDOFF.md` отдельным коммитом (`git rm AGENT_HANDOFF.md && git commit -m "chore(4.1-G): remove sticky AGENT_HANDOFF before PR"`), push, `git_pr(action="create")` с PR-template фаилом, дождаться зелёного GitHub-CI через `git(action="pr_checks")`.
+- **G.8** — Убрать `AGENT_HANDOFF.md` отдельным коммитом (`git rm AGENT_HANDOFF.md && git commit -m "chore(4.1-G): remove sticky AGENT_HANDOFF before PR"`), push, `git_pr(action="fetch_template")` → `git_pr(action="create")`, дождаться зелёного GitHub-CI через `git(action="pr_checks", wait_mode="all")`.
+
+Дополнительно в этом коммите (G.7):
+
+- **G.7** (этот коммит) — Doc-sync перед закрытием 4.1-G:
+  - `docs/history.md` +1 запись «2026-05-12 — Спринт 4.1-G «Redis-инфра + ActivityLocks-миграция»» в верхнем положении (свежие — первыми), по формату 4.1-F/4.1-E. Полное описание G.0–G.8 + «Заметки / решения» (ConnectionPool/JSON/key_prefix/default sql/pre-commit-mypy-fix).
+  - `docs/current_tasks.md`: снимок состояния пересобран под `main = <будущий merge-sha 4.1-G>`; Roadmap-блок 4.1-G помечен закрытым; 4.1-H/4.1-I/4.1-J вынесены отдельными пунктами; чек-лист 4.1-G передвинут в [АРХИВ]-секцию; новый active-PR — 4.1-H «Redis Lobby-миграция (LIST + Lua-atomic)» с предварительным чек-листом H.0–H.6; «Что ровно сейчас в работе» переписано под «Активный PR — 4.1-H»; «Последний коммит на ветке» обновлён этой же записью.
 - **G.5** — integration-тесты `tests/integration/redis/test_activity_lock_redis.py` через `fakeredis.aioredis.FakeRedis`: happy try_acquire/release/re-acquire, race-condition двух одновременных try_acquire (asyncio.gather), expired-cleanup.
 - **G.6** — `make ci` локально зелён.
 - **G.7** — doc-sync: `docs/history.md` +1 запись «Спринт 4.1-G» сверху, `current_tasks.md` снимок под `main = <будущий-merge-sha>`, чек-лист передвинуть на 4.1-H (Lobby-миграция).
