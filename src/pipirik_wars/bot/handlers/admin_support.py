@@ -39,6 +39,7 @@ from pipirik_wars.application.admin import (
 )
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
+from pipirik_wars.application.monetization import RefundLot
 from pipirik_wars.bot.filters import IsAdminFilter
 from pipirik_wars.bot.handlers.admin_economy import (
     COMMAND_KIND_BAN,
@@ -384,6 +385,7 @@ async def handle_confirm(  # noqa: PLR0911 — каждая ветка-возв�
     run_broadcast_announcement: RunBroadcastAnnouncement,
     broadcast_task_spawner: IBroadcastTaskSpawner,
     clock: IClock,
+    refund_lot: RefundLot,
     bundle: IMessageBundle,
     locale: Locale | None = None,
 ) -> None:
@@ -450,6 +452,7 @@ async def handle_confirm(  # noqa: PLR0911 — каждая ветка-возв�
             run_broadcast_announcement=run_broadcast_announcement,
             broadcast_task_spawner=broadcast_task_spawner,
             clock=clock,
+            refund_lot=refund_lot,
         )
         await dispatcher(result, message, tg_identity, effective_locale, bundle, deps)
         return

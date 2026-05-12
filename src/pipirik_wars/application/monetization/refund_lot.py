@@ -126,11 +126,18 @@ class RefundLotOutput:
       «лот уже возвращён в пул» без двойного audit-spam.
     * ``pool_after_native`` — баланс пула в этой валюте после refund-а.
       На no-op-ветке — текущий баланс (без изменений).
+    * ``currency`` — валюта лота (значение ``Currency``-enum). Нужна
+      для рендера success-сообщения из admin-handler-а (4.1-E.13);
+      audit-лог уже хранит этот срез.
+    * ``amount_native`` — размер лота в native-единицах валюты
+      (Stars / TON-nano / USDT-decimal). Эхо ``PrizeLot.amount_native``.
     """
 
     lot_id: int
     was_already_refunded: bool
     pool_after_native: int
+    currency: str
+    amount_native: int
 
 
 class RefundLot:
@@ -213,6 +220,8 @@ class RefundLot:
                     lot_id=inp.lot_id,
                     was_already_refunded=True,
                     pool_after_native=pool.balance_for(lot.currency),
+                    currency=lot.currency.value,
+                    amount_native=lot.amount_native,
                 )
 
             prev_status = lot.status
@@ -282,4 +291,6 @@ class RefundLot:
             lot_id=inp.lot_id,
             was_already_refunded=False,
             pool_after_native=pool_after_native,
+            currency=lot.currency.value,
+            amount_native=lot.amount_native,
         )
