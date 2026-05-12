@@ -11,6 +11,7 @@ from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pipirik_wars.infrastructure.payments.tg_stars.settings import TgStarsSettings
+from pipirik_wars.infrastructure.payments.ton_connect.settings import TonConnectSettings
 from pipirik_wars.infrastructure.payments.ton_rpc.settings import TonRpcSettings
 
 
@@ -176,3 +177,10 @@ class Settings(BaseSettings):
     # (или не собрать вообще, если секреты не заданы).
     ton_rpc: TonRpcSettings | None = Field(default=None)
     tg_stars: TgStarsSettings | None = Field(default=None)
+    # Спринт 4.1-F (шаг F.7): TON Connect 2.0 verify-flow.
+    # Сборка по дефолту всегда получает «backward-compat»-sandbox-default,
+    # поэтому (в отличие от ``ton_rpc``/``tg_stars``, требующих секреты)
+    # поле не ``Optional``: ``TonConnectSettings()`` без env всегда
+    # собирается. ``mode=production`` выбирается явным
+    # флагом ``BOT_TON_CONNECT_VERIFIER_MODE=production``.
+    ton_connect: TonConnectSettings = Field(default_factory=TonConnectSettings)

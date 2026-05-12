@@ -1,10 +1,20 @@
-"""Use-case ``LinkWallet`` (Спринт 4.1-D, ГДД §12.6.4).
+"""Use-case ``LinkWallet`` (Спринт 4.1-D, ГДД §12.6.4 + Спринт 4.1-F).
 
 Привязка TON-кошелька игрока:
 
 1. Verify TON Connect proof (``ITonConnectVerifier.verify``).
-2. Upsert ``Wallet`` через ``IWalletRepository.add_or_replace``.
-3. Audit-запись ``WALLET_LINKED``.
+2. **F.4.b:** атомарный ``consume_nonce(scope, nonce)`` через
+   ``INonceStore`` (anti-replay). На ``False`` (nonce уже consumed,
+   истёк, или никогда не выдавался) —
+   ``TonProofReplayedError(scope=...)``.
+3. Upsert ``Wallet`` через ``IWalletRepository.add_or_replace``.
+4. Audit-запись ``WALLET_LINKED``.
+
+Phase-1 (``RequestLinkWalletProof``, F.4.a) выдаёт ``nonce`` и
+``scope`` игроку и регистрирует их в ``INonceStore``;
+phase-2 (этот use-case) consume-ит nonce ровно один раз —
+второй вызов с тем же ``(scope, nonce)`` бросит
+``TonProofReplayedError``.
 """
 
 from __future__ import annotations
@@ -12,8 +22,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pipirik_wars.domain.monetization.entities import Wallet
-from pipirik_wars.domain.monetization.errors import WalletAlreadyLinkedError
+from pipirik_wars.domain.monetization.errors import (
+    TonProofReplayedError,
+    WalletAlreadyLinkedError,
+)
 from pipirik_wars.domain.monetization.ports import (
+    INonceStore,
     ITonConnectVerifier,
     IWalletRepository,
 )
@@ -43,12 +57,21 @@ class LinkWalletCommand:
     * ``address`` — TON-адрес кошелька (raw или user-friendly).
     * ``currency`` — ``TON_NANO`` или ``USDT_DECIMAL``.
     * ``proof`` — TON Connect proof для верификации.
+    * ``scope`` — nonce-scope из phase-1 (``RequestLinkWalletProof``,
+      F.4.a). Формат ``link_wallet:{player_id}:{currency.value}``;
+      проверяется при ``INonceStore.consume_nonce`` (F.4.b).
+    * ``nonce`` — server-issued nonce из phase-1 (32-символьная
+      base64url-строка). Атомарно consume-ится в этом
+      use-case-е; повторный вызов с тем же ``(scope, nonce)``
+      — ``TonProofReplayedError``.
     """
 
     player_id: int
     address: str
     currency: Currency
     proof: str
+    scope: str
+    nonce: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,18 +89,26 @@ class LinkWalletResult:
 class LinkWallet:
     """Use-case: привязка TON-кошелька (ГДД §12.6.4)."""
 
-    __slots__ = ("_audit", "_clock", "_verifier", "_wallet_repo")
+    __slots__ = (
+        "_audit",
+        "_clock",
+        "_nonce_store",
+        "_verifier",
+        "_wallet_repo",
+    )
 
     def __init__(
         self,
         *,
         wallet_repository: IWalletRepository,
         ton_connect_verifier: ITonConnectVerifier,
+        nonce_store: INonceStore,
         audit_logger: IAuditLogger,
         clock: IClock,
     ) -> None:
         self._wallet_repo = wallet_repository
         self._verifier = ton_connect_verifier
+        self._nonce_store = nonce_store
         self._audit = audit_logger
         self._clock = clock
 
@@ -93,6 +124,15 @@ class LinkWallet:
                 f"for address {command.address!r}",
             )
 
+        now = self._clock.now()
+        consumed = await self._nonce_store.consume_nonce(
+            scope=command.scope,
+            nonce=command.nonce,
+            now=now,
+        )
+        if not consumed:
+            raise TonProofReplayedError(scope=command.scope)
+
         existing = await self._wallet_repo.get_by_player_and_currency(
             player_id=command.player_id,
             currency=command.currency,
@@ -105,7 +145,6 @@ class LinkWallet:
                 existing_address=existing.address,
             )
 
-        now = self._clock.now()
         wallet = Wallet(
             player_id=command.player_id,
             address=command.address,

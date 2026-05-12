@@ -37,6 +37,13 @@ __all__ = [
     "PrizeLotNotFoundError",
     "PrizeLotStatusTransitionError",
     "PrizePoolAmountInvariantError",
+    "TonConnectVerificationError",
+    "TonProofAddressMismatchError",
+    "TonProofDomainMismatchError",
+    "TonProofExpiredError",
+    "TonProofMalformedError",
+    "TonProofReplayedError",
+    "TonProofSignatureInvalidError",
     "WalletAlreadyLinkedError",
     "WalletNotLinkedError",
 ]
@@ -381,4 +388,197 @@ class WalletAlreadyLinkedError(MonetizationDomainError):
             f"Player(id={player_id}) already has wallet "
             f"for currency {currency.value!r} "
             f"with same address {existing_address!r}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# TON Connect 2.0 ton_proof верификация  (Спринт 4.1-F)
+# ---------------------------------------------------------------------------
+
+
+class TonConnectVerificationError(MonetizationDomainError):
+    """Базовый класс ошибок верификации TON Connect 2.0 ``ton_proof``
+    (Спринт 4.1-F, замена ``SandboxTonConnectVerifier``-stub-а).
+
+    Никогда не бросается напрямую — используется как base для
+    sub-class-ов по конкретным причинам (parse / expired / domain /
+    signature / address-mismatch / replayed). bot-handler ``/link_wallet_confirm``
+    ловит этот базовый класс и мапит ``self.__class__.__name__`` в
+    локаль-ключ (RU/EN), подробности уходят в structured-log
+    (не игроку).
+
+    Подход аналогичен ``InvalidStarsPayloadError`` (4.1-D, шаг D.8):
+    машино-читаемый ``reason`` + контекст в аттрибутах; sensitive-
+    данные (подпись, payload-bytes) **в этом классе не хранятся** —
+    только их видые инварианты (длина, формат, причина фейла).
+    """
+
+
+class TonProofMalformedError(TonConnectVerificationError):
+    """TON Connect ``ton_proof``-JSON не прошёл парс / VO-invariants (Спринт 4.1-F).
+
+    Бросается Infrastructure-парсером (F.5.a) когда:
+    * JSON невалидный (`json.JSONDecodeError`);
+    * обязательные поля отсутствуют (`timestamp` / `domain` / и т.д.);
+    * тип поля не совпадает со schema-spec-ом;
+    * VO-invariant фейлит на ``TonProof(...)``-конструкторе (signature/pubkey-
+      длина, address-формат, domain-pattern, payload-лимиты).
+
+    Аттрибуты (все безопасны для лога):
+    * ``reason: str`` — короткий машинный код причины (``"json_parse"`` /
+      ``"missing_field"`` / ``"type_mismatch"`` / ``"bad_signature_length"`` /
+      ``"bad_pubkey_length"`` / ``"bad_address_format"`` / ``"bad_timestamp"`` /
+      ``"bad_domain"`` / ``"bad_payload"`` / ``"bad_state_init"``).
+    * ``raw_len: int`` — длина исходного raw-payload-а в байтах (без
+      содержимого).
+    """
+
+    def __init__(self, *, reason: str, raw_len: int) -> None:
+        self.reason = reason
+        self.raw_len = raw_len
+        super().__init__(
+            f"Invalid TON Connect ton_proof: reason={reason!r}, raw_len={raw_len}",
+        )
+
+
+class TonProofExpiredError(TonConnectVerificationError):
+    """TON Connect ``ton_proof``-timestamp вне окна ``[now - max_age, now]``
+    (Спринт 4.1-F).
+
+    Бросается ``TonConnectProductionVerifier`` (F.5.c) когда:
+    * proof был подписан слишком давно (свыше ``max_age_seconds``)
+      — защита от stale-replay (хотя основным является nonce-store в F.6);
+    * timestamp в будущем (»now + clock_skew») — защита от разъехавшихся
+      часов клиента.
+
+    Аттрибуты:
+    * ``proof_timestamp: int`` — из ``ton_proof``-а (Unix seconds).
+    * ``now_timestamp: int`` — серверный час на момент verify (Unix seconds).
+    * ``max_age_seconds: int`` — лимит окна.
+    """
+
+    def __init__(
+        self,
+        *,
+        proof_timestamp: int,
+        now_timestamp: int,
+        max_age_seconds: int,
+    ) -> None:
+        self.proof_timestamp = proof_timestamp
+        self.now_timestamp = now_timestamp
+        self.max_age_seconds = max_age_seconds
+        super().__init__(
+            f"TON Connect ton_proof timestamp out of window: "
+            f"proof_timestamp={proof_timestamp}, now={now_timestamp}, "
+            f"max_age_seconds={max_age_seconds}",
+        )
+
+
+class TonProofDomainMismatchError(TonConnectVerificationError):
+    """TON Connect ``ton_proof.domain`` не в whitelist-е (Спринт 4.1-F).
+
+    Бросается ``TonConnectProductionVerifier`` (F.5.c) когда ``proof.
+    domain_value`` не равен ни одному из ``allowed_domains`` в
+    ``TonConnectConfig``. Это защита от phishing-domain-replay (игрок
+    подписывает proof на ``malicious.com``, атакующий пытается его
+    «replay» на нашем домене).
+
+    Аттрибуты:
+    * ``actual_domain: str`` — что пришло в proof-е.
+    * ``allowed_domains: tuple[str, ...]`` — whitelist (из config-а).
+    """
+
+    def __init__(
+        self,
+        *,
+        actual_domain: str,
+        allowed_domains: tuple[str, ...],
+    ) -> None:
+        self.actual_domain = actual_domain
+        self.allowed_domains = allowed_domains
+        super().__init__(
+            f"TON Connect ton_proof domain {actual_domain!r} not in allowed_domains "
+            f"{list(allowed_domains)!r}",
+        )
+
+
+class TonProofSignatureInvalidError(TonConnectVerificationError):
+    """Ed25519-верификация ``ton_proof``-подписи провалилась (Спринт 4.1-F).
+
+    Бросается ``TonConnectProductionVerifier`` (F.5.c) когда ``pynacl.
+    VerifyKey(pub_key).verify(canonical_message, signature)`` бросает
+    ``nacl.exceptions.BadSignatureError``.
+
+    Это может быть либо:
+    * подпись действительно поддельная — атакующий не владеет private-
+      key-ем от ``public_key_hex``;
+    * canonical-message построен не по спеке (баг в нашем F.5.b) —
+      это нужно выявлять smoke-тестами с фиксированными векторами;
+    * ``proof.address`` не соответствует ``proof.public_key`` — attacker
+      пробует выдать address жертвы под своим pub-key. Это ловится
+      именно здесь, потому что address-есть-в-canonical-message; address-
+      from-pubkey-recovery (дополнительный layer) — backlog 4.1-G.
+
+    Аттрибуты (сама подпись и canonical-message в режиме «info for
+    logs» из этого класса не выносятся, чтобы не помогать attacker-y
+    reverse-engineering-ом):
+    * ``public_key_hex: str`` — hex-pubkey, под которым проверялась
+      подпись. Полезно для forensics — связывает попытку с атакующим.
+    """
+
+    def __init__(self, *, public_key_hex: str) -> None:
+        self.public_key_hex = public_key_hex
+        super().__init__(
+            f"TON Connect ton_proof Ed25519 signature invalid for public_key={public_key_hex!r}",
+        )
+
+
+class TonProofAddressMismatchError(TonConnectVerificationError):
+    """``proof.address`` не совпадает с ожидаемым (Спринт 4.1-F).
+
+    Бросается ``TonConnectProductionVerifier`` (F.5.c) когда ``proof.
+    address`` не равен ``expected_address`` (тот адрес, который
+    игрок желает привязать к своему аккаунту в phase-1).
+
+    Это защита от атаки ·«attacker перехватил proof жертвы и пытается
+    выдать как привязку своего адреса» — address-есть-часть-canonical-
+    message, и при этом является one-of-факторов, которые игрок
+    выбрал в phase-1.
+
+    Аттрибуты:
+    * ``actual_address: str`` — из proof-а.
+    * ``expected_address: str`` — выбранный игроком в phase-1.
+    """
+
+    def __init__(self, *, actual_address: str, expected_address: str) -> None:
+        self.actual_address = actual_address
+        self.expected_address = expected_address
+        super().__init__(
+            f"TON Connect ton_proof address mismatch: actual={actual_address!r}, "
+            f"expected={expected_address!r}",
+        )
+
+
+class TonProofReplayedError(TonConnectVerificationError):
+    """TON Connect nonce уже был использован (Спринт 4.1-F).
+
+    Бросается use-case-ом ``LinkWallet`` (F.4.b) когда ``INonceStore.
+    consume_nonce(scope, nonce)`` возвращает ``False`` — nonce либо
+    уже был consumed ранее (реплей), либо истёк (TTL в phase-1 был
+    превышен), либо вообще не был выдан (атакующий пытается
+    выдать свой nonce как server-issued).
+
+    Это главная защита от replay-атак (вторым поверх timestamp-окна).
+    Атакующий, получивший валидный proof, не может его переподать
+    системе второй раз.
+
+    Аттрибуты:
+    * ``scope: str`` — nonce-scope (бизнес-контекст, напр. ``"link_wallet:
+      {player_id}:{currency}"``).
+    """
+
+    def __init__(self, *, scope: str) -> None:
+        self.scope = scope
+        super().__init__(
+            f"TON Connect nonce already consumed or never issued for scope {scope!r}",
         )

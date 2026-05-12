@@ -88,6 +88,9 @@ from pipirik_wars.infrastructure.db.repositories.scrolls import (
 from pipirik_wars.infrastructure.db.repositories.signup_queue import (
     SqlAlchemySignupQueueRepository,
 )
+from pipirik_wars.infrastructure.db.repositories.ton_connect_nonce import (
+    SqlAlchemyNonceStore,
+)
 from pipirik_wars.infrastructure.db.repositories.wallet import (
     SqlAlchemyWalletRepository,
 )
@@ -113,6 +116,7 @@ __all__ = [
     "SqlAlchemyItemRepository",
     "SqlAlchemyMassDuelRepository",
     "SqlAlchemyMountainRunRepository",
+    "SqlAlchemyNonceStore",
     "SqlAlchemyOracleHistoryRepository",
     "SqlAlchemyPaymentLedger",
     "SqlAlchemyPayoutFreezeRepository",

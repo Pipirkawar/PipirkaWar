@@ -66,6 +66,10 @@ Free-to-play рулетка (Спринт 3.5.B):
 Freeze крипто-выплат (Спринт 4.1-E, E.11a):
 - `PayoutFreezeORM` — singleton-таблица `payout_freeze` (одна строка
   `id=1`, CHECK `id = 1`).
+
+Server-side nonce-store TON Connect 2.0 (Спринт 4.1-F, F.6.b):
+- `TonConnectNonceORM` — таблица `ton_connect_nonces` (одна строка на nonce,
+  PK по `nonce`).
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
@@ -110,6 +114,7 @@ from pipirik_wars.infrastructure.db.models.security import (
     IdempotencyKeyORM,
 )
 from pipirik_wars.infrastructure.db.models.signup_queue import SignupQueueORM
+from pipirik_wars.infrastructure.db.models.ton_connect_nonce import TonConnectNonceORM
 from pipirik_wars.infrastructure.db.models.wallet import WalletORM
 
 __all__ = [
@@ -145,6 +150,7 @@ __all__ = [
     "RouletteSpinORM",
     "ScrollORM",
     "SignupQueueORM",
+    "TonConnectNonceORM",
     "UserORM",
     "WalletORM",
 ]

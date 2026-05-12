@@ -1474,6 +1474,27 @@ link-wallet-confirm-linked =
 link-wallet-confirm-relinked =
     ✅ Address for `{ $currency }` is now `{ $address }`. New prize lots will be paid to the new address.
 
+# /link_wallet <ton|usdt> <address> — phase-1 (Sprint 4.1-F, F.8.a).
+link-wallet-request-usage =
+    Usage: `/link_wallet <ton|usdt> <address>`.
+
+    `currency` is `ton` or `usdt`, `address` is your TON address (raw `workchain:hex64` or friendly base64url).
+
+link-wallet-request-invalid-currency = Currency `{ $code }` is not supported. Available: `ton`, `usdt`.
+
+link-wallet-request-invalid-address =
+    ❌ Address `{ $address }` does not look like a TON address. Expected format: raw `workchain:hex64` or friendly base64url string.
+
+link-wallet-request-issued =
+    🔗 <b>Sign `ton_proof` via TON Connect</b>
+
+    1. Open a TON-Connect-compatible wallet (Tonkeeper, MyTonWallet, Tonhub) and connect to the bot.
+    2. Sign a `ton_proof` with these parameters:
+       • <code>domain</code> = <code>{ $domain }</code>
+       • <code>payload</code> = <code>{ $nonce }</code>
+    3. You have <b>{ $expires_at_minutes }</b> min — after that the nonce expires and you have to start over.
+    4. Take the wallet's JSON reply and run `/link_wallet_confirm { $currency } { $address } <proof-json>`.
+
 # /claim_prize <lot_id> (Sprint 4.1-D, D.7).
 claim-prize-group = `/claim_prize` is only available in the bot DM. Open the private chat.
 claim-prize-other = `/claim_prize` is only available in the bot DM.

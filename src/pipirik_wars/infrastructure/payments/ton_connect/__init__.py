@@ -21,7 +21,26 @@ from __future__ import annotations
 
 import structlog
 
-__all__ = ["SandboxTonConnectVerifier"]
+from pipirik_wars.infrastructure.payments.ton_connect.canonical_message import (
+    build_canonical_message,
+)
+from pipirik_wars.infrastructure.payments.ton_connect.in_memory_nonce_store import (
+    InMemoryNonceStore,
+)
+from pipirik_wars.infrastructure.payments.ton_connect.production import (
+    TonConnectProductionConfig,
+    TonConnectProductionVerifier,
+)
+from pipirik_wars.infrastructure.payments.ton_connect.proof_parser import parse_ton_proof
+
+__all__ = [
+    "InMemoryNonceStore",
+    "SandboxTonConnectVerifier",
+    "TonConnectProductionConfig",
+    "TonConnectProductionVerifier",
+    "build_canonical_message",
+    "parse_ton_proof",
+]
 
 _logger = structlog.get_logger(__name__)
 

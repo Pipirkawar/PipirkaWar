@@ -91,6 +91,8 @@ from pipirik_wars.application.monetization import (
     LinkWallet,
     RecordDonation,
     RefundLot,
+    RequestLinkWalletProof,
+    RequestLinkWalletProofConfig,
     SpinPaidRoulette,
     UnfreezePayouts,
 )
@@ -149,6 +151,7 @@ from pipirik_wars.domain.inventory import (
     ScrollStack,
 )
 from pipirik_wars.domain.monetization import (
+    INonceStore,
     IPaymentLedger,
     IPrizePoolRepository,
     ITgStarsPayloadVerifier,
@@ -253,6 +256,7 @@ from tests.fakes import (
     FakeMassDuelRepository,
     FakeMessageBundle,
     FakeMountainRunRepository,
+    FakeNonceStore,
     FakeOracleHistoryRepository,
     FakeOracleTemplateProvider,
     FakePaymentLedger,
@@ -1069,9 +1073,21 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         ITgStarsPayloadVerifier,
         MagicMock(spec=ITgStarsPayloadVerifier),
     )
+    # Спринт 4.1-F (шаг F.4.b): `INonceStore` — входящая
+    # зависимость use-case-a `LinkWallet` (с phase-2 anti-replay).
+    nonce_store_fake: INonceStore = FakeNonceStore()
+    request_link_wallet_proof_uc = RequestLinkWalletProof(
+        nonce_store=nonce_store_fake,
+        clock=clock,
+        config=RequestLinkWalletProofConfig(
+            canonical_domain="pipirik.example.com",
+            nonce_ttl_seconds=600,
+        ),
+    )
     link_wallet_uc = LinkWallet(
         wallet_repository=wallet_repo_fake,
         ton_connect_verifier=ton_connect_verifier_fake,
+        nonce_store=nonce_store_fake,
         audit_logger=audit,
         clock=clock,
     )
@@ -1411,8 +1427,10 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         payout_limit_checker=FakePayoutLimitChecker(),
         ton_payout_adapter=ton_payout_adapter_fake,
         ton_connect_verifier=ton_connect_verifier_fake,
+        nonce_store=nonce_store_fake,
         tg_stars_verifier=tg_stars_verifier_fake,
         generate_prize_lots=generate_prize_lots_uc,
+        request_link_wallet_proof=request_link_wallet_proof_uc,
         link_wallet=link_wallet_uc,
         claim_prize=claim_prize_uc,
         get_prize_pool_status=get_prize_pool_status_uc,

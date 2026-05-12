@@ -78,6 +78,16 @@ _KEY_CONFIRM_ALREADY_LINKED: Final[MessageKey] = MessageKey(
 _KEY_CONFIRM_LINKED: Final[MessageKey] = MessageKey("link-wallet-confirm-linked")
 _KEY_CONFIRM_RELINKED: Final[MessageKey] = MessageKey("link-wallet-confirm-relinked")
 
+# `/link_wallet <ton|usdt> <address>` — phase-1 (Спринт 4.1-F, шаг F.8.a).
+_KEY_REQUEST_USAGE: Final[MessageKey] = MessageKey("link-wallet-request-usage")
+_KEY_REQUEST_INVALID_CURRENCY: Final[MessageKey] = MessageKey(
+    "link-wallet-request-invalid-currency",
+)
+_KEY_REQUEST_INVALID_ADDRESS: Final[MessageKey] = MessageKey(
+    "link-wallet-request-invalid-address",
+)
+_KEY_REQUEST_ISSUED: Final[MessageKey] = MessageKey("link-wallet-request-issued")
+
 
 class LinkWalletCallbackData:
     """DTO для `callback_data` инлайн-кнопок `/link_wallet`."""
@@ -251,4 +261,43 @@ class LinkWalletPresenter:
             locale=locale,
             address=address,
             currency=currency_code,
+        )
+
+    # --- `/link_wallet <ton|usdt> <address>` phase-1 (F.8.a) ---------
+
+    def request_usage(self, *, locale: Locale) -> str:
+        return self._bundle.format(_KEY_REQUEST_USAGE, locale=locale)
+
+    def request_invalid_currency(self, *, locale: Locale, code: str) -> str:
+        return self._bundle.format(
+            _KEY_REQUEST_INVALID_CURRENCY,
+            locale=locale,
+            code=code,
+        )
+
+    def request_invalid_address(self, *, locale: Locale, address: str) -> str:
+        return self._bundle.format(
+            _KEY_REQUEST_INVALID_ADDRESS,
+            locale=locale,
+            address=address,
+        )
+
+    def request_issued(
+        self,
+        *,
+        locale: Locale,
+        nonce: str,
+        domain: str,
+        expires_at_minutes: int,
+        currency_code: str,
+        address: str,
+    ) -> str:
+        return self._bundle.format(
+            _KEY_REQUEST_ISSUED,
+            locale=locale,
+            nonce=nonce,
+            domain=domain,
+            expires_at_minutes=expires_at_minutes,
+            currency=currency_code,
+            address=address,
         )

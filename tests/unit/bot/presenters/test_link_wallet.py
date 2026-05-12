@@ -164,3 +164,37 @@ class TestLinkWalletPresenter:
         assert text.startswith("ru:link-wallet-confirm-already-linked")
         assert "address=EQOLD" in text
         assert "currency=ton_nano" in text
+
+    # /link_wallet <ton|usdt> <address> — phase-1 (F.8.a, F.8.c) ----
+
+    def test_request_usage(self) -> None:
+        assert self.presenter.request_usage(locale=self.ru) == "ru:link-wallet-request-usage"
+
+    def test_request_invalid_currency_includes_code(self) -> None:
+        text = self.presenter.request_invalid_currency(locale=self.en, code="doge")
+        assert text.startswith("en:link-wallet-request-invalid-currency")
+        assert "code=doge" in text
+
+    def test_request_invalid_address_includes_address(self) -> None:
+        text = self.presenter.request_invalid_address(
+            locale=self.ru,
+            address="not-an-address",
+        )
+        assert text.startswith("ru:link-wallet-request-invalid-address")
+        assert "address=not-an-address" in text
+
+    def test_request_issued_includes_all_params(self) -> None:
+        text = self.presenter.request_issued(
+            locale=self.en,
+            nonce="abcXYZ123",
+            domain="pipirik.example.com",
+            expires_at_minutes=10,
+            currency_code="ton_nano",
+            address="EQADDR",
+        )
+        assert text.startswith("en:link-wallet-request-issued")
+        assert "nonce=abcXYZ123" in text
+        assert "domain=pipirik.example.com" in text
+        assert "expires_at_minutes=10" in text
+        assert "currency=ton_nano" in text
+        assert "address=EQADDR" in text

@@ -82,6 +82,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0031_audit_source_prize_lot_refunded" in revisions
         assert "0032_audit_source_prize_lot_reserved" in revisions
         assert "0037_payout_freeze_and_prize_lot_winner_id" in revisions
+        assert "0038_ton_connect_nonces" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -300,6 +301,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0037 is not None
         assert rev_0037.down_revision == "0036_prize_lots_reserved_at"
 
+    def test_0038_descends_from_0037(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0038 = script.get_revision("0038_ton_connect_nonces")
+        assert rev_0038 is not None
+        assert rev_0038.down_revision == "0037_payout_freeze_and_prize_lot_winner_id"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -341,6 +349,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260511_0035_wallets.py",
             "20260511_0036_prize_lots_reserved_at.py",
             "20260512_0037_payout_freeze_and_prize_lot_winner_id.py",
+            "20260512_0038_ton_connect_nonces.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -402,6 +411,7 @@ class TestAlembicMigrationsApplyCleanly:
             "prize_lots",
             "wallets",
             "payout_freeze",
+            "ton_connect_nonces",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 
@@ -567,6 +577,40 @@ class TestAlembicMigrationsApplyCleanly:
         assert "ix_roulette_spins_player_id_occurred_at" in index_names
         # UNIQUE-индекс по idempotency_key для INSERT … ON CONFLICT DO NOTHING.
         assert "uq_roulette_spins_idempotency_key" in unique_names
+
+    def test_0038_creates_ton_connect_nonces_table(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Спринт 4.1-F, F.6.a: миграция создаёт `ton_connect_nonces` с PK + индексами."""
+        db_path = tmp_path / "alembic_0038.sqlite"
+        async_url = f"sqlite+aiosqlite:///{db_path}"
+        monkeypatch.setenv("DATABASE_URL", async_url)
+
+        cfg = _alembic_config(async_url)
+        command.upgrade(cfg, "head")
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.connect() as conn:
+                inspector = inspect(conn)
+                nonce_cols = {c["name"] for c in inspector.get_columns("ton_connect_nonces")}
+                pk = inspector.get_pk_constraint("ton_connect_nonces")
+                index_names = {ix["name"] for ix in inspector.get_indexes("ton_connect_nonces")}
+        finally:
+            engine.dispose()
+
+        assert nonce_cols == {
+            "nonce",
+            "scope",
+            "issued_at",
+            "consumed_at",
+            "expires_at",
+        }
+        assert set(pk["constrained_columns"]) == {"nonce"}
+        assert "ix_ton_connect_nonces_expires_at" in index_names
+        assert "ix_ton_connect_nonces_scope_nonce_consumed_at" in index_names
 
     def test_downgrade_then_upgrade_round_trips(
         self,

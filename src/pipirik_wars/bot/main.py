@@ -124,6 +124,8 @@ from pipirik_wars.application.monetization import (
     LinkWallet,
     RecordDonation,
     RefundLot,
+    RequestLinkWalletProof,
+    RequestLinkWalletProofConfig,
     SpinPaidRoulette,
     UnfreezePayouts,
 )
@@ -225,6 +227,7 @@ from pipirik_wars.domain.inventory import (
     IScrollRepository,
 )
 from pipirik_wars.domain.monetization import (
+    INonceStore,
     IPaymentLedger,
     IPayoutFreezeRepository,
     IPayoutLimitChecker,
@@ -290,6 +293,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyItemRepository,
     SqlAlchemyMassDuelRepository,
     SqlAlchemyMountainRunRepository,
+    SqlAlchemyNonceStore,
     SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPaymentLedger,
     SqlAlchemyPayoutFreezeRepository,
@@ -316,7 +320,14 @@ from pipirik_wars.infrastructure.i18n import (
 )
 from pipirik_wars.infrastructure.payments.tg_stars import HmacTgStarsPayloadVerifier
 from pipirik_wars.infrastructure.payments.tg_stars.settings import TgStarsSettings
-from pipirik_wars.infrastructure.payments.ton_connect import SandboxTonConnectVerifier
+from pipirik_wars.infrastructure.payments.ton_connect import (
+    InMemoryNonceStore,
+    SandboxTonConnectVerifier,
+)
+from pipirik_wars.infrastructure.payments.ton_connect.production import (
+    TonConnectProductionConfig,
+    TonConnectProductionVerifier,
+)
 from pipirik_wars.infrastructure.payments.ton_rpc import (
     Ed25519MessageSigner,
     JettonUsdtProvider,
@@ -517,8 +528,16 @@ class Container:
     payout_limit_checker: IPayoutLimitChecker
     ton_payout_adapter: ITonPayoutAdapter
     ton_connect_verifier: ITonConnectVerifier
+    # Спринт 4.1-F (шаг F.4.b): server-side nonce-store для
+    # TON Connect 2.0 anti-replay. До F.6.b/F.7 — in-memory; затем
+    # `SqlAlchemyNonceStore` (production).
+    nonce_store: INonceStore
     tg_stars_verifier: ITgStarsPayloadVerifier
     generate_prize_lots: GeneratePrizeLots
+    # Спринт 4.1-F (шаг F.7): phase-1 use-case TON Connect 2.0-flow-а.
+    # Выдаёт server-issued nonce + canonical-domain игроку, чтобы тот
+    # передал в TonConnect-app для подписи. Phase-2 — `link_wallet` ниже.
+    request_link_wallet_proof: RequestLinkWalletProof
     link_wallet: LinkWallet
     claim_prize: ClaimPrize
     get_prize_pool_status: GetPrizePoolStatus
@@ -1388,15 +1407,46 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     # Спринт 4.1-D / D.6: `IWalletRepository` для use-case-ов
     # `LinkWallet` / `ClaimPrize`. Upsert через ON CONFLICT (Postgres/SQLite).
     wallet_repo: IWalletRepository = SqlAlchemyWalletRepository(uow=uow)
-    # `ITonConnectVerifier` — stub до 4.1-E. В sandbox-е принимает
-    # non-empty proof (manual entry для testnet); в mainnet — отвергает
-    # всё (fail-closed). `is_sandbox` берётся из `TonRpcSettings`.
-    ton_connect_verifier: ITonConnectVerifier = SandboxTonConnectVerifier(
-        is_sandbox=ton_rpc_settings.is_sandbox,
+    # Спринт 4.1-F (шаг F.7): config-flag-режим TON Connect 2.0-verify-flow-а.
+    # `sandbox` — `SandboxTonConnectVerifier` (D.10.c stub) + `InMemoryNonceStore`
+    # (in-process dict); `production` — `TonConnectProductionVerifier` (F.5.c,
+    # реальный Ed25519-verify) + `SqlAlchemyNonceStore` (F.6.b, persistent
+    # atomic-CAS). Default `sandbox` для backward-compatibility на момент
+    # 4.1-F-merge-а; mainnet включается env-флагом
+    # `BOT_TON_CONNECT_VERIFIER_MODE=production`.
+    ton_connect_settings = settings.ton_connect
+    ton_connect_verifier: ITonConnectVerifier
+    nonce_store: INonceStore
+    if ton_connect_settings.verifier_mode == "production":
+        ton_connect_verifier = TonConnectProductionVerifier(
+            config=TonConnectProductionConfig(
+                allowed_domains=ton_connect_settings.allowed_domains,
+                max_age_seconds=ton_connect_settings.max_age_seconds,
+                clock_skew_seconds=ton_connect_settings.clock_skew_seconds,
+            ),
+            clock=clock,
+        )
+        nonce_store = SqlAlchemyNonceStore(uow=uow, clock=clock)
+    else:
+        # sandbox-mode: D.10.c stub (принимает non-empty proof только в testnet,
+        # mainnet → fail-closed) + in-process dict-nonce-store (теряется при
+        # рестарте, для unit/integration-тестов и testnet-демо).
+        ton_connect_verifier = SandboxTonConnectVerifier(
+            is_sandbox=ton_rpc_settings.is_sandbox,
+        )
+        nonce_store = InMemoryNonceStore()
+    request_link_wallet_proof = RequestLinkWalletProof(
+        nonce_store=nonce_store,
+        clock=clock,
+        config=RequestLinkWalletProofConfig(
+            canonical_domain=ton_connect_settings.canonical_domain,
+            nonce_ttl_seconds=ton_connect_settings.nonce_ttl_seconds,
+        ),
     )
     link_wallet = LinkWallet(
         wallet_repository=wallet_repo,
         ton_connect_verifier=ton_connect_verifier,
+        nonce_store=nonce_store,
         audit_logger=audit,
         clock=clock,
     )
@@ -1980,8 +2030,10 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         payout_limit_checker=payout_limit_checker,
         ton_payout_adapter=ton_payout_adapter,
         ton_connect_verifier=ton_connect_verifier,
+        nonce_store=nonce_store,
         tg_stars_verifier=tg_stars_verifier,
         generate_prize_lots=generate_prize_lots,
+        request_link_wallet_proof=request_link_wallet_proof,
         link_wallet=link_wallet,
         claim_prize=claim_prize,
         get_prize_pool_status=get_prize_pool_status,
@@ -2225,6 +2277,15 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     # и обрабатывает refund-ветку (`actual_fee > fee_buffer`). Handler-ы
     # требуют доступа к `wallet_repo` / `prize_lot_repo` для read-side
     # отображения карточек.
+    # Спринт 4.1-F (шаг F.8.a) — `RequestLinkWalletProof`-use-case (phase-1
+    # двухфазного flow привязки кошелька): bot-handler `/link_wallet
+    # <ton|usdt> <address>` через него получает server-issued nonce +
+    # canonical-domain + expires_at и рендерит инструкцию игроку
+    # «подпишите nonce в TonConnect-app-е, отправьте через
+    # /link_wallet_confirm». Composition root (F.7) уже собрал use-case
+    # из `TonConnectSettings` + `INonceStore`-имплементации, осталось
+    # пробросить в workflow_data.
+    dispatcher["request_link_wallet_proof"] = container.request_link_wallet_proof
     dispatcher["link_wallet"] = container.link_wallet
     dispatcher["claim_prize"] = container.claim_prize
     dispatcher["wallet_repository"] = container.wallet_repo

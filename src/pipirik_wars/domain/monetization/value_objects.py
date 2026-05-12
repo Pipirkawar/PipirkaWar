@@ -29,6 +29,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -46,6 +48,7 @@ __all__ = [
     "StarsPoolBalance",
     "TonAddress",
     "TonNanoAmount",
+    "TonProof",
     "UsdtDecimalAmount",
     "UsdtJettonAddress",
 ]
@@ -470,3 +473,166 @@ PayoutLimitCheckResult = PayoutLimitWithin | PayoutLimitOverLimit
 Use-case ``ClaimPrize`` (E.10) выполняет ``match`` по этому результату:
 ``Within`` → продолжить выплату; ``OverLimit`` → перевести лот в очередь.
 """
+
+
+# ---------------------------------------------------------------------------
+# TON Connect 2.0 ton_proof  (Спринт 4.1-F)
+# ---------------------------------------------------------------------------
+
+# Domain-value в TON Connect proof — utf8-имя хоста dApp-а, который просил
+# подпись («origin» без схемы: ``pipirik.example.com``, но может включать
+# порт ``:8443``). По спеке это произвольная utf8-строка с полем
+# ``lengthBytes`` = длина в байтах. Для безопасности ограничиваем формат именем
+# хоста (RFC 1123-like: буквы/цифры/точки/дефисы/двоеточия для порта)
+# — это резальный срез ``allowed_domains``-whitelist-а в верификаторе (F.5.c),
+# но в домене мы хотим базовый sanity-check поверх utf8-строки.
+_TON_PROOF_DOMAIN_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9._:\-]{1,253}$")
+
+# Payload — серверный nonce, выданный в phase-1 (`RequestLinkWalletProof`-use-
+# case-е). По спеке — произвольные байты, но мы из INonceStore выдаём
+# ASCII-printable nonce (`secrets.token_urlsafe(24)` = 32-байтная строка).
+# Ограничиваем [1, 512] как sanity-check.
+_TON_PROOF_PAYLOAD_RE: re.Pattern[str] = re.compile(r"^[\x20-\x7e]{1,512}$")
+
+# Ed25519: signature — 64 байта, public-key — 32 байта.
+_ED25519_SIGNATURE_BYTES: int = 64
+_ED25519_PUBLIC_KEY_BYTES: int = 32
+
+# Hex-encoded Ed25519 public key — 64 hex-символа (32 байта).
+_TON_PROOF_PUBKEY_HEX_RE: re.Pattern[str] = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+@dataclass(frozen=True, slots=True)
+class TonProof:
+    """Parsed TON Connect 2.0 ``ton_proof`` (Спринт 4.1-F).
+
+    Связанная информация, полученная от кошелькового приложения по
+    спеке https://docs.ton.org/develop/dapps/ton-connect/sign. Пришёл
+    от игрока как JSON-строка в хендлере ``/link_wallet_confirm``;
+    Infrastructure-парсер в ``infrastructure/payments/ton_connect/
+    proof_parser.py`` (F.5.a) превращает JSON в этот VO, ловя все
+    ``ValueError`` / ``TypeError`` и диспетчеризируя их в ``TonProofMalformedError``
+    с машино-читаемым ``reason``.
+
+    Поля:
+
+    * ``timestamp: int`` — Unix seconds (UTC) когда кошелёк подписал proof.
+      Равно ``> 0``. Окно ``[now - max_age, now]`` проверяет F.5.c,
+      не домен-VO (домен не знает «now» — только базовый инвариант типа).
+    * ``domain_value: str`` — utf8-имя хоста dApp-а (является частью
+      canonical-message при верификации в F.5.b). Проверяется общий
+      формат (RFC 1123-like + порт); whitelist-мэтч — в F.5.c.
+    * ``payload: str`` — server-изданный nonce (`RequestLinkWalletProof`-
+      use-case-ом в F.4.a). ASCII-printable, [1, 512] символов.
+      Replay-protection — в F.4.b (consume в ``LinkWallet``).
+    * ``signature_b64: str`` — raw Ed25519-signature, base64-encoded. Равна
+      64 байтам после декода. Сама верификация через ``pynacl.
+      VerifyKey.verify(...)`` — в F.5.c.
+    * ``public_key_hex: str`` — Ed25519-public-key кошелька, hex-encoded.
+      Равен 64 hex-символам (32 байта raw).
+    * ``address: str`` — TON-адрес кошелька в raw-формате ``workchain:hex64``
+      (является частью canonical-message). Не user-friendly-формат (b64url)
+      — потому что canonical-message-билдер (F.5.b) работает с workchain-
+      ом и address-hash по отдельности.
+    * ``state_init_b64: str | None`` — опциональный BoC кошелькового
+      state_init (база для address-from-pubkey-recovery; этот путь
+      вынесён в backlog 4.1-G). Если задан — валидный base64.
+
+    Frozen + slots → VO без identity, hashable, безопасно сравнивать ``==``.
+    """
+
+    timestamp: int
+    domain_value: str
+    payload: str
+    signature_b64: str
+    public_key_hex: str
+    address: str
+    state_init_b64: str | None = None
+
+    def __post_init__(self) -> None:  # noqa: PLR0912 — линейная цепочка инвариантов VO
+        # timestamp — строго int (не bool), > 0.
+        if not isinstance(self.timestamp, int) or isinstance(self.timestamp, bool):
+            raise TypeError(
+                f"TonProof.timestamp must be int, got {type(self.timestamp).__name__}",
+            )
+        if self.timestamp <= 0:
+            raise ValueError(
+                f"TonProof.timestamp must be > 0 (Unix seconds), got {self.timestamp}",
+            )
+
+        # domain_value — непустая utf8-строка, host-like формат.
+        if not isinstance(self.domain_value, str):
+            raise TypeError(
+                f"TonProof.domain_value must be str, got {type(self.domain_value).__name__}",
+            )
+        if not _TON_PROOF_DOMAIN_RE.fullmatch(self.domain_value):
+            raise ValueError(
+                f"TonProof.domain_value must match {_TON_PROOF_DOMAIN_RE.pattern!r}, "
+                f"got {self.domain_value!r}",
+            )
+
+        # payload — ASCII-printable, [1, 512] символов.
+        if not isinstance(self.payload, str):
+            raise TypeError(
+                f"TonProof.payload must be str, got {type(self.payload).__name__}",
+            )
+        if not _TON_PROOF_PAYLOAD_RE.fullmatch(self.payload):
+            raise ValueError(
+                f"TonProof.payload must match {_TON_PROOF_PAYLOAD_RE.pattern!r}, "
+                f"got len={len(self.payload)} payload={self.payload!r}",
+            )
+
+        # signature_b64 — валидный base64, декодируется в 64 байта.
+        if not isinstance(self.signature_b64, str):
+            raise TypeError(
+                f"TonProof.signature_b64 must be str, got {type(self.signature_b64).__name__}",
+            )
+        try:
+            sig_bytes = base64.b64decode(self.signature_b64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError(
+                f"TonProof.signature_b64 must be valid base64, got {self.signature_b64!r}",
+            ) from exc
+        if len(sig_bytes) != _ED25519_SIGNATURE_BYTES:
+            raise ValueError(
+                f"TonProof.signature_b64 must decode to {_ED25519_SIGNATURE_BYTES} bytes "
+                f"(Ed25519 signature), got {len(sig_bytes)} bytes",
+            )
+
+        # public_key_hex — 64 hex-символа (32 байта Ed25519 public key).
+        if not isinstance(self.public_key_hex, str):
+            raise TypeError(
+                f"TonProof.public_key_hex must be str, got {type(self.public_key_hex).__name__}",
+            )
+        if not _TON_PROOF_PUBKEY_HEX_RE.fullmatch(self.public_key_hex):
+            raise ValueError(
+                f"TonProof.public_key_hex must be {_ED25519_PUBLIC_KEY_BYTES * 2} hex chars "
+                f"({_ED25519_PUBLIC_KEY_BYTES} bytes Ed25519 public key), "
+                f"got {self.public_key_hex!r}",
+            )
+
+        # address — только raw-формат «workchain:hex64» (canonical-message-
+        # builder в F.5.b работает именно с этим форматом).
+        if not isinstance(self.address, str):
+            raise TypeError(
+                f"TonProof.address must be str, got {type(self.address).__name__}",
+            )
+        if not _TON_RAW_RE.fullmatch(self.address):
+            raise ValueError(
+                "TonProof.address must be in raw form 'workchain:hex64' "
+                f"(canonical-message requires raw form), got {self.address!r}",
+            )
+
+        # state_init_b64 — опциональный валидный base64 (если задан).
+        if self.state_init_b64 is not None:
+            if not isinstance(self.state_init_b64, str):
+                raise TypeError(
+                    "TonProof.state_init_b64 must be str | None, "
+                    f"got {type(self.state_init_b64).__name__}",
+                )
+            try:
+                base64.b64decode(self.state_init_b64, validate=True)
+            except (binascii.Error, ValueError) as exc:
+                raise ValueError(
+                    f"TonProof.state_init_b64 must be valid base64, got {self.state_init_b64!r}",
+                ) from exc
