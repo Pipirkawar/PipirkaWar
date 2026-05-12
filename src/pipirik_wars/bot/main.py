@@ -116,6 +116,7 @@ from pipirik_wars.application.i18n import IMessageBundle, IPlayerLocaleResolver
 from pipirik_wars.application.inventory import EnchantItem, GetInventory
 from pipirik_wars.application.monetization import (
     ClaimPrize,
+    EvaluatePayoutLimit,
     ExpireReservedPrizeLots,
     GeneratePrizeLots,
     LinkWallet,
@@ -221,6 +222,8 @@ from pipirik_wars.domain.inventory import (
 )
 from pipirik_wars.domain.monetization import (
     IPaymentLedger,
+    IPayoutFreezeRepository,
+    IPayoutLimitChecker,
     IPrizeLotRepository,
     IPrizePoolRepository,
     ITgStarsPayloadVerifier,
@@ -285,6 +288,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyMountainRunRepository,
     SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPaymentLedger,
+    SqlAlchemyPayoutFreezeRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemyPrizeLotRepository,
     SqlAlchemyPrizePoolRepository,
@@ -505,6 +509,8 @@ class Container:
     # `ton_connect_verifier` (`SandboxTonConnectVerifier` stub до 4.1-E).
     prize_lot_repo: IPrizeLotRepository
     wallet_repo: IWalletRepository
+    payout_freeze_repo: IPayoutFreezeRepository
+    payout_limit_checker: IPayoutLimitChecker
     ton_payout_adapter: ITonPayoutAdapter
     ton_connect_verifier: ITonConnectVerifier
     tg_stars_verifier: ITgStarsPayloadVerifier
@@ -1207,6 +1213,16 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     # результат перевыронит `CRYPTO_LOT` в `LENGTH`. Резервирование лота +
     # audit `PRIZE_LOT_RESERVED` придут в C.6.c.
     prize_lot_repo = SqlAlchemyPrizeLotRepository(uow=uow)
+    # Спринт 4.1-E / E.10–E.11a: `IPayoutFreezeRepository` + `IPayoutLimitChecker`
+    # для `ClaimPrize.execute(...)` (freeze-check + rolling-window-лимит) и
+    # admin-команд `/freeze_payouts`/`/unfreeze_payouts`/`/prize_pool`.
+    payout_freeze_repo: IPayoutFreezeRepository = SqlAlchemyPayoutFreezeRepository(
+        uow=uow,
+    )
+    payout_limit_checker: IPayoutLimitChecker = EvaluatePayoutLimit(
+        lot_repo=prize_lot_repo,
+        balance_config=balance,
+    )
     spin_free_roulette = SpinFreeRoulette(
         uow=uow,
         players=players,
@@ -1332,6 +1348,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         payout_adapter=ton_payout_adapter,
         audit_logger=audit,
         clock=clock,
+        payout_freeze_repository=payout_freeze_repo,
+        payout_limit_checker=payout_limit_checker,
     )
     spin_paid_roulette = SpinPaidRoulette(
         uow=uow,
@@ -1899,6 +1917,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         record_donation=record_donation,
         prize_lot_repo=prize_lot_repo,
         wallet_repo=wallet_repo,
+        payout_freeze_repo=payout_freeze_repo,
+        payout_limit_checker=payout_limit_checker,
         ton_payout_adapter=ton_payout_adapter,
         ton_connect_verifier=ton_connect_verifier,
         tg_stars_verifier=tg_stars_verifier,
@@ -2146,6 +2166,12 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["claim_prize"] = container.claim_prize
     dispatcher["wallet_repository"] = container.wallet_repo
     dispatcher["prize_lot_repository"] = container.prize_lot_repo
+    # Спринт 4.1-E — admin-команды `/prize_pool`, `/refund_lot`,
+    # `/freeze_payouts`, `/unfreeze_payouts` (E.12–E.14) требуют доступа
+    # к `IPayoutFreezeRepository` (set_frozen/set_unfrozen/get_state) и
+    # `IPayoutLimitChecker` (read-side для статус-отчёта `/prize_pool`).
+    dispatcher["payout_freeze_repository"] = container.payout_freeze_repo
+    dispatcher["payout_limit_checker"] = container.payout_limit_checker
     return dispatcher
 
 

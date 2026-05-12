@@ -252,6 +252,8 @@ from tests.fakes import (
     FakeOracleHistoryRepository,
     FakeOracleTemplateProvider,
     FakePaymentLedger,
+    FakePayoutFreezeRepository,
+    FakePayoutLimitChecker,
     FakePlayerLocaleResolver,
     FakePlayerRepository,
     FakePrizeLotRepository,
@@ -1076,6 +1078,8 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         payout_adapter=ton_payout_adapter_fake,
         audit_logger=audit,
         clock=clock,
+        payout_freeze_repository=FakePayoutFreezeRepository(),
+        payout_limit_checker=FakePayoutLimitChecker(),
     )
     expire_reserved_prize_lots_uc = ExpireReservedPrizeLots(
         uow=uow,
@@ -1363,6 +1367,8 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         record_donation=record_donation_uc,
         prize_lot_repo=prize_lot_repo_fake,
         wallet_repo=wallet_repo_fake,
+        payout_freeze_repo=FakePayoutFreezeRepository(),
+        payout_limit_checker=FakePayoutLimitChecker(),
         ton_payout_adapter=ton_payout_adapter_fake,
         ton_connect_verifier=ton_connect_verifier_fake,
         tg_stars_verifier=tg_stars_verifier_fake,

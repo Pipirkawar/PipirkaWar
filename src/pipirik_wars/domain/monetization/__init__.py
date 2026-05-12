@@ -29,6 +29,8 @@ from pipirik_wars.domain.monetization.entities import (
     Wallet,
 )
 from pipirik_wars.domain.monetization.errors import (
+    ClaimPrizeOverLimitError,
+    ClaimPrizePayoutsFrozenError,
     IdempotencyConflictError,
     InvalidStarsPayloadError,
     MonetizationDomainError,
@@ -69,6 +71,8 @@ from pipirik_wars.domain.monetization.value_objects import (
 )
 
 __all__ = [
+    "ClaimPrizeOverLimitError",
+    "ClaimPrizePayoutsFrozenError",
     "Currency",
     "FeeBufferAmount",
     "IFeeEstimator",

@@ -100,7 +100,7 @@
 **Активный PR — 4.1-E «Админ-команды + лимиты выплат + 4.1-D backlog»** — пятый PR Спринта 4.1 (Фаза 4 «Монетизация и масштаб»).
 - **Ветка:** `devin/1778559360-sprint-4-1-E-admin-payout-limits` от `main` = `1601410` (merge PR #132 4.1-D).
 - **На `main` (после 4.1-D):** Фаза 3 закрыта полностью (3.1–3.6), Спринт 4.1: A, B, C, D закрыты. TON-RPC HTTP-стек + Ed25519-подпись + BoC encoder + `ClaimPrize` / `LinkWallet` use-cases + composition root + smoke-tests все в проде.
-- **Текущая позиция:** ветка `devin/1778559360-sprint-4-1-E-admin-payout-limits` от `main = 1601410`; выполнены E.0–E.9 (`2b6b2cf`) + E.11a (этот коммит: Alembic `0037` payout_freeze + winner_id + `SqlAlchemyPayoutFreezeRepository` + SQL sum/oldest window). Сессия: https://app.devin.ai/sessions/f1baa58dac484f88a557431fc74959bb. `make lint typecheck imports` зелёные; full `pytest -q --no-cov` → 6526 passed, 2 skipped. Дальше: **E.10** (hook в `ClaimPrize`: freeze-check + EvaluatePayoutLimit), затем E.11b (очередь), E.12–E.20.
+- **Текущая позиция:** ветка `devin/1778559360-sprint-4-1-E-admin-payout-limits` от `main = 1601410`; выполнены E.0–E.9 + E.11a (`b0b147c`) + E.10 (этот коммит: hook freeze-check + EvaluatePayoutLimit в `ClaimPrize`, +2 domain-ошибки, +DI в composition root). Сессия: https://app.devin.ai/sessions/f1baa58dac484f88a557431fc74959bb. `make lint typecheck imports` зелёные; full `pytest -q --no-cov` → 6532 passed, 2 skipped. Дальше: **E.11b** опционально (queue — может быть пропущен, error рендерится в user-facing сообщение в E.12), затем E.12–E.20.
 - **Передача работы 2026-05-12 (приёмка 4.1-E, сессия `f1baa58dac484f88a557431fc74959bb`).** Новый агент подключился после E.9. Выполнена 7-шаговая приёмка (HANDOFF → git fetch → доки → `make ci` 6512 passed → clean status → current_tasks.md → E.11a). Предыдущая сессия: `ba3b3f787335465f995742b5aba6799c` (E.6–E.9).
 - **Скоуп 4.1-E:** admin-команды `/prize_pool`, `/refund_lot`, `/freeze_payouts`, `/unfreeze_payouts` (super_admin + TOTP, audit `ADMIN_PRIZE_*`); rolling-30d-payout-limit per player (50 USDT-eq дефолт, конфигурируется в `balance.yaml`); over-limit-queue; P0 фиксы из 4.1-D (`_fetch_seqno` hex-parse, `JettonUsdtProvider.resolve_wallet` slice-decode).
 - **Открытые решения:** конкретное число rolling-limit-а в `balance.yaml` (ГДД §12.6.5: «TODO(balance) ориентировочно 50 USDT-eq») — будет дефолт `50.00 USDT_DECIMAL = 50_000_000` + `0.0 TON_NANO` (TON не лимитируем отдельно? — ревью на E.5); очередь над-лимитных выплат — `PrizeLotStatus.QUEUED` (extends enum) или отдельная `payout_queue` таблица; **real `TonConnectVerifier` отложен в отдельный PR** (после 4.1-E).
@@ -123,12 +123,13 @@
 
 ## 📌 Последний коммит на ветке (обновляется в каждом коммите)
 
-E.11a (этот коммит) — Alembic `0037_payout_freeze_and_prize_lot_winner_id`: singleton `payout_freeze` + `prize_lots.winner_id` + покрывающий индекс + `PayoutFreezeORM` + `SqlAlchemyPayoutFreezeRepository` + SQL `sum_claimed_in_window`/`oldest_claimed_at_in_window` + `ClaimPrize` передаёт `winner_id` + 14 новых тестов. 6526 passed, 2 skipped.
+E.10 (этот коммит) — hook `IPayoutFreezeRepository.get_state()` + `IPayoutLimitChecker.check(...)` в `ClaimPrize.execute(...)`. Новые domain-ошибки: `ClaimPrizePayoutsFrozenError` (frozen → reject), `ClaimPrizeOverLimitError` (over-limit → reject with retry_after). Composition root подключает `SqlAlchemyPayoutFreezeRepository` + `EvaluatePayoutLimit` и пробрасывает в dispatcher workflow-data. +7 unit-тестов. 6532 passed, 2 skipped.
 
 ## 📌 История коммитов (ранее)
 
 > Обновляется автоматически перед каждым `git push`. После `git log --oneline -1` — short sha + subject.
 
+- `b0b147c` — **E.11a**: Alembic `0037` payout_freeze + prize_lots.winner_id + `SqlAlchemyPayoutFreezeRepository` + SQL sum/oldest + 14 тестов.
 - `2b6b2cf` — **E.9**: `GetPrizePoolStatus` use-case + `count_by_status` + 13 тестов.
 - `ded52b4` — **E.8**: `RefundLot` use-case + 11 unit-тестов.
 - `0ee165f` — **E.7**: `FreezePayouts`/`UnfreezePayouts` use-cases + 36 тестов.
