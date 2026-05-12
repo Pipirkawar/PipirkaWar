@@ -91,6 +91,8 @@ from pipirik_wars.application.monetization import (
     LinkWallet,
     RecordDonation,
     RefundLot,
+    RequestLinkWalletProof,
+    RequestLinkWalletProofConfig,
     SpinPaidRoulette,
     UnfreezePayouts,
 )
@@ -1074,6 +1076,14 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
     # Спринт 4.1-F (шаг F.4.b): `INonceStore` — входящая
     # зависимость use-case-a `LinkWallet` (с phase-2 anti-replay).
     nonce_store_fake: INonceStore = FakeNonceStore()
+    request_link_wallet_proof_uc = RequestLinkWalletProof(
+        nonce_store=nonce_store_fake,
+        clock=clock,
+        config=RequestLinkWalletProofConfig(
+            canonical_domain="pipirik.example.com",
+            nonce_ttl_seconds=600,
+        ),
+    )
     link_wallet_uc = LinkWallet(
         wallet_repository=wallet_repo_fake,
         ton_connect_verifier=ton_connect_verifier_fake,
@@ -1420,6 +1430,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         nonce_store=nonce_store_fake,
         tg_stars_verifier=tg_stars_verifier_fake,
         generate_prize_lots=generate_prize_lots_uc,
+        request_link_wallet_proof=request_link_wallet_proof_uc,
         link_wallet=link_wallet_uc,
         claim_prize=claim_prize_uc,
         get_prize_pool_status=get_prize_pool_status_uc,

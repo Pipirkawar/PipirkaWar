@@ -1,67 +1,103 @@
-# AGENT HANDOFF — Спринт 4.1-F (шаг F.6.b/F.12)
+# AGENT HANDOFF — Спринт 4.1-F (шаг F.7/F.12)
 
 > Этот файл — временный safety-net. Обновляется в том же коммите, что и основные изменения, и лежит в ветке пока есть незаконченная работа. Удали его отдельным коммитом перед открытием PR-а.
 
-## Что я сделал в этой сессии
+## Что сделано в текущей ветке
 
-- **Приёмка по 7-шаговому протоколу из CONTRIBUTING.md** (HANDOFF отсутствовал → git fetch → доки → `make ci` baseline → артефактов нет → current_tasks.md перерасписан под 4.1-F → старт F.0).
-- **F.0** (`e219a0c`) — Snapshot pivot + sticky `AGENT_HANDOFF.md` под старт Спринта 4.1-F. `current_tasks.md` перерасписан: чек-лист F.0–F.12, «Текущая позиция» обновлена, открытые блокеры из 4.1-E переразложены под 4.1-F (главный таргет — замена `SandboxTonConnectVerifier`-stub на production).
-- **F-plan refined** (`e3151be`) — по запросу пользователя F.1–F.12 разбиты на 17 коммитов с под-шагами F.4.a/b, F.5.a/b/c, F.6.a/b, F.8.a/b/c. Каждый под-шаг — самостоятельный, атомарный для rollback-а, ревью-friendly. Аргументация в `docs/current_tasks.md::Чек-лист текущего PR`. Явно отсечён address-from-pubkey-recovery в backlog 4.1-G (optional по TON Connect 2.0-spec).
-- **F.1** (`fce8468`) — Fix flaky `test_invalid_payload_logs_machine_readable_reason` в `tests/unit/bot/handlers/test_roulette_paid.py`: заменён `caplog.at_level(...)` на прямой `unittest.mock.patch("...._LOGGER.warning")` (как в `test_config.py::test_total_above_contract_limit_warns`). Не меняет prod-код. После фикса `make test` стабильно зелёный 6591 passed + 2 skipped (один прогон полного suite — 504 секунды).
-- **F.2** (`d35be55`) — Domain VO `TonProof` + `TonConnectVerificationError`-таксономия. В `domain/monetization/value_objects.py` добавлен `TonProof(timestamp, domain_value, payload, signature_b64, public_key_hex, address, state_init_b64=None)` — фрозен-dataclass со строгими invariants: timestamp `int > 0`; domain RFC1123-host-like `[A-Za-z0-9._:\-]{1,253}`; payload ASCII-printable `[1,512]`; signature ровно 64 байта после base64-decode (Ed25519); pubkey 64 hex-сим (32 байта); address raw `workchain:hex64`; state_init optional valid base64. В `domain/monetization/errors.py` добавлен `TonConnectVerificationError(MonetizationDomainError)`-base + 6 sub-class-ов: `TonProofMalformedError(reason, raw_len)`, `TonProofExpiredError(proof_timestamp, now_timestamp, max_age_seconds)`, `TonProofDomainMismatchError(actual_domain, allowed_domains)`, `TonProofSignatureInvalidError(public_key_hex)`, `TonProofAddressMismatchError(actual_address, expected_address)`, `TonProofReplayedError(scope)`. Всё переэкспортировано через `domain/monetization/__init__.py`. Unit-тесты — `tests/unit/domain/monetization/test_ton_proof.py` (112 passed).
-- **F.3** (`4297964`) — Domain port `INonceStore` + `FakeNonceStore` для тестов. В `domain/monetization/ports.py` добавлен Protocol `INonceStore` с двумя async-методами: `issue_nonce(*, scope, nonce, expires_at)` — записать выданный nonce; `consume_nonce(*, scope, nonce, now) -> bool` — атомарный CAS-consume (контракт: два параллельных вызова с одинаковым `(scope, nonce)` гарантируют ровно один `True` и один `False`). Документирован паттерн `UPDATE … WHERE consumed_at IS NULL AND expires_at > now() RETURNING …` как обязательный для F.6.b SQL-реализации. В `tests/fakes/nonce_store.py` создан in-memory `FakeNonceStore` с counter-ами `issue_calls` / `consume_calls` и helper-ами `is_known` / `is_consumed`. Переэкспорт через `tests/fakes/__init__.py`. Unit-тесты `tests/unit/fakes/test_nonce_store.py` (10 passed): покрывают happy-path, double-issue → ValueError, same-nonce-different-scope ok, consume-unknown/consumed/expired/wrong-scope → False, второй consume того же (scope, nonce) → False (CAS-семантика), граница `expires_at == now` → False.
-- **F.4.a** (`6ce3eff`) — Application use-case `RequestLinkWalletProof` (phase-1 двухфазного flow привязки кошелька). В `application/monetization/request_link_wallet_proof.py` добавлены: `RequestLinkWalletProofCommand(player_id, address, currency)`; `RequestLinkWalletProofConfig(canonical_domain, nonce_ttl_seconds=300)` с инвариантами; `RequestLinkWalletProofResult(nonce, domain, scope, expires_at)`; сам класс `RequestLinkWalletProof` с DI через `INonceStore` + `IClock` + `config` + optional `nonce_generator`. Под капотом: `secrets.token_urlsafe(24)` (32 символа URL-safe-base64) → `issue_nonce(scope="link_wallet:{pid}:{currency}", nonce, expires_at=now+TTL)`. Валидация: `player_id > 0`, `currency ≠ STARS`, `address` non-empty. Переэкспорт через `application/monetization/__init__.py`. Unit-тесты `tests/unit/application/monetization/test_request_link_wallet_proof.py` (15 passed): happy-path TON/USDT, custom TTL, два вызова → разные nonces, валидации (player≤0, STARS, empty addr), Config-инварианты (empty domain, ttl≤0, bool ttl), default-generator выдаёт 32-symbol URL-safe строку.
+**Ветка:** `devin/1778589416-sprint-4-1-F-real-ton-connect-verifier` от `main = 5ee1a84` (merge PR #133 4.1-E).
 
-- **F.4.b** (`24817cb`) — Application use-case `LinkWallet` расширен под phase-2 двухфазного flow + anti-replay. Изменения:
-  * `LinkWalletCommand` — добавлены поля `scope: str` + `nonce: str` (выдаются phase-1 use-case-ом `RequestLinkWalletProof`).
-  * `LinkWallet.__init__` — добавлена DI-зависимость `nonce_store: INonceStore`.
-  * `LinkWallet.execute` — после успешного `verify(...)` вызывает `consume_nonce(scope, nonce, now)`. На `False` (replay/expired/unknown) — `TonProofReplayedError(scope=...)`.
-  * `infrastructure/payments/ton_connect/in_memory_nonce_store.py` — новый `InMemoryNonceStore` (sandbox-fallback до F.6.b/F.7).
-  * `bot/main.py::build_container` — подключён `nonce_store: INonceStore = InMemoryNonceStore()` + проброшен в `LinkWallet` и в `Container`.
-  * `bot/handlers/link_wallet.py::handle_link_wallet_confirm` — перехватывает `TonProofReplayedError` → рендерит `confirm_invalid_proof` (отдельная локаль придёт в F.8.c). scope+nonce пока sentinel (`scope=link_wallet:{pid}:{cur}`, `nonce=proof`) — корректные значения будут в F.8.b после F.5.a (TonProof-JSON-deserializer).
-  * Unit-тесты `tests/unit/application/monetization/test_link_wallet.py` переписаны: 10 passed. Новые тесты: `test_unknown_nonce_raises_replayed`, `test_already_consumed_nonce_raises_replayed`, `test_expired_nonce_raises_replayed`, `test_wrong_scope_raises_replayed`, `test_consume_called_with_clock_now_after_verify`, `test_different_nonce_same_scope_ok`. Инварианты: `verify` проверяется ДО `consume_nonce` (при fail `verify` nonce НЕ consumed).
-  * `tests/unit/bot/test_composition_root.py` — добавлен `nonce_store_fake: INonceStore = FakeNonceStore()` в фикстуру.
-  * `make ci` зелёный: 6736 passed + 2 skipped в 8m43s. Coverage 95.46%.
+Закрытые шаги F.0–F.7:
 
-- **F.5.a** (`9eddd46`) — Infrastructure `TonProof`-JSON-десериалайзер. `src/pipirik_wars/infrastructure/payments/ton_connect/proof_parser.py::parse_ton_proof(raw: str) -> TonProof` — pure-CPU функция, парсит канонический TON Connect 2.0 wallet-response `{ proof: { timestamp, domain: {lengthBytes, value}, payload, signature, state_init? }, account: { address, publicKey } }`. Схема-проверки: top-level object, `proof`/`account` dict-ы, обязательные sub-поля, типы (`int`/`str`/`dict`), `domain.lengthBytes == len(domain.value.encode(utf-8))`. Затем строит `TonProof(...)`-VO и ловит все `__post_init__`-invariant-ы. На любой ошибке — `TonProofMalformedError(reason, raw_len)`. `reason`-коды: `json_parse`, `not_object`, `missing_field`, `type_mismatch`, `domain_length_mismatch`, `bad_timestamp`, `bad_domain`, `bad_payload`, `bad_signature`, `bad_pubkey`, `bad_address`, `bad_state_init`, `vo_invariant`. `raw_len` = utf8-byte-длина raw-payload-а (без содержимого в логе). 40 unit-тестов в `tests/unit/infrastructure/payments/ton_connect/test_proof_parser.py` покрывают happy-path, JSON-ошибки, missing-поля (parametrized), type-mismatch-ы, domain-length-mismatch, VO-invariant-фейлы, sensitive-data-non-leakage в `str(exc)`. Переэкспорт через `infrastructure/payments/ton_connect/__init__.py`. `make ci` зелёный — 6777 passed + 2 skipped (coverage 95.48%, 8m17s).
+- **F.0–F.5.c** (`e219a0c`…`f49a4a8`) — приёмка + F-plan + flaky-фикс + домейн-VO `TonProof` + порт `INonceStore` + `RequestLinkWalletProof`-use-case + `LinkWallet`-extend под anti-replay + `parse_ton_proof` + `build_canonical_message` + `TonConnectProductionVerifier`. Подробности — см. предыдущие версии этого файла + `docs/current_tasks.md`.
+- **F.6.a** (`17e6424`) — Alembic `0038_ton_connect_nonces` (PK nonce VARCHAR(64), scope VARCHAR(128), 3 timestamp-колонки, 3 CHECK-инварианта, 2 индекса) + integration-тесты миграций.
+- **F.6.b** (`ed117cc`) — `SqlAlchemyNonceStore` + ORM `TonConnectNonceORM` поверх `infrastructure/db/repositories|models/ton_connect_nonce.py`. `issue_nonce(scope, nonce, expires_at)` — `session.add()` + `flush()` + `IntegrityError → ValueError`. `consume_nonce(scope, nonce, now)` — атомарный CAS через `update().where(...).values(consumed_at=:now)` + `result.rowcount > 0`. DI: `uow: SqlAlchemyUnitOfWork`, `clock: IClock`. 12 integration-тестов покрывают happy-paths, error-paths, CAS-семантику, boundary-условия, DB-constraints. 517 integration-DB-тестов зелёные.
+- **F.7** (этот коммит) — composition root + config-flag.
 
-- **F.5.b** (`ff92bc0`) — Infrastructure TON Connect canonical-message-builder. `src/pipirik_wars/infrastructure/payments/ton_connect/canonical_message.py::build_canonical_message(proof: TonProof) -> bytes` — pure-CPU функция, собирает 32-байтовый canonical-message-hash по спеке TON Connect 2.0 (https://docs.ton.org/develop/dapps/ton-connect/sign#message-scheme): `message = b"ton-proof-item-v2/"` + workchain (int32 BE) + address_hash (32 bytes) + domain_length (uint32 LE) + utf8(domain_value) + timestamp (uint64 LE) + utf8(payload); `inner = sha256(message)`; `canonical = sha256(b"\xff\xff" + b"ton-connect" + inner)`. Этот hash подписывается Ed25519-ключом кошелька. 14 unit-тестов в `tests/unit/infrastructure/payments/ton_connect/test_canonical_message.py`: basics (32 bytes, deterministic), sensitivity (timestamp/domain/payload/workchain/address_hash — любое изменение даёт другой hash), layout (сверка с эталонным ручным вычислением по спеке, masterchain `-1`, large timestamp 2^32+1), Ed25519 round-trip (`SigningKey.sign(canonical) → VerifyKey.verify(canonical, sig) OK`; wrong key/canonical → `BadSignatureError`). Переэкспорт через `infrastructure/payments/ton_connect/__init__.py`. `make ci` — 6792 passed + 2 skipped (coverage 95.49%, 8m33s).
+## F.7 — что именно вошло в этот коммит
 
-- **F.5.c** (`fa847ce`) — Infrastructure `TonConnectProductionVerifier` (производственный Ed25519-верификатор TON Connect 2.0). Имплементирует `ITonConnectVerifier.verify(*, address, proof) -> bool`. Пайплайн: (1) `parse_ton_proof(proof)` (F.5.a) → `TonProof`-VO; (2) `parsed.address == address` (точная строка, raw-формат); (3) timestamp-окно `now - max_age <= ts <= now + clock_skew` (Unix sec); (4) `parsed.domain_value in allowed_domains` (whitelist); (5) `build_canonical_message(parsed)` (F.5.b); (6) `nacl.signing.VerifyKey(pub_key_bytes).verify(canonical, sig)`. На любой fail — `False` + structured-WARNING-log с машино-читаемым `reason` (`malformed`/`address_mismatch`/`expired`/`future`/`domain_not_allowed`/`signature_invalid`/`internal_error`). Sensitive-данные в лог не попадают (только prefix-ы address/pubkey). `TonConnectProductionConfig(allowed_domains, max_age_seconds, clock_skew_seconds)` — frozen-dataclass с инвариантами. **Сознательный пропуск:** address-from-pubkey-recovery (TON wallet contract `state_init → hash`) — в backlog 4.1-G. 17 unit-тестов в `tests/unit/infrastructure/payments/ton_connect/test_production_verifier.py`: config-инварианты (6), happy-path (3: правильно подписанный через `nacl.signing.SigningKey`, max_age boundary, multiple allowed-domains), fail-paths (8: malformed JSON, address-mismatch, expired, future, domain-not-allowed, signed-by-wrong-key, tampered-payload, tampered-timestamp). Переэкспорт через `infrastructure/payments/ton_connect/__init__.py`. `make ci` — 6810 passed + 2 skipped (coverage 95.49%, 8m46s).
+**Новый `TonConnectSettings` (`infrastructure/payments/ton_connect/settings.py`):**
+- env-prefix `BOT_TON_CONNECT_`, поля:
+  - `verifier_mode: Literal["sandbox", "production"] = "sandbox"`
+  - `allowed_domains: tuple[str, ...] = ("pipirik.example.com",)` — CSV-parser в `@field_validator("allowed_domains", mode="before")`.
+  - `canonical_domain: str = "pipirik.example.com"` — попадает в `ton_proof.domain.value` через `RequestLinkWalletProof`.
+  - `max_age_seconds: int = 600` (gt=0).
+  - `clock_skew_seconds: int = 60` (ge=0).
+  - `nonce_ttl_seconds: int = 600` (gt=0).
+- Cross-field-validation в `model_post_init`: при `verifier_mode == "production"` whitelist должен быть non-empty И содержать `canonical_domain` — иначе ValueError. Это fail-loud при `Settings()` старте: production-verifier гарантированно отверг бы свой собственный proof, если бы домен advertised игроку не совпадал с whitelist-ом.
 
-- **F.6.a** (`17e6424`) — Alembic-миграция `0038_ton_connect_nonces`. Файл `src/pipirik_wars/infrastructure/db/migrations/versions/20260512_0038_ton_connect_nonces.py`: новая таблица `ton_connect_nonces` с колонками `nonce VARCHAR(64) PK` (server-side nonce, `secrets.token_urlsafe(24)` ≈ 32 ASCII-символа + 64 запас), `scope VARCHAR(128) NOT NULL` (`link_wallet:{player_id}:{currency}`), `issued_at TIMESTAMPTZ NOT NULL`, `consumed_at TIMESTAMPTZ NULL`, `expires_at TIMESTAMPTZ NOT NULL`. CHECK-инварианты (last-line-of-defense): `LENGTH(nonce) > 0`, `LENGTH(scope) > 0`, `expires_at > issued_at`. Индексы: `ix_ton_connect_nonces_expires_at` (cleanup-job) + `ix_ton_connect_nonces_scope_nonce_consumed_at` (atomic-CAS-consume в F.6.b). `down_revision = 0037_payout_freeze_and_prize_lot_winner_id`; downgrade симметричен (drop index → drop index → drop table). +integration-тест `test_0038_creates_ton_connect_nonces_table` в `tests/integration/db/test_migrations.py` (валидирует columns/PK/индексы через `inspect()`); добавлено `0038_ton_connect_nonces` в `test_expected_revisions_exist` + `test_0038_descends_from_0037` (линейность цепочки) + `20260512_0038_ton_connect_nonces.py` в `test_versions_dir_lists_only_known_files` + таблица `ton_connect_nonces` в `test_upgrade_head_creates_all_tables`-expected. Локально: 43 integration-теста миграций зелёные, `ruff`/`mypy --strict`/`lint-imports` зелёные.
+**`Settings.ton_connect`:** `Field(default_factory=TonConnectSettings)`. Не Optional — backward-compat default «sandbox + InMemoryNonceStore» собирается всегда.
 
-- **F.6.b (этот коммит)** — Infrastructure `SqlAlchemyNonceStore` в `infrastructure/db/repositories/ton_connect_nonce.py` (по сложившемуся pattern-у `SqlAlchemyWalletRepository`, не `infrastructure/persistence/`) + ORM `TonConnectNonceORM` в `infrastructure/db/models/ton_connect_nonce.py` (выписана схема = миграции 0038). `__init__.py` переэкспорт (models + repositories), `tests/integration/db/conftest.py` registration.
-  - `issue_nonce(*, scope, nonce, expires_at)` — `session.add(orm)` + `flush()`; на `IntegrityError` (PK-конфликт `nonce`) → `ValueError(f"SqlAlchemyNonceStore: nonce already issued for scope={scope!r} ...")` (контракт `INonceStore`).
-  - `consume_nonce(*, scope, nonce, now)` — атомарный CAS через SQLAlchemy `update(...).where(nonce=?, scope=?, consumed_at IS NULL, expires_at > :now).values(consumed_at=:now)`; возвращает `result.rowcount > 0` (`CursorResult.rowcount` portable на Postgres + aiosqlite). One UPDATE-statement даёт race-free CAS-семантику без `RETURNING`-трюков (Postgres row-lock + SQLite single-writer).
-  - `IClock` инжектируется для `issued_at = clock.now()` (порт `INonceStore.issue_nonce` не передаёт `issued_at`; фоллоуин паттерна `SqlAlchemyDailyActivityRepository`/`SqlAlchemyPrizePoolRepository`).
-  - 12 integration-тестов в `tests/integration/db/test_ton_connect_nonce_store.py`: `issue_nonce` happy (1) + duplicate-PK → `ValueError` (1) + different-nonces-same-scope (1); `consume_nonce` happy (1) + unknown (1) + wrong-scope (1) + double-consume → `True/False` (1) + expired (1) + boundary `expires_at == now` (1); DB-CHECK empty-nonce (1) + empty-scope (1) + expires-before-issued (1). 517 integration-тестов всего зелёные.
+**`bot/main.py::build_container`:**
+- Импорты: добавлены `TonConnectProductionConfig`, `TonConnectProductionVerifier`, `SqlAlchemyNonceStore`, `RequestLinkWalletProof`, `RequestLinkWalletProofConfig`.
+- Старый блок `ton_connect_verifier = SandboxTonConnectVerifier(...)` + `nonce_store = InMemoryNonceStore()` заменён на ветку:
+  ```python
+  if ton_connect_settings.verifier_mode == "production":
+      ton_connect_verifier = TonConnectProductionVerifier(
+          config=TonConnectProductionConfig(
+              allowed_domains=...,
+              max_age_seconds=...,
+              clock_skew_seconds=...,
+          ),
+          clock=clock,
+      )
+      nonce_store = SqlAlchemyNonceStore(uow=uow, clock=clock)
+  else:
+      ton_connect_verifier = SandboxTonConnectVerifier(is_sandbox=ton_rpc_settings.is_sandbox)
+      nonce_store = InMemoryNonceStore()
+  ```
+- Добавлен use-case `request_link_wallet_proof = RequestLinkWalletProof(nonce_store=nonce_store, clock=clock, config=RequestLinkWalletProofConfig(canonical_domain=..., nonce_ttl_seconds=...))`.
+- `Container` расширен полем `request_link_wallet_proof: RequestLinkWalletProof`.
+
+**Тесты:**
+- `tests/unit/infrastructure/payments/ton_connect/test_settings.py` — 14 unit-тестов: defaults, production-mode-ok, production-mode-mismatch-domain-raises, production-empty-whitelist-raises, sandbox-ignores-whitelist-mismatch, CSV-parser (3 теста), field-invariants (5 тестов).
+- `tests/unit/bot/test_container_ton_rpc.py::TestBuildContainerTonConnectModeSwitch` — 4 теста: sandbox-mode wiring + production-mode wiring + request_link_wallet_proof в обоих режимах.
+- `tests/unit/bot/test_composition_root.py` — добавлен `request_link_wallet_proof_uc` в `_build_container_with_fakes`-фикстуру; `Container(...)` обновлён.
+
+**Verification:**
+- `ruff check` зелён.
+- `mypy --strict` зелён (1050 source files, 0 issues).
+- `lint-imports` зелён (4 contracts kept).
+- `pytest tests/unit/bot/ tests/unit/infrastructure/payments/ton_connect/ tests/integration/db/test_ton_connect_nonce_store.py` — 1816 passed.
+- `make ci` локально не запускал (он 8+ минут) — `make ci` finalize в F.10.
 
 ## На каком файле/задаче остановился
 
-- Файл: следующий шаг — F.7 wiring в composition root. Ожидаемые изменения: (1) `infrastructure/settings/bot.py` (или где `BotSettings` живёт) — добавить `ton_connect_verifier_mode: Literal["sandbox", "production"] = "sandbox"`, `ton_connect_allowed_domains: list[str]`, `ton_connect_max_age_seconds: int = 600`, `ton_connect_clock_skew_seconds: int = 30`, `ton_connect_nonce_ttl_seconds: int = 600`; (2) `bot/main.py::Container` — ветвить конструкцию `ton_connect_verifier` по флагу (`sandbox` → старый `SandboxTonConnectVerifier`; `production` → `TonConnectProductionVerifier(TonConnectProductionConfig(…))`); (3) заменить `InMemoryNonceStore` на `SqlAlchemyNonceStore(uow=…, clock=…)` в production-mode; (4) обновить `RequestLinkWalletProof`-config в wiring-е через `nonce_ttl_seconds`; (5) +unit-тесты composition-комбинаций (оба mode-а).
-- Что планировал дальше: F.7 (composition root + config-flag) → F.8.a (`/link_wallet`-phase-1 — wiring в существующем handler-е под `nonce`+`scope` в `LinkWalletCommand`) → F.8.b (`/link_wallet_confirm` phase-2 handler) → F.8.c (локали RU/EN новых ключей) → F.9 (smoke-test через `httpx.MockTransport`) → F.10 (`make ci` sanity, не отдельный коммит) → F.11 (doc-sync) → F.12 (remove HANDOFF + PR).
-- Где брать ТЗ: `docs/development_plan.md` §7 (Спринт 4.1, задача 4.1.2); `docs/current_tasks.md` (чек-лист F.0–F.12); `docs/game_design.md` §12.5/§12.6; официальная спецификация TON Connect 2.0: https://docs.ton.org/develop/dapps/ton-connect/sign.
+**Следующий шаг — F.8.a** «bot-handler `/link_wallet` phase-1»:
+- Открыть `src/pipirik_wars/bot/handlers/link_wallet.py` (handler уже существует, расширяет phase-2 `/link_wallet_confirm`).
+- Добавить новый `@router.message(Command("link_wallet"))`-handler (или подкоманду `/link_wallet <address>`, ровно по контракту).
+- Внутри handler-а:
+  1. Резолвить player_id из update.from_user.id (через `IPlayerRepository.find_by_tg_id` — паттерн ровно как в существующем `/link_wallet_confirm`).
+  2. Парсить `address` из args; нормализовать в raw `workchain:hex64` (хелпер `parse_ton_address(...)` уже есть в `bot/handlers/_ton_addr.py` или нужно добавить).
+  3. Парсить `currency` (TON / USDT, default TON).
+  4. Вызвать `request_link_wallet_proof.execute(RequestLinkWalletProofCommand(...))`.
+  5. Отрендерить локаль `link-wallet-prompt` с `{nonce}` + `{domain}` + `{expires_at_minutes}` (формат «у вас N минут»).
+  6. На ValueError (валидация) — `link-wallet-invalid-address` или `link-wallet-invalid-currency`.
+- `workflow_data[request_link_wallet_proof]` уже проброшен в dispatcher через `build_dispatcher(container)` — проверить в `bot/main.py::build_dispatcher`.
+
+**После F.8.a:** F.8.b (расширить `/link_wallet_confirm` парсингом TonProof-JSON из proof-арга, передавать `scope` + `nonce` корректно из подписанного proof-а), F.8.c (RU/EN-локали), F.9 (httpx.MockTransport smoke), F.10 (make ci), F.11 (history.md +1), F.12 (remove AGENT_HANDOFF + open PR).
 
 ## Состояние ветки
 
-- Ветка: `devin/1778589416-sprint-4-1-F-real-ton-connect-verifier`
-- База: `main = 5ee1a84` (merge PR #133 «Спринт 4.1-E»)
-- Последний коммит: `(F.6.b — этот, sha будет известен после commit-а)` — `feat(4.1-F): F.6.b — SqlAlchemyNonceStore atomic-CAS-consume`. Предыдущий коммит: `17e6424` (F.6.a Alembic 0038).
-- Незакоммиченные изменения: да — `src/pipirik_wars/infrastructure/db/models/ton_connect_nonce.py (новый)` + `src/pipirik_wars/infrastructure/db/models/__init__.py` (registration) + `src/pipirik_wars/infrastructure/db/repositories/ton_connect_nonce.py (новый)` + `src/pipirik_wars/infrastructure/db/repositories/__init__.py` (export) + `tests/integration/db/test_ton_connect_nonce_store.py (новый, 12 тестов)` + `tests/integration/db/conftest.py` (registration `TonConnectNonceORM`) + `AGENT_HANDOFF.md` + `docs/current_tasks.md`.
-- CI прогонялся? Локально: `ruff check` + `mypy --strict` (1048 файлов, 0 issues) + `lint-imports` (4 contracts kept) + `pytest tests/integration/db/` (517 passed) — зелёные. Полный `make ci` после F.5.c: 6810 passed + 2 skipped (8m36s, coverage 95.48%). После F.6.b полный `make ci` будет прогнан перед F.12 (локальные lint+typecheck+imports+focused-tests достаточны на промежуточных шагах).
+- **Last commit (будет после `git commit`):** F.7 — `feat(4.1-F): F.7 — composition root + BOT_TON_CONNECT_VERIFIER_MODE`.
+- **Files in this commit:**
+  * Новый: `src/pipirik_wars/infrastructure/payments/ton_connect/settings.py`.
+  * Новый: `tests/unit/infrastructure/payments/ton_connect/test_settings.py`.
+  * Модифицированы: `src/pipirik_wars/infrastructure/settings/settings.py` (+`TonConnectSettings` import + `Settings.ton_connect` поле), `src/pipirik_wars/bot/main.py` (импорты + Container-поле + build_container-ветка), `tests/unit/bot/test_container_ton_rpc.py` (+`TestBuildContainerTonConnectModeSwitch`), `tests/unit/bot/test_composition_root.py` (+`request_link_wallet_proof_uc` в фикстуре), `docs/current_tasks.md`, `AGENT_HANDOFF.md`.
+- **Pre-commit hooks:** должны быть зелёные (ruff + ruff-format + mypy + import-linter все запущены вручную и зелёные).
+- **CI:** не запущен ещё (запустится после push-а).
+- **Sticky:** этот файл живёт в ветке до F.12 (отдельный `chore: remove AGENT_HANDOFF` коммит перед открытием PR).
 
-## Команды для следующего агента
+## Что НЕ сделано
 
-- Поднять окружение: см. `README.md` «Локальная разработка» (`python3.12 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]" && pre-commit install`).
-- Прогнать CI: `make ci` (lint + typecheck + imports + tests).
-- Запустить только integration-тесты миграций: `pytest tests/integration/db/test_migrations.py -q --no-cov` (43 passed после F.6.a).
-- Запустить только F.6.a-тест: `pytest tests/integration/db/test_migrations.py::TestAlembicMigrationsApplyCleanly::test_0038_creates_ton_connect_nonces_table -v --no-cov`.
-- Проверить F.1-flake в изоляции (предыдущий блокер): `pytest tests/unit/bot/handlers/test_roulette_paid.py::TestHandleSuccessfulPayment::test_invalid_payload_logs_machine_readable_reason -v --no-cov` (закрыт F.1, стабильно зелёный).
-- Запустить F.6.b-тесты: `pytest tests/integration/db/test_ton_connect_nonce_store.py -v --no-cov` (12 passed).
+- F.8.a/b/c — handlers + locales.
+- F.9 — smoke-test через `httpx.MockTransport`.
+- F.10 — `make ci` локально.
+- F.11 — doc-sync (history.md +1 запись + переразложить current_tasks.md под 4.1-G).
+- F.12 — снять AGENT_HANDOFF.md + открыть PR + дождаться CI.
 
-## Известные блокеры / открытые вопросы
+## Ссылки
 
-- **TTL nonce + max-age timestamp-window** — текущие гипотезы 600 секунд (10 минут) для обоих. Будут зафиксированы в `config/balance.yaml::monetization.ton_connect` в F.7.
-- **Whitelist доменов** — будут зафиксированы в `config/balance.yaml::monetization.ton_connect.allowed_domains` в F.7.
-- **F.7 wiring в Container** — нужно решить, как `SqlAlchemyNonceStore` получит `IClock` (он уже есть в Container-е?) и `IUnitOfWork` (пер-request или singleton?). Решение выбрать в F.7 (предложение: `SqlAlchemyNonceStore` — per-handler экземпляр поверх per-handler-`UnitOfWork`, как `SqlAlchemyWalletRepository`).
+- TZ: `docs/current_tasks.md` (чек-лист F.0–F.12 + «Текущая позиция»).
+- Спека TON Connect 2.0: https://docs.ton.org/develop/dapps/ton-connect/sign.
+- Сессия: https://app.devin.ai/sessions/5d21d632cf2a44a2baa0cbf0d729c608.
+- Предыдущая сессия: https://app.devin.ai/sessions/f9838cfa4a284470b3dde218866bbe61.

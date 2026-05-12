@@ -19,12 +19,23 @@ from pipirik_wars.application.monetization import (
     ClaimPrize,
     ExpireReservedPrizeLots,
     LinkWallet,
+    RequestLinkWalletProof,
 )
 from pipirik_wars.bot.main import build_container
-from pipirik_wars.infrastructure.db.repositories import SqlAlchemyWalletRepository
+from pipirik_wars.infrastructure.db.repositories import (
+    SqlAlchemyNonceStore,
+    SqlAlchemyWalletRepository,
+)
 from pipirik_wars.infrastructure.payments.tg_stars import HmacTgStarsPayloadVerifier
 from pipirik_wars.infrastructure.payments.tg_stars.settings import TgStarsSettings
-from pipirik_wars.infrastructure.payments.ton_connect import SandboxTonConnectVerifier
+from pipirik_wars.infrastructure.payments.ton_connect import (
+    InMemoryNonceStore,
+    SandboxTonConnectVerifier,
+)
+from pipirik_wars.infrastructure.payments.ton_connect.production import (
+    TonConnectProductionVerifier,
+)
+from pipirik_wars.infrastructure.payments.ton_connect.settings import TonConnectSettings
 from pipirik_wars.infrastructure.payments.ton_rpc import TonRpcAdapter
 from pipirik_wars.infrastructure.payments.ton_rpc.settings import TonRpcSettings
 from pipirik_wars.infrastructure.settings import (
@@ -111,6 +122,50 @@ class TestBuildContainerFallbackForOptionalSections:
         assert isinstance(c.ton_connect_verifier, SandboxTonConnectVerifier)
         # Проверим, что fail-closed на пустой proof работает корректно
         # (verify() — coroutine, тестируется отдельно в test_ton_connect.py).
+
+
+def _settings_production_ton_connect() -> Settings:
+    """`Settings` с включённым `BOT_TON_CONNECT_VERIFIER_MODE=production`."""
+    return Settings(
+        environment="test",
+        db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+        bot=BotSettings(token=SecretStr("test-token")),
+        bootstrap=BootstrapSettings(),
+        ton_rpc=TonRpcSettings(is_sandbox=False),
+        tg_stars=TgStarsSettings(secret=SecretStr("test-tg-stars-32-byte-secret-foo")),
+        ton_connect=TonConnectSettings(
+            verifier_mode="production",
+            allowed_domains=("pipirik.example.com",),
+            canonical_domain="pipirik.example.com",
+            max_age_seconds=600,
+            clock_skew_seconds=60,
+            nonce_ttl_seconds=600,
+        ),
+    )
+
+
+class TestBuildContainerTonConnectModeSwitch:
+    """Спринт 4.1-F (шаг F.7): `BOT_TON_CONNECT_VERIFIER_MODE` переключает verifier+nonce-store."""
+
+    def test_sandbox_mode_uses_stub_verifier_and_in_memory_store(self) -> None:
+        """Default `sandbox` — `SandboxTonConnectVerifier` + `InMemoryNonceStore`."""
+        c = build_container(settings=_settings_with_crypto_sections())
+        assert isinstance(c.ton_connect_verifier, SandboxTonConnectVerifier)
+        assert isinstance(c.nonce_store, InMemoryNonceStore)
+
+    def test_production_mode_uses_real_verifier_and_sql_store(self) -> None:
+        """`production` — `TonConnectProductionVerifier` + `SqlAlchemyNonceStore`."""
+        c = build_container(settings=_settings_production_ton_connect())
+        assert isinstance(c.ton_connect_verifier, TonConnectProductionVerifier)
+        assert isinstance(c.nonce_store, SqlAlchemyNonceStore)
+
+    def test_request_link_wallet_proof_wired_in_sandbox(self) -> None:
+        c = build_container(settings=_settings_with_crypto_sections())
+        assert isinstance(c.request_link_wallet_proof, RequestLinkWalletProof)
+
+    def test_request_link_wallet_proof_wired_in_production(self) -> None:
+        c = build_container(settings=_settings_production_ton_connect())
+        assert isinstance(c.request_link_wallet_proof, RequestLinkWalletProof)
 
 
 # NB: дополнительный тест `build_dispatcher`-пробросов крипто-DI
