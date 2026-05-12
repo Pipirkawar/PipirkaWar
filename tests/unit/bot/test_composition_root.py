@@ -86,11 +86,13 @@ from pipirik_wars.application.inventory import EnchantItem, GetInventory
 from pipirik_wars.application.monetization import (
     ClaimPrize,
     ExpireReservedPrizeLots,
+    FreezePayouts,
     GetPrizePoolStatus,
     LinkWallet,
     RecordDonation,
     RefundLot,
     SpinPaidRoulette,
+    UnfreezePayouts,
 )
 from pipirik_wars.application.monetization.generate_prize_lots import GeneratePrizeLots
 from pipirik_wars.application.mountains import (
@@ -1103,6 +1105,22 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         clock=clock,
         authz=admin_authz,
     )
+    freeze_payouts_uc = FreezePayouts(
+        uow=uow,
+        admins=admins,
+        payout_freeze_repo=FakePayoutFreezeRepository(),
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    unfreeze_payouts_uc = UnfreezePayouts(
+        uow=uow,
+        admins=admins,
+        payout_freeze_repo=FakePayoutFreezeRepository(),
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
     expire_reserved_prize_lots_uc = ExpireReservedPrizeLots(
         uow=uow,
         prize_lot_repository=prize_lot_repo_fake,
@@ -1399,6 +1417,8 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         claim_prize=claim_prize_uc,
         get_prize_pool_status=get_prize_pool_status_uc,
         refund_lot=refund_lot_uc,
+        freeze_payouts=freeze_payouts_uc,
+        unfreeze_payouts=unfreeze_payouts_uc,
         expire_reserved_prize_lots=expire_reserved_prize_lots_uc,
     )
 

@@ -21,6 +21,9 @@ from pipirik_wars.bot.handlers.admin_communication import (
     router as admin_communication_router,
 )
 from pipirik_wars.bot.handlers.admin_economy import router as admin_economy_router
+from pipirik_wars.bot.handlers.admin_freeze_payouts import (
+    router as admin_freeze_payouts_router,
+)
 from pipirik_wars.bot.handlers.admin_prize_pool import (
     router as admin_prize_pool_router,
 )
@@ -144,6 +147,13 @@ def register_routers(dispatcher: Dispatcher) -> None:
     # Роутер подключается рядом с admin_prize_pool, чтобы admin-RBAC
     # фильтры не оборвались на промежуточных роутерах.
     dispatcher.include_router(admin_refund_lot_router)
+    # Спринт 4.1-E.14: `/freeze_payouts <reason>` и `/unfreeze_payouts` —
+    # двухфазный admin-flow (super-admin + TOTP). Импорт модуля выше
+    # уже зарегистрировал `dispatch_freeze_payouts` и `dispatch_unfreeze_payouts`
+    # в `CONFIRM_DISPATCHERS` (фаза 2 использует регистри admin_economy +
+    # workflow-data `freeze_payouts` / `unfreeze_payouts`). Роутер подключается
+    # рядом с admin_refund_lot из тех же соображений (admin-RBAC chain).
+    dispatcher.include_router(admin_freeze_payouts_router)
     dispatcher.include_router(registration_router)
 
 
