@@ -1525,3 +1525,19 @@ claim-prize-refund =
 
 claim-prize-invalid-callback = Что-то пошло не так с кнопкой. Запусти `/claim_prize <lot_id>` руками.
 claim-prize-toast-invalid = Кнопка устарела. Используй `/claim_prize <lot_id>`.
+
+# ───────────────────────────────────────────────────────────────────────────
+# Спринт 4.1-E.12 — admin-команда `/prize_pool` (ГДД §12.6.6)
+# Read-only снимок состояния крипто-пула + freeze-флага.
+# Доступ: SUPER_ADMIN (см. AdminCommandKind.GET_PRIZE_POOL).
+# ───────────────────────────────────────────────────────────────────────────
+admin-prize-pool-not-authorized = ❌ Доступ к снимку крипто-пула — только у super-admin-а.
+admin-prize-pool-header = 💰 <b>Снимок крипто-пула</b>
+admin-prize-pool-row =
+    • <code>{ $currency }</code> · balance=<code>{ $balance }</code> · active=<code>{ $active }</code> · reserved=<code>{ $reserved }</code> · claimed=<code>{ $claimed }</code> · refunded=<code>{ $refunded }</code>
+admin-prize-pool-unfrozen = ❄️ Заморозка крипто-выплат: <b>выключена</b>.
+admin-prize-pool-frozen =
+    🧊 Заморозка крипто-выплат: <b>ВКЛЮЧЕНА</b>.
+    Кем: admin_id=<code>{ $admin_id }</code>
+    Когда: <code>{ $frozen_at }</code>
+    Причина: { $reason }

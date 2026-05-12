@@ -86,6 +86,7 @@ from pipirik_wars.application.inventory import EnchantItem, GetInventory
 from pipirik_wars.application.monetization import (
     ClaimPrize,
     ExpireReservedPrizeLots,
+    GetPrizePoolStatus,
     LinkWallet,
     RecordDonation,
     SpinPaidRoulette,
@@ -1081,6 +1082,16 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         payout_freeze_repository=FakePayoutFreezeRepository(),
         payout_limit_checker=FakePayoutLimitChecker(),
     )
+    get_prize_pool_status_uc = GetPrizePoolStatus(
+        uow=uow,
+        admins=admins,
+        prize_pool_repository=prize_pool_repo_fake,
+        prize_lot_repository=prize_lot_repo_fake,
+        payout_freeze_repo=FakePayoutFreezeRepository(),
+        admin_audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
     expire_reserved_prize_lots_uc = ExpireReservedPrizeLots(
         uow=uow,
         prize_lot_repository=prize_lot_repo_fake,
@@ -1375,6 +1386,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         generate_prize_lots=generate_prize_lots_uc,
         link_wallet=link_wallet_uc,
         claim_prize=claim_prize_uc,
+        get_prize_pool_status=get_prize_pool_status_uc,
         expire_reserved_prize_lots=expire_reserved_prize_lots_uc,
     )
 

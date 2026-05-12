@@ -1521,3 +1521,19 @@ claim-prize-refund =
 
 claim-prize-invalid-callback = The button does not work. Run `/claim_prize <lot_id>` manually.
 claim-prize-toast-invalid = Button expired. Use `/claim_prize <lot_id>`.
+
+# ───────────────────────────────────────────────────────────────────────────
+# Sprint 4.1-E.12 — admin command `/prize_pool` (GDD §12.6.6)
+# Read-only snapshot of crypto-pool + payout-freeze state.
+# Access: SUPER_ADMIN (see AdminCommandKind.GET_PRIZE_POOL).
+# ───────────────────────────────────────────────────────────────────────────
+admin-prize-pool-not-authorized = ❌ Crypto-pool snapshot is super-admin only.
+admin-prize-pool-header = 💰 <b>Crypto-pool snapshot</b>
+admin-prize-pool-row =
+    • <code>{ $currency }</code> · balance=<code>{ $balance }</code> · active=<code>{ $active }</code> · reserved=<code>{ $reserved }</code> · claimed=<code>{ $claimed }</code> · refunded=<code>{ $refunded }</code>
+admin-prize-pool-unfrozen = ❄️ Crypto payouts freeze: <b>OFF</b>.
+admin-prize-pool-frozen =
+    🧊 Crypto payouts freeze: <b>ON</b>.
+    By: admin_id=<code>{ $admin_id }</code>
+    At: <code>{ $frozen_at }</code>
+    Reason: { $reason }

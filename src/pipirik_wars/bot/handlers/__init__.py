@@ -21,6 +21,9 @@ from pipirik_wars.bot.handlers.admin_communication import (
     router as admin_communication_router,
 )
 from pipirik_wars.bot.handlers.admin_economy import router as admin_economy_router
+from pipirik_wars.bot.handlers.admin_prize_pool import (
+    router as admin_prize_pool_router,
+)
 from pipirik_wars.bot.handlers.admin_setup_totp import router as admin_setup_totp_router
 from pipirik_wars.bot.handlers.admin_support import router as admin_support_router
 from pipirik_wars.bot.handlers.boss import router as boss_router
@@ -127,6 +130,10 @@ def register_routers(dispatcher: Dispatcher) -> None:
     # Спринт 2.5-D.6: self-service выдача TOTP-секрета (`/admin_setup_totp`).
     # Фильтр `is_admin` — на самом router-е.
     dispatcher.include_router(admin_setup_totp_router)
+    # Спринт 4.1-E.12: `/prize_pool` — read-only снимок крипто-пула +
+    # freeze-флага (super-admin + audit). Фильтр `is_admin` —
+    # на самом router-е; RBAC `SUPER_ADMIN` — на use-case-е.
+    dispatcher.include_router(admin_prize_pool_router)
     dispatcher.include_router(registration_router)
 
 

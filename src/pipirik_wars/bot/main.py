@@ -119,6 +119,7 @@ from pipirik_wars.application.monetization import (
     EvaluatePayoutLimit,
     ExpireReservedPrizeLots,
     GeneratePrizeLots,
+    GetPrizePoolStatus,
     LinkWallet,
     RecordDonation,
     SpinPaidRoulette,
@@ -517,6 +518,7 @@ class Container:
     generate_prize_lots: GeneratePrizeLots
     link_wallet: LinkWallet
     claim_prize: ClaimPrize
+    get_prize_pool_status: GetPrizePoolStatus
     expire_reserved_prize_lots: ExpireReservedPrizeLots
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
@@ -1254,6 +1256,18 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     # 10-step flow-а вызывает `record_donation.execute(...)` с тем же
     # `idempotency_key`, что и у платежа.
     prize_pool_repo = SqlAlchemyPrizePoolRepository(uow=uow)
+    # Спринт 4.1-E / E.12: admin-команда `/prize_pool` (super-admin
+    # read-only + audit `ADMIN_PRIZE_POOL_VIEWED`).
+    get_prize_pool_status = GetPrizePoolStatus(
+        uow=uow,
+        admins=admins,
+        prize_pool_repository=prize_pool_repo,
+        prize_lot_repository=prize_lot_repo,
+        payout_freeze_repo=payout_freeze_repo,
+        admin_audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
     # 4.1-C / C.7.a + C.7.b: cron `GeneratePrizeLots` 1×/час per currency.
     # 4.1-C / C.7.d: тот же use-case прокидывается в `RecordDonation` как
     # внеочередной триггер «крупного» доната (>= 0.5 TON / >= 1 USDT),
@@ -1925,6 +1939,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         generate_prize_lots=generate_prize_lots,
         link_wallet=link_wallet,
         claim_prize=claim_prize,
+        get_prize_pool_status=get_prize_pool_status,
         expire_reserved_prize_lots=expire_reserved_prize_lots,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
@@ -2172,6 +2187,7 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     # `IPayoutLimitChecker` (read-side для статус-отчёта `/prize_pool`).
     dispatcher["payout_freeze_repository"] = container.payout_freeze_repo
     dispatcher["payout_limit_checker"] = container.payout_limit_checker
+    dispatcher["get_prize_pool_status"] = container.get_prize_pool_status
     return dispatcher
 
 
