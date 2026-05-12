@@ -383,6 +383,82 @@ class IPrizeLotRepository(Protocol):
         """
         ...
 
+    async def sum_claimed_in_window(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+        since: datetime,
+    ) -> int:
+        """Сумма `amount_native` по `CLAIMED`-лотам игрока в rolling-окне.
+
+        Используется `EvaluatePayoutLimit` use-case-ом (Спринт 4.1-E,
+        шаг E.6) для rolling-window-проверки лимита выплат на игрока:
+
+        ::
+
+            sum = repo.sum_claimed_in_window(
+                player_id=command.player_id,
+                currency=command.currency,
+                since=clock.now() - timedelta(days=cfg.window_days),
+            )
+            if sum + amount_native <= cfg.max_amount_native:
+                return PayoutLimitWithin(remaining_native=...)
+            return PayoutLimitOverLimit(retry_after=..., exceeded_by_native=...)
+
+        Семантика SQL-реализации (шаг E.11) — `SELECT COALESCE(SUM(
+        amount_native), 0) FROM prize_lots WHERE winner_id = :player_id
+        AND currency = :currency AND status = 'CLAIMED' AND
+        claimed_at >= :since`. До шага E.11 в таблице ``prize_lots`` нет
+        колонки ``winner_id``: миграция и заполнение `winner_id` через
+        ``ClaimPrize``-flow приходят в E.11 одновременно с подключением
+        ``IPayoutLimitChecker`` к ``ClaimPrize.execute(...)`` (E.10).
+
+        Параметры:
+
+        * ``player_id`` — id игрока (`> 0`, валидирует вызывающий).
+        * ``currency`` — валюта (для STARS реализация может возвращать
+          `0` — Stars-выплаты идут через TG-refund-канал и не учитываются
+          в крипто-лимите, ГДД §12.6.5).
+        * ``since`` — TZ-aware момент-cutoff (`claimed_at >= since`).
+          Передаётся use-case-ом как `clock.now() - timedelta(days=cfg.
+          window_days)`.
+
+        Возвращает: ``int >= 0``. ``0`` — если у игрока нет CLAIMED-лотов
+        в окне (свежий игрок или давно не выводил). Реализация не
+        должна возвращать ``None``.
+        """
+        ...
+
+    async def oldest_claimed_at_in_window(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+        since: datetime,
+    ) -> datetime | None:
+        """Самый ранний `claimed_at` среди CLAIMED-лотов игрока в окне.
+
+        Используется `EvaluatePayoutLimit` use-case-ом (Спринт 4.1-E,
+        шаг E.6) в ветке `OverLimit` для расчёта `retry_after = oldest +
+        window_days`. После этого момента самая ранняя выплата выпадет
+        из rolling-окна и игрок снова может выйти в `Within`.
+
+        Семантика SQL-реализации (E.11) — `SELECT MIN(claimed_at) FROM
+        prize_lots WHERE winner_id = :player_id AND currency = :currency
+        AND status = 'CLAIMED' AND claimed_at >= :since`. Композитный
+        индекс `(winner_id, currency, status, claimed_at)` в E.11
+        покрывает этот запрос индексным seek-ом.
+
+        Параметры идентичны ``sum_claimed_in_window``.
+
+        Возвращает: TZ-aware `datetime` или ``None`` (если нет ни одного
+        CLAIMED-лота в окне — теоретически невозможный случай, когда
+        ``sum_claimed_in_window > 0``; обязан возвращать ``None``,
+        чтобы caller мог фолбекнуться на ``Within(remaining=max)``).
+        """
+        ...
+
 
 class IFeeEstimator(Protocol):
     """Порт оценки сетевой комиссии для лота (ГДД §12.6.3, Спринт 4.1-C).

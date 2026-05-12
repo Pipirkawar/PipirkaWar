@@ -27,6 +27,9 @@ from pipirik_wars.application.monetization.claim_prize import (
     ClaimPrizeCommand,
     ClaimPrizeResult,
 )
+from pipirik_wars.application.monetization.evaluate_payout_limit import (
+    EvaluatePayoutLimit,
+)
 from pipirik_wars.application.monetization.expire_reserved_prize_lots import (
     ExpireReservedPrizeLots,
     ExpireReservedPrizeLotsResult,
@@ -57,6 +60,7 @@ __all__ = [
     "ClaimPrize",
     "ClaimPrizeCommand",
     "ClaimPrizeResult",
+    "EvaluatePayoutLimit",
     "ExpireReservedPrizeLots",
     "ExpireReservedPrizeLotsResult",
     "GeneratePrizeLots",

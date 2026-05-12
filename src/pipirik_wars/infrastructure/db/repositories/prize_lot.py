@@ -225,6 +225,53 @@ class SqlAlchemyPrizeLotRepository(IPrizeLotRepository):
         result = await session.execute(stmt)
         return tuple(_orm_to_domain(orm) for orm in result.scalars().all())
 
+    async def sum_claimed_in_window(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+        since: datetime,
+    ) -> int:
+        """Сумма `amount_native` по CLAIMED-лотам игрока в окне `claimed_at >= since`.
+
+        Не реализовано до шага **E.11** (`prize_lots.winner_id`-миграция).
+        До того момента порт всё ещё валидно объявлен в `IPrizeLotRepository`,
+        реализация в этом классе возвращает `NotImplementedError`, чтобы
+        случайный вызов до E.11 не приводил к silent-zero (`0` без winner-
+        фильтра был бы крайне опасен — он отключил бы лимит для всех игроков).
+
+        После E.11 здесь будет::
+
+            SELECT COALESCE(SUM(amount_native), 0) FROM prize_lots
+            WHERE winner_id = :player_id AND currency = :currency
+              AND status = 'CLAIMED' AND claimed_at >= :since;
+        """
+        del player_id, currency, since  # used by E.11
+        raise NotImplementedError(
+            "SqlAlchemyPrizeLotRepository.sum_claimed_in_window: schema "
+            "migration `prize_lots.winner_id` ещё не сделана (Спринт 4.1-E "
+            "шаг E.11). До E.11 этот метод не подключён к ClaimPrize-flow "
+            "(IPayoutLimitChecker hook делается в E.10 ПОСЛЕ E.11)."
+        )
+
+    async def oldest_claimed_at_in_window(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+        since: datetime,
+    ) -> datetime | None:
+        """Самый ранний `claimed_at` для player+currency в окне (>= since).
+
+        Не реализовано до шага **E.11** (см. `sum_claimed_in_window`).
+        """
+        del player_id, currency, since  # used by E.11
+        raise NotImplementedError(
+            "SqlAlchemyPrizeLotRepository.oldest_claimed_at_in_window: schema "
+            "migration `prize_lots.winner_id` ещё не сделана (Спринт 4.1-E "
+            "шаг E.11)."
+        )
+
 
 def _orm_to_domain(orm: PrizeLotORM) -> PrizeLot:
     """Собрать `PrizeLot`-VO из ORM-строки.
