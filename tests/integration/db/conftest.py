@@ -52,6 +52,7 @@ from pipirik_wars.infrastructure.db.models import (  # noqa: F401  (регист
     ScrollORM,
     SignupQueueORM,
     UserORM,
+    WalletORM,
 )
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
 

@@ -59,7 +59,7 @@ from typing import Final
 
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.application.player import GetProfile
@@ -67,6 +67,7 @@ from pipirik_wars.application.roulette import (
     SpinFreeRoulette,
     SpinFreeRouletteCommand,
 )
+from pipirik_wars.bot.handlers.claim_prize import build_claim_prize_keyboard
 from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters import (
     RoulettePresenter,
@@ -76,6 +77,7 @@ from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.player import PlayerNotFoundError
 from pipirik_wars.domain.roulette import (
     InsufficientLengthForRouletteError,
+    RouletteOutcomeKind,
     RouletteThicknessGateError,
 )
 
@@ -282,6 +284,19 @@ async def handle_roulette_callback(  # noqa: PLR0911 — каждая ветка
         presenter.toast_spin_complete(locale=effective_locale),
         show_alert=False,
     )
+
+    reply_markup: InlineKeyboardMarkup | None = None
+    if (
+        result.outcome is not None
+        and result.outcome.kind is RouletteOutcomeKind.CRYPTO_LOT
+        and result.outcome.lot_id is not None
+    ):
+        reply_markup = build_claim_prize_keyboard(
+            bundle=bundle,
+            locale=effective_locale,
+            lot_id=result.outcome.lot_id,
+        )
+
     await _set_message_text(
         callback,
         presenter.render_result(
@@ -289,6 +304,7 @@ async def handle_roulette_callback(  # noqa: PLR0911 — каждая ветка
             cost_cm=cost_cm,
             locale=effective_locale,
         ),
+        reply_markup=reply_markup,
     )
 
 
@@ -310,7 +326,12 @@ async def _strip_keyboard(callback: CallbackQuery) -> None:
         )
 
 
-async def _set_message_text(callback: CallbackQuery, text: str) -> None:
+async def _set_message_text(
+    callback: CallbackQuery,
+    text: str,
+    *,
+    reply_markup: InlineKeyboardMarkup | None = None,
+) -> None:
     """Заменить текст сообщения, к которому привязан callback.
 
     Аналогично `_strip_keyboard`: ошибки edit-а поглощаем, чтобы не
@@ -320,7 +341,7 @@ async def _set_message_text(callback: CallbackQuery, text: str) -> None:
     if msg is None:
         return
     try:
-        await msg.edit_text(text)  # type: ignore[union-attr]
+        await msg.edit_text(text, reply_markup=reply_markup)  # type: ignore[union-attr]
     except Exception:
         _LOGGER.debug(
             "roulette.callback: failed to edit message text",

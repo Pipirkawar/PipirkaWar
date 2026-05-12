@@ -1400,9 +1400,124 @@ roulette-paid-result-pack-10 =
 
 roulette-paid-result-idempotent = ℹ This spin is already complete. Open /profile to see your current state.
 
+# Card when invoice_payload fails server-side HMAC verification
+# (Sprint 4.1-D, D.8.c). User-facing copy is intentionally generic
+# — the machine-readable failure reason is logged separately.
+roulette-paid-payment-invalid = ⚠ The payment couldn't be verified and was rejected. No spin happened. Reopen /roulette_paid and try again.
+
 # Toasts.
 roulette-paid-toast-thickness-gate = Need thickness ≥ { NUMBER($required, useGrouping: 0) }. You're at { NUMBER($actual, useGrouping: 0) }.
 roulette-paid-toast-not-registered = Tap /start in the bot DM first.
 roulette-paid-toast-payment-ok = Payment confirmed, roulette spun.
 roulette-paid-toast-already-processed = Already processed.
 roulette-paid-toast-error = Something went wrong.
+
+## /link_wallet + /link_wallet_confirm (Sprint 4.1-D.6, GDD §12.6.4)
+
+# Chat guards.
+link-wallet-group = `/link_wallet` only works in the bot DM. Open the DM and try again.
+link-wallet-other = `/link_wallet` only works in the bot DM.
+link-wallet-not-registered = Register first — tap /start in the bot DM.
+
+# Main prompt with currency selection buttons.
+link-wallet-prompt =
+    💼 <b>Link a TON wallet</b>
+
+    Pick the currency your prize lots will be paid in — this is a one-time setup. You can change the address later by running `/link_wallet` again.
+
+link-wallet-button-ton = Link TON wallet
+link-wallet-button-usdt = Link USDT wallet (TON jetton)
+
+# Instructions after currency is picked.
+link-wallet-instructions-ton =
+    🔗 <b>TON Connect — TON wallet</b>
+
+    1. Open a TON-Connect-compatible wallet (Tonkeeper, MyTonWallet, Tonhub).
+    2. Find the «TON Connect» / «Connect dApp» section and connect to this bot.
+    3. Sign the `tonconnect_proof` — your wallet proves ownership of the address.
+    4. After signing the bot links the address automatically. If it didn't, run `/link_wallet_confirm ton &lt;address&gt; &lt;proof&gt;` manually.
+
+link-wallet-instructions-usdt =
+    🔗 <b>TON Connect — USDT wallet</b>
+
+    1. Open a TON-Connect-compatible wallet (Tonkeeper, MyTonWallet, Tonhub).
+    2. Find the «TON Connect» / «Connect dApp» section and connect to this bot.
+    3. Sign the `tonconnect_proof` — your wallet proves ownership of the TON address that will receive jetton-USDT.
+    4. After signing the bot links the address automatically. If it didn't, run `/link_wallet_confirm usdt &lt;address&gt; &lt;proof&gt;` manually.
+
+link-wallet-invalid-callback = Something is wrong with the button. Tap /link_wallet again.
+link-wallet-toast-invalid = Button expired. Run /link_wallet again.
+
+# `/link_wallet_confirm <currency> <address> <proof>`.
+link-wallet-confirm-group = `/link_wallet_confirm` only works in the bot DM. Open the DM and try again.
+link-wallet-confirm-other = `/link_wallet_confirm` only works in the bot DM.
+link-wallet-confirm-not-registered = Register first — tap /start in the bot DM.
+
+link-wallet-confirm-usage =
+    Usage: `/link_wallet_confirm <currency> <address> <proof>`.
+
+    Here `currency` is `ton` or `usdt`, `address` is your TON address, and `proof` is the TON Connect proof your wallet produced.
+
+link-wallet-confirm-unsupported = Currency `{ $code }` is not supported. Available: `ton`, `usdt`.
+
+link-wallet-confirm-invalid-proof =
+    ❌ TON Connect proof failed verification. The signature is forged or expired.
+
+    Run /link_wallet and sign again.
+
+link-wallet-confirm-already-linked =
+    ℹ Wallet `{ $address }` is already linked for `{ $currency }`. Nothing to do — prize lots go there.
+
+link-wallet-confirm-linked =
+    ✅ Wallet `{ $address }` is linked for `{ $currency }`. Prize lots in this currency will be paid out here.
+
+link-wallet-confirm-relinked =
+    ✅ Address for `{ $currency }` is now `{ $address }`. New prize lots will be paid to the new address.
+
+# /claim_prize <lot_id> (Sprint 4.1-D, D.7).
+claim-prize-group = `/claim_prize` is only available in the bot DM. Open the private chat.
+claim-prize-other = `/claim_prize` is only available in the bot DM.
+claim-prize-not-registered = Sign up first — press /start in the bot DM.
+
+claim-prize-usage =
+    Usage: `/claim_prize <lot_id>`.
+
+    `lot_id` is the id of the reserved lot from a roulette result. Payout goes to the linked wallet.
+
+claim-prize-invalid-lot-id = `lot_id` must be a positive integer. Got: `{ $raw }`.
+
+claim-prize-prompt =
+    🎁 <b>Crypto prize reserved — lot #{ $lot_id }</b>
+
+    Currency: `{ $currency }`. Amount: `{ $amount }` (native units).
+    Tap the button below to withdraw to the linked wallet (or run /link_wallet first).
+
+claim-prize-button = Claim prize
+
+claim-prize-not-found = Lot #{ $lot_id } not found. Either it was already claimed or it does not exist.
+
+claim-prize-already-claimed = Lot #{ $lot_id } has already been paid out. It cannot be claimed again.
+
+claim-prize-not-reserved =
+    Lot #{ $lot_id } is currently in status `{ $status }`, not `reserved`.
+    Only reserved lots can be withdrawn via `/claim_prize`.
+
+claim-prize-wallet-not-linked =
+    No wallet linked for currency `{ $currency }`. Run /link_wallet first and then come back to claim the lot.
+
+claim-prize-not-owner = Lot #{ $lot_id } does not belong to you.
+
+claim-prize-success =
+    ✅ <b>Payout sent — lot #{ $lot_id }</b>
+
+    Currency: `{ $currency }`. Amount: `{ $amount }`.
+    Network fee: `{ $actual_fee }`. Wallet: `{ $address }`.
+    Transaction hash: `{ $tx_hash }`.
+
+claim-prize-refund =
+    ⚠ <b>Lot #{ $lot_id } refunded to the pool</b>
+
+    Network fee `{ $actual_fee }` exceeded the buffer `{ $fee_buffer }` for `{ $currency } { $amount }`. The lot will return to the pool and re-appear once fees drop.
+
+claim-prize-invalid-callback = The button does not work. Run `/claim_prize <lot_id>` manually.
+claim-prize-toast-invalid = Button expired. Use `/claim_prize <lot_id>`.

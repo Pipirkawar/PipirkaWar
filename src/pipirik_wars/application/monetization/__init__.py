@@ -4,6 +4,11 @@ Use-case-ы и DTO-комманды для платных операций. Re-e
 символов:
 
     from pipirik_wars.application.monetization import (
+        ClaimPrize,
+        ClaimPrizeCommand,
+        ClaimPrizeResult,
+        ExpireReservedPrizeLots,
+        ExpireReservedPrizeLotsResult,
         GeneratePrizeLots,
         GeneratePrizeLotsCommand,
         GeneratePrizeLotsResult,
@@ -17,10 +22,24 @@ Use-case-ы и DTO-комманды для платных операций. Re-e
     )
 """
 
+from pipirik_wars.application.monetization.claim_prize import (
+    ClaimPrize,
+    ClaimPrizeCommand,
+    ClaimPrizeResult,
+)
+from pipirik_wars.application.monetization.expire_reserved_prize_lots import (
+    ExpireReservedPrizeLots,
+    ExpireReservedPrizeLotsResult,
+)
 from pipirik_wars.application.monetization.generate_prize_lots import (
     GeneratePrizeLots,
     GeneratePrizeLotsCommand,
     GeneratePrizeLotsResult,
+)
+from pipirik_wars.application.monetization.link_wallet import (
+    LinkWallet,
+    LinkWalletCommand,
+    LinkWalletResult,
 )
 from pipirik_wars.application.monetization.record_donation import (
     RecordDonation,
@@ -35,9 +54,17 @@ from pipirik_wars.application.monetization.spin_paid_roulette import (
 )
 
 __all__ = [
+    "ClaimPrize",
+    "ClaimPrizeCommand",
+    "ClaimPrizeResult",
+    "ExpireReservedPrizeLots",
+    "ExpireReservedPrizeLotsResult",
     "GeneratePrizeLots",
     "GeneratePrizeLotsCommand",
     "GeneratePrizeLotsResult",
+    "LinkWallet",
+    "LinkWalletCommand",
+    "LinkWalletResult",
     "PaidRoulettePack",
     "RecordDonation",
     "RecordDonationCommand",

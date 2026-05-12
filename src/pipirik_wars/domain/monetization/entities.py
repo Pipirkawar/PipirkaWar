@@ -41,8 +41,10 @@ from pipirik_wars.domain.monetization.value_objects import (
     FeeBufferAmount,
     IdempotencyKey,
     StarsPoolBalance,
+    TonAddress,
     TonNanoAmount,
     UsdtDecimalAmount,
+    UsdtJettonAddress,
 )
 
 __all__ = [
@@ -51,6 +53,7 @@ __all__ = [
     "PrizeLot",
     "PrizeLotStatus",
     "PrizePool",
+    "Wallet",
 ]
 
 
@@ -357,6 +360,13 @@ class PrizeLot:
     * `status: PrizeLotStatus` — текущий статус (см. enum-docstring).
     * `created_at: datetime` — момент `IPrizeLotRepository.add(...)`
       (TZ-aware; валидируется).
+    * `reserved_at: datetime | None` — момент резервирования (TZ-aware).
+      На `ACTIVE` — `None`. На `RESERVED` — обязан быть выставлен.
+      На `CLAIMED` — сохраняется из `RESERVED` (референс на момент
+      брони; D.9-flow использует для expire-cron-а `now - reserved_at
+      > reserved_ttl_seconds`). На `REFUNDED` — `None` если лот пришёл
+      из `ACTIVE` (admin /refund_lot, 4.1-E); выставлен если из `RESERVED`
+      (timeout-refund, 4.1-D D.9).
     * `claimed_at: datetime | None` — момент `ClaimPrize` (TZ-aware).
       На моменте `ACTIVE` / `RESERVED` / `REFUNDED` — `None`. На моменте
       `CLAIMED` — обязан быть выставлен (валидируется).
@@ -366,11 +376,14 @@ class PrizeLot:
        игроку обязан остаться `>= 1` минимальная единица валюты.
     2. `status == CLAIMED ⇒ claimed_at is not None` (и наоборот:
        `claimed_at is not None ⇒ status == CLAIMED`).
-    3. Status transition: `ACTIVE → RESERVED|REFUNDED`,
+    3. `status == ACTIVE ⇒ reserved_at is None`; `status == RESERVED
+       ⇒ reserved_at is not None`. Для `CLAIMED` / `REFUNDED` поле может
+       быть любым (зависит от пути в state-machine).
+    4. Status transition: `ACTIVE → RESERVED|REFUNDED`,
        `RESERVED → CLAIMED|REFUNDED`, `CLAIMED|REFUNDED` — terminal.
        Нарушение → `PrizeLotStatusTransitionError`.
 
-    Frozen + slots → агрегат без мутаций; `reserve()` / `claim(...)` /
+    Frozen + slots → агрегат без мутаций; `reserve(...)` / `claim(...)` /
     `refund()` возвращают новый инстанс (старый не мутируется).
     Convention идентична `domain/caravan/entities.py::Caravan.mark_*`.
     """
@@ -381,6 +394,7 @@ class PrizeLot:
     fee_buffer_native: FeeBufferAmount
     status: PrizeLotStatus
     created_at: datetime
+    reserved_at: datetime | None = None
     claimed_at: datetime | None = None
 
     def __post_init__(self) -> None:
@@ -401,6 +415,18 @@ class PrizeLot:
             raise ValueError(
                 "PrizeLot.created_at must be timezone-aware "
                 "(naïve datetime would lose UTC offset on persistence)",
+            )
+        if self.reserved_at is not None and self.reserved_at.tzinfo is None:
+            raise ValueError(
+                "PrizeLot.reserved_at must be timezone-aware",
+            )
+        if self.status is PrizeLotStatus.ACTIVE and self.reserved_at is not None:
+            raise ValueError(
+                f"PrizeLot(status=ACTIVE) must have reserved_at=None, got {self.reserved_at!r}",
+            )
+        if self.status is PrizeLotStatus.RESERVED and self.reserved_at is None:
+            raise ValueError(
+                "PrizeLot(status=RESERVED) requires reserved_at to be set",
             )
         if self.claimed_at is not None and self.claimed_at.tzinfo is None:
             raise ValueError(
@@ -445,6 +471,7 @@ class PrizeLot:
             fee_buffer_native=fee_buffer_native,
             status=PrizeLotStatus.ACTIVE,
             created_at=created_at,
+            reserved_at=None,
             claimed_at=None,
         )
 
@@ -472,15 +499,40 @@ class PrizeLot:
         """
         return self.amount_native - self.fee_buffer_native.value
 
-    def reserve(self) -> PrizeLot:
-        """Перевести `ACTIVE → RESERVED`. Невалидный source → ошибка.
+    def reserve(self, *, reserved_at: datetime) -> PrizeLot:
+        """Перевести `ACTIVE → RESERVED` с пометкой времени резервирования.
 
         Используется на доменном уровне для in-memory моделирования
         резервирования (например, в Fake-репозитории unit-тестов).
         В production-flow атомарность гарантируется SQL-репозиторием
         (`UPDATE ... WHERE status='active'`, шаг C.3).
+
+        `reserved_at` — TZ-aware момент резервирования (обычно
+        `IClock.now()` из use-case-а спина). D.9-flow использует
+        для expire-cron-а: если `now - reserved_at > reserved_ttl_seconds`
+        (баланс-конфиг D.9.a), лот возвращается в `REFUNDED` + сумма
+        в пул.
         """
-        return self._transition_to(PrizeLotStatus.RESERVED)
+        if reserved_at.tzinfo is None:
+            raise ValueError(
+                "PrizeLot.reserve(reserved_at=...) must be timezone-aware",
+            )
+        if self.status is not PrizeLotStatus.ACTIVE:
+            raise PrizeLotStatusTransitionError(
+                lot_id=self.id,
+                from_status=self.status,
+                to_status=PrizeLotStatus.RESERVED,
+            )
+        return PrizeLot(
+            id=self.id,
+            currency=self.currency,
+            amount_native=self.amount_native,
+            fee_buffer_native=self.fee_buffer_native,
+            status=PrizeLotStatus.RESERVED,
+            created_at=self.created_at,
+            reserved_at=reserved_at,
+            claimed_at=None,
+        )
 
     def claim(self, *, claimed_at: datetime) -> PrizeLot:
         """Перевести `RESERVED → CLAIMED` с пометкой времени выплаты.
@@ -505,6 +557,7 @@ class PrizeLot:
             fee_buffer_native=self.fee_buffer_native,
             status=PrizeLotStatus.CLAIMED,
             created_at=self.created_at,
+            reserved_at=self.reserved_at,
             claimed_at=claimed_at,
         )
 
@@ -536,5 +589,70 @@ class PrizeLot:
             fee_buffer_native=self.fee_buffer_native,
             status=new_status,
             created_at=self.created_at,
+            reserved_at=self.reserved_at,
             claimed_at=self.claimed_at,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class Wallet:
+    """Привязанный TON-кошелёк игрока (ГДД §12.6.4, Спринт 4.1-D).
+
+    Один игрок — один кошелёк per-currency (ГДД §12.6.5: «один
+    TG-аккаунт = один TON-адрес для выплат»). При повторной привязке
+    старый адрес заменяется (use-case ``LinkWallet``).
+
+    Поля:
+
+    * ``player_id: int`` — id игрока (FK → ``users.id``). ``> 0``.
+    * ``address: str`` — строковый адрес кошелька. Конкретный
+      формат зависит от ``currency``:
+
+      - ``Currency.TON_NANO`` → raw / user-friendly TON-address
+        (валидируется через ``TonAddress`` VO);
+      - ``Currency.USDT_DECIMAL`` → raw / user-friendly TON-address
+        (jetton-кошелёк; валидируется через ``UsdtJettonAddress`` VO);
+      - ``Currency.STARS`` → не требуется (выплата Stars идёт через
+        Telegram Bot API ``payments.refund`` на tg_id игрока;
+        ``LinkWallet`` для Stars — `ValueError`).
+
+    * ``currency: Currency`` — к какой валюте привязан адрес.
+    * ``linked_at: datetime`` — TZ-aware момент привязки.
+
+    Frozen + slots → VO / entity без мутаций. Identity на уровне
+    домена — ``(player_id, currency)``. ``address`` может измениться
+    при повторной привязке (``LinkWallet`` делает ``add_or_replace``).
+    """
+
+    player_id: int
+    address: str
+    currency: Currency
+    linked_at: datetime
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.player_id, int) or isinstance(self.player_id, bool):
+            raise TypeError(
+                f"Wallet.player_id must be int, got {type(self.player_id).__name__}",
+            )
+        if self.player_id <= 0:
+            raise ValueError(
+                f"Wallet.player_id must be > 0, got {self.player_id}",
+            )
+        if not isinstance(self.address, str) or not self.address:
+            raise ValueError(
+                "Wallet.address must be a non-empty str",
+            )
+        if self.currency is Currency.STARS:
+            raise ValueError(
+                "Wallet does not support Currency.STARS — Stars payouts "
+                "go through Telegram Bot API refund, no wallet needed",
+            )
+        if self.currency is Currency.TON_NANO:
+            TonAddress(self.address)
+        elif self.currency is Currency.USDT_DECIMAL:
+            UsdtJettonAddress(self.address)
+        if self.linked_at.tzinfo is None:
+            raise ValueError(
+                "Wallet.linked_at must be timezone-aware "
+                "(naïve datetime would lose UTC offset on persistence)",
+            )

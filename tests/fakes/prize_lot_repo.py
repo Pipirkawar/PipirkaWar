@@ -53,7 +53,7 @@ class FakePrizeLotRepository(IPrizeLotRepository):
     _storage: dict[int, PrizeLot] = field(default_factory=dict)
     _next_id: int = 1
     add_calls: list[PrizeLot] = field(default_factory=list)
-    update_status_calls: list[tuple[int, PrizeLotStatus, datetime | None]] = field(
+    update_status_calls: list[tuple[int, PrizeLotStatus, datetime | None, datetime | None]] = field(
         default_factory=list
     )
     # C.6.d test hook: при `True` `update_status` **до** изменения хранилища
@@ -91,10 +91,11 @@ class FakePrizeLotRepository(IPrizeLotRepository):
         *,
         lot_id: int,
         new_status: PrizeLotStatus,
+        reserved_at: datetime | None = None,
         claimed_at: datetime | None = None,
     ) -> PrizeLot:
         """Перевести лот в `new_status`, делегируя домену state-machine."""
-        self.update_status_calls.append((lot_id, new_status, claimed_at))
+        self.update_status_calls.append((lot_id, new_status, reserved_at, claimed_at))
         current = self._storage.get(lot_id)
         if current is None:
             raise PrizeLotNotFoundError(lot_id=lot_id)
@@ -106,7 +107,12 @@ class FakePrizeLotRepository(IPrizeLotRepository):
             )
 
         if new_status is PrizeLotStatus.RESERVED:
-            updated = current.reserve()
+            if reserved_at is None:
+                raise ValueError(
+                    "FakePrizeLotRepository.update_status: reserved_at is "
+                    "required for RESERVED transition"
+                )
+            updated = current.reserve(reserved_at=reserved_at)
         elif new_status is PrizeLotStatus.CLAIMED:
             if claimed_at is None:
                 raise ValueError(
@@ -123,3 +129,32 @@ class FakePrizeLotRepository(IPrizeLotRepository):
 
         self._storage[lot_id] = updated
         return updated
+
+    async def list_expired_reserved(
+        self,
+        *,
+        currency: Currency,
+        expired_before: datetime,
+        limit: int = 100,
+    ) -> Sequence[PrizeLot]:
+        """Все `RESERVED`-лоты `currency` с `reserved_at <= expired_before`.
+
+        Порядок — `ORDER BY reserved_at ASC, id ASC` (самые старые вперёд).
+        `limit` обрезает результат после сортировки.
+        """
+        candidates = [
+            lot
+            for lot in self._storage.values()
+            if lot.currency is currency
+            and lot.status is PrizeLotStatus.RESERVED
+            and lot.reserved_at is not None
+            and lot.reserved_at <= expired_before
+        ]
+
+        def _sort_key(lot: PrizeLot) -> tuple[datetime, int]:
+            assert lot.reserved_at is not None  # filtered above
+            assert lot.id is not None  # add(...) assigns id before storage
+            return (lot.reserved_at, lot.id)
+
+        candidates.sort(key=_sort_key)
+        return tuple(candidates[:limit])

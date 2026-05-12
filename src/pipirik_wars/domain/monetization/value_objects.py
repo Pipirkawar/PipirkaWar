@@ -38,9 +38,12 @@ __all__ = [
     "FeeBufferAmount",
     "IdempotencyKey",
     "StarsAmount",
+    "StarsPayload",
     "StarsPoolBalance",
+    "TonAddress",
     "TonNanoAmount",
     "UsdtDecimalAmount",
+    "UsdtJettonAddress",
 ]
 
 
@@ -239,4 +242,132 @@ class IdempotencyKey:
         if not _IDEMPOTENCY_KEY_RE.fullmatch(self.value):
             raise ValueError(
                 f"IdempotencyKey.value must match [A-Za-z0-9_-:]{{1,64}}, got {self.value!r}",
+            )
+
+
+# ---------------------------------------------------------------------------
+# TON-адреса  (ГДД §12.6.4, Спринт 4.1-D)
+# ---------------------------------------------------------------------------
+
+# User-friendly TON-address: 48 base64url characters (0:[32 bytes hex] raw
+# form is 66 chars, but user-friendly is always 48 chars base64url, starting
+# with 'E' / 'U' / '0' etc.).  We accept both raw (`0:hex{64}`) and
+# user-friendly (48-char base64url) formats.
+_TON_RAW_RE: re.Pattern[str] = re.compile(r"^-?[0-9]+:[0-9a-fA-F]{64}$")
+_TON_FRIENDLY_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_\-+/]{48}$")
+
+
+@dataclass(frozen=True, slots=True)
+class TonAddress:
+    """Адрес TON-кошелька игрока (ГДД §12.6.4, Спринт 4.1-D).
+
+    Принимает два формата:
+    * Raw — ``<workchain>:<hex64>`` (e.g. ``0:abcdef...``);
+    * User-friendly — 48-символьный base64url (e.g.
+      ``EQD...``).
+
+    Frozen + slots → VO без identity, hashable, безопасно сравнивать ``==``.
+    """
+
+    value: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, str):
+            raise TypeError(
+                f"TonAddress.value must be str, got {type(self.value).__name__}",
+            )
+        if not (_TON_RAW_RE.fullmatch(self.value) or _TON_FRIENDLY_RE.fullmatch(self.value)):
+            raise ValueError(
+                f"TonAddress.value must be a valid TON address "
+                f"(raw or user-friendly), got {self.value!r}",
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class UsdtJettonAddress:
+    """Адрес USDT-jetton-кошелька на сети TON (ГДД §12.6.4, Спринт 4.1-D).
+
+    Формат идентичен ``TonAddress`` (USDT на TON — это jetton, кошелёк
+    которого адресуется стандартным TON-адресом). Отдельный VO для
+    type-safety: caller не может случайно подставить ``TonAddress``
+    вместо ``UsdtJettonAddress`` (Liskov violation предотвращён).
+
+    Frozen + slots → VO без identity, hashable, безопасно сравнивать ``==``.
+    """
+
+    value: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, str):
+            raise TypeError(
+                f"UsdtJettonAddress.value must be str, got {type(self.value).__name__}",
+            )
+        if not (_TON_RAW_RE.fullmatch(self.value) or _TON_FRIENDLY_RE.fullmatch(self.value)):
+            raise ValueError(
+                f"UsdtJettonAddress.value must be a valid TON address "
+                f"(raw or user-friendly), got {self.value!r}",
+            )
+
+
+# ---------------------------------------------------------------------------
+# Telegram Stars signed payload  (4.1-A handler выводится в продакшн в 4.1-D, шаг D.8)
+# ---------------------------------------------------------------------------
+
+# `idempotency_seed` — серверный nonce, зашитый в `invoice_payload` при
+# `bot.send_invoice(...)`. На `successful_payment` верификатор проверяет
+# HMAC и возвращает `StarsPayload(pack, idempotency_seed)`; use-case строит
+# `IdempotencyKey` из `(player_id, telegram_payment_charge_id)` и сверяет
+# `idempotency_seed` как часть антифрод-валидации. Длина 16-32 символа
+# (достаточно энтропии, помещается в 128-байтовый лимит invoice_payload
+# вместе с pack-meta и HMAC).
+_IDEMPOTENCY_SEED_RE: re.Pattern[str] = re.compile(r"^[A-Za-z0-9_\-]{16,32}$")
+
+
+@dataclass(frozen=True, slots=True)
+class StarsPayload:
+    """Декодированный и проверенный invoice-payload TG Stars (4.1-D, шаг D.8).
+
+    Skeleton-handler 4.1-A принимал «голый» `invoice_payload` строкой
+    (формат `paid_roulette:<pack>`) и доверял Telegram-callback-у без
+    серверной верификации. В продакшне (шаг D.8) сервер подписывает
+    payload HMAC-SHA256-ом по `(provider_id, idempotency_key, amount,
+    currency)`, что закрывает подмену payload-а между созданием invoice-а
+    и приёмом `successful_payment` (детали — `ITgStarsPayloadVerifier`).
+
+    `StarsPayload` — результат успешной верификации:
+
+    * `pack_value: str` — машинный id `PaidRoulettePack` (`single` /
+      `pack_10`). Хранится строкой (а не `PaidRoulettePack`-enum-ом),
+      чтобы доменный пакет монетизации не зависел от
+      application-слоя (`PaidRoulettePack` живёт в
+      `pipirik_wars.application.monetization`); caller (handler 4.1-A)
+      сам мапит строку в enum.
+    * `idempotency_seed: str` — серверный nonce, зашитый в `invoice_payload`
+      при создании invoice-а. `[A-Za-z0-9_-]{16,32}`. Verifier обязан
+      сверить HMAC поверх `seed`-а; use-case дополнительно использует
+      `seed` как часть scope-а audit-payload-а (debug-trace «какой
+      invoice сработал»).
+
+    Frozen + slots → VO без identity, hashable, безопасно сравнивать ``==``.
+    """
+
+    pack_value: str
+    idempotency_seed: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.pack_value, str):
+            raise TypeError(
+                f"StarsPayload.pack_value must be str, got {type(self.pack_value).__name__}",
+            )
+        if not self.pack_value:
+            raise ValueError("StarsPayload.pack_value must be non-empty")
+        if not isinstance(self.idempotency_seed, str):
+            raise TypeError(
+                "StarsPayload.idempotency_seed must be str, "
+                f"got {type(self.idempotency_seed).__name__}",
+            )
+        if not _IDEMPOTENCY_SEED_RE.fullmatch(self.idempotency_seed):
+            raise ValueError(
+                "StarsPayload.idempotency_seed must match "
+                f"[A-Za-z0-9_-]{{16,32}}, got {self.idempotency_seed!r}",
             )

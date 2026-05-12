@@ -235,6 +235,7 @@ class TestListActive:
             await repo.update_status(
                 lot_id=to_reserve.id,
                 new_status=PrizeLotStatus.RESERVED,
+                reserved_at=NOW,
             )
             await repo.update_status(
                 lot_id=to_refund.id,
@@ -279,11 +280,14 @@ class TestUpdateStatus:
             saved = await repo.add(lot=_fresh_lot())
             assert saved.id is not None
 
+            reserved_at = NOW + timedelta(seconds=42)
             reserved = await repo.update_status(
                 lot_id=saved.id,
                 new_status=PrizeLotStatus.RESERVED,
+                reserved_at=reserved_at,
             )
             assert reserved.status is PrizeLotStatus.RESERVED
+            assert reserved.reserved_at == reserved_at
             assert reserved.claimed_at is None
 
             claimed_at = NOW + timedelta(minutes=5)
@@ -323,12 +327,15 @@ class TestUpdateStatus:
             await repo.update_status(
                 lot_id=saved.id,
                 new_status=PrizeLotStatus.RESERVED,
+                reserved_at=NOW,
             )
             refunded = await repo.update_status(
                 lot_id=saved.id,
                 new_status=PrizeLotStatus.REFUNDED,
             )
         assert refunded.status is PrizeLotStatus.REFUNDED
+        # `reserved_at` сохранён после RESERVED → REFUNDED (нужно для аудита)
+        assert refunded.reserved_at == NOW
 
     @pytest.mark.asyncio
     async def test_double_reserve_raises_transition_error(
@@ -343,11 +350,13 @@ class TestUpdateStatus:
             await repo.update_status(
                 lot_id=saved.id,
                 new_status=PrizeLotStatus.RESERVED,
+                reserved_at=NOW,
             )
             with pytest.raises(PrizeLotStatusTransitionError) as exc_info:
                 await repo.update_status(
                     lot_id=saved.id,
                     new_status=PrizeLotStatus.RESERVED,
+                    reserved_at=NOW,
                 )
         assert exc_info.value.lot_id == saved.id
         assert exc_info.value.from_status is PrizeLotStatus.RESERVED
@@ -405,6 +414,7 @@ class TestUpdateStatus:
                 await repo.update_status(
                     lot_id=999_999,
                     new_status=PrizeLotStatus.RESERVED,
+                    reserved_at=NOW,
                 )
         assert exc_info.value.lot_id == 999_999
 
@@ -435,6 +445,7 @@ class TestUpdateStatus:
             await repo.update_status(
                 lot_id=saved.id,
                 new_status=PrizeLotStatus.RESERVED,
+                reserved_at=NOW,
             )
             with pytest.raises(ValueError, match="claimed_at is required for CLAIMED"):
                 await repo.update_status(
@@ -455,6 +466,7 @@ class TestUpdateStatus:
                 await repo.update_status(
                     lot_id=saved.id,
                     new_status=PrizeLotStatus.RESERVED,
+                    reserved_at=NOW,
                     claimed_at=NOW,
                 )
 
@@ -592,3 +604,291 @@ class TestDbInvariants:
                         claimed_at=NOW,
                     ),
                 )
+
+    @pytest.mark.asyncio
+    async def test_active_with_reserved_at_violates_check(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """D.9.b: `status='active' AND reserved_at IS NOT NULL` запрещено."""
+        async with uow:
+            with pytest.raises(IntegrityError):
+                await uow.session.execute(
+                    insert(PrizeLotORM).values(
+                        currency="usdt_decimal",
+                        amount_native=Decimal(1_000_000),
+                        fee_buffer_native=Decimal(100_000),
+                        status="active",
+                        created_at=NOW,
+                        reserved_at=NOW,
+                        claimed_at=None,
+                    ),
+                )
+
+    @pytest.mark.asyncio
+    async def test_reserved_without_reserved_at_violates_check(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """D.9.b: `status='reserved' AND reserved_at IS NULL` запрещено."""
+        async with uow:
+            with pytest.raises(IntegrityError):
+                await uow.session.execute(
+                    insert(PrizeLotORM).values(
+                        currency="usdt_decimal",
+                        amount_native=Decimal(1_000_000),
+                        fee_buffer_native=Decimal(100_000),
+                        status="reserved",
+                        created_at=NOW,
+                        reserved_at=None,
+                        claimed_at=None,
+                    ),
+                )
+
+
+# --------------------------------------------------------------------------- #
+# list_expired_reserved(...) — refund-cron-обход (D.9.b)
+# --------------------------------------------------------------------------- #
+
+
+class TestListExpiredReserved:
+    """`IPrizeLotRepository.list_expired_reserved(...)` (D.9.b).
+
+    Используется expire-cron-ом `ExpireReservedPrizeLots` (D.9.c) для
+    обнаружения RESERVED-лотов с истёкшим TTL и возврата их в пул.
+    """
+
+    @pytest.mark.asyncio
+    async def test_empty_when_no_reserved_lots(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = _make_repo(uow)
+        async with uow:
+            # есть ACTIVE и REFUNDED — но нет RESERVED
+            await repo.add(lot=_fresh_lot())
+            refunded = await repo.add(lot=_fresh_lot(amount_native=2_000_000))
+            assert refunded.id is not None
+            await repo.update_status(
+                lot_id=refunded.id,
+                new_status=PrizeLotStatus.REFUNDED,
+            )
+
+        async with uow:
+            result = await repo.list_expired_reserved(
+                currency=Currency.USDT_DECIMAL,
+                expired_before=NOW + timedelta(hours=1),
+            )
+        assert result == ()
+
+    @pytest.mark.asyncio
+    async def test_returns_only_expired_reserved_lots(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """Возвращает только лоты с `reserved_at <= expired_before`."""
+        repo = _make_repo(uow)
+        cutoff = NOW + timedelta(hours=2)
+        async with uow:
+            stale = await repo.add(lot=_fresh_lot(amount_native=1_000_000))
+            fresh = await repo.add(lot=_fresh_lot(amount_native=2_000_000))
+            assert stale.id is not None
+            assert fresh.id is not None
+            # stale зарезервирован задолго до cutoff
+            await repo.update_status(
+                lot_id=stale.id,
+                new_status=PrizeLotStatus.RESERVED,
+                reserved_at=NOW,
+            )
+            # fresh зарезервирован после cutoff — не должен попасть в выдачу
+            await repo.update_status(
+                lot_id=fresh.id,
+                new_status=PrizeLotStatus.RESERVED,
+                reserved_at=cutoff + timedelta(seconds=1),
+            )
+
+        async with uow:
+            result = await repo.list_expired_reserved(
+                currency=Currency.USDT_DECIMAL,
+                expired_before=cutoff,
+            )
+        assert [lot.id for lot in result] == [stale.id]
+
+    @pytest.mark.asyncio
+    async def test_filters_by_currency(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """Возвращает лоты только запрошенной `currency`."""
+        repo = _make_repo(uow)
+        async with uow:
+            usdt = await repo.add(lot=_fresh_lot(currency=Currency.USDT_DECIMAL))
+            ton = await repo.add(
+                lot=_fresh_lot(
+                    currency=Currency.TON_NANO,
+                    amount_native=2_000_000_000,
+                    fee_buffer_native=10_000_000,
+                )
+            )
+            assert usdt.id is not None
+            assert ton.id is not None
+            await repo.update_status(
+                lot_id=usdt.id,
+                new_status=PrizeLotStatus.RESERVED,
+                reserved_at=NOW,
+            )
+            await repo.update_status(
+                lot_id=ton.id,
+                new_status=PrizeLotStatus.RESERVED,
+                reserved_at=NOW,
+            )
+
+        cutoff = NOW + timedelta(hours=1)
+        async with uow:
+            usdt_result = await repo.list_expired_reserved(
+                currency=Currency.USDT_DECIMAL,
+                expired_before=cutoff,
+            )
+            ton_result = await repo.list_expired_reserved(
+                currency=Currency.TON_NANO,
+                expired_before=cutoff,
+            )
+        assert [lot.id for lot in usdt_result] == [usdt.id]
+        assert [lot.id for lot in ton_result] == [ton.id]
+
+    @pytest.mark.asyncio
+    async def test_excludes_non_reserved_statuses(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """`ACTIVE` / `CLAIMED` / `REFUNDED` исключены даже при `reserved_at <= cutoff`."""
+        repo = _make_repo(uow)
+        async with uow:
+            active = await repo.add(lot=_fresh_lot(amount_native=1_000_000))
+            claimed_lot = await repo.add(lot=_fresh_lot(amount_native=2_000_000))
+            refunded = await repo.add(lot=_fresh_lot(amount_native=3_000_000))
+            reserved = await repo.add(lot=_fresh_lot(amount_native=4_000_000))
+            assert active.id is not None
+            assert claimed_lot.id is not None
+            assert refunded.id is not None
+            assert reserved.id is not None
+            # claimed: ACTIVE → RESERVED → CLAIMED (reserved_at сохранён)
+            await repo.update_status(
+                lot_id=claimed_lot.id,
+                new_status=PrizeLotStatus.RESERVED,
+                reserved_at=NOW,
+            )
+            await repo.update_status(
+                lot_id=claimed_lot.id,
+                new_status=PrizeLotStatus.CLAIMED,
+                claimed_at=NOW + timedelta(minutes=5),
+            )
+            # refunded: ACTIVE → REFUNDED (reserved_at=None)
+            await repo.update_status(
+                lot_id=refunded.id,
+                new_status=PrizeLotStatus.REFUNDED,
+            )
+            # reserved
+            await repo.update_status(
+                lot_id=reserved.id,
+                new_status=PrizeLotStatus.RESERVED,
+                reserved_at=NOW,
+            )
+
+        async with uow:
+            result = await repo.list_expired_reserved(
+                currency=Currency.USDT_DECIMAL,
+                expired_before=NOW + timedelta(hours=1),
+            )
+        assert [lot.id for lot in result] == [reserved.id]
+
+    @pytest.mark.asyncio
+    async def test_orders_by_reserved_at_ascending(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """Лоты сортируются по `reserved_at ASC` (самые старые вперёд)."""
+        repo = _make_repo(uow)
+        async with uow:
+            first = await repo.add(lot=_fresh_lot(amount_native=1_000_000))
+            second = await repo.add(lot=_fresh_lot(amount_native=2_000_000))
+            third = await repo.add(lot=_fresh_lot(amount_native=3_000_000))
+            assert first.id is not None
+            assert second.id is not None
+            assert third.id is not None
+            # Намеренно резервируем в обратном порядке
+            await repo.update_status(
+                lot_id=third.id,
+                new_status=PrizeLotStatus.RESERVED,
+                reserved_at=NOW + timedelta(minutes=30),
+            )
+            await repo.update_status(
+                lot_id=first.id,
+                new_status=PrizeLotStatus.RESERVED,
+                reserved_at=NOW,
+            )
+            await repo.update_status(
+                lot_id=second.id,
+                new_status=PrizeLotStatus.RESERVED,
+                reserved_at=NOW + timedelta(minutes=15),
+            )
+
+        async with uow:
+            result = await repo.list_expired_reserved(
+                currency=Currency.USDT_DECIMAL,
+                expired_before=NOW + timedelta(hours=1),
+            )
+        assert [lot.id for lot in result] == [first.id, second.id, third.id]
+
+    @pytest.mark.asyncio
+    async def test_limit_truncates_result(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """`limit` обрезает результат после сортировки."""
+        repo = _make_repo(uow)
+        async with uow:
+            lots: list[PrizeLot] = []
+            for i in range(5):
+                lot = await repo.add(
+                    lot=_fresh_lot(amount_native=1_000_000 + i),
+                )
+                assert lot.id is not None
+                lots.append(lot)
+                await repo.update_status(
+                    lot_id=lot.id,
+                    new_status=PrizeLotStatus.RESERVED,
+                    reserved_at=NOW + timedelta(minutes=i),
+                )
+
+        async with uow:
+            result = await repo.list_expired_reserved(
+                currency=Currency.USDT_DECIMAL,
+                expired_before=NOW + timedelta(hours=1),
+                limit=2,
+            )
+        assert [lot.id for lot in result] == [lots[0].id, lots[1].id]
+
+    @pytest.mark.asyncio
+    async def test_inclusive_cutoff_boundary(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        """`reserved_at == expired_before` включается в выдачу (`<=` cutoff)."""
+        repo = _make_repo(uow)
+        cutoff = NOW + timedelta(hours=1)
+        async with uow:
+            lot = await repo.add(lot=_fresh_lot())
+            assert lot.id is not None
+            await repo.update_status(
+                lot_id=lot.id,
+                new_status=PrizeLotStatus.RESERVED,
+                reserved_at=cutoff,
+            )
+
+        async with uow:
+            result = await repo.list_expired_reserved(
+                currency=Currency.USDT_DECIMAL,
+                expired_before=cutoff,
+            )
+        assert [lot.id for lot in result] == [lot.id]

@@ -614,9 +614,9 @@ class TestCryptoPoolDrainage:
         spin_audit = next(e for e in audit.entries if e.action is AuditAction.ROULETTE_SPIN)
         assert spin_audit.after is not None
         assert spin_audit.after["lot_id"] == stored.id
-        # C.6.c: резервирование вызвано один раз с (lot_id, RESERVED).
+        # C.6.c: резервирование вызвано один раз с (lot_id, RESERVED, reserved_at).
         assert prize_lots.update_status_calls == [
-            (stored.id, PrizeLotStatus.RESERVED, None),
+            (stored.id, PrizeLotStatus.RESERVED, _NOW, None),
         ]
         # spin записан в event-log с CRYPTO_LOT-исходом.
         assert len(spins.rows) == 1
@@ -663,7 +663,7 @@ class TestCryptoPoolDrainage:
         assert result.outcome is not None
         assert result.outcome.kind is RouletteOutcomeKind.CRYPTO_LOT
         assert prize_lots.update_status_calls == [
-            (stored.id, PrizeLotStatus.RESERVED, None),
+            (stored.id, PrizeLotStatus.RESERVED, _NOW, None),
         ]
         reserved = await prize_lots.get_by_id(lot_id=stored.id or 0)
         assert reserved is not None

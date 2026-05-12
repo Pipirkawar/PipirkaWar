@@ -45,17 +45,24 @@
 
 `successful_payment`-handler (Telegram-payment подтверждён):
 
-1. Парсит `invoice_payload` → `PaidRoulettePack`.
-2. Строит `idempotency_key = f"paid_roulette:{player_id}:{tg_payment_charge_id}"`
+1. **HMAC-верификация invoice_payload-а через `ITgStarsPayloadVerifier`
+   (D.8.c).** `verifier.verify(raw_payload, provider_payment_id,
+   amount_native, currency)` подтверждает, что payload подписан
+   нашим секретом и не был подменён между `bot.send_invoice(...)` и
+   `successful_payment`-callback-ом. На `InvalidStarsPayloadError`
+   — structured-log + `payment_invalid`-карточка + return (платёж
+   уже списан Telegram-ом; refund — задача админ-команды в 4.1-E).
+2. Маппит `verified.pack_value` обратно в `PaidRoulettePack`.
+3. Строит `idempotency_key = f"paid_roulette:{player_id}:{tg_payment_charge_id}"`
    (стабильный id платежа от Telegram гарантирует идемпотентность —
    повторный callback с тем же id не проведёт двойного списания).
-3. Зовёт `SpinPaidRoulette.execute(SpinPaidRouletteCommand(...))`.
-4. Маппинг исходов:
+4. Зовёт `SpinPaidRoulette.execute(SpinPaidRouletteCommand(...))`.
+5. Маппинг исходов:
    - `idempotent=True` → `result_idempotent` карточка + toast
      `toast_already_processed`.
    - `outcomes=...` → `render_result(result)` карточка + toast
      `toast_payment_ok`.
-5. Маппинг доменных ошибок:
+6. Маппинг доменных ошибок:
    - `RouletteThicknessGateError` → toast + `requirement_thickness`
      карточка (handler-pre-check мог пропустить, если YAML был
      hot-reload-нут между показом prompt-а и оплатой). `payments`-row
@@ -63,39 +70,64 @@
    - `PlayerNotFoundError` → `not_registered` (race с unregister-ом;
      платёж в БД остаётся).
    - Любая другая ошибка — toast `toast_error`, текст не правится.
+
+buy-callback (D.8.c):
+
+С D.8.c invoice_payload подписывается server-side через
+`ITgStarsPayloadVerifier.serialize(pack_value, idempotency_seed,
+amount_native, currency)`. `idempotency_seed` — свежий 24-символьный
+nonce из `secrets.token_urlsafe(...)`. Подписанный payload отдаётся
+в `bot.send_invoice(payload=...)` — Telegram возвращает его обратно
+в `successful_payment`-callback-е, где он проходит HMAC-верификацию.
 """
 
 from __future__ import annotations
 
 import logging
+import secrets
 from typing import Final
 
 from aiogram import Bot, F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message, PreCheckoutQuery
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message, PreCheckoutQuery
 
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.application.monetization import (
     PaidRoulettePack,
     SpinPaidRoulette,
     SpinPaidRouletteCommand,
+    SpinPaidRouletteResult,
 )
 from pipirik_wars.application.player import GetProfile
+from pipirik_wars.bot.handlers.claim_prize import (
+    build_claim_prize_keyboard,
+    build_claim_prize_keyboard_multi,
+)
 from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters import (
     TG_STARS_CURRENCY,
     RoulettePaidPresenter,
-    invoice_payload_for,
     parse_invoice_payload,
     parse_roulette_paid_callback_data,
 )
 from pipirik_wars.domain.balance.ports import IBalanceConfig
-from pipirik_wars.domain.monetization import IdempotencyKey
+from pipirik_wars.domain.monetization import (
+    Currency,
+    IdempotencyKey,
+    InvalidStarsPayloadError,
+    ITgStarsPayloadVerifier,
+)
 from pipirik_wars.domain.player import PlayerNotFoundError
-from pipirik_wars.domain.roulette import RouletteThicknessGateError
+from pipirik_wars.domain.roulette import RouletteOutcomeKind, RouletteThicknessGateError
 
 router = Router(name="roulette_paid")
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
+
+# Длина `idempotency_seed`-нонса (24 символа url-safe base64) — в пределах
+# инварианта `StarsPayload.idempotency_seed` (16–32 символа
+# `[A-Za-z0-9_-]`). `secrets.token_urlsafe(18)` возвращает 24 символа
+# url-safe base64 без паддинга (18 байт = 144 бита энтропии).
+_IDEMPOTENCY_SEED_BYTES: Final[int] = 18
 
 
 @router.message(Command("roulette_paid"))
@@ -173,13 +205,17 @@ async def handle_roulette_paid_buy(
     bot: Bot,
     balance: IBalanceConfig,
     bundle: IMessageBundle,
+    tg_stars_verifier: ITgStarsPayloadVerifier,
     locale: Locale | None = None,
 ) -> None:
     """Обработчик инлайн-кнопок `[Купить ...]` под `/roulette_paid`.
 
     На клик отправляет invoice через `bot.send_invoice(...)` и снимает
-    клавиатуру pre-spin карточки. Сам spin / charge выполняется
-    позже — после `successful_payment`-callback-а.
+    клавиатуру pre-spin карточки. С D.8.c invoice_payload подписывается
+    server-side через `tg_stars_verifier.serialize(...)` — это даёт
+    HMAC-защиту от подмены payload-а между send_invoice и
+    successful_payment. Сам spin / charge выполняется позже —
+    после `successful_payment`-callback-а.
     """
     if tg_identity is None or callback.data is None or callback.message is None:
         return
@@ -225,7 +261,17 @@ async def handle_roulette_paid_buy(
         pack = PaidRoulettePack.PACK_10
         cost_stars = paid_cfg.cost_stars_pack10
 
-    payload = invoice_payload_for(pack)
+    # D.8.c: подписанный invoice_payload через HMAC-SHA256 поверх
+    # `(version|pack_value|idempotency_seed|amount_native|currency)`-
+    # контекста. Свежий `idempotency_seed` на каждый invoice
+    # блокирует реплей-атаки по старым payload-ам.
+    idempotency_seed = secrets.token_urlsafe(_IDEMPOTENCY_SEED_BYTES)
+    payload = tg_stars_verifier.serialize(
+        pack_value=pack.value,
+        idempotency_seed=idempotency_seed,
+        amount_native=cost_stars,
+        currency=Currency.STARS,
+    )
 
     # Снимаем клавиатуру до отправки invoice-а — один pre-spin → одна
     # попытка оплаты. Повторный клик после снятия клавиатуры невозможен.
@@ -336,12 +382,13 @@ async def handle_pre_checkout_query(
 
 
 @router.message(F.successful_payment)
-async def handle_successful_payment(
+async def handle_successful_payment(  # noqa: PLR0911 — handler-state-machine с 8 ранне-возвращающими guard-ами
     message: Message,
     tg_identity: TgIdentity | None,
     get_profile: GetProfile,
     spin_paid_roulette: SpinPaidRoulette,
     bundle: IMessageBundle,
+    tg_stars_verifier: ITgStarsPayloadVerifier,
     locale: Locale | None = None,
 ) -> None:
     """`successful_payment`-handler — фактический spin после подтверждения платежа.
@@ -349,14 +396,21 @@ async def handle_successful_payment(
     Telegram присылает этот update только после успешного списания
     Stars (после `pre_checkout_query` с `ok=True`). Здесь мы:
 
-    1. Парсим `invoice_payload` → `PaidRoulettePack`.
-    2. Строим `idempotency_key` из `telegram_payment_charge_id`.
-    3. Зовём `SpinPaidRoulette.execute(...)`.
-    4. Рендерим результат в чат игрока.
+    1. **HMAC-верификация `invoice_payload`-а** через `ITgStarsPayloadVerifier`
+       (D.8.c). Проверяет, что payload подписан нашим секретом
+       и не был подменён между send_invoice и successful_payment.
+    2. На `InvalidStarsPayloadError` — structured-log + `payment_invalid`-
+       карточка + return. Платёж уже списан Telegram-ом
+       (`pre_checkout_query` вернул `ok=True`); spin НЕ проводим
+       — refund-flow задача админ-команды 4.1-E.
+    3. Маппим `verified.pack_value` обратно в `PaidRoulettePack`.
+    4. Строим `idempotency_key` из `telegram_payment_charge_id`.
+    5. Зовём `SpinPaidRoulette.execute(...)`.
+    6. Рендерим результат в чат игрока.
 
     Если этот handler ловит `successful_payment`, **не относящийся** к
     нашей рулетке (другой invoice-ный payload-формат) — мы тихо игнорим
-    (фильтруем по prefix-у `paid_roulette:`). Это даёт безопасный coexist
+    (фильтруем по prefix-у парсера). Это даёт безопасный coexist
     с другими invoice-flow в Спринтах 4.1-D / 4.1-E.
     """
     payment = message.successful_payment
@@ -366,12 +420,69 @@ async def handle_successful_payment(
     presenter = RoulettePaidPresenter(bundle=bundle)
     effective_locale = locale or DEFAULT_LOCALE
 
+    # Префикс-фильтр: foreign `successful_payment` (другой invoice-flow
+    # из 4.1-D или позже) — тихо игнорим, не вовлекая verifier.
+    # Это привязывает verifier-верификацию к payload-ам, которые
+    # мы ждём (легаси или v1), и оставляет поле для параллельных
+    # flow-ов (TON / USDT / etc.) без false-positive-отказов.
     try:
-        pack = parse_invoice_payload(payment.invoice_payload)
+        pack_legacy_or_v1 = parse_invoice_payload(payment.invoice_payload)
     except ValueError:
         # `successful_payment` от другой invoice-flow — не наш payload.
         # Не трогаем платёж и не пишем в чат.
         return
+
+    # D.8.c: HMAC-верификация payload-а. Проверяется подпись
+    # поверх `(version|pack|seed|amount|currency)`-контекста.
+    # `verify(...)` также откажет легаси-v0-payload-у (`reason="malformed"`)
+    # — это ожидаемо и безопасно (после D.8.c все новые invoice-ы
+    # подписаны; legacy-payload-ы в wild-м теоретически могут прийти
+    # только от игроков, кто накликал invoice до релиза D.8.c и не
+    # оплатил до него).
+    try:
+        verified = tg_stars_verifier.verify(
+            raw_payload=payment.invoice_payload,
+            provider_payment_id=payment.telegram_payment_charge_id,
+            amount_native=payment.total_amount,
+            currency=Currency.STARS,
+        )
+    except InvalidStarsPayloadError as exc:
+        _LOGGER.warning(
+            "roulette_paid.successful_payment: invalid invoice_payload",
+            extra={
+                "tg_id": tg_identity.tg_user_id,
+                "tg_payment_charge_id": payment.telegram_payment_charge_id,
+                "reason": exc.reason,
+                "payload_len": exc.payload_len,
+            },
+        )
+        await message.answer(presenter.payment_invalid(locale=effective_locale))
+        return
+
+    # Маппим верифицированный `pack_value` обратно в `PaidRoulettePack`.
+    # На данный момент verifier уже валидировал VO-инварианты
+    # (непустота, доп. символы), но не знает про набор
+    # `PaidRoulettePack`-энумов. Если подписанный pack_value не входит
+    # в энум (сверх-редкий случай: invoice выдан старым кодом, где был
+    # другой pack-enum) — отказываемся как от обычного провала.
+    try:
+        pack = PaidRoulettePack(verified.pack_value)
+    except ValueError:
+        _LOGGER.warning(
+            "roulette_paid.successful_payment: verified pack_value not in enum",
+            extra={
+                "tg_id": tg_identity.tg_user_id,
+                "tg_payment_charge_id": payment.telegram_payment_charge_id,
+                "pack_value": verified.pack_value,
+            },
+        )
+        await message.answer(presenter.payment_invalid(locale=effective_locale))
+        return
+
+    # `pack_legacy_or_v1` используется лишь как foreign-payload-фильтр
+    # (выше). После успешного verify(...) берём `pack` из подписанного
+    # payload-а. Они должны совпадать (parse берёт parts[1], verifier тоже).
+    assert pack is pack_legacy_or_v1, "pack mismatch between parse and verify"
 
     view = await get_profile.execute(tg_id=tg_identity.tg_user_id)
     if view is None:
@@ -415,9 +526,34 @@ async def handle_successful_payment(
         await message.answer(presenter.toast_error(locale=effective_locale))
         return
 
-    await message.answer(
-        presenter.render_result(result=result, locale=effective_locale),
-    )
+    result_text = presenter.render_result(result=result, locale=effective_locale)
+    reply_markup = _build_crypto_keyboard(result, effective_locale, bundle)
+    if reply_markup is not None:
+        await message.answer(result_text, reply_markup=reply_markup)
+    else:
+        await message.answer(result_text)
+
+
+def _build_crypto_keyboard(
+    result: SpinPaidRouletteResult,
+    locale: Locale,
+    bundle: IMessageBundle,
+) -> InlineKeyboardMarkup | None:
+    """Собрать inline-клавиатуру «Забрать приз» для CRYPTO_LOT-исходов.
+
+    Для idempotent-ответа / пустых outcome-ов / отсутствия CRYPTO_LOT-ов
+    возвращает ``None``.
+    """
+    lot_ids = [
+        o.lot_id
+        for o in result.outcomes
+        if o.kind is RouletteOutcomeKind.CRYPTO_LOT and o.lot_id is not None
+    ]
+    if not lot_ids:
+        return None
+    if len(lot_ids) == 1:
+        return build_claim_prize_keyboard(bundle=bundle, locale=locale, lot_id=lot_ids[0])
+    return build_claim_prize_keyboard_multi(bundle=bundle, locale=locale, lot_ids=lot_ids)
 
 
 async def _strip_keyboard(callback: CallbackQuery) -> None:

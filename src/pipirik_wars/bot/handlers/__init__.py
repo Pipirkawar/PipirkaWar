@@ -25,6 +25,7 @@ from pipirik_wars.bot.handlers.admin_setup_totp import router as admin_setup_tot
 from pipirik_wars.bot.handlers.admin_support import router as admin_support_router
 from pipirik_wars.bot.handlers.boss import router as boss_router
 from pipirik_wars.bot.handlers.caravan import router as caravan_router
+from pipirik_wars.bot.handlers.claim_prize import router as claim_prize_router
 from pipirik_wars.bot.handlers.clan_head import router as clan_head_router
 from pipirik_wars.bot.handlers.clan_history import router as clan_history_router
 from pipirik_wars.bot.handlers.clantop import router as clantop_router
@@ -33,6 +34,7 @@ from pipirik_wars.bot.handlers.dungeon import router as dungeon_router
 from pipirik_wars.bot.handlers.enchant import router as enchant_router
 from pipirik_wars.bot.handlers.forest import router as forest_router
 from pipirik_wars.bot.handlers.lang import router as lang_router
+from pipirik_wars.bot.handlers.link_wallet import router as link_wallet_router
 from pipirik_wars.bot.handlers.mass_duel import router as mass_duel_router
 from pipirik_wars.bot.handlers.mountains import router as mountains_router
 from pipirik_wars.bot.handlers.oracle import router as oracle_router
@@ -51,6 +53,11 @@ def register_routers(dispatcher: Dispatcher) -> None:
     dispatcher.include_router(start_router)
     dispatcher.include_router(profile_router)
     dispatcher.include_router(lang_router)
+    # Спринт 4.1-D.6: `/link_wallet` (личка-only) выбор валюты + callback
+    # `link_wallet:select:<ton|usdt>` показ инструкций. `/link_wallet_confirm`
+    # — backend-вход: парсит `(currency, address, proof)` и зовёт
+    # `LinkWallet.execute(...)`. Префикс callback_data — `link_wallet:`.
+    dispatcher.include_router(link_wallet_router)
     dispatcher.include_router(forest_router)
     # Спринт 3.1-E: PvE-локации с ±-исходом — `/mountains` и `/dungeon`.
     # Каждый router держит свой префикс callback_data (`mountains:` /
@@ -84,6 +91,11 @@ def register_routers(dispatcher: Dispatcher) -> None:
     # проводит spin на `successful_payment`. Spin выполняется через
     # `SpinPaidRoulette` с идемпотентностью по `tg_payment_charge_id`.
     dispatcher.include_router(roulette_paid_router)
+    # Спринт 4.1-D.7: `/claim_prize <lot_id>` (личка-only) — забрать
+    # зарезервированный CRYPTO_LOT-приз. Префикс callback_data —
+    # `claim_prize:`. Callback handler приходит от inline-кнопки
+    # «Забрать приз» в результате roulette-спина.
+    dispatcher.include_router(claim_prize_router)
     dispatcher.include_router(upgrade_router)
     dispatcher.include_router(duel_router)
     dispatcher.include_router(mass_duel_router)

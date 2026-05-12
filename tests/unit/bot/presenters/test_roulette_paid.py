@@ -116,16 +116,43 @@ class TestInvoicePayloadSerialization:
             assert len(payload.encode("utf-8")) <= 128
 
     def test_parse_invoice_payload_wrong_prefix(self) -> None:
-        with pytest.raises(ValueError, match="must be 'paid_roulette:<pack>'"):
+        with pytest.raises(ValueError, match="invoice_payload must be"):
             parse_invoice_payload("free_roulette:single")
 
     def test_parse_invoice_payload_unknown_pack(self) -> None:
         with pytest.raises(ValueError, match="unknown PaidRoulettePack value"):
             parse_invoice_payload("paid_roulette:pack_99")
 
-    def test_parse_invoice_payload_too_many_parts(self) -> None:
-        with pytest.raises(ValueError, match="must be 'paid_roulette:<pack>'"):
+    def test_parse_invoice_payload_three_parts_rejected(self) -> None:
+        # 3-частьевый payload не подходит ни под v0 (ровно 2), ни
+        # под v1 (ровно 4) — отказ.
+        with pytest.raises(ValueError, match="invoice_payload must be"):
             parse_invoice_payload("paid_roulette:single:extra")
+
+    # D.8.c: поддержка v1-signed-формата в parse_invoice_payload.
+
+    def test_parse_v1_signed_payload_single(self) -> None:
+        # Сигнед-пайлоад `<v>:<pack>:<seed>:<hmac>` — parse берёт parts[1].
+        # HMAC НЕ проверяется здесь (это роль verifier-а).
+        assert (
+            parse_invoice_payload("v1:single:abcdefghij0123456789ABCD:fake-hmac")
+            is PaidRoulettePack.SINGLE
+        )
+
+    def test_parse_v1_signed_payload_pack_10(self) -> None:
+        assert (
+            parse_invoice_payload("v1:pack_10:abcdefghij0123456789ABCD:fake-hmac")
+            is PaidRoulettePack.PACK_10
+        )
+
+    def test_parse_v1_signed_payload_unknown_pack_rejected(self) -> None:
+        with pytest.raises(ValueError, match="unknown PaidRoulettePack value"):
+            parse_invoice_payload("v1:pack_99:abcdefghij0123456789ABCD:fake-hmac")
+
+    def test_parse_v1_signed_payload_wrong_version_prefix_rejected(self) -> None:
+        # Первая часть не начинается с 'v' → не v1-format → отказ.
+        with pytest.raises(ValueError, match="invoice_payload must be"):
+            parse_invoice_payload("x1:single:abcdefghij0123456789ABCD:fake-hmac")
 
 
 # --- Презентер ---
@@ -362,3 +389,14 @@ class TestRoulettePaidPresenterToasts:
 
     def test_toast_error(self) -> None:
         assert _presenter().toast_error(locale=Locale("ru")) == "ru:roulette-paid-toast-error"
+
+    def test_payment_invalid_ru(self) -> None:
+        # D.8.c: новая карточка отказа для `InvalidStarsPayloadError`.
+        assert (
+            _presenter().payment_invalid(locale=Locale("ru")) == "ru:roulette-paid-payment-invalid"
+        )
+
+    def test_payment_invalid_en(self) -> None:
+        assert (
+            _presenter().payment_invalid(locale=Locale("en")) == "en:roulette-paid-payment-invalid"
+        )

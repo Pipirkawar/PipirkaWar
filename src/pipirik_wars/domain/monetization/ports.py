@@ -34,6 +34,7 @@ SQLAlchemy-implementation; тесты use-case-ов (Спринт 4.1-A) —
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
@@ -43,14 +44,23 @@ from pipirik_wars.domain.monetization.entities import (
     PrizeLot,
     PrizeLotStatus,
     PrizePool,
+    Wallet,
 )
-from pipirik_wars.domain.monetization.value_objects import Currency, IdempotencyKey
+from pipirik_wars.domain.monetization.value_objects import (
+    Currency,
+    IdempotencyKey,
+    StarsPayload,
+)
 
 __all__ = [
     "IFeeEstimator",
     "IPaymentLedger",
     "IPrizeLotRepository",
     "IPrizePoolRepository",
+    "ITgStarsPayloadVerifier",
+    "ITonConnectVerifier",
+    "ITonPayoutAdapter",
+    "IWalletRepository",
 ]
 
 
@@ -313,6 +323,7 @@ class IPrizeLotRepository(Protocol):
         *,
         lot_id: int,
         new_status: PrizeLotStatus,
+        reserved_at: datetime | None = None,
         claimed_at: datetime | None = None,
     ) -> PrizeLot:
         """Атомарно перевести лот в `new_status` с проверкой машины состояний.
@@ -322,6 +333,9 @@ class IPrizeLotRepository(Protocol):
         - `new_status` — целевой статус (`RESERVED` / `CLAIMED` /
           `REFUNDED`; `ACTIVE` не валидный target — лоты в `ACTIVE`
           создаются через `add(...)`).
+        - `reserved_at` — TZ-aware момент резервирования; обязателен на
+          `new_status=RESERVED`, на остальных — `None` (на CLAIMED /
+          REFUNDED сохраняется существующий `reserved_at` лота).
         - `claimed_at` — TZ-aware момент claim-а; обязателен на
           `new_status=CLAIMED`, на остальных — `None`.
 
@@ -332,6 +346,36 @@ class IPrizeLotRepository(Protocol):
         - `PrizeLotStatusTransitionError` — если текущий статус
           не разрешает переход в `new_status` (см.
           `_PRIZE_LOT_TRANSITIONS`).
+        """
+        ...
+
+    async def list_expired_reserved(
+        self,
+        *,
+        currency: Currency,
+        expired_before: datetime,
+        limit: int = 100,
+    ) -> Sequence[PrizeLot]:
+        """Все `status=RESERVED`-лоты `currency`, у которых `reserved_at <= expired_before`.
+
+        Используется expire-cron-ом `ExpireReservedPrizeLots` (D.9.c) —
+        который вычисляет `expired_before = now - reserved_ttl_seconds`
+        (D.9.a balance-config) и просит репозиторий вернуть все
+        просроченные лоты пачкой `limit` штук (страничный обход).
+
+        Порядок — стабильный `ORDER BY reserved_at ASC, id ASC`
+        (сначала самые старые — справедливый refund-порядок). Composite-
+        индекс `(status, reserved_at)` в Alembic-миграции
+        `0036_prize_lots_reserved_at` покрывает этот запрос.
+
+        Параметры:
+        - `currency` — фильтр валюты (один cron-entry на каждую).
+        - `expired_before` — TZ-aware момент-cutoff
+          (обычно `clock.now() - timedelta(seconds=reserved_ttl_seconds)`).
+        - `limit` — макс. размер пачки (default `100`); use-case
+          вызывает несколько раз в цикле пока возвращается полная пачка.
+
+        Возвращает: tuple из `PrizeLot` (может быть пустым — нормально).
         """
         ...
 
@@ -385,5 +429,181 @@ class IFeeEstimator(Protocol):
         - `int >= 0` — оценка буфера в native-юнитах. Для STARS —
           всегда `0`. Для TON_NANO / USDT_DECIMAL — позитивный
           (P95-аппроксимация газа).
+        """
+        ...
+
+
+class IWalletRepository(Protocol):
+    """Порт репозитория кошельков (ГДД §12.6.4, Спринт 4.1-D).
+
+    Один игрок — один кошелёк per-currency. ``add_or_replace`` —
+    upsert: если у игрока уже есть кошелёк данной валюты, адрес
+    обновляется. Все методы — async, выполняются в ``IUnitOfWork``.
+    """
+
+    async def add_or_replace(self, *, wallet: Wallet) -> Wallet:
+        """Upsert кошелёк: вставить или заменить адрес.
+
+        Возвращает сохранённый ``Wallet``.
+        """
+        ...
+
+    async def get_by_player_and_currency(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+    ) -> Wallet | None:
+        """Получить кошелёк или ``None``."""
+        ...
+
+
+class ITonConnectVerifier(Protocol):
+    """Порт верификации TON Connect proof (Спринт 4.1-D).
+
+    Проверяет, что ``proof`` (подпись ``ton_proof``) действительно
+    принадлежит ``address`` — защита от подмены адреса другим
+    игроком. Реализация — infrastructure-слой (HTTP-вызов к
+    TON Connect verification endpoint или локальная проверка).
+    """
+
+    async def verify(
+        self,
+        *,
+        address: str,
+        proof: str,
+    ) -> bool:
+        """``True`` если proof валидный для данного address."""
+        ...
+
+
+class ITonPayoutAdapter(Protocol):
+    """Порт выплаты TON / USDT на кошелёк игрока (Спринт 4.1-D).
+
+    Отправляет native-юниты ``amount_native`` валюты ``currency``
+    на ``recipient_address``. Возвращает ``PayoutResult`` с
+    ``tx_hash`` и ``actual_fee_native``.
+    """
+
+    async def payout(
+        self,
+        *,
+        currency: Currency,
+        amount_native: int,
+        recipient_address: str,
+    ) -> PayoutResult:
+        """Выплатить приз. Возвращает ``PayoutResult``."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class PayoutResult:
+    """Результат выплаты через ``ITonPayoutAdapter`` (Спринт 4.1-D).
+
+    * ``tx_hash: str`` — хэш транзакции в TON-сети.
+    * ``actual_fee_native: int`` — фактическая комиссия в native-юнитах.
+    """
+
+    tx_hash: str
+    actual_fee_native: int
+
+
+class ITgStarsPayloadVerifier(Protocol):
+    """Порт серверной верификации Telegram Stars `invoice_payload` (Спринт 4.1-D, шаг D.8).
+
+    Skeleton-handler ``/roulette_paid`` (4.1-A) принимал `invoice_payload`
+    голой строкой формата ``paid_roulette:<pack>``. Из коробки это
+    небезопасно: между ``bot.send_invoice(...)`` и ``successful_payment``-
+    callback-ом любой компрометированный middleware может подменить
+    payload — попросить «pack_10» по цене single, либо «зачесть»
+    в чужой `idempotency_key`.
+
+    Этот порт закрывает риск: реализация (``HmacTgStarsPayloadVerifier``
+    из D.8.b) при создании invoice-а кладёт в payload server-side
+    HMAC-SHA256-подпись поверх `(provider_id, idempotency_key,
+    amount, currency)`-кортежа, а при разборе на ``successful_payment``-
+    callback-е пересчитывает HMAC поверх тех же полей (значения берутся
+    из update-а от Telegram, который сам — trusted) и сравнивает с
+    подписью в payload-е.
+
+    Метод ``verify(...)``:
+
+    * **success** → возвращает ``StarsPayload(pack_value, idempotency_seed)``,
+      handler 4.1-A (после D.8.c-wire) маппит `pack_value` в
+      ``PaidRoulettePack`` и идёт в ``SpinPaidRoulette.execute(...)``;
+    * **fail** → бросает ``InvalidStarsPayloadError`` с machine-readable
+      `reason` (``"empty"`` / ``"too_long"`` / ``"malformed"`` /
+      ``"bad_pack"`` / ``"bad_seed"`` / ``"hmac_mismatch"``).
+
+    Порт **sync** (HMAC-проверка не требует I/O); это намеренное
+    отличие от ``ITonConnectVerifier.verify`` (там нужен HTTP-вызов к
+    TON Connect verification endpoint-у, поэтому ``async``).
+
+    Реализация — ``infrastructure/payments/tg_stars/`` (шаг D.8.b);
+    тесты handler-а ``successful_payment`` (шаг D.8.c) используют
+    ``FakeTgStarsPayloadVerifier``.
+    """
+
+    def serialize(
+        self,
+        *,
+        pack_value: str,
+        idempotency_seed: str,
+        amount_native: int,
+        currency: Currency,
+    ) -> str:
+        """Собрать подписанный `invoice_payload` для `bot.send_invoice(...)`.
+
+        Возвращает строку формата ``<version>:<pack_value>:<seed>:<hmac_b64url>``
+        с server-side HMAC-подписью поверх
+        ``(version|pack_value|seed|amount|currency)``-контекста.
+
+        Вызывающая сторона (handler ``handle_roulette_paid_buy`` шага D.8.c)
+        обязана сгенерировать свежий ``idempotency_seed`` per-invoice
+        (24-символьный url-safe-base64 из ``secrets.token_urlsafe(18)``);
+        тот же seed позже используется в `IdempotencyKey` use-case-а.
+
+        Никаких проверок входа здесь нет (adapter-level primitive),
+        вход известен серверу и считается доверенным. VO-инварианты
+        ``StarsPayload`` (формат `idempotency_seed`, etc.) проверяются
+        на стороне ``verify(...)``, а на стороне `serialize(...)` —
+        на стороне caller-а.
+        """
+        ...
+
+    def verify(
+        self,
+        *,
+        raw_payload: str | None,
+        provider_payment_id: str,
+        amount_native: int,
+        currency: Currency,
+    ) -> StarsPayload:
+        """Сверить HMAC raw_payload-а и вернуть распарсенный ``StarsPayload``.
+
+        Параметры — всё, что Telegram присылает в `successful_payment`-callback-е,
+        и что мы используем как «контекст» HMAC-подписи:
+
+        * ``raw_payload`` — `message.successful_payment.invoice_payload`
+          (либо ``None`` если update пришёл без payload-а — тогда
+          реализация бросает ``InvalidStarsPayloadError(reason="empty")``).
+        * ``provider_payment_id`` — `message.successful_payment.telegram_payment_charge_id`
+          (стабильный id платежа от Telegram). Используется как одна
+          из компонент HMAC-контекста — payload, подписанный для
+          одного `provider_payment_id`-а, не пройдёт верификацию
+          в callback-е с другим id.
+        * ``amount_native`` — `message.successful_payment.total_amount`
+          (для TG Stars — целое количество ⭐). Tampering суммы между
+          invoice-ом и callback-ом ловится через несовпадение HMAC.
+        * ``currency`` — валюта платежа (``Currency.STARS`` для всего
+          4.1-A skeleton-flow; параметр оставлен на будущее, когда
+          этот же порт может верифицировать платежи в других валютах).
+
+        Returns:
+        * ``StarsPayload`` — распарсенный и верифицированный payload.
+
+        Raises:
+        * ``InvalidStarsPayloadError`` — payload пуст / превышает лимит /
+          malformed / bad pack / bad seed / HMAC-mismatch.
         """
         ...

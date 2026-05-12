@@ -82,6 +82,7 @@ from tests.fakes.random import FakeRandom
 from tests.fakes.referral import FakeReferralRepository
 from tests.fakes.roulette_spin_repo import FakeRouletteSpinRepository
 from tests.fakes.signup_queue import FakeSignupQueueRepository
+from tests.fakes.tg_stars_verifier import FakeTgStarsPayloadVerifier
 from tests.fakes.top_clans import FakeClanTopQuery
 from tests.fakes.top_players import FakeTopPlayersQuery
 from tests.fakes.totp_verifier import FakeTotpVerifier
@@ -140,6 +141,7 @@ __all__ = [
     "FakeReferralRepository",
     "FakeRouletteSpinRepository",
     "FakeSignupQueueRepository",
+    "FakeTgStarsPayloadVerifier",
     "FakeTopPlayersQuery",
     "FakeTotpVerifier",
     "FakeUnitOfWork",

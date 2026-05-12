@@ -39,6 +39,8 @@ from pipirik_wars.application.forest import (
     IForestFinishNotifier,
 )
 from pipirik_wars.application.monetization import (
+    ExpireReservedPrizeLots,
+    ExpireReservedPrizeLotsResult,
     GeneratePrizeLots,
     GeneratePrizeLotsCommand,
 )
@@ -1377,3 +1379,170 @@ class TestPrizeLotGeneratorCron:
         )
         await adapter._run_prize_lot_generator_cron_job(Currency.USDT_DECIMAL.value)
         assert logger.warning.called
+
+
+# ── 4.1-D / D.9.d: expire_reserved_prize_lots hourly cron ──
+
+
+@dataclass
+class _FakeExpireReservedPrizeLotsUseCase:
+    """Stub `ExpireReservedPrizeLots`-use-case-а для тестов callback-а D.9.d.
+
+    Считает вызовы + опционально кидает исключение для проверки
+    error-swallow-семантики callback-а.
+    """
+
+    execute_calls: int = 0
+    raise_exc: BaseException | None = None
+    result: ExpireReservedPrizeLotsResult = field(
+        default_factory=lambda: ExpireReservedPrizeLotsResult(
+            refunded_per_currency={},
+            total_refunded=0,
+            cutoff_iso="2026-05-09T12:00:00+00:00",
+        ),
+    )
+
+    async def execute(self) -> ExpireReservedPrizeLotsResult:
+        self.execute_calls += 1
+        if self.raise_exc is not None:
+            raise self.raise_exc
+        return self.result
+
+
+class TestExpireReservedPrizeLotsCron:
+    """`schedule_expire_reserved_prize_lots_cron` + callback (4.1-D / D.9.d).
+
+    Один `IntervalTrigger(hours=1)`-job; use-case сам обходит все валюты.
+    """
+
+    @pytest.mark.asyncio
+    async def test_schedule_registers_one_job(self) -> None:
+        fake_uc = _FakeExpireReservedPrizeLotsUseCase()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            expire_reserved_prize_lots_factory=lambda: cast(
+                ExpireReservedPrizeLots,
+                fake_uc,
+            ),
+        )
+        adapter.start()
+        try:
+            adapter.schedule_expire_reserved_prize_lots_cron()
+            adapter.schedule_expire_reserved_prize_lots_cron()  # idempotent
+            jobs = [
+                j
+                for j in adapter._scheduler.get_jobs()
+                if j.id == "expire_reserved_prize_lots_cron"
+            ]
+            assert len(jobs) == 1
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_schedule_uses_interval_trigger_one_hour(self) -> None:
+        fake_uc = _FakeExpireReservedPrizeLotsUseCase()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            expire_reserved_prize_lots_factory=lambda: cast(
+                ExpireReservedPrizeLots,
+                fake_uc,
+            ),
+        )
+        adapter.start()
+        try:
+            adapter.schedule_expire_reserved_prize_lots_cron()
+            (job,) = [
+                j
+                for j in adapter._scheduler.get_jobs()
+                if j.id == "expire_reserved_prize_lots_cron"
+            ]
+            assert isinstance(job.trigger, IntervalTrigger)
+            assert job.trigger.interval.total_seconds() == 3600.0
+        finally:
+            adapter.shutdown(wait=False)
+
+    @pytest.mark.asyncio
+    async def test_schedule_no_factory_logs_warning_and_skips(self) -> None:
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            logger=logger,
+        )
+        adapter.schedule_expire_reserved_prize_lots_cron()
+        assert logger.warning.called
+        jobs = [
+            j for j in adapter._scheduler.get_jobs() if j.id == "expire_reserved_prize_lots_cron"
+        ]
+        assert jobs == []
+
+    @pytest.mark.asyncio
+    async def test_callback_invokes_use_case(self) -> None:
+        fake_uc = _FakeExpireReservedPrizeLotsUseCase()
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            expire_reserved_prize_lots_factory=lambda: cast(
+                ExpireReservedPrizeLots,
+                fake_uc,
+            ),
+        )
+        await adapter._run_expire_reserved_prize_lots_cron_job()
+        assert fake_uc.execute_calls == 1
+
+    @pytest.mark.asyncio
+    async def test_callback_swallows_use_case_error(self) -> None:
+        fake_uc = _FakeExpireReservedPrizeLotsUseCase(
+            raise_exc=RuntimeError("kaboom"),
+        )
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            expire_reserved_prize_lots_factory=lambda: cast(
+                ExpireReservedPrizeLots,
+                fake_uc,
+            ),
+            logger=logger,
+        )
+        # Не должно бросить — callback логирует и выходит.
+        await adapter._run_expire_reserved_prize_lots_cron_job()
+        assert logger.exception.called
+
+    @pytest.mark.asyncio
+    async def test_callback_no_factory_logs_warning(self) -> None:
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            logger=logger,
+        )
+        await adapter._run_expire_reserved_prize_lots_cron_job()
+        assert logger.warning.called
+
+    @pytest.mark.asyncio
+    async def test_callback_logs_info_on_success(self) -> None:
+        fake_uc = _FakeExpireReservedPrizeLotsUseCase(
+            result=ExpireReservedPrizeLotsResult(
+                refunded_per_currency={Currency.STARS: 2},
+                total_refunded=2,
+                cutoff_iso="2026-05-09T12:00:00+00:00",
+            ),
+        )
+        logger = MagicMock(spec=logging.Logger)
+        adapter = APSchedulerDelayedJobScheduler(
+            scheduler=AsyncIOScheduler(),
+            finish_factory=lambda: cast(FinishForestRun, _FakeFinishUseCase()),
+            expire_reserved_prize_lots_factory=lambda: cast(
+                ExpireReservedPrizeLots,
+                fake_uc,
+            ),
+            logger=logger,
+        )
+        await adapter._run_expire_reserved_prize_lots_cron_job()
+        assert logger.info.called
+        # Сводка в `extra`-payload-е содержит total_refunded и cutoff_iso.
+        kwargs = logger.info.call_args.kwargs
+        assert kwargs["extra"]["total_refunded"] == 2

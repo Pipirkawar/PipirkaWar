@@ -81,6 +81,7 @@ _KEY_RESULT_SINGLE_CRYPTO_LOT: Final[MessageKey] = MessageKey(
 )
 _KEY_RESULT_PACK10_HEADER: Final[MessageKey] = MessageKey("roulette-paid-result-pack-10")
 _KEY_RESULT_IDEMPOTENT: Final[MessageKey] = MessageKey("roulette-paid-result-idempotent")
+_KEY_PAYMENT_INVALID: Final[MessageKey] = MessageKey("roulette-paid-payment-invalid")
 _KEY_TOAST_THICKNESS: Final[MessageKey] = MessageKey("roulette-paid-toast-thickness-gate")
 _KEY_TOAST_NOT_REGISTERED: Final[MessageKey] = MessageKey("roulette-paid-toast-not-registered")
 _KEY_TOAST_PAYMENT_OK: Final[MessageKey] = MessageKey("roulette-paid-toast-payment-ok")
@@ -142,34 +143,57 @@ def is_roulette_paid_callback(data: str | None) -> bool:
 
 
 def invoice_payload_for(pack: PaidRoulettePack) -> str:
-    """Сериализовать `invoice_payload` для `bot.send_invoice(payload=...)`.
+    """Сериализовать legacy v0-`invoice_payload`. **Deprecated на D.8.c.**
 
-    Формат: `paid_roulette:<pack-value>` (либо `paid_roulette:single`,
-    либо `paid_roulette:pack_10`). Telegram возвращает этот payload
-    обратно в `pre_checkout_query.invoice_payload` и в
-    `successful_payment.invoice_payload` — handler парсит его, чтобы
-    выяснить, какой именно pack оплачен.
+    Формат: `paid_roulette:<pack-value>` (`paid_roulette:single` /
+    `paid_roulette:pack_10`). Это формат skeleton-handler-а 4.1-A —
+    без HMAC-подписи. На D.8.c production-handler перешёл на
+    подписанный v1-payload через `HmacTgStarsPayloadVerifier.serialize(...)`,
+    и v0 в `verify(...)` теперь отклоняется (`reason="bad_version"` /
+    `"malformed"`).
 
-    Длина ≤ 128 байт (Telegram limit для invoice_payload), реально
-    ≤ 22 байт.
+    Эта функция оставлена только для backward compat в тестах и для
+    случаев, когда в БД остался лежать v0-payload от старых invoice-ов
+    skeleton-периода. **Не использовать в новом коде.**
     """
     return f"{_INVOICE_PAYLOAD_PREFIX}:{pack.value}"
 
 
 def parse_invoice_payload(payload: str) -> PaidRoulettePack:
-    """Распарсить `invoice_payload` обратно в `PaidRoulettePack`.
+    """Извлечь `PaidRoulettePack` из любого поддерживаемого invoice_payload-формата.
 
-    Бросает `ValueError` на любой формат отличный от
-    `paid_roulette:<pack-value>` или на неизвестный `pack-value`.
-    Это критично с точки зрения антифрода — handler не должен
-    проводить платёж по непонятному payload-у.
+    Принимает два формата:
+
+    * **v0 legacy** — `paid_roulette:<pack>` (skeleton-handler 4.1-A,
+      без HMAC, deprecated на D.8.c).
+    * **v1 signed** — `<version>:<pack>:<seed>:<hmac>` (4 части, версия
+      начинается с `v`, см. `HmacTgStarsPayloadVerifier.serialize(...)`).
+
+    HMAC **не проверяется** в этой функции — она лишь маппит payload
+    на `PaidRoulettePack`. Используется в `pre_checkout_query`-handler-е,
+    где нужно знать pack для матчинга суммы (`amount_native`), но HMAC-
+    проверка отложена до `successful_payment` (см.
+    `ITgStarsPayloadVerifier.verify(...)`).
+
+    Бросает `ValueError` на нераспознанный формат или неизвестный pack —
+    это критично с точки зрения антифрода: handler не должен пускать
+    `pre_checkout_query.ok=True` для payload-а, который ни в один из
+    форматов не парсится.
     """
     parts = payload.split(":")
-    if len(parts) != 2 or parts[0] != _INVOICE_PAYLOAD_PREFIX:
+    if len(parts) == 2 and parts[0] == _INVOICE_PAYLOAD_PREFIX:
+        pack_raw = parts[1]
+    elif len(parts) == 4 and parts[0].startswith("v") and len(parts[0]) >= 2:
+        # v1-signed (D.8.c): `<version>:<pack>:<seed>:<hmac>`.
+        # HMAC-проверка — отдельный шаг в `successful_payment`-handler-е
+        # через `ITgStarsPayloadVerifier.verify(...)`. Здесь только маппим
+        # pack для pre_checkout-amount-валидации.
+        pack_raw = parts[1]
+    else:
         raise ValueError(
-            f"invoice_payload must be 'paid_roulette:<pack>', got {payload!r}",
+            f"invoice_payload must be 'paid_roulette:<pack>' (v0) or "
+            f"'<version>:<pack>:<seed>:<hmac>' (v1), got {payload!r}",
         )
-    _, pack_raw = parts
     for pack in PaidRoulettePack:
         if pack.value == pack_raw:
             return pack
@@ -431,6 +455,16 @@ class RoulettePaidPresenter:
     def result_idempotent(self, *, locale: Locale) -> str:
         """Идемпотентный retry (повторный `successful_payment` от Telegram)."""
         return self._bundle.format(_KEY_RESULT_IDEMPOTENT, locale=locale)
+
+    def payment_invalid(self, *, locale: Locale) -> str:
+        """Карточка отказа: invoice_payload не прошёл HMAC-верификацию (D.8.c).
+
+        Текст намеренно общий и не содержит machine-readable `reason`
+        (`empty` / `hmac_mismatch` / `bad_pack` / etc.) — он уходит в
+        structured-log, не к игроку. Игроку показываем только факт
+        отказа + предложение перезапустить flow.
+        """
+        return self._bundle.format(_KEY_PAYMENT_INVALID, locale=locale)
 
     # --- Toast-ы (короткие inline-сообщения над callback-кнопкой) ---
 

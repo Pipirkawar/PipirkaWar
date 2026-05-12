@@ -114,7 +114,7 @@ class AuditLogORM(Base):
             # Полный whitelist `audit_log.source` — должен совпадать с
             # `pipirik_wars.domain.shared.ports.audit.AuditSource` и с
             # whitelist-ом из последней расширяющей миграции
-            # (`20260511_0032_audit_source_prize_lot_reserved.py`).
+            # (`20260511_0034_audit_source_wallet_linked.py`).
             # Расхождение ловит unit-тест `test_audit_source.py`.
             "source IN ('forest', 'mountains', 'dungeon', 'oracle', 'referral_signup', "
             "'referral_thickness', 'pvp_reward', 'caravan_reward', 'raid_reward', "
@@ -122,7 +122,7 @@ class AuditLogORM(Base):
             "'usdt_payment', 'daily_head', 'roulette_free_cost', "
             "'roulette_free_reward', 'oracle_tribe_bonus', 'roulette_paid_reward', "
             "'prize_pool_increment', 'prize_lot_generated', 'prize_lot_refunded', "
-            "'prize_lot_reserved', 'unknown')",
+            "'prize_lot_reserved', 'prize_lot_claimed', 'wallet_linked', 'unknown')",
             name="audit_log_source_whitelist",
         ),
     )

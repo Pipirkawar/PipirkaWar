@@ -59,6 +59,10 @@ class PrizeLotORM(Base):
         DateTime(timezone=True),
         nullable=False,
     )
+    reserved_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     claimed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -90,9 +94,26 @@ class PrizeLotORM(Base):
             "OR (status <> 'claimed' AND claimed_at IS NULL)",
             name="ck_prize_lots_claimed_at_iff_claimed",
         ),
+        # D.9.b invariant: ACTIVE-лот не может иметь reserved_at; RESERVED-лот
+        # обязан иметь reserved_at. Для CLAIMED / REFUNDED — любое значение.
+        CheckConstraint(
+            "(status = 'active' AND reserved_at IS NULL) "
+            "OR (status = 'reserved' AND reserved_at IS NOT NULL) "
+            "OR (status IN ('claimed', 'refunded'))",
+            name="ck_prize_lots_reserved_at_consistent",
+        ),
         Index(
             "ix_prize_lots_status_currency",
             "status",
             "currency",
+        ),
+        # D.9.b composite-индекс для `list_expired_reserved(...)`-запроса:
+        # `WHERE status = 'reserved' AND reserved_at <= :cutoff ORDER BY
+        # reserved_at ASC LIMIT N`. Покрывающий — Postgres использует
+        # index-only scan, SQLite — обычный index scan.
+        Index(
+            "ix_prize_lots_status_reserved_at",
+            "status",
+            "reserved_at",
         ),
     )

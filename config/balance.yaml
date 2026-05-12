@@ -703,3 +703,28 @@ roulette:
       - { name: "medium", min_cm: 50,  max_cm: 150, weight: 0.170 }
       - { name: "good",   min_cm: 150, max_cm: 300, weight: 0.025 }
       - { name: "big",    min_cm: 300, max_cm: 500, weight: 0.005 }
+
+# -----------------------------------------------------------------------------
+# §12.6.3-§12.6.4 — крипто-лоты (Спринт 4.1-D).
+#
+# Сценарий «выигрыш → reserve → claim/expire»:
+#   1. Игрок крутит платную/free-рулетку и выигрывает крипто-приз;
+#      use-case `SpinPaidRoulette` / `SpinFreeRoulette` переводит лот
+#      `ACTIVE → RESERVED` и пишет audit `PRIZE_LOT_RESERVED`.
+#   2. У игрока есть `reserved_ttl_seconds` секунд, чтобы выполнить
+#      `ClaimPrize(lot_id, recipient_address)` (Спринт 4.1-D, D.2).
+#   3. Если за это время `ClaimPrize` не выполнен (бот недоступен,
+#      кошелёк не привязан, TON-RPC лёг), cron `ExpireReservedPrizeLots`
+#      (Спринт 4.1-D, D.9) возвращает лот в пул: `RESERVED → ACTIVE`
+#      + `apply_increment(currency, amount)` обратно в `PrizePool`
+#      + audit `PRIZE_LOT_REFUNDED` (audit-source добавлен в 4.1-C,
+#      Alembic `0031`).
+#
+# `reserved_ttl_seconds` — стартовая гипотеза `172_800` (48 h),
+# финал — на ревью геймдиза. Pydantic-границы: `[60, 30 d]` —
+# меньше минуты резерв бессмысленен (auto-refund сразу после reserve),
+# больше 30 дней лот зависает дольше, чем срок свежести P95-оценки
+# комиссии (§12.6.4: «P95 за 7 дней»), и refund-математика ломается.
+# -----------------------------------------------------------------------------
+prize_lot:
+  reserved_ttl_seconds: 172800   # 48 h; см. ГДД §12.6.3-§12.6.4

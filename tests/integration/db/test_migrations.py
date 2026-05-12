@@ -328,6 +328,10 @@ class TestAlembicMigrationsApplyCleanly:
             "20260510_0030_prize_lots.py",
             "20260510_0031_audit_source_prize_lot_refunded.py",
             "20260511_0032_audit_source_prize_lot_reserved.py",
+            "20260511_0033_audit_source_prize_lot_claimed.py",
+            "20260511_0034_audit_source_wallet_linked.py",
+            "20260511_0035_wallets.py",
+            "20260511_0036_prize_lots_reserved_at.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -387,6 +391,7 @@ class TestAlembicMigrationsApplyCleanly:
             "payments",
             "prize_pool_balance",
             "prize_lots",
+            "wallets",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 

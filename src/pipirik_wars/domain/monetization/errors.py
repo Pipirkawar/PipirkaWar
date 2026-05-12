@@ -28,11 +28,14 @@ if TYPE_CHECKING:
 
 __all__ = [
     "IdempotencyConflictError",
+    "InvalidStarsPayloadError",
     "MonetizationDomainError",
     "PrizeLotInvariantError",
     "PrizeLotNotFoundError",
     "PrizeLotStatusTransitionError",
     "PrizePoolAmountInvariantError",
+    "WalletAlreadyLinkedError",
+    "WalletNotLinkedError",
 ]
 
 
@@ -235,3 +238,91 @@ class PrizeLotNotFoundError(MonetizationDomainError):
     def __init__(self, *, lot_id: int) -> None:
         self.lot_id = lot_id
         super().__init__(f"PrizeLot(id={lot_id}) not found")
+
+
+class WalletNotLinkedError(MonetizationDomainError):
+    """Игрок не привязал кошелёк для указанной валюты (Спринт 4.1-D).
+
+    Бросается use-case-ом ``ClaimPrize``, когда игрок пытается забрать
+    крипто-приз, но ``IWalletRepository.get_by_player_and_currency(...)``
+    вернул ``None``.
+
+    Аттрибуты:
+    - ``player_id: int``
+    - ``currency: Currency``
+    """
+
+    def __init__(self, *, player_id: int, currency: Currency) -> None:
+        self.player_id = player_id
+        self.currency = currency
+        super().__init__(
+            f"Player(id={player_id}) has no linked wallet for currency {currency.value!r}",
+        )
+
+
+class InvalidStarsPayloadError(MonetizationDomainError):
+    """Telegram Stars `invoice_payload` не прошёл серверную верификацию (Спринт 4.1-D, шаг D.8).
+
+    Бросается портом ``ITgStarsPayloadVerifier.verify(...)`` когда:
+
+    * raw payload пуст / превышает 128-байтовый лимит Telegram;
+    * payload-структура (`<prefix>:<pack>:<seed>:<hmac>`) malformed —
+      неверный prefix, отсутствуют поля, плохо закодирован `seed` / `hmac`;
+    * HMAC-подпись не совпадает с локально пересчитанной над
+      `(provider_id, idempotency_key, amount, currency)`-кортежем —
+      payload либо подделан, либо был выпущен для другой суммы /
+      валюты / игрока. В обоих случаях use-case 4.1-A
+      ``SpinPaidRoulette.execute(...)`` НЕ вызывается, платёж
+      аудируется отдельной audit-записью (`STARS_PAYLOAD_VERIFICATION_FAILED`,
+      audit-source добавляется в D.8.c), Telegram-callback тихо игнорируется
+      на UI-уровне (не показываем игроку причину, чтобы не помогать
+      reverse-engineering-у формата подписи).
+
+    Аттрибуты — для machine-readable логирования / audit-payload-а
+    (без реального содержимого payload-а, чтобы не утечь HMAC-байты
+    в logs):
+
+    * ``reason: str`` — короткий машинный код причины (``"empty"`` /
+      ``"too_long"`` / ``"malformed"`` / ``"bad_pack"`` /
+      ``"bad_seed"`` / ``"bad_hmac"`` / ``"hmac_mismatch"``). Используется
+      для подбора метрики `tg_stars_payload_verification_failed_total`
+      по labels.
+    * ``payload_len: int`` — фактическая длина raw payload-а в байтах
+      (``0`` если payload был ``None`` / non-str). Безопасно логируется.
+    """
+
+    def __init__(self, *, reason: str, payload_len: int) -> None:
+        self.reason = reason
+        self.payload_len = payload_len
+        super().__init__(
+            f"Invalid TG Stars invoice_payload: reason={reason!r}, payload_len={payload_len}",
+        )
+
+
+class WalletAlreadyLinkedError(MonetizationDomainError):
+    """Кошелёк уже привязан и попытка привязки дублирует адрес (Спринт 4.1-D).
+
+    Бросается use-case-ом ``LinkWallet``, когда игрок пытается
+    привязать тот же самый адрес, который уже привязан.
+
+    Аттрибуты:
+    - ``player_id: int``
+    - ``currency: Currency``
+    - ``existing_address: str``
+    """
+
+    def __init__(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+        existing_address: str,
+    ) -> None:
+        self.player_id = player_id
+        self.currency = currency
+        self.existing_address = existing_address
+        super().__init__(
+            f"Player(id={player_id}) already has wallet "
+            f"for currency {currency.value!r} "
+            f"with same address {existing_address!r}",
+        )

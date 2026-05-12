@@ -83,7 +83,13 @@ from pipirik_wars.application.forest import (
 )
 from pipirik_wars.application.i18n import IMessageBundle
 from pipirik_wars.application.inventory import EnchantItem, GetInventory
-from pipirik_wars.application.monetization import RecordDonation, SpinPaidRoulette
+from pipirik_wars.application.monetization import (
+    ClaimPrize,
+    ExpireReservedPrizeLots,
+    LinkWallet,
+    RecordDonation,
+    SpinPaidRoulette,
+)
 from pipirik_wars.application.monetization.generate_prize_lots import GeneratePrizeLots
 from pipirik_wars.application.mountains import (
     FinishMountainRun,
@@ -138,7 +144,14 @@ from pipirik_wars.domain.inventory import (
     ItemNotFoundError,
     ScrollStack,
 )
-from pipirik_wars.domain.monetization import IPaymentLedger, IPrizePoolRepository
+from pipirik_wars.domain.monetization import (
+    IPaymentLedger,
+    IPrizePoolRepository,
+    ITgStarsPayloadVerifier,
+    ITonConnectVerifier,
+    ITonPayoutAdapter,
+    IWalletRepository,
+)
 from pipirik_wars.domain.mountains import IMountainRunRepository
 from pipirik_wars.domain.player import IPlayerRepository
 from pipirik_wars.domain.pvp import IDuelRepository, IMassDuelRepository
@@ -1032,6 +1045,46 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         clock=clock,
         record_donation=record_donation_uc,
     )
+    # Спринт 4.1-D: фейки для use-case-ов `LinkWallet` / `ClaimPrize` /
+    # `ExpireReservedPrizeLots`. Полноценные fake-классы для портов
+    # `IWalletRepository` / `ITonPayoutAdapter` / `ITonConnectVerifier`
+    # живут в test-файлах application-уровня; здесь достаточно
+    # `MagicMock(spec=...)` (read-only smoke того, что DI собирается).
+    wallet_repo_fake: IWalletRepository = cast(IWalletRepository, MagicMock(spec=IWalletRepository))
+    ton_payout_adapter_fake: ITonPayoutAdapter = cast(
+        ITonPayoutAdapter,
+        MagicMock(spec=ITonPayoutAdapter),
+    )
+    ton_connect_verifier_fake: ITonConnectVerifier = cast(
+        ITonConnectVerifier,
+        MagicMock(spec=ITonConnectVerifier),
+    )
+    tg_stars_verifier_fake: ITgStarsPayloadVerifier = cast(
+        ITgStarsPayloadVerifier,
+        MagicMock(spec=ITgStarsPayloadVerifier),
+    )
+    link_wallet_uc = LinkWallet(
+        wallet_repository=wallet_repo_fake,
+        ton_connect_verifier=ton_connect_verifier_fake,
+        audit_logger=audit,
+        clock=clock,
+    )
+    claim_prize_uc = ClaimPrize(
+        prize_lot_repository=prize_lot_repo_fake,
+        prize_pool_repository=prize_pool_repo_fake,
+        wallet_repository=wallet_repo_fake,
+        payout_adapter=ton_payout_adapter_fake,
+        audit_logger=audit,
+        clock=clock,
+    )
+    expire_reserved_prize_lots_uc = ExpireReservedPrizeLots(
+        uow=uow,
+        prize_lot_repository=prize_lot_repo_fake,
+        prize_pool_repository=prize_pool_repo_fake,
+        audit_logger=audit,
+        balance_config=balance,
+        clock=clock,
+    )
     close_caravan_lobby_uc = CloseCaravanLobby(
         uow=uow,
         caravans=caravans_repo,
@@ -1308,6 +1361,15 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         spin_paid_roulette=spin_paid_roulette_uc,
         prize_pool_repo=prize_pool_repo_fake,
         record_donation=record_donation_uc,
+        prize_lot_repo=prize_lot_repo_fake,
+        wallet_repo=wallet_repo_fake,
+        ton_payout_adapter=ton_payout_adapter_fake,
+        ton_connect_verifier=ton_connect_verifier_fake,
+        tg_stars_verifier=tg_stars_verifier_fake,
+        generate_prize_lots=generate_prize_lots_uc,
+        link_wallet=link_wallet_uc,
+        claim_prize=claim_prize_uc,
+        expire_reserved_prize_lots=expire_reserved_prize_lots_uc,
     )
 
 
@@ -1573,7 +1635,7 @@ class TestBuildDispatcher:
     структуру через **один** общий test, а не дробим.
     """
 
-    def test_build_dispatcher_assembles_full_stack(self) -> None:
+    def test_build_dispatcher_assembles_full_stack(self) -> None:  # noqa: PLR0915 — единственный smoke `build_dispatcher`-а; aiogram-роутеры singleton-ны
         c = _container_with_fakes()
         dp = build_dispatcher(c)
         assert isinstance(dp, Dispatcher)
@@ -1637,3 +1699,13 @@ class TestBuildDispatcher:
         assert dp["get_inventory"] is c.get_inventory
         assert dp["enchant_item"] is c.enchant_item
         assert dp["uow"] is c.uow
+        # Sprint 4.1-D / D.10.c: HMAC-верификатор TG-Stars payload-а
+        # + use-case-ы `LinkWallet` / `ClaimPrize` + read-side доступы
+        # к `wallet_repository` / `prize_lot_repository` пробрасываются
+        # в workflow-data для handler-ов `/roulette_paid` / `/link_wallet*` /
+        # `/claim_prize`.
+        assert dp["tg_stars_verifier"] is c.tg_stars_verifier
+        assert dp["link_wallet"] is c.link_wallet
+        assert dp["claim_prize"] is c.claim_prize
+        assert dp["wallet_repository"] is c.wallet_repo
+        assert dp["prize_lot_repository"] is c.prize_lot_repo
