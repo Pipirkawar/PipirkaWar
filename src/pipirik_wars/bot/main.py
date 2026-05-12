@@ -122,6 +122,7 @@ from pipirik_wars.application.monetization import (
     GetPrizePoolStatus,
     LinkWallet,
     RecordDonation,
+    RefundLot,
     SpinPaidRoulette,
 )
 from pipirik_wars.application.mountains import (
@@ -519,6 +520,7 @@ class Container:
     link_wallet: LinkWallet
     claim_prize: ClaimPrize
     get_prize_pool_status: GetPrizePoolStatus
+    refund_lot: RefundLot
     expire_reserved_prize_lots: ExpireReservedPrizeLots
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
@@ -1268,6 +1270,22 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         clock=clock,
         authz=admin_authz,
     )
+    # Спринт 4.1-E / E.13: admin-команда `/refund_lot <lot_id> <reason>`
+    # (super-admin + TOTP). Двухфазный flow: handler `admin_refund_lot`
+    # → `RequestAdminConfirm` (фаза 1, выдаёт token), `admin_support.handle_confirm`
+    # → `dispatch_refund_lot` (фаза 2, после TOTP-verify, вызывает усе-кейс).
+    # Регистрация в `CONFIRM_DISPATCHERS` срабатывает при импорте
+    # модуля `bot/handlers/admin_refund_lot.py` (через `register_routers`).
+    refund_lot = RefundLot(
+        uow=uow,
+        admins=admins,
+        prize_lot_repository=prize_lot_repo,
+        prize_pool_repository=prize_pool_repo,
+        audit=audit,
+        admin_audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
     # 4.1-C / C.7.a + C.7.b: cron `GeneratePrizeLots` 1×/час per currency.
     # 4.1-C / C.7.d: тот же use-case прокидывается в `RecordDonation` как
     # внеочередной триггер «крупного» доната (>= 0.5 TON / >= 1 USDT),
@@ -1940,6 +1958,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         link_wallet=link_wallet,
         claim_prize=claim_prize,
         get_prize_pool_status=get_prize_pool_status,
+        refund_lot=refund_lot,
         expire_reserved_prize_lots=expire_reserved_prize_lots,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
@@ -2188,6 +2207,12 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["payout_freeze_repository"] = container.payout_freeze_repo
     dispatcher["payout_limit_checker"] = container.payout_limit_checker
     dispatcher["get_prize_pool_status"] = container.get_prize_pool_status
+    # 4.1-E.13: `dispatch_refund_lot` (фаза 2 `/refund_lot`) живёт в
+    # `ConfirmDispatchDeps.refund_lot` — `admin_support.handle_confirm`
+    # резолвит его из workflow-data и вкладывает в `deps`-контейнер
+    # перед регистрированным dispatcher-ом. Сам handler фазы 1 вызывает
+    # только `RequestAdminConfirm` (уже проброшен в dispatcher раньше).
+    dispatcher["refund_lot"] = container.refund_lot
     return dispatcher
 
 

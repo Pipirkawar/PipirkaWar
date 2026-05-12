@@ -89,6 +89,7 @@ from pipirik_wars.application.monetization import (
     GetPrizePoolStatus,
     LinkWallet,
     RecordDonation,
+    RefundLot,
     SpinPaidRoulette,
 )
 from pipirik_wars.application.monetization.generate_prize_lots import GeneratePrizeLots
@@ -1092,6 +1093,16 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         clock=clock,
         authz=admin_authz,
     )
+    refund_lot_uc = RefundLot(
+        uow=uow,
+        admins=admins,
+        prize_lot_repository=prize_lot_repo_fake,
+        prize_pool_repository=prize_pool_repo_fake,
+        audit=audit,
+        admin_audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
     expire_reserved_prize_lots_uc = ExpireReservedPrizeLots(
         uow=uow,
         prize_lot_repository=prize_lot_repo_fake,
@@ -1387,6 +1398,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         link_wallet=link_wallet_uc,
         claim_prize=claim_prize_uc,
         get_prize_pool_status=get_prize_pool_status_uc,
+        refund_lot=refund_lot_uc,
         expire_reserved_prize_lots=expire_reserved_prize_lots_uc,
     )
 

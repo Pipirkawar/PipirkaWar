@@ -24,6 +24,9 @@ from pipirik_wars.bot.handlers.admin_economy import router as admin_economy_rout
 from pipirik_wars.bot.handlers.admin_prize_pool import (
     router as admin_prize_pool_router,
 )
+from pipirik_wars.bot.handlers.admin_refund_lot import (
+    router as admin_refund_lot_router,
+)
 from pipirik_wars.bot.handlers.admin_setup_totp import router as admin_setup_totp_router
 from pipirik_wars.bot.handlers.admin_support import router as admin_support_router
 from pipirik_wars.bot.handlers.boss import router as boss_router
@@ -134,6 +137,13 @@ def register_routers(dispatcher: Dispatcher) -> None:
     # freeze-флага (super-admin + audit). Фильтр `is_admin` —
     # на самом router-е; RBAC `SUPER_ADMIN` — на use-case-е.
     dispatcher.include_router(admin_prize_pool_router)
+    # Спринт 4.1-E.13: `/refund_lot <lot_id> <reason>` — двухфазный
+    # admin-flow (super-admin + TOTP). Импорт модуля выше уже
+    # зарегистрировал `dispatch_refund_lot` в `CONFIRM_DISPATCHERS`
+    # (фаза 2 использует регистри admin_economy + workflow-data `refund_lot`).
+    # Роутер подключается рядом с admin_prize_pool, чтобы admin-RBAC
+    # фильтры не оборвались на промежуточных роутерах.
+    dispatcher.include_router(admin_refund_lot_router)
     dispatcher.include_router(registration_router)
 
 
