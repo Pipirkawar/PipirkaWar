@@ -68,6 +68,12 @@ from pipirik_wars.application.monetization.refund_lot import (
     RefundLotInput,
     RefundLotOutput,
 )
+from pipirik_wars.application.monetization.request_link_wallet_proof import (
+    RequestLinkWalletProof,
+    RequestLinkWalletProofCommand,
+    RequestLinkWalletProofConfig,
+    RequestLinkWalletProofResult,
+)
 from pipirik_wars.application.monetization.spin_paid_roulette import (
     PaidRoulettePack,
     SpinPaidRoulette,
@@ -102,6 +108,10 @@ __all__ = [
     "RefundLot",
     "RefundLotInput",
     "RefundLotOutput",
+    "RequestLinkWalletProof",
+    "RequestLinkWalletProofCommand",
+    "RequestLinkWalletProofConfig",
+    "RequestLinkWalletProofResult",
     "SpinPaidRoulette",
     "SpinPaidRouletteCommand",
     "SpinPaidRouletteResult",
