@@ -137,9 +137,42 @@ class TonRpcSettings(BaseSettings):
             "Production может переопределить через `TON_RPC_WALLET_SUBWALLET_ID`."
         ),
     )
+    payout_wallet_signing_key_seed: SecretStr = Field(
+        default=SecretStr("0" * 64),
+        description=(
+            "Hex-кодированный (64 hex-символа = 32 байта) Ed25519-seed "
+            "hot-wallet-а. Используется `Ed25519MessageSigner`-ом для "
+            "подписи внешних message-ей. Дефолт `0`*32 — placeholder, "
+            "подходит только для unit-tests / sandbox; production должен "
+            "задать через `TON_RPC_PAYOUT_WALLET_SIGNING_KEY_SEED`. "
+            "`SecretStr` маскирует значение в `__repr__`/`logs`."
+        ),
+    )
 
     @field_validator("endpoint", mode="after")
     @classmethod
     def _strip_trailing_slash(cls, value: str) -> str:
         """Убрать trailing `/` — упрощает конкатенацию путей."""
         return value.rstrip("/")
+
+    @field_validator("payout_wallet_signing_key_seed", mode="after")
+    @classmethod
+    def _validate_signing_key_seed_hex(cls, value: SecretStr) -> SecretStr:
+        """Проверить, что seed — 64 hex-символа (32 байта Ed25519).
+
+        Не декодируем сюда — это делает composition-root при сборке
+        `Ed25519MessageSigner`. Здесь только формат: длина 64 + hex.
+        """
+        raw = value.get_secret_value()
+        if len(raw) != 64:
+            raise ValueError(
+                "TonRpcSettings.payout_wallet_signing_key_seed must be 64 hex chars "
+                f"(32 bytes Ed25519 seed), got {len(raw)}",
+            )
+        try:
+            bytes.fromhex(raw)
+        except ValueError as exc:
+            raise ValueError(
+                "TonRpcSettings.payout_wallet_signing_key_seed must be valid hex",
+            ) from exc
+        return value

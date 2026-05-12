@@ -10,6 +10,9 @@ from __future__ import annotations
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from pipirik_wars.infrastructure.payments.tg_stars.settings import TgStarsSettings
+from pipirik_wars.infrastructure.payments.ton_rpc.settings import TonRpcSettings
+
 
 class DatabaseSettings(BaseSettings):
     """Подключение к Postgres (и aiosqlite для тестов)."""
@@ -158,3 +161,18 @@ class Settings(BaseSettings):
     db: DatabaseSettings = Field(default_factory=DatabaseSettings)
     bot: BotSettings = Field(default_factory=BotSettings)
     bootstrap: BootstrapSettings = Field(default_factory=BootstrapSettings)
+    # Спринт 4.1-D, шаг D.10.c: настройки TON-RPC-адаптера и
+    # HMAC-верификатора Telegram Stars `invoice_payload`. Оба поля —
+    # `Optional`, потому что:
+    # 1) `TgStarsSettings.secret` — обязательное (без env-var-а
+    #    `TG_STARS_SECRET` `TgStarsSettings()` бросает `ValidationError`).
+    #    `Settings` не должен ронять весь bootstrap, если этой переменной
+    #    нет (unit-тесты собирают `Settings()` без env-context-а).
+    # 2) `TonRpcSettings` сам по себе не требует env, но имеет placeholder-
+    #    дефолты (`payout_wallet_address=""`, `payout_wallet_signing_key_seed`
+    #    = 32 zero-byte) — `build_container` сам разрулит fail-loud
+    #    если placeholder-ы используются в проде.
+    # `build_container` интерпретирует `None` как «собрать с дефолтами»
+    # (или не собрать вообще, если секреты не заданы).
+    ton_rpc: TonRpcSettings | None = Field(default=None)
+    tg_stars: TgStarsSettings | None = Field(default=None)

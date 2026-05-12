@@ -34,6 +34,7 @@ from pathlib import Path
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from pydantic import SecretStr
 
 from pipirik_wars.application.admin import (
     BanPlayer,
@@ -114,8 +115,10 @@ from pipirik_wars.application.forest import (
 from pipirik_wars.application.i18n import IMessageBundle, IPlayerLocaleResolver
 from pipirik_wars.application.inventory import EnchantItem, GetInventory
 from pipirik_wars.application.monetization import (
+    ClaimPrize,
     ExpireReservedPrizeLots,
     GeneratePrizeLots,
+    LinkWallet,
     RecordDonation,
     SpinPaidRoulette,
 )
@@ -216,7 +219,15 @@ from pipirik_wars.domain.inventory import (
     IItemRepository,
     IScrollRepository,
 )
-from pipirik_wars.domain.monetization import IPaymentLedger, IPrizePoolRepository
+from pipirik_wars.domain.monetization import (
+    IPaymentLedger,
+    IPrizeLotRepository,
+    IPrizePoolRepository,
+    ITgStarsPayloadVerifier,
+    ITonConnectVerifier,
+    ITonPayoutAdapter,
+    IWalletRepository,
+)
 from pipirik_wars.domain.mountains import IMountainRunRepository
 from pipirik_wars.domain.oracle import IOracleHistoryRepository
 from pipirik_wars.domain.player import IPlayerRepository
@@ -281,6 +292,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyRouletteSpinRepository,
     SqlAlchemyScrollRepository,
     SqlAlchemySignupQueueRepository,
+    SqlAlchemyWalletRepository,
 )
 from pipirik_wars.infrastructure.db.services import (
     SqlAlchemyAdminAuditLogger,
@@ -294,6 +306,16 @@ from pipirik_wars.infrastructure.i18n import (
     FluentMessageBundle,
     PlayerLocaleResolverDB,
 )
+from pipirik_wars.infrastructure.payments.tg_stars import HmacTgStarsPayloadVerifier
+from pipirik_wars.infrastructure.payments.tg_stars.settings import TgStarsSettings
+from pipirik_wars.infrastructure.payments.ton_connect import SandboxTonConnectVerifier
+from pipirik_wars.infrastructure.payments.ton_rpc import (
+    Ed25519MessageSigner,
+    JettonUsdtProvider,
+    TonRpcAdapter,
+    TonRpcHttpClient,
+)
+from pipirik_wars.infrastructure.payments.ton_rpc.settings import TonRpcSettings
 from pipirik_wars.infrastructure.random import RealRandom, SeededRandom
 from pipirik_wars.infrastructure.rate_limit import (
     InMemoryTokenBucketRateLimiter,
@@ -473,6 +495,23 @@ class Container:
     # Интегрирован в `SpinPaidRoulette` (Step 5b в 10-step flow-е).
     prize_pool_repo: IPrizePoolRepository
     record_donation: RecordDonation
+    # Призовые лоты + крипто-выплаты (Спринт 4.1-C + 4.1-D). 4.1-C —
+    # `prize_lot_repo` (`SqlAlchemyPrizeLotRepository`), use-case-ы
+    # `GeneratePrizeLots` (cron 1×/час) + reservation в спинах. 4.1-D —
+    # `wallet_repo` (`SqlAlchemyWalletRepository`), use-case-ы `LinkWallet`
+    # / `ClaimPrize` / `ExpireReservedPrizeLots`, `ton_payout_adapter`
+    # (`TonRpcAdapter` поверх `TonRpcHttpClient` + `Ed25519MessageSigner` +
+    # `JettonUsdtProvider`), `tg_stars_verifier` (`HmacTgStarsPayloadVerifier`),
+    # `ton_connect_verifier` (`SandboxTonConnectVerifier` stub до 4.1-E).
+    prize_lot_repo: IPrizeLotRepository
+    wallet_repo: IWalletRepository
+    ton_payout_adapter: ITonPayoutAdapter
+    ton_connect_verifier: ITonConnectVerifier
+    tg_stars_verifier: ITgStarsPayloadVerifier
+    generate_prize_lots: GeneratePrizeLots
+    link_wallet: LinkWallet
+    claim_prize: ClaimPrize
+    expire_reserved_prize_lots: ExpireReservedPrizeLots
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
     get_top_players: GetTopPlayers
@@ -1239,6 +1278,61 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         balance_config=balance,
         clock=clock,
     )
+    # Спринт 4.1-D / D.10.c: composition root для крипто-выплат.
+    # Если `settings.tg_stars` / `settings.ton_rpc` не заданы (None) —
+    # собираем дефолтами (placeholder-seed `0`*32, placeholder-secret
+    # `"placeholder-tg-stars-secret"`). Это позволяет unit-тестам
+    # инстанцировать Container без env-context-а. В production-сборке
+    # обе секции должны быть подняты из env-переменных `TG_STARS_*` и
+    # `TON_RPC_*`.
+    tg_stars_settings = settings.tg_stars or TgStarsSettings(
+        secret=SecretStr("placeholder-tg-stars-secret-replace-via-env-32b"),
+    )
+    tg_stars_verifier: ITgStarsPayloadVerifier = HmacTgStarsPayloadVerifier(
+        settings=tg_stars_settings,
+    )
+    ton_rpc_settings = settings.ton_rpc or TonRpcSettings()
+    # Hex-seed из `TonRpcSettings.payout_wallet_signing_key_seed`:
+    # 64 hex-символа → 32 байта; используется `Ed25519MessageSigner`-ом.
+    # Validator в `TonRpcSettings` уже проверил формат, здесь декодируем.
+    _payout_seed_bytes = bytes.fromhex(
+        ton_rpc_settings.payout_wallet_signing_key_seed.get_secret_value(),
+    )
+    ton_rpc_http_client = TonRpcHttpClient(settings=ton_rpc_settings)
+    ton_message_signer = Ed25519MessageSigner(signing_key_seed=_payout_seed_bytes)
+    jetton_usdt_provider = JettonUsdtProvider(
+        client=ton_rpc_http_client,
+        jetton_master_address=ton_rpc_settings.usdt_jetton_master,
+    )
+    ton_payout_adapter: ITonPayoutAdapter = TonRpcAdapter(
+        client=ton_rpc_http_client,
+        settings=ton_rpc_settings,
+        jetton_provider=jetton_usdt_provider,
+        signer=ton_message_signer,
+    )
+    # Спринт 4.1-D / D.6: `IWalletRepository` для use-case-ов
+    # `LinkWallet` / `ClaimPrize`. Upsert через ON CONFLICT (Postgres/SQLite).
+    wallet_repo: IWalletRepository = SqlAlchemyWalletRepository(uow=uow)
+    # `ITonConnectVerifier` — stub до 4.1-E. В sandbox-е принимает
+    # non-empty proof (manual entry для testnet); в mainnet — отвергает
+    # всё (fail-closed). `is_sandbox` берётся из `TonRpcSettings`.
+    ton_connect_verifier: ITonConnectVerifier = SandboxTonConnectVerifier(
+        is_sandbox=ton_rpc_settings.is_sandbox,
+    )
+    link_wallet = LinkWallet(
+        wallet_repository=wallet_repo,
+        ton_connect_verifier=ton_connect_verifier,
+        audit_logger=audit,
+        clock=clock,
+    )
+    claim_prize = ClaimPrize(
+        prize_lot_repository=prize_lot_repo,
+        prize_pool_repository=prize_pool_repo,
+        wallet_repository=wallet_repo,
+        payout_adapter=ton_payout_adapter,
+        audit_logger=audit,
+        clock=clock,
+    )
     spin_paid_roulette = SpinPaidRoulette(
         uow=uow,
         players=players,
@@ -1803,6 +1897,15 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         spin_paid_roulette=spin_paid_roulette,
         prize_pool_repo=prize_pool_repo,
         record_donation=record_donation,
+        prize_lot_repo=prize_lot_repo,
+        wallet_repo=wallet_repo,
+        ton_payout_adapter=ton_payout_adapter,
+        ton_connect_verifier=ton_connect_verifier,
+        tg_stars_verifier=tg_stars_verifier,
+        generate_prize_lots=generate_prize_lots,
+        link_wallet=link_wallet,
+        claim_prize=claim_prize,
+        expire_reserved_prize_lots=expire_reserved_prize_lots,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
         get_top_players=get_top_players,
@@ -2024,6 +2127,25 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     # `spin_paid_roulette` для самой прокрутки после подтверждения
     # платежа Telegram-ом.
     dispatcher["spin_paid_roulette"] = container.spin_paid_roulette
+    # Спринт 4.1-D — bot-handler `/roulette_paid` теперь проверяет
+    # подпись `invoice_payload`-а HMAC-верификатором (D.8.c). Раньше
+    # `tg_stars_verifier` не пробрасывался в workflow-data (handler
+    # бросал MissingDependencyError на первом же платеже). На D.10.c
+    # composition root собирает `HmacTgStarsPayloadVerifier` из
+    # `TgStarsSettings`-секрета и пробрасывает в dispatcher.
+    dispatcher["tg_stars_verifier"] = container.tg_stars_verifier
+    # Спринт 4.1-D — bot-handler-ы `/link_wallet*` (личка-only) и
+    # `/claim_prize <lot_id>`. `link_wallet`-use-case верифицирует
+    # `ton_proof` (D.6 — manual entry; production — TON Connect signature
+    # verification, добавится в 4.1-E). `claim_prize`-use-case проверяет
+    # `wallet.address == recipient_address`, вызывает `ITonPayoutAdapter`
+    # и обрабатывает refund-ветку (`actual_fee > fee_buffer`). Handler-ы
+    # требуют доступа к `wallet_repo` / `prize_lot_repo` для read-side
+    # отображения карточек.
+    dispatcher["link_wallet"] = container.link_wallet
+    dispatcher["claim_prize"] = container.claim_prize
+    dispatcher["wallet_repository"] = container.wallet_repo
+    dispatcher["prize_lot_repository"] = container.prize_lot_repo
     return dispatcher
 
 

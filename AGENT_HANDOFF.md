@@ -1,4 +1,4 @@
-# AGENT HANDOFF — Спринт 4.1-D (шаг D.10.b/D.15, после декомпозиции — шаг D.10.b / D.15 + 14 микрошагов D.7.a–D.10.d)
+# AGENT HANDOFF — Спринт 4.1-D (шаг D.10.c/D.15, после декомпозиции — шаг D.10.c / D.15 + 14 микрошагов D.7.a–D.10.d)
 
 > Этот файл — временный safety-net. Обновляется в том же коммите, что и основные изменения, и лежит в ветке пока есть незаконченная работа. Удали его отдельным коммитом перед открытием PR-а.
 
@@ -93,27 +93,38 @@
   - **CI:** `make lint` зелёный, `make typecheck` 999 source files зелён, `make imports` 4 contracts kept, `pytest tests/unit/` 5678 passed + 2 skipped.
   - **Известные ограничения:** real-seqno-fetch требует рабочего payout-wallet-а на testnet/mainnet (не проверяем в unit-suite, покрывается в D.10.d smoke). Subwallet_id в settings—default `698_983_191`; production-override обязателен при использовании non-standard wallet.
 
+- **D.10.c (этот коммит):** Composition root для крипто-выплат в `bot/main.py::Container` + `build_dispatcher(...)`:
+  - **Settings (`infrastructure/settings/settings.py`)** расширен полями `ton_rpc: TonRpcSettings | None = None` и `tg_stars: TgStarsSettings | None = None`. Оба `Optional`, чтобы Settings() без env не падал (unit-tests).
+  - **TonRpcSettings (`infrastructure/payments/ton_rpc/settings.py`)** расширен полем `payout_wallet_signing_key_seed: SecretStr` (default `"0"*64` placeholder; production читает из env `TON_RPC_PAYOUT_WALLET_SIGNING_KEY_SEED`) + hex-validator (64 hex char = 32 byte Ed25519 seed); не декодирует, только валидирует формат.
+  - **`infrastructure/payments/ton_connect/__init__.py`** новый модуль: `SandboxTonConnectVerifier(is_sandbox: bool)` — stub до 4.1-E. `is_sandbox=True` → accept non-empty proof (для testnet/manual-entry); `is_sandbox=False` → fail-closed (returns False, WARNING-log).
+  - **`build_container(...)` в `bot/main.py`** инстанциирует production-цепочку: `TonRpcHttpClient(settings)` → `Ed25519MessageSigner(signing_key_seed=bytes.fromhex(...))` → `JettonUsdtProvider(client, jetton_master_address)` → `TonRpcAdapter(client, settings, jetton_provider, signer)`; `HmacTgStarsPayloadVerifier(tg_stars_settings)`; `SandboxTonConnectVerifier(is_sandbox=ton_rpc_settings.is_sandbox)`; `SqlAlchemyWalletRepository(uow)`; use-case-ы `LinkWallet(wallet_repo, ton_connect_verifier, audit, clock)` + `ClaimPrize(lot_repo, pool_repo, wallet_repo, payout_adapter, audit, clock)`. Fallback на default-секции, когда `settings.ton_rpc` / `settings.tg_stars` = None.
+  - **`Container` dataclass** расширен 10 полями: `prize_lot_repo`, `wallet_repo`, `ton_payout_adapter`, `ton_connect_verifier`, `tg_stars_verifier`, `generate_prize_lots`, `link_wallet`, `claim_prize`, `expire_reserved_prize_lots`.
+  - **`build_dispatcher(...)`** пробрасывает крипто-DI в workflow-data: `dp["tg_stars_verifier"]`, `dp["link_wallet"]`, `dp["claim_prize"]`, `dp["wallet_repository"]`, `dp["prize_lot_repository"]`. Закрывает MissingDependencyError-blocker для handler-а `/roulette_paid` (D.8.c).
+  - **Тесты:** 12 unit в `tests/unit/bot/test_container_ton_rpc.py` (TestBuildContainerCryptoWiring × 7 — real adapters; TestBuildContainerFallbackForOptionalSections × 2 — Settings без env-секций; aiogram-singleton constraint не разрешает > 1 build_dispatcher в сессии — assertions для workflow-data добавлены в существующий `test_composition_root.py::TestBuildDispatcher::test_build_dispatcher_assembles_full_stack` × 5).
+  - **Composition-root тесты `test_composition_root.py::_container_with_fakes()`** расширен 4 MagicMock-ами (`IWalletRepository`, `ITonPayoutAdapter`, `ITonConnectVerifier`, `ITgStarsPayloadVerifier`) + use-case-ы `LinkWallet` + `ClaimPrize` + `ExpireReservedPrizeLots` на фейках.
+  - **CI:** `make lint` зелёный, `make typecheck` 1000 source files зелёный (новый `payments/ton_connect/`-модуль), `make imports` 4 contracts kept, `pytest tests/unit/bot/test_container_ton_rpc.py tests/unit/bot/test_composition_root.py` 20 passed.
+
 ## На каком файле / задаче остановился
-- D.10.b полностью завершён (3 суб-коммита). Следующий шаг — **D.10.c «Composition root: DI сборка в `bot/main.py::Container`»**:
-  - Инстанцировать `TonRpcHttpClient` (из D.10.a) + `Ed25519MessageSigner` (из D.10.b-1, seed из secret `TON_RPC_WALLET_SIGNING_SEED`) + `JettonUsdtProvider` (из D.5).
-  - Собрать `TonRpcAdapter` с всеми DI-зависимостями; разрешить `ITonPayoutAdapter` в `Container`.
-  - Подключить `HmacTgStarsPayloadVerifier` (из D.8.b, secret `TG_STARS_SECRET`) в `Container` (текущий placeholder бросает MissingDependencyError).
-  - 4-6 unit-тестов в `test_register_routers.py` или новый `test_container_ton_rpc.py`.
-  - **D.10.d:** smoke-test (`tests/smoke/test_ton_rpc_payout.py`): отдельный marker `@pytest.mark.smoke`, запуск через `make smoke`/`pytest tests/smoke/`. Имитирует 3 сценария payout (TON, USDT-success, USDT-jetton-resolution-failure) через mocked HTTP layer (httpx.MockTransport).
-- Note for D.10.c: `wallet_subwallet_id` settings field имеет default `698_983_191`. Production-override через `TON_RPC_WALLET_SUBWALLET_ID`-знв-вариабл. Документировать в README в финале спринта.
+- D.10.c завершён. Следующий шаг — **D.10.d «Smoke-test TON-RPC payout-stack»**:
+  - `tests/smoke/test_ton_rpc_payout.py` (новый файл): отдельный marker `@pytest.mark.smoke`, запуск через `make smoke` или `pytest tests/smoke/`.
+  - 3 сценария payout через `httpx.MockTransport` (без live network): (1) TON payout — `TonRpcAdapter.payout(currency=TON, ...)` через mocked `/runGetMethod` (seqno) + `/sendBoc` (tx_hash + actual_fee_native); (2) USDT-success — `currency=USDT` через mocked `get_wallet_address` resolve + `sendBoc` (jetton-transfer-body); (3) USDT-jetton-resolution-failure — mocked `get_wallet_address` returns 4xx → `JettonResolutionError`.
+  - DI: использовать реальный `build_container(...)` или собирать минимальный `TonRpcAdapter` напрямую (зависит от того, нужен ли whole Container).
+  - Дополнить `Makefile`-target `smoke: pytest -m smoke tests/smoke/` (если ещё нет).
+  - **D.11–D.15:** локальный `make ci`, doc-commit, удалить HANDOFF, PR, CI.
+- *Note for D.10.d:* `SandboxTonConnectVerifier` создаёт WARNING-log при mainnet-fail-closed — может всплыть в caplog-фикстурах parallel pytest-xdist. Локализовать через `caplog.set_level(...)` или мок.
+- *Note for D.10.d:* placeholder-seed `0`*32 → Ed25519 deterministic public_key. Это валидное Ed25519, но не безопасное для production. Smoke-test может детерминистично проверять `signer.public_key` против эталона.
 - *Note for D.9.a:* pre-checkout-HMAC-валидация (handler `handle_pre_checkout_query`, `roulette_paid.py:~302`) перенесена в 4.1-E (см. plan); сейчас pre-checkout валидирует только `parse_invoice_payload` + amount, без HMAC.
-- *Note for D.10.c:* refund-ветка пока рендерит `actual_fee_native=0` (placeholder) — `ClaimPrizeResult.refund_*` контракт расширим в D.10.c.
-- *Note for D.10.c:* composition-root (`bot/main.py::Container`) пока не трогаем — `HmacTgStarsPayloadVerifier`-инстанс не собран; handler-параметр `tg_stars_verifier` пока бросит `MissingDependencyError` при реальном вызове, но это сборочный issue, не функциональный. Окончательная сборка в D.10.c.
+- *Note for D.10.c (закрыто):* `MissingDependencyError`-blocker в handler-е `/roulette_paid` закрыт в этом коммите — `tg_stars_verifier` пробрасывается в workflow-data через build_dispatcher.
 - Где брать ТЗ: `docs/current_tasks.md` чек-лист D.9.a–D.10.d; `docs/development_plan.md` Спринт 4.1, задача 4.1.2 (TON Connect) + 4.1.4 (антифрод/idempotency).
 
 ## Состояние ветки
 - Ветка: `devin/1778501374-sprint-4-1-D-ton-connect-usdt-claim-prize`
 - База: `main` (= `db8e630 Merge pull request #131`)
-- Предыдущий коммит: `f09ce48 feat(4.1-D): D.10.b-2 — TON BoC encoder (Cell/CellBuilder/serialize_boc/parse_address) + 82 unit-tests`.
-- Последний коммит (этот): `feat(4.1-D): D.10.b-3 — real TEP-67/74 + Ed25519 signing + adaptive off_bytes + 33 BoC golden-tests`.
+- Предыдущий коммит: `e3a5f9e feat(4.1-D): D.10.b-3 — real TEP-67/74 + Ed25519 signing + adaptive off_bytes + 33 BoC golden-tests`.
+- Последний коммит (этот): `feat(4.1-D): D.10.c — composition root DI assembly (TON-RPC + TG-Stars verifier + LinkWallet/ClaimPrize)`.
 - Незакоммиченные изменения: нет (после коммита).
-- CI прогонялся локально на этом коммите: `make lint` зелён, `make typecheck` 999 source files зелён, `make imports` 4 contracts kept, `pytest tests/unit/` 5678 passed + 2 skipped за 1m54s. Известный флак под -n auto в `test_invalid_payload_logs_machine_readable_reason` (D.8.c, caplog конфликт в parallel-fixture) — в isolated passed.
-- GitHub CI: не открыт PR (по протоколу — PR откроется после D.13/D.14). Прежний прогон D.6 на GitHub не нужен — workflow `paths-ignore: ['docs/**', '**.md', 'AGENT_HANDOFF.md']` ignored docs-коммиты, а функциональные пуши до открытия PR-а в `on: pull_request`-trigger не попадают.
+- CI прогонялся локально на этом коммите выборочно: `make lint` зелён, `make typecheck` 1000 source files зелён, `make imports` 4 contracts kept, `pytest tests/unit/bot/test_container_ton_rpc.py tests/unit/bot/test_composition_root.py` 20 passed. Полный `make ci` запустится после D.10.d (smoke-test).
+- GitHub CI: не открыт PR (по протоколу — PR откроется после D.13/D.14).
 
 ## Команды для следующего агента
 - Поднять окружение: см. README.md «Локальная разработка» (`python3.12 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]" && pre-commit install`).
