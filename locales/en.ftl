@@ -1537,3 +1537,20 @@ admin-prize-pool-frozen =
     By: admin_id=<code>{ $admin_id }</code>
     At: <code>{ $frozen_at }</code>
     Reason: { $reason }
+
+# ───────────────────────────────────────────────────────────────────────────
+# Sprint 4.1-E.13 — admin command `/refund_lot <lot_id> <reason>` (GDD §12.6.6)
+# Force-refund a prize lot into the crypto-pool (super-admin + TOTP-confirm).
+# Access: SUPER_ADMIN (see AdminCommandKind.REFUND_LOT). Phase 1: `/refund_lot`
+# issues a token; phase 2: `/confirm <token> <code>` invokes RefundLot use-case.
+# ───────────────────────────────────────────────────────────────────────────
+admin-refund-lot-usage = ⚠️ Usage: <code>/refund_lot &lt;lot_id&gt; &lt;reason&gt;</code>. Both arguments are required.
+admin-refund-lot-not-authorized = ❌ Only super-admins can force-refund prize lots.
+admin-refund-lot-totp-not-configured = ❌ Your TOTP is not configured. <code>/refund_lot</code> is unavailable until you run <code>/admin_setup_totp</code>.
+admin-refund-lot-bad-lot-id = ⚠️ <code>{ $value }</code> is not a valid lot_id (positive integer).
+admin-refund-lot-no-reason = ⚠️ Reason is required. Usage: <code>/refund_lot &lt;lot_id&gt; &lt;reason&gt;</code>.
+admin-refund-lot-confirm-issued = 🛡️ Confirm the refund. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>. The token expires in { $ttl_seconds } seconds.
+admin-refund-lot-success = ✅ Lot <code>#{ $lot_id }</code> ({ $currency } <code>{ $amount }</code>) returned to the pool. Pool balance after refund: <code>{ $pool_after }</code>.
+admin-refund-lot-already-refunded = ℹ️ Lot <code>#{ $lot_id }</code> has already been refunded. Pool balance: <code>{ $pool_after }</code>.
+admin-refund-lot-not-found = 🔍 Lot <code>#{ $lot_id }</code> not found.
+admin-refund-lot-bad-transition = 🚫 Lot <code>#{ $lot_id }</code> is in status <code>{ $status }</code> — refund via <code>/refund_lot</code> is not permitted (see GDD §12.6.6).

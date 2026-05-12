@@ -1541,3 +1541,20 @@ admin-prize-pool-frozen =
     Кем: admin_id=<code>{ $admin_id }</code>
     Когда: <code>{ $frozen_at }</code>
     Причина: { $reason }
+
+# ───────────────────────────────────────────────────────────────────────────
+# Спринт 4.1-E.13 — admin-команда `/refund_lot <lot_id> <reason>` (ГДД §12.6.6)
+# Принудительно вернуть лот в крипто-пул (super-admin + TOTP-confirm).
+# Доступ: SUPER_ADMIN (см. AdminCommandKind.REFUND_LOT). Фаза 1: `/refund_lot`
+# выдаёт токен; фаза 2: `/confirm <token> <code>` вызывает RefundLot use-case.
+# ───────────────────────────────────────────────────────────────────────────
+admin-refund-lot-usage = ⚠️ Использование: <code>/refund_lot &lt;lot_id&gt; &lt;причина&gt;</code>. Оба параметра обязательны.
+admin-refund-lot-not-authorized = ❌ Только super-admin-ы могут принудительно возвращать лоты в пул.
+admin-refund-lot-totp-not-configured = ❌ У тебя не настроен TOTP. <code>/refund_lot</code> без него недоступен — запусти <code>/admin_setup_totp</code>.
+admin-refund-lot-bad-lot-id = ⚠️ <code>{ $value }</code> не похож на lot_id (положительное целое).
+admin-refund-lot-no-reason = ⚠️ Причина обязательна. Использование: <code>/refund_lot &lt;lot_id&gt; &lt;причина&gt;</code>.
+admin-refund-lot-confirm-issued = 🛡️ Подтверди возврат лота. Отправь: <code>/confirm { $token } &lt;6-значный код&gt;</code>. Токен живёт { $ttl_seconds } секунд.
+admin-refund-lot-success = ✅ Лот <code>#{ $lot_id }</code> ({ $currency } <code>{ $amount }</code>) возвращён в пул. Баланс валюты после возврата: <code>{ $pool_after }</code>.
+admin-refund-lot-already-refunded = ℹ️ Лот <code>#{ $lot_id }</code> уже был возвращён в пул ранее. Баланс валюты: <code>{ $pool_after }</code>.
+admin-refund-lot-not-found = 🔍 Лот <code>#{ $lot_id }</code> не найден.
+admin-refund-lot-bad-transition = 🚫 Лот <code>#{ $lot_id }</code> в статусе <code>{ $status }</code> — возврат через <code>/refund_lot</code> запрещён (см. ГДД §12.6.6).
