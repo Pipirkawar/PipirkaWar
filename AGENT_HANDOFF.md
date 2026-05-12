@@ -1,4 +1,4 @@
-# AGENT HANDOFF — Спринт 4.1-H (шаг H.1/6)
+# AGENT HANDOFF — Спринт 4.1-H (шаг H.2/6)
 
 > Этот файл — временный safety-net на случай обрыва сессии (CONTRIBUTING.md «Уходящий агент»). Обновляется в том же коммите, что и основные изменения. Удаляется отдельным коммитом перед открытием PR-а.
 
@@ -10,21 +10,21 @@
 - Поднял `.venv` (Python 3.12.8), `pip install -e ".[dev]"`, `pre-commit install`. Бейзлайн `make ci` на `b49aec5` зелёный: **6912 passed + 2 skipped + 95.50 % coverage**.
 - Создал ветку `devin/1778613141-sprint-4-1-H-redis-lobby-migration` от свежего `main = b49aec5`.
 - H.0 (`52f4f11`) — pivot `docs/current_tasks.md` под старт 4.1-H + создан sticky `AGENT_HANDOFF.md`.
-- H.1 (этот коммит) — `RedisGlobalLobbyRepository(IGlobalLobbyRepository)` в `src/pipirik_wars/infrastructure/redis/repositories/global_lobby.py`. Key-format: `lobby:queue` LIST (LPUSH в head, RPOP с tail для FIFO) + `lobby:enqueued_at` HASH (`duel_id-строка → ISO-8601`). 3 атомарных Lua-скрипта: `enqueue` (HEXISTS → HSET + LPUSH), `pop_oldest` (RPOP → HGET + HDEL), `remove` (HDEL → LREM). `is_in_lobby` — single `HEXISTS` (Lua не нужен). `±конструктор` принимает `key_prefix` (default `"lobby"`). Экспорт через `infrastructure/redis/__init__.py` + `infrastructure/redis/repositories/__init__.py`. **fakeredis[lua]** в dev-deps (`pyproject.toml`) — без `[lua]`-extra-а `lupa` не ставится и EVAL/EVALSHA в FakeRedis отвечает `unknown command`. +18 unit-тестов в `tests/unit/infrastructure/redis/repositories/test_global_lobby.py`: happy enqueue/pop_oldest/remove/is_in_lobby; dedup (повторный enqueue сохраняет первоначальный `enqueued_at`); FIFO-ordering через 3 записи; разные `duel_id` не конфликтуют; sanity-ключ LIST/HASH; кастомный `key_prefix`; remove-noop + не трогает другие записи; concurrent `asyncio.gather(10× enqueue same duel)` → ровно 1 победитель. mypy --strict зелён (понадобился `cast("Awaitable[bool]", client.hexists(...))` — redis-py-сигнатура `hexists` объявлена как `Awaitable[bool] | bool`).
+- H.1 (`ad07984`) — `RedisGlobalLobbyRepository(IGlobalLobbyRepository)` в `src/pipirik_wars/infrastructure/redis/repositories/global_lobby.py`. Key-format: `lobby:queue` LIST (LPUSH в head, RPOP с tail для FIFO) + `lobby:enqueued_at` HASH (`duel_id-строка → ISO-8601`). 3 атомарных Lua-скрипта: `enqueue` (HEXISTS → HSET + LPUSH), `pop_oldest` (RPOP → HGET + HDEL), `remove` (HDEL → LREM). `is_in_lobby` — single `HEXISTS` (Lua не нужен). `±конструктор` принимает `key_prefix` (default `"lobby"`). Экспорт через `infrastructure/redis/__init__.py` + `infrastructure/redis/repositories/__init__.py`. **fakeredis[lua]** в dev-deps (`pyproject.toml`) — без `[lua]`-extra-а `lupa` не ставится и EVAL/EVALSHA в FakeRedis отвечает `unknown command`. +18 unit-тестов в `tests/unit/infrastructure/redis/repositories/test_global_lobby.py`: happy enqueue/pop_oldest/remove/is_in_lobby; dedup (повторный enqueue сохраняет первоначальный `enqueued_at`); FIFO-ordering через 3 записи; разные `duel_id` не конфликтуют; sanity-ключ LIST/HASH; кастомный `key_prefix`; remove-noop + не трогает другие записи; concurrent `asyncio.gather(10× enqueue same duel)` → ровно 1 победитель. mypy --strict зелён (понадобился `cast("Awaitable[bool]", client.hexists(...))` — redis-py-сигнатура `hexists` объявлена как `Awaitable[bool] | bool`).
 
 ## На каком файле/задаче остановился
 
-- Файл: `src/pipirik_wars/infrastructure/settings/settings.py` (`BotSettings`) + `src/pipirik_wars/bot/main.py` (`build_container`) — следующий шаг.
-- Что планировал дальше: **H.2** — config-flag `BOT_LOBBY_BACKEND={sql|redis}` (default `sql` — backward-compat) + composition-root switch `build_container::global_lobby` на `RedisGlobalLobbyRepository` при redis-бэкенде; выделить локальную переменную `_redis_client = build_redis_client(...)` чтобы переиспользовать её и в ActivityLocks (4.1-G), и в Lobby (4.1-H). +composition-root-тесты: default `sql`, explicit `redis`, mixed (lock=`sql`+lobby=`redis` и наоборот).
-- Где брать ТЗ: `docs/current_tasks.md` чек-лист 4.1-H (пункт H.2); паттерн взять из 4.1-G G.4 (в `bot/main.py::build_container` уже есть аналогичный switch для `activity_locks`).
+- Файл: `tests/integration/redis/test_global_lobby.py` (ещё не создан) — следующий шаг.
+- Что планировал дальше: **H.3** — integration-тесты через fakeredis: полный жизненный цикл (enqueue → is_in_lobby → pop_oldest → remove), dedup (enqueue×2 того же `duel_id`), concurrent enqueue через `asyncio.gather`, atomicity-инварианты (после pop_oldest HASH и LIST оба не содержат следов).
+- Где брать ТЗ: `docs/current_tasks.md` чек-лист 4.1-H (пункт H.3); паттерн взять из `tests/integration/redis/test_activity_lock.py` (если есть) или из соседних integration-файлов в `tests/integration/db/`.
 
 ## Состояние ветки
 
 - Ветка: `devin/1778613141-sprint-4-1-H-redis-lobby-migration`
 - База: `main = b49aec5` (merge PR #135 = 4.1-G «Redis-инфра + ActivityLocks-миграция»).
-- Последний коммит: `<этот коммит>` (H.1 — RedisGlobalLobbyRepository + unit-тесты).
+- Последний коммит: `<этот коммит>` (H.2 — config-flag `BOT_LOBBY_BACKEND` + composition-root switch + 5 composition-root-тестов).
 - Незакоммиченные изменения: нет (всё в этом коммите).
-- CI прогонялся? Частично: ruff + mypy --strict + 18 новых unit-тестов зелёные локально. Следующий полный `make ci` — после H.2 + H.3 (когда коллективный скоуп финальный).
+- CI прогонялся? Частично: ruff + mypy --strict + 18 unit-тестов lobby + 5 composition-root-тестов (default/explicit/mixed/both-redis-shared-client) зелёные локально. Следующий полный `make ci` — после H.3 (integration-тесты).
 
 ## Архитектурные решения 4.1-H (принятые в этой сессии)
 

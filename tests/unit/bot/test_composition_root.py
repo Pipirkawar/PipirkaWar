@@ -215,7 +215,10 @@ from pipirik_wars.infrastructure.rate_limit import (
     InMemoryTokenBucketRateLimiter,
     IRateLimiter,
 )
-from pipirik_wars.infrastructure.redis import RedisActivityLockRepository
+from pipirik_wars.infrastructure.redis import (
+    RedisActivityLockRepository,
+    RedisGlobalLobbyRepository,
+)
 from pipirik_wars.infrastructure.scheduler import APSchedulerDelayedJobScheduler
 from pipirik_wars.infrastructure.settings import (
     BootstrapSettings,
@@ -1721,6 +1724,104 @@ class TestBuildContainer:
         )
         c = build_container(settings=settings)
         assert isinstance(c.activity_locks, RedisActivityLockRepository)
+
+    def test_build_container_lobby_backend_sql_is_default(self) -> None:
+        """`BOT_LOBBY_BACKEND` unset ⇒ SQL-репозиторий (default).
+
+        Спринт 4.1-H, шаг H.2: config-flag-режим `lobby_backend`.
+        """
+        c = build_container(settings=_test_settings())
+        assert isinstance(c.global_lobby, SqlAlchemyGlobalLobbyRepository)
+
+    def test_build_container_lobby_backend_redis_switches_repo(self) -> None:
+        """`BOT_LOBBY_BACKEND=redis` ⇒ Redis-репозиторий.
+
+        Спринт 4.1-H, шаг H.2: composition-root switch на
+        `RedisGlobalLobbyRepository`. `build_redis_client` создаёт
+        `ConnectionPool` лениво — никакого реального сетевого
+        подключения здесь не происходит.
+        """
+        settings = Settings(
+            environment="test",
+            db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+            bot=BotSettings(
+                token=SecretStr("test-token"),
+                lobby_backend="redis",
+            ),
+            bootstrap=BootstrapSettings(),
+        )
+        c = build_container(settings=settings)
+        assert isinstance(c.global_lobby, RedisGlobalLobbyRepository)
+
+    def test_build_container_mixed_lock_sql_lobby_redis(self) -> None:
+        """`activity_lock_backend=sql` + `lobby_backend=redis` ⇒ независимые бэкенды.
+
+        Спринт 4.1-H, шаг H.2: оба config-flag-а независимы; один
+        Redis-клиент создаётся через `build_redis_client(settings.redis)`
+        (см. `bot/main.py::build_container`, переменная `redis_client`)
+        и переиспользуется всеми Redis-репозиториями, когда оба флага
+        включены одновременно.
+        """
+        settings = Settings(
+            environment="test",
+            db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+            bot=BotSettings(
+                token=SecretStr("test-token"),
+                activity_lock_backend="sql",
+                lobby_backend="redis",
+            ),
+            bootstrap=BootstrapSettings(),
+        )
+        c = build_container(settings=settings)
+        assert isinstance(c.activity_locks, SqlAlchemyActivityLockRepository)
+        assert isinstance(c.global_lobby, RedisGlobalLobbyRepository)
+
+    def test_build_container_mixed_lock_redis_lobby_sql(self) -> None:
+        """`activity_lock_backend=redis` + `lobby_backend=sql` ⇒ независимые бэкенды.
+
+        Симметрия предыдущего теста — оба флага работают независимо.
+        """
+        settings = Settings(
+            environment="test",
+            db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+            bot=BotSettings(
+                token=SecretStr("test-token"),
+                activity_lock_backend="redis",
+                lobby_backend="sql",
+            ),
+            bootstrap=BootstrapSettings(),
+        )
+        c = build_container(settings=settings)
+        assert isinstance(c.activity_locks, RedisActivityLockRepository)
+        assert isinstance(c.global_lobby, SqlAlchemyGlobalLobbyRepository)
+
+    def test_build_container_both_redis_share_single_client(self) -> None:
+        """`activity_lock_backend=redis` + `lobby_backend=redis` ⇒ один Redis-клиент.
+
+        `bot/main.py::build_container` создаёт `build_redis_client(...)`
+        ровно один раз через `needs_redis`-флаг и передаёт его обоим
+        репозиториям. Проверяем, что `RedisActivityLockRepository._client`
+        и `RedisGlobalLobbyRepository._client` — тот же самый instance
+        (long-lived singleton, переиспользует `ConnectionPool`).
+        """
+        settings = Settings(
+            environment="test",
+            db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+            bot=BotSettings(
+                token=SecretStr("test-token"),
+                activity_lock_backend="redis",
+                lobby_backend="redis",
+            ),
+            bootstrap=BootstrapSettings(),
+        )
+        c = build_container(settings=settings)
+        assert isinstance(c.activity_locks, RedisActivityLockRepository)
+        assert isinstance(c.global_lobby, RedisGlobalLobbyRepository)
+        # Тот же самый Redis-клиент переиспользуется (long-lived singleton).
+        # Sanity-инвариант: «один клиент на оба бэкенда»; обращение к
+        # protected `_client` оправдано контрактом — в `build_container`
+        # один `build_redis_client(...)` инжектится в оба репозитория.
+        assert c.activity_locks._client is c.global_lobby._client
 
 
 class TestBuildDispatcher:
