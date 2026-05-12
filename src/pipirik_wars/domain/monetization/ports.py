@@ -41,6 +41,7 @@ from typing import Protocol
 from pipirik_wars.domain.monetization.entities import (
     Payment,
     PaymentStatus,
+    PayoutFreeze,
     PrizeLot,
     PrizeLotStatus,
     PrizePool,
@@ -55,6 +56,7 @@ from pipirik_wars.domain.monetization.value_objects import (
 __all__ = [
     "IFeeEstimator",
     "IPaymentLedger",
+    "IPayoutFreezeRepository",
     "IPrizeLotRepository",
     "IPrizePoolRepository",
     "ITgStarsPayloadVerifier",
@@ -605,5 +607,96 @@ class ITgStarsPayloadVerifier(Protocol):
         Raises:
         * ``InvalidStarsPayloadError`` — payload пуст / превышает лимит /
           malformed / bad pack / bad seed / HMAC-mismatch.
+        """
+        ...
+
+
+class IPayoutFreezeRepository(Protocol):
+    """Порт singleton-репозитория ``PayoutFreeze`` (ГДД §12.6.5, Спринт 4.1-E).
+
+    Состояние freeze-флага крипто-выплат хранится одной строкой в
+    таблице ``payout_freeze`` (миграция, Спринт 4.1-E, шаг E.11).
+    Репозиторий собирает строку в доменный ``PayoutFreeze``-VO и
+    отдаёт его use-case-ам.
+
+    Используется:
+
+    * ``ClaimPrize`` (E.10) — ``get_state()`` перед попыткой выплаты;
+      если ``is_frozen=True`` → ``ClaimPrizePayoutsFrozenError``.
+    * ``FreezePayouts`` (E.7) — ``set_frozen(...)``.
+    * ``UnfreezePayouts`` (E.7) — ``set_unfrozen(...)``.
+    * ``GetPrizePoolStatus`` (E.9) — ``get_state()`` для печати
+      ``frozen_by``/``reason`` в карточке ``/prize_pool``.
+
+    Все методы — асинхронные, выполняются в открытой ``IUnitOfWork``-сессии.
+    Композиционный root (``bot/main.py``, шаг E.15) пробрасывает
+    SQLAlchemy-implementation (``SqlAlchemyPayoutFreezeRepository``,
+    шаг E.11); тесты use-case-ов — ``FakePayoutFreezeRepository``
+    (in-memory snapshot с тем же контрактом).
+
+    Семантика:
+
+    * ``get_state()`` — снапшот строки ``payout_freeze``. На свежей БД
+      (сразу после миграции с seed-строкой) возвращает
+      ``PayoutFreeze.unfrozen()``. Идемпотентен (SELECT без побочных
+      эффектов).
+    * ``set_frozen(*, admin_id, at, reason)`` — переключить состояние
+      в ``is_frozen=True`` с указанными атрибутами. **Идемпотентность**:
+      повторный вызов с тем же ``admin_id`` (тот же админ повторно
+      жмёт ``/freeze_payouts``) — обновляет только ``reason``/``at``
+      и **не** считается «новым freeze-актом» на уровне БД-ряда
+      (одна строка с UPSERT-ом); admin-аудит решает на уровне use-case-а,
+      писать ли вторую запись ``ADMIN_FREEZE_PAYOUTS`` (см. E.7).
+      Возвращает свежий ``PayoutFreeze``-снапшот.
+    * ``set_unfrozen()`` — переключить состояние в ``is_frozen=False``
+      (все три nullable-атрибута → ``None``). Идемпотентен:
+      повторный ``unfreeze`` на уже-unfrozen-строке — no-op (то же
+      состояние). Возвращает свежий ``PayoutFreeze``-снапшот.
+
+    Конкуррентность: SQL-implementation использует одиночный
+    ``UPDATE ... RETURNING`` (или ``INSERT ... ON CONFLICT ... DO
+    UPDATE`` при первом freeze) — атомарно под row-lock-ом, без явных
+    транзакций над строкой.
+    """
+
+    async def get_state(self) -> PayoutFreeze:
+        """Получить текущее состояние freeze-флага.
+
+        На свежей БД (после миграции, в которой есть seed-row) возвращает
+        ``PayoutFreeze.unfrozen()``. Идемпотентен.
+        """
+        ...
+
+    async def set_frozen(
+        self,
+        *,
+        admin_id: int,
+        at: datetime,
+        reason: str,
+    ) -> PayoutFreeze:
+        """Переключить состояние в ``is_frozen=True``.
+
+        Параметры:
+
+        * ``admin_id`` — id админа, выполняющего ``/freeze_payouts``.
+          Сохраняется в ``frozen_by_admin_id``.
+        * ``at`` — TZ-aware момент freeze-а (из ``IClock.now()``
+          use-case-а).
+        * ``reason`` — обязательный комментарий админа (`>= 1` непустой
+          символ; домен валидирует это в ``PayoutFreeze.__post_init__``).
+
+        Возвращает свежий ``PayoutFreeze``-снапшот с
+        ``is_frozen=True``. Идемпотентен: повторный вызов того же админа
+        обновит ``reason``/``at`` (но не создаст «вторую заморозку»;
+        admin-аудит — отдельный invariant на уровне use-case-а E.7).
+        """
+        ...
+
+    async def set_unfrozen(self) -> PayoutFreeze:
+        """Переключить состояние в ``is_frozen=False``.
+
+        Сбрасывает все три nullable-атрибута в ``None``. Идемпотентен:
+        повторный ``unfreeze`` на уже-unfrozen-строке — no-op.
+        Возвращает свежий ``PayoutFreeze``-снапшот с ``is_frozen=False``.
         """
         ...

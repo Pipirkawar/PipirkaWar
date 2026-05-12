@@ -22,6 +22,7 @@
 from pipirik_wars.domain.monetization.entities import (
     Payment,
     PaymentStatus,
+    PayoutFreeze,
     PrizeLot,
     PrizeLotStatus,
     PrizePool,
@@ -41,6 +42,7 @@ from pipirik_wars.domain.monetization.errors import (
 from pipirik_wars.domain.monetization.ports import (
     IFeeEstimator,
     IPaymentLedger,
+    IPayoutFreezeRepository,
     IPrizeLotRepository,
     IPrizePoolRepository,
     ITgStarsPayloadVerifier,
@@ -67,6 +69,7 @@ __all__ = [
     "FeeBufferAmount",
     "IFeeEstimator",
     "IPaymentLedger",
+    "IPayoutFreezeRepository",
     "IPrizeLotRepository",
     "IPrizePoolRepository",
     "ITgStarsPayloadVerifier",
@@ -79,6 +82,7 @@ __all__ = [
     "MonetizationDomainError",
     "Payment",
     "PaymentStatus",
+    "PayoutFreeze",
     "PayoutResult",
     "PrizeLot",
     "PrizeLotInvariantError",
