@@ -16,7 +16,12 @@
 
 ## Текущая позиция
 
-**G.0 в работе.** Сделано в этом коммите:
+**G.1 в работе.** Сделано на ветке:
+
+- **G.0** (`654fbab`) — pivot `current_tasks.md` под 4.1-G + sticky `AGENT_HANDOFF.md`. Baseline `make ci` зелён.
+- **G.1** (этот коммит) — `pyproject.toml`: `redis>=5,<7` в `dependencies` (резолвится в `redis-6.4.0`) + `fakeredis>=2.21,<3` в `[project.optional-dependencies].dev` (`fakeredis-2.35.1`). `pip install -e ".[dev]"` прошёл. `pip-audit` — `No known vulnerabilities found` для всех пакетов. Smoke-проверка `fakeredis.aioredis.FakeRedis` подтверждает: `SET NX PX` атомарен (первый ОК → True, второй на занятом ключе → None), `PTTL` возвращает оставшийся TTL в ms, `DEL` сбрасывает ключ. Это всё, что нужно для `RedisActivityLockRepository`.
+
+Сделано ранее:
 
 1. `git fetch origin --prune` → `main = 555a5c50` (merge #134) → создана ветка `devin/1778606701-sprint-4-1-G-redis-migration` от свежего main.
 2. Прочитаны: CONTRIBUTING.md «Уходящий агент» + «Промпт-приёмка», development_plan.md §7 4.1.12, current_tasks.md.
@@ -27,9 +32,7 @@
 4. Baseline `make ci` зелён на свежем main: **6876 passed + 2 skipped + 95.50% cov** (`ruff` + `mypy --strict` 1052 файла + `lint-imports` 562 файла 4/4 contracts + `pytest`).
 5. `docs/current_tasks.md` перестроен под 4.1-G: новый чек-лист G.0–G.8, snapshot обновлён («Активный PR — 4.1-G»), 4.1-F-чек-лист помечен как `[АРХИВ]`, 4.1.13–4.1.15 переадресованы на 4.1-K (после миграции).
 
-## Следующие шаги (G.1–G.8)
-
-- **G.1** — добавить в `pyproject.toml`: `redis>=5,<6` в `dependencies`; `fakeredis>=2.21,<3` в `[project.optional-dependencies].dev`. `pip install -e ".[dev]"` + проверить `pip-audit` локально.
+## Следующие шаги (G.2–G.8)
 - **G.2** — `RedisSettings` (env-prefix `BOT_REDIS_`) в новом каталоге `src/pipirik_wars/infrastructure/redis/` (модуль не сущ.): `url`, `pool_max_connections`, `connect_timeout_seconds`, `socket_timeout_seconds`, `socket_keepalive`. `build_redis_client(settings) -> redis.asyncio.Redis` с явным connection-pool-ом. Добавить `Settings.redis: RedisSettings = Field(default_factory=...)` в `bot/main.py` или `bot/config.py` (там же, где другие Settings).
 - **G.3** — `RedisActivityLockRepository(IActivityLockRepository)` в `src/.../infrastructure/redis/repositories/activity_lock.py`: key `lock:{actor_kind}:{actor_id}`, value `json.dumps({"reason": reason.value, "acquired_at": now.isoformat()})`, atomic `SET key value NX PX ttl_ms`. unit-тесты через `fakeredis.aioredis.FakeRedis`.
 - **G.4** — config-flag `Settings.activity_lock_backend: Literal["sql","redis"] = "sql"` (env `BOT_ACTIVITY_LOCK_BACKEND`); в `bot/main.py::build_container` switch: `redis` → `build_redis_client(...)` + `RedisActivityLockRepository`; `sql` (default) → текущий `SqlAlchemyActivityLockRepository`. По аналогии с `BOT_TON_CONNECT_VERIFIER_MODE` из 4.1-F (см. F.7).
