@@ -37,10 +37,20 @@ from aiogram.types import Message
 from pipirik_wars.application.admin import (
     RequestAdminConfirm,
     RequestAdminConfirmInput,
+    VerifyAdminConfirmOutput,
 )
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
+from pipirik_wars.application.monetization import (
+    FreezePayoutsInput,
+    UnfreezePayoutsInput,
+)
 from pipirik_wars.bot.filters import IsAdminFilter
+from pipirik_wars.bot.handlers.admin_economy import (
+    CONFIRM_DISPATCHERS,
+    ConfirmDispatchDeps,
+    ConfirmPayloadInvalidPresenter,
+)
 from pipirik_wars.bot.middlewares import TgIdentity
 from pipirik_wars.bot.presenters.admin_freeze_payouts import (
     FreezePayoutsPresenter,
@@ -178,10 +188,126 @@ async def handle_unfreeze_payouts(
     )
 
 
+# ── Фаза 2: dispatch_freeze_payouts / dispatch_unfreeze_payouts (вызываются из /confirm) ─
+
+
+async def dispatch_freeze_payouts(
+    result: VerifyAdminConfirmOutput,
+    message: Message,
+    identity: TgIdentity,
+    locale: Locale,
+    bundle: IMessageBundle,
+    deps: ConfirmDispatchDeps,
+) -> None:
+    """Фаза 2 `/freeze_payouts` — вызывает `FreezePayouts.execute(...)` после TOTP.
+
+    Диспетчеризуется из `admin_support.handle_confirm` по
+    `result.command_kind == COMMAND_KIND_FREEZE_PAYOUTS`. Payload из фазы 1
+    — ``{reason: str}`` (см. `_PAYLOAD_KEY_REASON` выше).
+
+    Обработка веток:
+
+    * `AuthorizationError` — админа деактивировали между фазами 1 и 2 (race);
+    * `out.was_already_frozen=True` — идемпотентный retry (тот же
+      админ и та же причина) → `already_frozen`;
+    * успех → `success(reason)`.
+    """
+    presenter = FreezePayoutsPresenter(bundle=bundle)
+
+    reason_raw = result.payload.get(_PAYLOAD_KEY_REASON)
+    if not isinstance(reason_raw, str):
+        # Payload собирается фазой 1 — валидным он быть обязан.
+        # Если нет — в TOTP-store-е что-то сломалось; возвращаем
+        # общий «invalid command_kind»-ответ, не светим детали payload-а.
+        await message.answer(
+            ConfirmPayloadInvalidPresenter(bundle=bundle).message(
+                locale=locale,
+                command_kind=result.command_kind,
+            ),
+        )
+        return
+
+    try:
+        out = await deps.freeze_payouts.execute(
+            FreezePayoutsInput(
+                actor_tg_id=identity.tg_user_id,
+                reason=reason_raw,
+                tg_chat_id=identity.chat_id,
+            ),
+        )
+    except AuthorizationError:
+        await message.answer(presenter.not_authorized(locale=locale))
+        return
+
+    if out.was_already_frozen:
+        await message.answer(
+            presenter.already_frozen(locale=locale, reason=reason_raw),
+        )
+        return
+
+    await message.answer(
+        presenter.success(locale=locale, reason=reason_raw),
+    )
+
+
+async def dispatch_unfreeze_payouts(
+    result: VerifyAdminConfirmOutput,
+    message: Message,
+    identity: TgIdentity,
+    locale: Locale,
+    bundle: IMessageBundle,
+    deps: ConfirmDispatchDeps,
+) -> None:
+    """Фаза 2 `/unfreeze_payouts` — вызывает `UnfreezePayouts.execute(...)` после TOTP.
+
+    Диспетчеризуется из `admin_support.handle_confirm` по
+    `result.command_kind == COMMAND_KIND_UNFREEZE_PAYOUTS`. Payload из фазы 1
+    — пустой (параметров у команды нет; reason в admin-аудит пишет
+    сам use-case дефолтом).
+
+    Обработка веток:
+
+    * `AuthorizationError` — админа деактивировали между фазами 1 и 2 (race);
+    * `out.was_already_unfrozen=True` — идемпотентный retry (выплаты
+      и так были разрешены) → `already_unfrozen`;
+    * успех → `success`.
+    """
+    presenter = UnfreezePayoutsPresenter(bundle=bundle)
+
+    try:
+        out = await deps.unfreeze_payouts.execute(
+            UnfreezePayoutsInput(
+                actor_tg_id=identity.tg_user_id,
+                reason=None,
+                tg_chat_id=identity.chat_id,
+            ),
+        )
+    except AuthorizationError:
+        await message.answer(presenter.not_authorized(locale=locale))
+        return
+
+    if out.was_already_unfrozen:
+        await message.answer(presenter.already_unfrozen(locale=locale))
+        return
+
+    await message.answer(presenter.success(locale=locale))
+
+
+# Регистрация в общем registry-диспетчере `/confirm`-handler-а. Импорт
+# `CONFIRM_DISPATCHERS` сразу мутирует словарь — модуль должен быть
+# подтянут в `bot/handlers/__init__.py` до `register_routers`-вызова,
+# что и происходит при `include_router(admin_freeze_payouts_router)`
+# — это будет сделано в E.14.d (аналогично admin_refund_lot).
+CONFIRM_DISPATCHERS[COMMAND_KIND_FREEZE_PAYOUTS] = dispatch_freeze_payouts
+CONFIRM_DISPATCHERS[COMMAND_KIND_UNFREEZE_PAYOUTS] = dispatch_unfreeze_payouts
+
+
 __all__ = [
     "COMMAND_KIND_FREEZE_PAYOUTS",
     "COMMAND_KIND_UNFREEZE_PAYOUTS",
     "REPLY_NON_PRIVATE_RU",
+    "dispatch_freeze_payouts",
+    "dispatch_unfreeze_payouts",
     "handle_freeze_payouts",
     "handle_unfreeze_payouts",
     "router",

@@ -43,7 +43,7 @@ from pipirik_wars.application.admin import (
 )
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
-from pipirik_wars.application.monetization import RefundLot
+from pipirik_wars.application.monetization import FreezePayouts, RefundLot, UnfreezePayouts
 from pipirik_wars.bot.handlers.admin_communication import (
     COMMAND_KIND_BROADCAST_ANNOUNCEMENT,
     REPLY_NON_PRIVATE_RU,
@@ -166,6 +166,8 @@ def _deps(
         broadcast_task_spawner=spawner or _SpyTaskSpawner(),
         clock=_fixed_clock(),
         refund_lot=cast(RefundLot, MagicMock(spec=RefundLot)),
+        freeze_payouts=cast(FreezePayouts, MagicMock(spec=FreezePayouts)),
+        unfreeze_payouts=cast(UnfreezePayouts, MagicMock(spec=UnfreezePayouts)),
     )
 
 

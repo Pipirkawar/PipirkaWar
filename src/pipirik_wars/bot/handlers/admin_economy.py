@@ -50,7 +50,7 @@ from pipirik_wars.application.admin import (
 )
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale, MessageKey
-from pipirik_wars.application.monetization import RefundLot
+from pipirik_wars.application.monetization import FreezePayouts, RefundLot, UnfreezePayouts
 from pipirik_wars.bot.filters import IsAdminFilter
 from pipirik_wars.bot.handlers._idempotency import build_admin_idempotency_key
 from pipirik_wars.bot.middlewares import TgIdentity
@@ -411,7 +411,9 @@ class ConfirmDispatchDeps:
     параметры `handle_confirm`-функции; так компактнее.
 
     `refund_lot` добавлен в 4.1-E.13 для `dispatch_refund_lot`
-    (`bot/handlers/admin_refund_lot.py`). Расширение этого dataclass-а
+    (`bot/handlers/admin_refund_lot.py`). `freeze_payouts` / `unfreeze_payouts`
+    — в 4.1-E.14 для `dispatch_(un)freeze_payouts`
+    (`bot/handlers/admin_freeze_payouts.py`). Расширение этого dataclass-а
     требует синхронного обновления `admin_support.handle_confirm`,
     который строит этот контейнер из aiogram-workflow-data.
     """
@@ -424,6 +426,8 @@ class ConfirmDispatchDeps:
     broadcast_task_spawner: IBroadcastTaskSpawner
     clock: IClock
     refund_lot: RefundLot
+    freeze_payouts: FreezePayouts
+    unfreeze_payouts: UnfreezePayouts
 
 
 ConfirmDispatcher = Callable[

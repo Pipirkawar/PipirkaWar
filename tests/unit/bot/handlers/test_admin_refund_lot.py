@@ -45,7 +45,12 @@ from pipirik_wars.application.admin import (
 )
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
-from pipirik_wars.application.monetization import RefundLot, RefundLotOutput
+from pipirik_wars.application.monetization import (
+    FreezePayouts,
+    RefundLot,
+    RefundLotOutput,
+    UnfreezePayouts,
+)
 from pipirik_wars.bot.handlers.admin_economy import (
     CONFIRM_DISPATCHERS,
     ConfirmDispatchDeps,
@@ -155,6 +160,8 @@ def _deps(*, refund_lot: RefundLot | None = None) -> ConfirmDispatchDeps:
         ),
         clock=_fixed_clock(),
         refund_lot=refund_lot or _stub_refund_lot(),
+        freeze_payouts=cast(FreezePayouts, MagicMock(spec=FreezePayouts)),
+        unfreeze_payouts=cast(UnfreezePayouts, MagicMock(spec=UnfreezePayouts)),
     )
 
 
