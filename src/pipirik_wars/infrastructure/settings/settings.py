@@ -7,12 +7,15 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pipirik_wars.infrastructure.payments.tg_stars.settings import TgStarsSettings
 from pipirik_wars.infrastructure.payments.ton_connect.settings import TonConnectSettings
 from pipirik_wars.infrastructure.payments.ton_rpc.settings import TonRpcSettings
+from pipirik_wars.infrastructure.redis.settings import RedisSettings
 
 
 class DatabaseSettings(BaseSettings):
@@ -88,6 +91,17 @@ class BotSettings(BaseSettings):
         description=(
             "Стартовый MAX_DAU (ГДД §18.5: 200 для VPS 1 GB). "
             "Меняется на горячую через `/set_max_dau N`."
+        ),
+    )
+    activity_lock_backend: Literal["sql", "redis"] = Field(
+        default="sql",
+        description=(
+            "Бэкенд для `IActivityLockRepository` (Спринт 4.1-G, G.4). "
+            "`sql` (default) — `SqlAlchemyActivityLockRepository` поверх "
+            "таблицы `activity_locks`. `redis` — `RedisActivityLockRepository` "
+            "поверх `redis.asyncio.Redis` (требует поднятого Redis-инстанса "
+            "по `settings.redis.url`). Переключается env-флагом "
+            "`BOT_ACTIVITY_LOCK_BACKEND=redis`."
         ),
     )
 
@@ -184,3 +198,12 @@ class Settings(BaseSettings):
     # собирается. ``mode=production`` выбирается явным
     # флагом ``BOT_TON_CONNECT_VERIFIER_MODE=production``.
     ton_connect: TonConnectSettings = Field(default_factory=TonConnectSettings)
+    # Спринт 4.1-G (шаг G.2): Redis-инфраструктура для ActivityLocks-
+    # (G.3) / Lobby- (4.1-H) / DAU- (4.1-I) репозиториев. Поле не
+    # ``Optional`` — `RedisSettings()` без env всегда собирается
+    # (local-dev defaults `redis://localhost:6379/0`). Реальное
+    # подключение к Redis устанавливается только если
+    # `BOT_ACTIVITY_LOCK_BACKEND=redis` (G.4) или явный feature-flag в
+    # следующих PR-ах; иначе settings собран, но client не
+    # инстанцируется.
+    redis: RedisSettings = Field(default_factory=RedisSettings)
