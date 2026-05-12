@@ -78,6 +78,11 @@ class AdminCommandKind(str, enum.Enum):
     SET_MAX_DAU = "set_max_dau"
     BROADCAST_ANNOUNCEMENT = "broadcast_announcement"
     SETUP_TOTP = "setup_totp"
+    # ---- Prize-pool admin (4.1-E, ГДД §12.6.6) ----
+    GET_PRIZE_POOL = "get_prize_pool"
+    REFUND_LOT = "refund_lot"
+    FREEZE_PAYOUTS = "freeze_payouts"
+    UNFREEZE_PAYOUTS = "unfreeze_payouts"
 
     # ── Инфраструктурные (TOTP-confirm flow, доступно тем, кто и саму команду
     #    может вызвать; политика смотрит на сам confirm-flow как на «можно»
@@ -217,6 +222,10 @@ class RoleBasedAdminAuthorizationPolicy(IAdminAuthorizationPolicy):
             AdminCommandKind.SET_MAX_DAU: frozenset({AdminRole.SUPER_ADMIN}),
             AdminCommandKind.BROADCAST_ANNOUNCEMENT: frozenset({AdminRole.SUPER_ADMIN}),
             AdminCommandKind.SETUP_TOTP: frozenset({AdminRole.SUPER_ADMIN}),
+            AdminCommandKind.GET_PRIZE_POOL: frozenset({AdminRole.SUPER_ADMIN}),
+            AdminCommandKind.REFUND_LOT: frozenset({AdminRole.SUPER_ADMIN}),
+            AdminCommandKind.FREEZE_PAYOUTS: frozenset({AdminRole.SUPER_ADMIN}),
+            AdminCommandKind.UNFREEZE_PAYOUTS: frozenset({AdminRole.SUPER_ADMIN}),
         }
 
     def is_authorized(self, admin: Admin, command_kind: AdminCommandKind) -> bool:

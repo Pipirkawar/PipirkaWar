@@ -34,7 +34,10 @@ import pytest
 from pipirik_wars.infrastructure.payments.ton_rpc.boc import (
     Cell,
     CellBuilder,
+    deserialize_boc,
+    format_raw_address,
     parse_address,
+    parse_msgaddress_int_from_cell,
     serialize_boc,
 )
 
@@ -637,3 +640,169 @@ class TestBocCapacity:
         root = level[0]
         with pytest.raises(ValueError, match="too many cells"):
             serialize_boc(root)
+
+
+class TestDeserializeBoc:
+    """Спринт 4.1-E / E.2 — `deserialize_boc(...)` round-trip с `serialize_boc(...)`."""
+
+    def test_round_trip_byte_aligned_uint8(self) -> None:
+        builder = CellBuilder()
+        builder.store_uint(0xAB, 8)
+        cell = builder.end_cell()
+        decoded = deserialize_boc(serialize_boc(cell))
+        assert decoded.bits == cell.bits
+        assert decoded.bits_count == cell.bits_count
+        assert decoded.refs == ()
+
+    def test_round_trip_non_aligned_3_bits(self) -> None:
+        builder = CellBuilder()
+        builder.store_uint(0b101, 3)
+        cell = builder.end_cell()
+        decoded = deserialize_boc(serialize_boc(cell))
+        assert decoded.bits == cell.bits
+        assert decoded.bits_count == cell.bits_count
+
+    def test_round_trip_empty_cell(self) -> None:
+        cell = CellBuilder().end_cell()
+        decoded = deserialize_boc(serialize_boc(cell))
+        assert decoded.bits == b""
+        assert decoded.bits_count == 0
+        assert decoded.refs == ()
+
+    def test_round_trip_address_basechain(self) -> None:
+        account_hash = bytes.fromhex("aa" * 32)
+        builder = CellBuilder()
+        builder.store_address(workchain=0, account_hash=account_hash)
+        cell = builder.end_cell()
+        decoded = deserialize_boc(serialize_boc(cell))
+        assert decoded.bits == cell.bits
+        assert decoded.bits_count == 267
+
+    def test_round_trip_address_masterchain(self) -> None:
+        account_hash = bytes.fromhex("12" * 32)
+        builder = CellBuilder()
+        builder.store_address(workchain=-1, account_hash=account_hash)
+        cell = builder.end_cell()
+        decoded = deserialize_boc(serialize_boc(cell))
+        assert decoded.bits == cell.bits
+        assert decoded.bits_count == 267
+
+    def test_round_trip_with_refs(self) -> None:
+        leaf_a = CellBuilder().store_uint(0x11, 8).end_cell()
+        leaf_b = CellBuilder().store_uint(0x22, 8).end_cell()
+        root = CellBuilder().store_uint(0xFF, 8).store_ref(leaf_a).store_ref(leaf_b).end_cell()
+        decoded = deserialize_boc(serialize_boc(root))
+        assert decoded.bits == root.bits
+        assert decoded.bits_count == root.bits_count
+        assert len(decoded.refs) == 2
+        assert decoded.refs[0].bits == leaf_a.bits
+        assert decoded.refs[1].bits == leaf_b.bits
+
+    def test_round_trip_preserves_repr_hash(self) -> None:
+        account_hash = bytes.fromhex("cd" * 32)
+        builder = CellBuilder()
+        builder.store_address(workchain=0, account_hash=account_hash)
+        cell = builder.end_cell()
+        decoded = deserialize_boc(serialize_boc(cell))
+        assert decoded.repr_hash() == cell.repr_hash()
+
+    def test_rejects_non_bytes_input(self) -> None:
+        with pytest.raises(ValueError, match="must be bytes"):
+            deserialize_boc("not bytes")  # type: ignore[arg-type]
+
+    def test_rejects_too_short_input(self) -> None:
+        with pytest.raises(ValueError, match="too short"):
+            deserialize_boc(b"\xb5\xee\x9c\x72")
+
+    def test_rejects_bad_magic(self) -> None:
+        # 10 bytes длины, но magic-неверный.
+        with pytest.raises(ValueError, match="magic"):
+            deserialize_boc(b"\x00\x01\x02\x03" + b"\x00" * 10)
+
+    def test_rejects_zero_cells_num(self) -> None:
+        # Корректный header, но cells_num=0.
+        header = b"\xb5\xee\x9c\x72" + bytes([0b0000_0001, 1, 0, 1, 0, 0, 0])
+        with pytest.raises(ValueError, match="cells_num"):
+            deserialize_boc(header)
+
+
+class TestParseMsgAddressIntFromCell:
+    """E.2 — `parse_msgaddress_int_from_cell(cell)` декодирует TL-B addr_std$10."""
+
+    def test_basechain_address(self) -> None:
+        account_hash = bytes.fromhex("aa" * 32)
+        builder = CellBuilder()
+        builder.store_address(workchain=0, account_hash=account_hash)
+        cell = builder.end_cell()
+        wc, ah = parse_msgaddress_int_from_cell(cell)
+        assert wc == 0
+        assert ah == account_hash
+
+    def test_masterchain_address(self) -> None:
+        account_hash = bytes.fromhex("ff" * 32)
+        builder = CellBuilder()
+        builder.store_address(workchain=-1, account_hash=account_hash)
+        cell = builder.end_cell()
+        wc, ah = parse_msgaddress_int_from_cell(cell)
+        assert wc == -1
+        assert ah == account_hash
+
+    def test_arbitrary_workchain(self) -> None:
+        account_hash = bytes.fromhex("01" * 32)
+        builder = CellBuilder()
+        builder.store_address(workchain=42, account_hash=account_hash)
+        cell = builder.end_cell()
+        wc, ah = parse_msgaddress_int_from_cell(cell)
+        assert wc == 42
+        assert ah == account_hash
+
+    def test_cell_with_too_few_bits_rejected(self) -> None:
+        cell = CellBuilder().store_uint(0x42, 8).end_cell()  # only 8 bits
+        with pytest.raises(ValueError, match="267 bits"):
+            parse_msgaddress_int_from_cell(cell)
+
+    def test_cell_with_wrong_tag_rejected(self) -> None:
+        # Build a 267-bit cell with tag=00 (addr_none / addr_ext-tagged form).
+        builder = CellBuilder()
+        builder.store_uint(0, 2)  # tag = 00 (not 10)
+        builder.store_uint(0, 1)  # anycast = None
+        builder.store_int(0, 8)
+        builder.store_bytes(b"\x00" * 32)
+        cell = builder.end_cell()
+        with pytest.raises(ValueError, match="addr_std"):
+            parse_msgaddress_int_from_cell(cell)
+
+    def test_round_trip_through_deserialize(self) -> None:
+        account_hash = bytes.fromhex("0123456789abcdef" * 4)
+        builder = CellBuilder()
+        builder.store_address(workchain=-1, account_hash=account_hash)
+        cell = builder.end_cell()
+        decoded = deserialize_boc(serialize_boc(cell))
+        wc, ah = parse_msgaddress_int_from_cell(decoded)
+        assert wc == -1
+        assert ah == account_hash
+
+
+class TestFormatRawAddress:
+    def test_basechain_lower_hex(self) -> None:
+        account_hash = bytes.fromhex("ab" * 32)
+        assert format_raw_address(0, account_hash) == f"0:{'ab' * 32}"
+
+    def test_masterchain(self) -> None:
+        account_hash = bytes.fromhex("12" * 32)
+        assert format_raw_address(-1, account_hash) == f"-1:{'12' * 32}"
+
+    def test_invalid_workchain_rejected(self) -> None:
+        with pytest.raises(ValueError, match="int8"):
+            format_raw_address(128, b"\x00" * 32)
+
+    def test_invalid_hash_length_rejected(self) -> None:
+        with pytest.raises(ValueError, match="32 bytes"):
+            format_raw_address(0, b"\x00" * 31)
+
+    def test_round_trip_with_parse_address(self) -> None:
+        account_hash = bytes.fromhex("cd" * 32)
+        raw = format_raw_address(0, account_hash)
+        wc, ah = parse_address(raw)
+        assert wc == 0
+        assert ah == account_hash

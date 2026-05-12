@@ -87,6 +87,10 @@ _SUPER_ONLY_COMMANDS: frozenset[AdminCommandKind] = frozenset(
         AdminCommandKind.SET_MAX_DAU,
         AdminCommandKind.BROADCAST_ANNOUNCEMENT,
         AdminCommandKind.SETUP_TOTP,
+        AdminCommandKind.GET_PRIZE_POOL,
+        AdminCommandKind.REFUND_LOT,
+        AdminCommandKind.FREEZE_PAYOUTS,
+        AdminCommandKind.UNFREEZE_PAYOUTS,
     },
 )
 

@@ -58,6 +58,9 @@ from pipirik_wars.infrastructure.db.repositories.oracle_history import (
 from pipirik_wars.infrastructure.db.repositories.payments import (
     SqlAlchemyPaymentLedger,
 )
+from pipirik_wars.infrastructure.db.repositories.payout_freeze import (
+    SqlAlchemyPayoutFreezeRepository,
+)
 from pipirik_wars.infrastructure.db.repositories.player import (
     SqlAlchemyPlayerRepository,
 )
@@ -112,6 +115,7 @@ __all__ = [
     "SqlAlchemyMountainRunRepository",
     "SqlAlchemyOracleHistoryRepository",
     "SqlAlchemyPaymentLedger",
+    "SqlAlchemyPayoutFreezeRepository",
     "SqlAlchemyPlayerRepository",
     "SqlAlchemyPrizeLotRepository",
     "SqlAlchemyPrizePoolRepository",

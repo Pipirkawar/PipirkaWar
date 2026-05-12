@@ -62,6 +62,10 @@ Free-to-play рулетка (Спринт 3.5.B):
 Кошельки (Спринт 4.1-D):
 - `WalletORM` — таблица `wallets` (одна строка на пару `(player_id,
   currency)`, составной PK).
+
+Freeze крипто-выплат (Спринт 4.1-E, E.11a):
+- `PayoutFreezeORM` — singleton-таблица `payout_freeze` (одна строка
+  `id=1`, CHECK `id = 1`).
 """
 
 from pipirik_wars.infrastructure.db.models.admin import AdminORM
@@ -81,6 +85,7 @@ from pipirik_wars.infrastructure.db.models.forest import ForestRunORM
 from pipirik_wars.infrastructure.db.models.items import ItemORM
 from pipirik_wars.infrastructure.db.models.oracle import OracleInvocationORM
 from pipirik_wars.infrastructure.db.models.payments import PaymentORM
+from pipirik_wars.infrastructure.db.models.payout_freeze import PayoutFreezeORM
 from pipirik_wars.infrastructure.db.models.player import UserORM
 from pipirik_wars.infrastructure.db.models.prize_lot import PrizeLotORM
 from pipirik_wars.infrastructure.db.models.prize_pool import PrizePoolBalanceORM
@@ -127,6 +132,7 @@ __all__ = [
     "MountainRunORM",
     "OracleInvocationORM",
     "PaymentORM",
+    "PayoutFreezeORM",
     "PrizeLotORM",
     "PrizePoolBalanceORM",
     "PvpDuelORM",

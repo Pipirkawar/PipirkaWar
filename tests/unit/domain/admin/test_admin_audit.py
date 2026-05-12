@@ -32,6 +32,24 @@ class TestAdminAuditAction:
         assert AdminAuditAction.ADMIN_BALANCE_GET.value == "admin_balance_get"
         assert AdminAuditAction.ADMIN_BALANCE_SET.value == "admin_balance_set"
 
+    def test_prize_pool_actions_present(self) -> None:
+        """Спринт 4.1-E: админ-команды управления призовым пулом."""
+        assert AdminAuditAction.ADMIN_PRIZE_POOL_VIEWED.value == "admin_prize_pool_viewed"
+        assert AdminAuditAction.ADMIN_REFUND_LOT.value == "admin_refund_lot"
+        assert AdminAuditAction.ADMIN_FREEZE_PAYOUTS.value == "admin_freeze_payouts"
+        assert AdminAuditAction.ADMIN_UNFREEZE_PAYOUTS.value == "admin_unfreeze_payouts"
+
+    def test_all_values_unique(self) -> None:
+        """Гарантирует, что новые значения не пересеклись со старыми."""
+        values = [a.value for a in AdminAuditAction]
+        assert len(values) == len(set(values))
+
+    def test_all_values_snake_case(self) -> None:
+        """Все значения должны быть в snake_case + начинаться с `admin_`."""
+        for a in AdminAuditAction:
+            assert a.value == a.value.lower(), f"non-lowercase: {a.name}"
+            assert a.value.startswith("admin_"), f"missing admin_ prefix: {a.name}"
+
 
 class TestAdminAuditSource:
     def test_only_bot_and_web_allowed(self) -> None:

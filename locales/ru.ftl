@@ -1525,3 +1525,60 @@ claim-prize-refund =
 
 claim-prize-invalid-callback = Что-то пошло не так с кнопкой. Запусти `/claim_prize <lot_id>` руками.
 claim-prize-toast-invalid = Кнопка устарела. Используй `/claim_prize <lot_id>`.
+
+# ───────────────────────────────────────────────────────────────────────────
+# Спринт 4.1-E.12 — admin-команда `/prize_pool` (ГДД §12.6.6)
+# Read-only снимок состояния крипто-пула + freeze-флага.
+# Доступ: SUPER_ADMIN (см. AdminCommandKind.GET_PRIZE_POOL).
+# ───────────────────────────────────────────────────────────────────────────
+admin-prize-pool-not-authorized = ❌ Доступ к снимку крипто-пула — только у super-admin-а.
+admin-prize-pool-header = 💰 <b>Снимок крипто-пула</b>
+admin-prize-pool-row =
+    • <code>{ $currency }</code> · balance=<code>{ $balance }</code> · active=<code>{ $active }</code> · reserved=<code>{ $reserved }</code> · claimed=<code>{ $claimed }</code> · refunded=<code>{ $refunded }</code>
+admin-prize-pool-unfrozen = ❄️ Заморозка крипто-выплат: <b>выключена</b>.
+admin-prize-pool-frozen =
+    🧊 Заморозка крипто-выплат: <b>ВКЛЮЧЕНА</b>.
+    Кем: admin_id=<code>{ $admin_id }</code>
+    Когда: <code>{ $frozen_at }</code>
+    Причина: { $reason }
+
+# ───────────────────────────────────────────────────────────────────────────
+# Спринт 4.1-E.13 — admin-команда `/refund_lot <lot_id> <reason>` (ГДД §12.6.6)
+# Принудительно вернуть лот в крипто-пул (super-admin + TOTP-confirm).
+# Доступ: SUPER_ADMIN (см. AdminCommandKind.REFUND_LOT). Фаза 1: `/refund_lot`
+# выдаёт токен; фаза 2: `/confirm <token> <code>` вызывает RefundLot use-case.
+# ───────────────────────────────────────────────────────────────────────────
+admin-refund-lot-usage = ⚠️ Использование: <code>/refund_lot &lt;lot_id&gt; &lt;причина&gt;</code>. Оба параметра обязательны.
+admin-refund-lot-not-authorized = ❌ Только super-admin-ы могут принудительно возвращать лоты в пул.
+admin-refund-lot-totp-not-configured = ❌ У тебя не настроен TOTP. <code>/refund_lot</code> без него недоступен — запусти <code>/admin_setup_totp</code>.
+admin-refund-lot-bad-lot-id = ⚠️ <code>{ $value }</code> не похож на lot_id (положительное целое).
+admin-refund-lot-no-reason = ⚠️ Причина обязательна. Использование: <code>/refund_lot &lt;lot_id&gt; &lt;причина&gt;</code>.
+admin-refund-lot-confirm-issued = 🛡️ Подтверди возврат лота. Отправь: <code>/confirm { $token } &lt;6-значный код&gt;</code>. Токен живёт { $ttl_seconds } секунд.
+admin-refund-lot-success = ✅ Лот <code>#{ $lot_id }</code> ({ $currency } <code>{ $amount }</code>) возвращён в пул. Баланс валюты после возврата: <code>{ $pool_after }</code>.
+admin-refund-lot-already-refunded = ℹ️ Лот <code>#{ $lot_id }</code> уже был возвращён в пул ранее. Баланс валюты: <code>{ $pool_after }</code>.
+admin-refund-lot-not-found = 🔍 Лот <code>#{ $lot_id }</code> не найден.
+admin-refund-lot-bad-transition = 🚫 Лот <code>#{ $lot_id }</code> в статусе <code>{ $status }</code> — возврат через <code>/refund_lot</code> запрещён (см. ГДД §12.6.6).
+
+# ───────────────────────────────────────────────────────────────────────────
+# Спринт 4.1-E.14 — admin-команды `/freeze_payouts <reason>` + `/unfreeze_payouts`
+# (ГДД §12.6.6). Глобально остановить / снова разрешить крипто-выплаты
+# (super-admin + TOTP-confirm). Доступ: SUPER_ADMIN (см.
+# `AdminCommandKind.FREEZE_PAYOUTS` / `UNFREEZE_PAYOUTS`). Фаза 1: команда
+# выдаёт токен; фаза 2: `/confirm <token> <code>` вызывает соответствующий
+# use-case (`FreezePayouts` / `UnfreezePayouts`). Идемпотентны: повторный
+# `/freeze_payouts` тем же admin-ом с той же причиной — no-op; `/unfreeze_payouts`
+# при уже размороженных выплатах — no-op.
+# ───────────────────────────────────────────────────────────────────────────
+admin-freeze-payouts-usage = ⚠️ Использование: <code>/freeze_payouts &lt;причина&gt;</code>. Причина обязательна.
+admin-freeze-payouts-not-authorized = ❌ Только super-admin-ы могут замораживать крипто-выплаты.
+admin-freeze-payouts-totp-not-configured = ❌ У тебя не настроен TOTP. <code>/freeze_payouts</code> без него недоступен — запусти <code>/admin_setup_totp</code>.
+admin-freeze-payouts-no-reason = ⚠️ Причина обязательна. Использование: <code>/freeze_payouts &lt;причина&gt;</code>.
+admin-freeze-payouts-confirm-issued = 🛡️ Подтверди заморозку выплат. Отправь: <code>/confirm { $token } &lt;6-значный код&gt;</code>. Токен живёт { $ttl_seconds } секунд.
+admin-freeze-payouts-success = ✅ Крипто-выплаты заморожены. Причина: { $reason }
+admin-freeze-payouts-already-frozen = ℹ️ Крипто-выплаты уже были заморожены тобой ранее с той же причиной — повторная фиксация не нужна. Причина: { $reason }
+
+admin-unfreeze-payouts-not-authorized = ❌ Только super-admin-ы могут снимать заморозку крипто-выплат.
+admin-unfreeze-payouts-totp-not-configured = ❌ У тебя не настроен TOTP. <code>/unfreeze_payouts</code> без него недоступен — запусти <code>/admin_setup_totp</code>.
+admin-unfreeze-payouts-confirm-issued = 🛡️ Подтверди разморозку выплат. Отправь: <code>/confirm { $token } &lt;6-значный код&gt;</code>. Токен живёт { $ttl_seconds } секунд.
+admin-unfreeze-payouts-success = ✅ Крипто-выплаты снова разрешены.
+admin-unfreeze-payouts-already-unfrozen = ℹ️ Крипто-выплаты не были заморожены — снимать нечего.

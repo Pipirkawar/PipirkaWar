@@ -39,6 +39,7 @@ from pipirik_wars.infrastructure.db.models import (  # noqa: F401  (регист
     MountainRunORM,
     OracleInvocationORM,
     PaymentORM,
+    PayoutFreezeORM,
     PrizeLotORM,
     PrizePoolBalanceORM,
     PvpDuelORM,
@@ -81,6 +82,19 @@ async def engine() -> AsyncIterator[AsyncEngine]:
                     "updated_at": _PRIZE_POOL_SEED_AT,
                 }
                 for currency in ("stars", "ton_nano", "usdt_decimal")
+            ],
+        )
+        # E.11a seed: singleton payout_freeze (id=1, is_frozen=FALSE).
+        await conn.execute(
+            insert(PayoutFreezeORM),
+            [
+                {
+                    "id": 1,
+                    "is_frozen": False,
+                    "frozen_by_admin_id": None,
+                    "frozen_at": None,
+                    "reason": None,
+                },
             ],
         )
     yield eng

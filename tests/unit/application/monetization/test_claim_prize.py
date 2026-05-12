@@ -20,8 +20,11 @@ from pipirik_wars.application.monetization.claim_prize import (
     ClaimPrizeCommand,
 )
 from pipirik_wars.domain.monetization import (
+    ClaimPrizeOverLimitError,
+    ClaimPrizePayoutsFrozenError,
     Currency,
     FeeBufferAmount,
+    PayoutLimitOverLimit,
     PrizeLot,
     PrizeLotNotFoundError,
     PrizeLotStatus,
@@ -32,6 +35,8 @@ from pipirik_wars.domain.monetization import (
 from pipirik_wars.domain.monetization.ports import PayoutResult
 from tests.fakes.audit import FakeAuditLogger
 from tests.fakes.clock import FakeClock
+from tests.fakes.payout_freeze_repo import FakePayoutFreezeRepository
+from tests.fakes.payout_limit_checker import FakePayoutLimitChecker
 from tests.fakes.prize_lot_repo import FakePrizeLotRepository
 from tests.fakes.prize_pool_repo import FakePrizePoolRepository
 
@@ -145,6 +150,14 @@ class TestClaimPrizeHappyPath:
         return FakePrizePoolRepository()
 
     @pytest.fixture()
+    def freeze_repo(self) -> FakePayoutFreezeRepository:
+        return FakePayoutFreezeRepository()
+
+    @pytest.fixture()
+    def limit_checker(self) -> FakePayoutLimitChecker:
+        return FakePayoutLimitChecker()
+
+    @pytest.fixture()
     def use_case(
         self,
         lot_repo: FakePrizeLotRepository,
@@ -153,6 +166,8 @@ class TestClaimPrizeHappyPath:
         pool_repo: FakePrizePoolRepository,
         audit: FakeAuditLogger,
         clock: FakeClock,
+        freeze_repo: FakePayoutFreezeRepository,
+        limit_checker: FakePayoutLimitChecker,
     ) -> ClaimPrize:
         return ClaimPrize(
             prize_lot_repository=lot_repo,
@@ -161,6 +176,8 @@ class TestClaimPrizeHappyPath:
             payout_adapter=payout_adapter,
             audit_logger=audit,
             clock=clock,
+            payout_freeze_repository=freeze_repo,
+            payout_limit_checker=limit_checker,
         )
 
     @pytest.mark.asyncio()
@@ -216,6 +233,8 @@ class TestClaimPrizeFeeOverflow:
             payout_adapter=payout_adapter,
             audit_logger=audit,
             clock=clock,
+            payout_freeze_repository=FakePayoutFreezeRepository(),
+            payout_limit_checker=FakePayoutLimitChecker(),
         )
         result = await uc.execute(
             ClaimPrizeCommand(
@@ -260,6 +279,8 @@ class TestClaimPrizeErrors:
             payout_adapter=payout,
             audit_logger=audit,
             clock=clock,
+            payout_freeze_repository=FakePayoutFreezeRepository(),
+            payout_limit_checker=FakePayoutLimitChecker(),
         )
         with pytest.raises(PrizeLotNotFoundError):
             await uc.execute(
@@ -292,6 +313,8 @@ class TestClaimPrizeErrors:
             payout_adapter=payout,
             audit_logger=audit,
             clock=clock,
+            payout_freeze_repository=FakePayoutFreezeRepository(),
+            payout_limit_checker=FakePayoutLimitChecker(),
         )
         with pytest.raises(PrizeLotStatusTransitionError):
             await uc.execute(
@@ -316,6 +339,8 @@ class TestClaimPrizeErrors:
             payout_adapter=payout,
             audit_logger=audit,
             clock=clock,
+            payout_freeze_repository=FakePayoutFreezeRepository(),
+            payout_limit_checker=FakePayoutLimitChecker(),
         )
         with pytest.raises(WalletNotLinkedError):
             await uc.execute(
@@ -342,6 +367,8 @@ class TestClaimPrizeErrors:
             payout_adapter=payout,
             audit_logger=audit,
             clock=clock,
+            payout_freeze_repository=FakePayoutFreezeRepository(),
+            payout_limit_checker=FakePayoutLimitChecker(),
         )
         with pytest.raises(ValueError, match="anti-fraud"):
             await uc.execute(
@@ -351,3 +378,226 @@ class TestClaimPrizeErrors:
                     recipient_address="0:" + "bb" * 32,
                 )
             )
+
+
+def _build_use_case(
+    *,
+    lot_repo: FakePrizeLotRepository,
+    wallet_repo: FakeWalletRepository,
+    freeze_repo: FakePayoutFreezeRepository | None = None,
+    limit_checker: FakePayoutLimitChecker | None = None,
+    payout_adapter: FakePayoutAdapter | None = None,
+    pool_repo: FakePrizePoolRepository | None = None,
+    audit: FakeAuditLogger | None = None,
+) -> tuple[
+    ClaimPrize,
+    FakePayoutFreezeRepository,
+    FakePayoutLimitChecker,
+    FakeAuditLogger,
+    FakePayoutAdapter,
+]:
+    freeze_repo = freeze_repo if freeze_repo is not None else FakePayoutFreezeRepository()
+    limit_checker = limit_checker if limit_checker is not None else FakePayoutLimitChecker()
+    payout_adapter = (
+        payout_adapter
+        if payout_adapter is not None
+        else FakePayoutAdapter(
+            result=PayoutResult(tx_hash="ok", actual_fee_native=1_000_000),
+        )
+    )
+    pool_repo = pool_repo if pool_repo is not None else FakePrizePoolRepository()
+    audit = audit if audit is not None else FakeAuditLogger()
+    uc = ClaimPrize(
+        prize_lot_repository=lot_repo,
+        prize_pool_repository=pool_repo,
+        wallet_repository=wallet_repo,
+        payout_adapter=payout_adapter,
+        audit_logger=audit,
+        clock=FakeClock(_NOW),
+        payout_freeze_repository=freeze_repo,
+        payout_limit_checker=limit_checker,
+    )
+    return uc, freeze_repo, limit_checker, audit, payout_adapter
+
+
+class TestClaimPrizeFreezeCheck:
+    """E.10: freeze-check перед попыткой выплаты."""
+
+    @pytest.mark.asyncio()
+    async def test_frozen_raises_before_payout(self) -> None:
+        """При is_frozen=True — ClaimPrizePayoutsFrozenError, payout не вызывается."""
+        lot_repo = FakePrizeLotRepository()
+        lot_repo._storage[1] = _make_reserved_lot()
+        wallet_repo = FakeWalletRepository()
+        wallet_repo._storage[(42, Currency.TON_NANO)] = _make_wallet()
+
+        freeze_repo = FakePayoutFreezeRepository()
+        await freeze_repo.set_frozen(
+            admin_id=7,
+            at=_NOW,
+            reason="suspicious activity detected",
+        )
+
+        uc, _, limit_checker, audit, _ = _build_use_case(
+            lot_repo=lot_repo,
+            wallet_repo=wallet_repo,
+            freeze_repo=freeze_repo,
+        )
+
+        with pytest.raises(ClaimPrizePayoutsFrozenError) as exc_info:
+            await uc.execute(
+                ClaimPrizeCommand(
+                    player_id=42,
+                    lot_id=1,
+                    recipient_address=_VALID_ADDR,
+                ),
+            )
+
+        assert exc_info.value.lot_id == 1
+        assert exc_info.value.reason == "suspicious activity detected"
+        assert lot_repo._storage[1].status is PrizeLotStatus.RESERVED
+        assert len(audit.entries) == 0
+        assert len(limit_checker.calls) == 0
+
+    @pytest.mark.asyncio()
+    async def test_unfrozen_proceeds_to_payout(self) -> None:
+        """is_frozen=False (дефолт) — нормальный flow, claimed."""
+        lot_repo = FakePrizeLotRepository()
+        lot_repo._storage[1] = _make_reserved_lot()
+        wallet_repo = FakeWalletRepository()
+        wallet_repo._storage[(42, Currency.TON_NANO)] = _make_wallet()
+
+        uc, freeze_repo, _, _, _ = _build_use_case(
+            lot_repo=lot_repo,
+            wallet_repo=wallet_repo,
+        )
+
+        result = await uc.execute(
+            ClaimPrizeCommand(
+                player_id=42,
+                lot_id=1,
+                recipient_address=_VALID_ADDR,
+            ),
+        )
+
+        assert result.claimed is True
+        assert freeze_repo.get_state_calls == 1
+
+
+class TestClaimPrizeOverLimitCheck:
+    """E.10: payout-limit-check перед попыткой выплаты."""
+
+    @pytest.mark.asyncio()
+    async def test_over_limit_raises_before_payout(self) -> None:
+        """OverLimit → ClaimPrizeOverLimitError, payout не вызывается."""
+        lot_repo = FakePrizeLotRepository()
+        lot_repo._storage[1] = _make_reserved_lot()
+        wallet_repo = FakeWalletRepository()
+        wallet_repo._storage[(42, Currency.TON_NANO)] = _make_wallet()
+
+        retry_after = datetime(2026, 6, 11, tzinfo=UTC)
+        limit_checker = FakePayoutLimitChecker(
+            per_key={
+                (42, Currency.TON_NANO): PayoutLimitOverLimit(
+                    retry_after=retry_after,
+                    exceeded_by_native=5_000_000,
+                ),
+            },
+        )
+
+        uc, _, _, audit, payout_adapter = _build_use_case(
+            lot_repo=lot_repo,
+            wallet_repo=wallet_repo,
+            limit_checker=limit_checker,
+        )
+
+        with pytest.raises(ClaimPrizeOverLimitError) as exc_info:
+            await uc.execute(
+                ClaimPrizeCommand(
+                    player_id=42,
+                    lot_id=1,
+                    recipient_address=_VALID_ADDR,
+                ),
+            )
+
+        assert exc_info.value.lot_id == 1
+        assert exc_info.value.player_id == 42
+        assert exc_info.value.retry_after == retry_after
+        assert exc_info.value.exceeded_by_native == 5_000_000
+        assert lot_repo._storage[1].status is PrizeLotStatus.RESERVED
+        assert len(audit.entries) == 0
+
+    @pytest.mark.asyncio()
+    async def test_within_limit_proceeds_to_payout(self) -> None:
+        """Within (дефолт) — нормальный flow, claimed."""
+        lot_repo = FakePrizeLotRepository()
+        lot_repo._storage[1] = _make_reserved_lot()
+        wallet_repo = FakeWalletRepository()
+        wallet_repo._storage[(42, Currency.TON_NANO)] = _make_wallet()
+
+        uc, _, limit_checker, _, _ = _build_use_case(
+            lot_repo=lot_repo,
+            wallet_repo=wallet_repo,
+        )
+
+        result = await uc.execute(
+            ClaimPrizeCommand(
+                player_id=42,
+                lot_id=1,
+                recipient_address=_VALID_ADDR,
+            ),
+        )
+
+        assert result.claimed is True
+        assert len(limit_checker.calls) == 1
+        call = limit_checker.calls[0]
+        assert call.player_id == 42
+        assert call.currency is Currency.TON_NANO
+        assert call.amount_native == 1_000_000_000
+
+
+class TestClaimPrizeCheckOrder:
+    """E.10: freeze-check ДО payout-limit-check (frozen wins)."""
+
+    @pytest.mark.asyncio()
+    async def test_frozen_takes_precedence_over_over_limit(self) -> None:
+        """Если frozen — limit-checker не вызывается."""
+        lot_repo = FakePrizeLotRepository()
+        lot_repo._storage[1] = _make_reserved_lot()
+        wallet_repo = FakeWalletRepository()
+        wallet_repo._storage[(42, Currency.TON_NANO)] = _make_wallet()
+
+        freeze_repo = FakePayoutFreezeRepository()
+        await freeze_repo.set_frozen(
+            admin_id=7,
+            at=_NOW,
+            reason="freeze",
+        )
+
+        retry_after = datetime(2026, 6, 11, tzinfo=UTC)
+        limit_checker = FakePayoutLimitChecker(
+            per_key={
+                (42, Currency.TON_NANO): PayoutLimitOverLimit(
+                    retry_after=retry_after,
+                    exceeded_by_native=1,
+                ),
+            },
+        )
+
+        uc, _, _, _, _ = _build_use_case(
+            lot_repo=lot_repo,
+            wallet_repo=wallet_repo,
+            freeze_repo=freeze_repo,
+            limit_checker=limit_checker,
+        )
+
+        with pytest.raises(ClaimPrizePayoutsFrozenError):
+            await uc.execute(
+                ClaimPrizeCommand(
+                    player_id=42,
+                    lot_id=1,
+                    recipient_address=_VALID_ADDR,
+                ),
+            )
+
+        assert len(limit_checker.calls) == 0

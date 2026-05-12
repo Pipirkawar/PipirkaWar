@@ -1,13 +1,17 @@
-"""Use-case ``ClaimPrize`` (Спринт 4.1-D, ГДД §12.6.4).
+"""Use-case ``ClaimPrize`` (Спринт 4.1-D + 4.1-E, ГДД §12.6.4–§12.6.5).
 
 Выплата зарезервированного крипто-лота игроку:
 
 1. Загрузить лот по ``lot_id``; убедиться что ``status == RESERVED``.
-2. Загрузить кошелёк игрока; anti-fraud — ``wallet.address == recipient_address``.
-3. Вызвать ``ITonPayoutAdapter.payout(...)`` — перевод на сеть TON/USDT.
-4. Если ``actual_fee <= fee_buffer_native`` — ``RESERVED → CLAIMED`` + audit
+2. **Freeze-check** (E.10): если ``IPayoutFreezeRepository.get_state().is_frozen``
+   → ``ClaimPrizePayoutsFrozenError`` (без попытки выплаты).
+3. **Payout-limit-check** (E.10): ``IPayoutLimitChecker.check(...)``;
+   ``OverLimit`` → ``ClaimPrizeOverLimitError``.
+4. Загрузить кошелёк игрока; anti-fraud — ``wallet.address == recipient_address``.
+5. Вызвать ``ITonPayoutAdapter.payout(...)`` — перевод на сеть TON/USDT.
+6. Если ``actual_fee <= fee_buffer_native`` — ``RESERVED → CLAIMED`` + audit
    ``PRIZE_LOT_CLAIMED``.
-5. Если ``actual_fee > fee_buffer_native`` — refund-в-пул: ``RESERVED → REFUNDED``
+7. Если ``actual_fee > fee_buffer_native`` — refund-в-пул: ``RESERVED → REFUNDED``
    + ``apply_increment(currency, +amount_native)`` + audit ``PRIZE_LOT_REFUNDED``.
 """
 
@@ -18,16 +22,23 @@ from datetime import datetime
 
 from pipirik_wars.domain.monetization.entities import PrizeLot, PrizeLotStatus
 from pipirik_wars.domain.monetization.errors import (
+    ClaimPrizeOverLimitError,
+    ClaimPrizePayoutsFrozenError,
     PrizeLotNotFoundError,
     PrizeLotStatusTransitionError,
     WalletNotLinkedError,
 )
 from pipirik_wars.domain.monetization.ports import (
+    IPayoutFreezeRepository,
+    IPayoutLimitChecker,
     IPrizeLotRepository,
     IPrizePoolRepository,
     ITonPayoutAdapter,
     IWalletRepository,
     PayoutResult,
+)
+from pipirik_wars.domain.monetization.value_objects import (
+    PayoutLimitOverLimit,
 )
 from pipirik_wars.domain.shared.ports.audit import (
     AuditAction,
@@ -78,11 +89,13 @@ class ClaimPrizeResult:
 
 
 class ClaimPrize:
-    """Use-case: выплата зарезервированного лота (ГДД §12.6.4)."""
+    """Use-case: выплата зарезервированного лота (ГДД §12.6.4–§12.6.5)."""
 
     __slots__ = (
         "_audit",
         "_clock",
+        "_freeze_repo",
+        "_limit_checker",
         "_lot_repo",
         "_payout_adapter",
         "_pool_repo",
@@ -98,6 +111,8 @@ class ClaimPrize:
         payout_adapter: ITonPayoutAdapter,
         audit_logger: IAuditLogger,
         clock: IClock,
+        payout_freeze_repository: IPayoutFreezeRepository,
+        payout_limit_checker: IPayoutLimitChecker,
     ) -> None:
         self._lot_repo = prize_lot_repository
         self._pool_repo = prize_pool_repository
@@ -105,6 +120,8 @@ class ClaimPrize:
         self._payout_adapter = payout_adapter
         self._audit = audit_logger
         self._clock = clock
+        self._freeze_repo = payout_freeze_repository
+        self._limit_checker = payout_limit_checker
 
     async def execute(self, command: ClaimPrizeCommand) -> ClaimPrizeResult:
         """Выплатить или вернуть зарезервированный лот."""
@@ -116,6 +133,33 @@ class ClaimPrize:
                 lot_id=lot.id,
                 from_status=lot.status,
                 to_status=PrizeLotStatus.CLAIMED,
+            )
+
+        # E.10: freeze-check — замороженные выплаты → reject.
+        freeze = await self._freeze_repo.get_state()
+        if freeze.is_frozen:
+            assert lot.id is not None
+            assert freeze.reason is not None
+            raise ClaimPrizePayoutsFrozenError(
+                lot_id=lot.id,
+                reason=freeze.reason,
+            )
+
+        # E.10: payout-limit-check — rolling-window-лимит пер игрок.
+        now = self._clock.now()
+        limit_result = await self._limit_checker.check(
+            player_id=command.player_id,
+            currency=lot.currency,
+            amount_native=lot.amount_native,
+            now=now,
+        )
+        if isinstance(limit_result, PayoutLimitOverLimit):
+            assert lot.id is not None
+            raise ClaimPrizeOverLimitError(
+                lot_id=lot.id,
+                player_id=command.player_id,
+                retry_after=limit_result.retry_after,
+                exceeded_by_native=limit_result.exceeded_by_native,
             )
 
         wallet = await self._wallet_repo.get_by_player_and_currency(
@@ -159,6 +203,7 @@ class ClaimPrize:
             lot_id=lot.id,
             new_status=PrizeLotStatus.CLAIMED,
             claimed_at=now,
+            winner_id=command.player_id,
         )
         await self._audit.record(
             AuditEntry(

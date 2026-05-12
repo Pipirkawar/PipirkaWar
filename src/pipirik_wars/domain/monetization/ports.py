@@ -41,6 +41,7 @@ from typing import Protocol
 from pipirik_wars.domain.monetization.entities import (
     Payment,
     PaymentStatus,
+    PayoutFreeze,
     PrizeLot,
     PrizeLotStatus,
     PrizePool,
@@ -49,12 +50,15 @@ from pipirik_wars.domain.monetization.entities import (
 from pipirik_wars.domain.monetization.value_objects import (
     Currency,
     IdempotencyKey,
+    PayoutLimitCheckResult,
     StarsPayload,
 )
 
 __all__ = [
     "IFeeEstimator",
     "IPaymentLedger",
+    "IPayoutFreezeRepository",
+    "IPayoutLimitChecker",
     "IPrizeLotRepository",
     "IPrizePoolRepository",
     "ITgStarsPayloadVerifier",
@@ -325,6 +329,7 @@ class IPrizeLotRepository(Protocol):
         new_status: PrizeLotStatus,
         reserved_at: datetime | None = None,
         claimed_at: datetime | None = None,
+        winner_id: int | None = None,
     ) -> PrizeLot:
         """Атомарно перевести лот в `new_status` с проверкой машины состояний.
 
@@ -338,6 +343,11 @@ class IPrizeLotRepository(Protocol):
           REFUNDED сохраняется существующий `reserved_at` лота).
         - `claimed_at` — TZ-aware момент claim-а; обязателен на
           `new_status=CLAIMED`, на остальных — `None`.
+        - `winner_id` — id игрока-получателя CLAIMED-лота (`>= 1`).
+          Обязателен на `new_status=CLAIMED` (Спринт 4.1-E, шаг E.11a:
+          колонка `prize_lots.winner_id` появилась для rolling-30d
+          payout-limit-проверки). На остальных статусах должен быть
+          `None`.
 
         Возвращает: обновлённый `PrizeLot`-снапшот.
 
@@ -346,6 +356,7 @@ class IPrizeLotRepository(Protocol):
         - `PrizeLotStatusTransitionError` — если текущий статус
           не разрешает переход в `new_status` (см.
           `_PRIZE_LOT_TRANSITIONS`).
+        - `ValueError` — невалидная комбинация параметров (см. выше).
         """
         ...
 
@@ -376,6 +387,111 @@ class IPrizeLotRepository(Protocol):
           вызывает несколько раз в цикле пока возвращается полная пачка.
 
         Возвращает: tuple из `PrizeLot` (может быть пустым — нормально).
+        """
+        ...
+
+    async def sum_claimed_in_window(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+        since: datetime,
+    ) -> int:
+        """Сумма `amount_native` по `CLAIMED`-лотам игрока в rolling-окне.
+
+        Используется `EvaluatePayoutLimit` use-case-ом (Спринт 4.1-E,
+        шаг E.6) для rolling-window-проверки лимита выплат на игрока:
+
+        ::
+
+            sum = repo.sum_claimed_in_window(
+                player_id=command.player_id,
+                currency=command.currency,
+                since=clock.now() - timedelta(days=cfg.window_days),
+            )
+            if sum + amount_native <= cfg.max_amount_native:
+                return PayoutLimitWithin(remaining_native=...)
+            return PayoutLimitOverLimit(retry_after=..., exceeded_by_native=...)
+
+        Семантика SQL-реализации (шаг E.11) — `SELECT COALESCE(SUM(
+        amount_native), 0) FROM prize_lots WHERE winner_id = :player_id
+        AND currency = :currency AND status = 'CLAIMED' AND
+        claimed_at >= :since`. До шага E.11 в таблице ``prize_lots`` нет
+        колонки ``winner_id``: миграция и заполнение `winner_id` через
+        ``ClaimPrize``-flow приходят в E.11 одновременно с подключением
+        ``IPayoutLimitChecker`` к ``ClaimPrize.execute(...)`` (E.10).
+
+        Параметры:
+
+        * ``player_id`` — id игрока (`> 0`, валидирует вызывающий).
+        * ``currency`` — валюта (для STARS реализация может возвращать
+          `0` — Stars-выплаты идут через TG-refund-канал и не учитываются
+          в крипто-лимите, ГДД §12.6.5).
+        * ``since`` — TZ-aware момент-cutoff (`claimed_at >= since`).
+          Передаётся use-case-ом как `clock.now() - timedelta(days=cfg.
+          window_days)`.
+
+        Возвращает: ``int >= 0``. ``0`` — если у игрока нет CLAIMED-лотов
+        в окне (свежий игрок или давно не выводил). Реализация не
+        должна возвращать ``None``.
+        """
+        ...
+
+    async def oldest_claimed_at_in_window(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+        since: datetime,
+    ) -> datetime | None:
+        """Самый ранний `claimed_at` среди CLAIMED-лотов игрока в окне.
+
+        Используется `EvaluatePayoutLimit` use-case-ом (Спринт 4.1-E,
+        шаг E.6) в ветке `OverLimit` для расчёта `retry_after = oldest +
+        window_days`. После этого момента самая ранняя выплата выпадет
+        из rolling-окна и игрок снова может выйти в `Within`.
+
+        Семантика SQL-реализации (E.11) — `SELECT MIN(claimed_at) FROM
+        prize_lots WHERE winner_id = :player_id AND currency = :currency
+        AND status = 'CLAIMED' AND claimed_at >= :since`. Композитный
+        индекс `(winner_id, currency, status, claimed_at)` в E.11
+        покрывает этот запрос индексным seek-ом.
+
+        Параметры идентичны ``sum_claimed_in_window``.
+
+        Возвращает: TZ-aware `datetime` или ``None`` (если нет ни одного
+        CLAIMED-лота в окне — теоретически невозможный случай, когда
+        ``sum_claimed_in_window > 0``; обязан возвращать ``None``,
+        чтобы caller мог фолбекнуться на ``Within(remaining=max)``).
+        """
+        ...
+
+    async def count_by_status(
+        self,
+        *,
+        currency: Currency,
+        status: PrizeLotStatus,
+    ) -> int:
+        """Количество лотов в указанном `status` для `currency`.
+
+        Используется `GetPrizePoolStatus`-use-case-ом (Спринт 4.1-E,
+        шаг E.9) для построения admin-снимка пула: счётчики
+        `ACTIVE` / `RESERVED` / `CLAIMED` / `REFUNDED` per-currency.
+
+        Семантика SQL-реализации — ``SELECT COUNT(*) FROM prize_lots
+        WHERE currency = :currency AND status = :status``. В отличие
+        от ``sum_claimed_in_window`` / ``oldest_claimed_at_in_window``
+        этот метод НЕ зависит от ``winner_id``-схемы (E.11) — он
+        реализуется в SQL прямо сейчас. Existing-индексы
+        ``ix_prize_lots__currency_status`` покрывают этот запрос
+        индексным sequential-scan-ом.
+
+        Параметры:
+        * ``currency`` — фильтр валюты.
+        * ``status`` — фильтр статуса (любое значение
+          ``PrizeLotStatus``).
+
+        Возвращает: ``int >= 0``.
         """
         ...
 
@@ -605,5 +721,159 @@ class ITgStarsPayloadVerifier(Protocol):
         Raises:
         * ``InvalidStarsPayloadError`` — payload пуст / превышает лимит /
           malformed / bad pack / bad seed / HMAC-mismatch.
+        """
+        ...
+
+
+class IPayoutFreezeRepository(Protocol):
+    """Порт singleton-репозитория ``PayoutFreeze`` (ГДД §12.6.5, Спринт 4.1-E).
+
+    Состояние freeze-флага крипто-выплат хранится одной строкой в
+    таблице ``payout_freeze`` (миграция, Спринт 4.1-E, шаг E.11).
+    Репозиторий собирает строку в доменный ``PayoutFreeze``-VO и
+    отдаёт его use-case-ам.
+
+    Используется:
+
+    * ``ClaimPrize`` (E.10) — ``get_state()`` перед попыткой выплаты;
+      если ``is_frozen=True`` → ``ClaimPrizePayoutsFrozenError``.
+    * ``FreezePayouts`` (E.7) — ``set_frozen(...)``.
+    * ``UnfreezePayouts`` (E.7) — ``set_unfrozen(...)``.
+    * ``GetPrizePoolStatus`` (E.9) — ``get_state()`` для печати
+      ``frozen_by``/``reason`` в карточке ``/prize_pool``.
+
+    Все методы — асинхронные, выполняются в открытой ``IUnitOfWork``-сессии.
+    Композиционный root (``bot/main.py``, шаг E.15) пробрасывает
+    SQLAlchemy-implementation (``SqlAlchemyPayoutFreezeRepository``,
+    шаг E.11); тесты use-case-ов — ``FakePayoutFreezeRepository``
+    (in-memory snapshot с тем же контрактом).
+
+    Семантика:
+
+    * ``get_state()`` — снапшот строки ``payout_freeze``. На свежей БД
+      (сразу после миграции с seed-строкой) возвращает
+      ``PayoutFreeze.unfrozen()``. Идемпотентен (SELECT без побочных
+      эффектов).
+    * ``set_frozen(*, admin_id, at, reason)`` — переключить состояние
+      в ``is_frozen=True`` с указанными атрибутами. **Идемпотентность**:
+      повторный вызов с тем же ``admin_id`` (тот же админ повторно
+      жмёт ``/freeze_payouts``) — обновляет только ``reason``/``at``
+      и **не** считается «новым freeze-актом» на уровне БД-ряда
+      (одна строка с UPSERT-ом); admin-аудит решает на уровне use-case-а,
+      писать ли вторую запись ``ADMIN_FREEZE_PAYOUTS`` (см. E.7).
+      Возвращает свежий ``PayoutFreeze``-снапшот.
+    * ``set_unfrozen()`` — переключить состояние в ``is_frozen=False``
+      (все три nullable-атрибута → ``None``). Идемпотентен:
+      повторный ``unfreeze`` на уже-unfrozen-строке — no-op (то же
+      состояние). Возвращает свежий ``PayoutFreeze``-снапшот.
+
+    Конкуррентность: SQL-implementation использует одиночный
+    ``UPDATE ... RETURNING`` (или ``INSERT ... ON CONFLICT ... DO
+    UPDATE`` при первом freeze) — атомарно под row-lock-ом, без явных
+    транзакций над строкой.
+    """
+
+    async def get_state(self) -> PayoutFreeze:
+        """Получить текущее состояние freeze-флага.
+
+        На свежей БД (после миграции, в которой есть seed-row) возвращает
+        ``PayoutFreeze.unfrozen()``. Идемпотентен.
+        """
+        ...
+
+    async def set_frozen(
+        self,
+        *,
+        admin_id: int,
+        at: datetime,
+        reason: str,
+    ) -> PayoutFreeze:
+        """Переключить состояние в ``is_frozen=True``.
+
+        Параметры:
+
+        * ``admin_id`` — id админа, выполняющего ``/freeze_payouts``.
+          Сохраняется в ``frozen_by_admin_id``.
+        * ``at`` — TZ-aware момент freeze-а (из ``IClock.now()``
+          use-case-а).
+        * ``reason`` — обязательный комментарий админа (`>= 1` непустой
+          символ; домен валидирует это в ``PayoutFreeze.__post_init__``).
+
+        Возвращает свежий ``PayoutFreeze``-снапшот с
+        ``is_frozen=True``. Идемпотентен: повторный вызов того же админа
+        обновит ``reason``/``at`` (но не создаст «вторую заморозку»;
+        admin-аудит — отдельный invariant на уровне use-case-а E.7).
+        """
+        ...
+
+    async def set_unfrozen(self) -> PayoutFreeze:
+        """Переключить состояние в ``is_frozen=False``.
+
+        Сбрасывает все три nullable-атрибута в ``None``. Идемпотентен:
+        повторный ``unfreeze`` на уже-unfrozen-строке — no-op.
+        Возвращает свежий ``PayoutFreeze``-снапшот с ``is_frozen=False``.
+        """
+        ...
+
+
+class IPayoutLimitChecker(Protocol):
+    """Порт rolling-window-чекера лимитов выплат на игрока (ГДД §12.6.5, Спринт 4.1-E).
+
+    Отвечает на вопрос: «выплата ``amount_native`` в валюте ``currency``
+    игроку ``player_id`` на момент ``now`` — проходит по лимитам». Исполь-
+    зуется в:
+
+    * ``ClaimPrize.execute(...)`` (E.10) — перед ``payout_adapter.payout(...)``
+      проверяет over-limit-окно; ``Within`` → продолжает выплату,
+      ``OverLimit`` → лот в очередь (E.11).
+    * ``GetPrizePoolStatus`` (E.9) — рендер карточки ``/prize_pool``
+      «игрок X у лимита» (пока опционально в E.9; чекер готов).
+
+    Конфиг лимита пер-currency живёт в ``balance.yaml::
+    monetization.payout_limit.per_currency`` (схема в ``domain/balance/
+    config.py::MonetizationConfig``, валидируется на старте процесса).
+    Реализация порта (шаг E.6) — ``EvaluatePayoutLimit`` use-case-адаптер
+    поверх ``IPrizeLotRepository.sum_claimed_in_window(...)``.
+
+    Семантика «omitted-from-config = unlimited»: если в ``balance.yaml::
+    monetization.payout_limit.per_currency`` нет записи для данной
+    ``currency`` — чекер возвращает ``PayoutLimitWithin(remaining_native=
+    sys.maxsize)``. Это путь для валют, в которых лимит не применим
+    (`STARS` — не крипто-выплата, или `TON_NANO` в будущем, если
+    оператор решит снять лимит).
+
+    Все методы асинхронные (реализация дёргает ``IPrizeLotRepository``
+    через активную ``IUnitOfWork``-сессию).
+    """
+
+    async def check(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+        amount_native: int,
+        now: datetime,
+    ) -> PayoutLimitCheckResult:
+        """Проверить, укладывается ли выплата в rolling-window-лимит.
+
+        Параметры:
+
+        * ``player_id`` — игрок (`> 0`, вызывающий use-case должен уже
+          валидировать ``AuthContext``).
+        * ``currency`` — валюта предполагаемой выплаты. Для currency,
+          отсутствующих в ``balance.yaml::monetization.payout_limit.
+          per_currency``, чекер возвращает «unlimited» (см. docstring класса).
+        * ``amount_native`` — размер выплаты в native-юнитах (`>= 1`,
+          контракт вызывающего use-case-а).
+        * ``now`` — TZ-aware момент (из ``IClock.now()``), относительно
+          которого отсчитывается rolling-window (`since = now - window_days`).
+
+        Возвращает:
+
+        * ``PayoutLimitWithin(remaining_native)`` — выплата укладывается;
+          ``remaining_native`` — сколько ещё native-юнитов можно выплатить
+          в текущем окне (`>= 0`; при omitted-currency = ``sys.maxsize``).
+        * ``PayoutLimitOverLimit(retry_after, exceeded_by_native)`` —
+          лимит превышен, «приходи после ``retry_after``».
         """
         ...

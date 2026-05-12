@@ -31,12 +31,16 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 
 __all__ = [
     "Currency",
     "FeeBufferAmount",
     "IdempotencyKey",
+    "PayoutLimitCheckResult",
+    "PayoutLimitOverLimit",
+    "PayoutLimitWithin",
     "StarsAmount",
     "StarsPayload",
     "StarsPoolBalance",
@@ -371,3 +375,98 @@ class StarsPayload:
                 "StarsPayload.idempotency_seed must match "
                 f"[A-Za-z0-9_-]{{16,32}}, got {self.idempotency_seed!r}",
             )
+
+
+@dataclass(frozen=True, slots=True)
+class PayoutLimitWithin:
+    """Игрок укладывается в rolling-window-лимит выплат (ГДД §12.6.5, Спринт 4.1-E).
+
+    Результат успешной проверки ``IPayoutLimitChecker.check(...)``. Use-case
+    ``ClaimPrize`` (E.10) при получении этого результата продолжает выплату
+    как обычно; админ-use-case ``GetPrizePoolStatus`` (E.9) использует
+    ``remaining_native`` для печати «осталось N USDT до месячного лимита».
+
+    Поле ``remaining_native: int`` — сколько ещё native-юнитов игрок может
+    получить в текущем rolling-окне (``>= 0``). При omitted-в-конфиге
+    currency (=unlimited) реализация возвращает большой sentinel-int
+    (`sys.maxsize`), но граница `>= 0` гарантирована.
+
+    Frozen + slots → VO без identity, hashable, безопасно сравнивать ``==``.
+    """
+
+    remaining_native: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.remaining_native, int) or isinstance(
+            self.remaining_native,
+            bool,
+        ):
+            raise TypeError(
+                "PayoutLimitWithin.remaining_native must be int, "
+                f"got {type(self.remaining_native).__name__}",
+            )
+        if self.remaining_native < 0:
+            raise ValueError(
+                f"PayoutLimitWithin.remaining_native must be >= 0, got {self.remaining_native}",
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class PayoutLimitOverLimit:
+    """Игрок превысил rolling-window-лимит выплат (ГДД §12.6.5, Спринт 4.1-E).
+
+    Результат проверки ``IPayoutLimitChecker.check(...)`` в случае, когда
+    суммарный выплаченный объём за окно + текущий запрос превышает
+    ``max_amount_native``. Use-case ``ClaimPrize`` (E.10) при получении
+    этого результата ставит лот в over-limit-очередь (E.11) и сообщает
+    игроку, когда можно повторить попытку (через локаль presenter-а).
+
+    Поля:
+
+    * ``retry_after: datetime`` — TZ-aware момент, в который самая ранняя
+      выплата в окне выпадет из rolling-окна (``oldest_claim_at +
+      window_days``). После этого момента игрок может повторить
+      ``/claim_prize`` и проверка снова даст ``PayoutLimitWithin``.
+    * ``exceeded_by_native: int`` — насколько (в native-юнитах) запрос
+      превышает оставшийся лимит. ``>= 1``: «ровно столько native
+      нужно сэкономить, чтобы уложиться». Используется в presenter-е
+      ``/prize_pool`` / ``/claim_prize``-ошибки для диагностики.
+
+    Frozen + slots → VO без identity, hashable, безопасно сравнивать ``==``.
+    """
+
+    retry_after: datetime
+    exceeded_by_native: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.retry_after, datetime):
+            raise TypeError(
+                "PayoutLimitOverLimit.retry_after must be datetime, "
+                f"got {type(self.retry_after).__name__}",
+            )
+        if self.retry_after.tzinfo is None:
+            raise ValueError(
+                "PayoutLimitOverLimit.retry_after must be timezone-aware "
+                "(naïve datetime would lose UTC offset on persistence)",
+            )
+        if not isinstance(self.exceeded_by_native, int) or isinstance(
+            self.exceeded_by_native,
+            bool,
+        ):
+            raise TypeError(
+                "PayoutLimitOverLimit.exceeded_by_native must be int, "
+                f"got {type(self.exceeded_by_native).__name__}",
+            )
+        if self.exceeded_by_native < 1:
+            raise ValueError(
+                "PayoutLimitOverLimit.exceeded_by_native must be >= 1, "
+                f"got {self.exceeded_by_native}",
+            )
+
+
+PayoutLimitCheckResult = PayoutLimitWithin | PayoutLimitOverLimit
+"""Sum-type результата ``IPayoutLimitChecker.check(...)`` (Спринт 4.1-E).
+
+Use-case ``ClaimPrize`` (E.10) выполняет ``match`` по этому результату:
+``Within`` → продолжить выплату; ``OverLimit`` → перевести лот в очередь.
+"""

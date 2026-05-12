@@ -52,6 +52,10 @@ class FakePrizeLotRepository(IPrizeLotRepository):
 
     _storage: dict[int, PrizeLot] = field(default_factory=dict)
     _next_id: int = 1
+    # Side-map lot_id -> player_id (winner). Заполняется тестами через
+    # `record_winner(...)` (т.к. PrizeLot-агрегат до шага E.11
+    # не хранит winner_id; в E.11 это станет полем в схеме).
+    winners: dict[int, int] = field(default_factory=dict)
     add_calls: list[PrizeLot] = field(default_factory=list)
     update_status_calls: list[tuple[int, PrizeLotStatus, datetime | None, datetime | None]] = field(
         default_factory=list
@@ -93,6 +97,7 @@ class FakePrizeLotRepository(IPrizeLotRepository):
         new_status: PrizeLotStatus,
         reserved_at: datetime | None = None,
         claimed_at: datetime | None = None,
+        winner_id: int | None = None,
     ) -> PrizeLot:
         """Перевести лот в `new_status`, делегируя домену state-machine."""
         self.update_status_calls.append((lot_id, new_status, reserved_at, claimed_at))
@@ -112,6 +117,10 @@ class FakePrizeLotRepository(IPrizeLotRepository):
                     "FakePrizeLotRepository.update_status: reserved_at is "
                     "required for RESERVED transition"
                 )
+            if winner_id is not None:
+                raise ValueError(
+                    "FakePrizeLotRepository.update_status: winner_id must be None for RESERVED"
+                )
             updated = current.reserve(reserved_at=reserved_at)
         elif new_status is PrizeLotStatus.CLAIMED:
             if claimed_at is None:
@@ -119,8 +128,22 @@ class FakePrizeLotRepository(IPrizeLotRepository):
                     "FakePrizeLotRepository.update_status: claimed_at is "
                     "required for CLAIMED transition"
                 )
+            if winner_id is None:
+                raise ValueError(
+                    "FakePrizeLotRepository.update_status: winner_id is "
+                    "required for CLAIMED transition"
+                )
+            if winner_id <= 0:
+                raise ValueError(
+                    f"FakePrizeLotRepository.update_status: winner_id must be > 0, got {winner_id}"
+                )
             updated = current.claim(claimed_at=claimed_at)
+            self.winners[lot_id] = winner_id
         elif new_status is PrizeLotStatus.REFUNDED:
+            if winner_id is not None:
+                raise ValueError(
+                    "FakePrizeLotRepository.update_status: winner_id must be None for REFUNDED"
+                )
             updated = current.refund()
         else:
             raise ValueError(
@@ -129,6 +152,77 @@ class FakePrizeLotRepository(IPrizeLotRepository):
 
         self._storage[lot_id] = updated
         return updated
+
+    def record_winner(self, *, lot_id: int, player_id: int) -> None:
+        """Связать CLAIMED-лот с winner-игроком в in-memory хранилище.
+
+        Используется тестами `EvaluatePayoutLimit` use-case-а (E.6) и
+        будущими `ClaimPrize`-тестами (E.10), чтобы записать
+        кто заклеймил лот. До шага E.11 PrizeLot-агрегат не хранит
+        winner_id — храним в sidemap `winners`. Валидирует:
+        `lot_id` в `_storage`, статус лота == CLAIMED, `player_id > 0`.
+        """
+        if player_id <= 0:
+            raise ValueError(
+                f"FakePrizeLotRepository.record_winner: player_id must be > 0, got {player_id}"
+            )
+        lot = self._storage.get(lot_id)
+        if lot is None:
+            raise PrizeLotNotFoundError(lot_id=lot_id)
+        if lot.status is not PrizeLotStatus.CLAIMED:
+            raise ValueError(
+                f"FakePrizeLotRepository.record_winner: lot {lot_id} status "
+                f"is {lot.status.value!r}, expected 'claimed'"
+            )
+        self.winners[lot_id] = player_id
+
+    async def sum_claimed_in_window(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+        since: datetime,
+    ) -> int:
+        """Сумма `amount_native` CLAIMED-лотов игрока в окне (ин-memory).
+
+        Линейный проход по `_storage` + `winners`. В SQL-реализации (E.11)
+        будет покрывающий индекс `(winner_id, currency, status, claimed_at)`.
+        """
+        total = 0
+        for lot_id, lot in self._storage.items():
+            if lot.status is not PrizeLotStatus.CLAIMED:
+                continue
+            if lot.currency is not currency:
+                continue
+            if lot.claimed_at is None or lot.claimed_at < since:
+                continue
+            if self.winners.get(lot_id) != player_id:
+                continue
+            total += lot.amount_native
+        return total
+
+    async def oldest_claimed_at_in_window(
+        self,
+        *,
+        player_id: int,
+        currency: Currency,
+        since: datetime,
+    ) -> datetime | None:
+        """Самый ранний `claimed_at` для player+currency в окне или `None`."""
+        candidates: list[datetime] = []
+        for lot_id, lot in self._storage.items():
+            if lot.status is not PrizeLotStatus.CLAIMED:
+                continue
+            if lot.currency is not currency:
+                continue
+            if lot.claimed_at is None or lot.claimed_at < since:
+                continue
+            if self.winners.get(lot_id) != player_id:
+                continue
+            candidates.append(lot.claimed_at)
+        if not candidates:
+            return None
+        return min(candidates)
 
     async def list_expired_reserved(
         self,
@@ -158,3 +252,14 @@ class FakePrizeLotRepository(IPrizeLotRepository):
 
         candidates.sort(key=_sort_key)
         return tuple(candidates[:limit])
+
+    async def count_by_status(
+        self,
+        *,
+        currency: Currency,
+        status: PrizeLotStatus,
+    ) -> int:
+        """Количество лотов в указанном `status` для `currency`."""
+        return sum(
+            1 for lot in self._storage.values() if lot.currency is currency and lot.status is status
+        )

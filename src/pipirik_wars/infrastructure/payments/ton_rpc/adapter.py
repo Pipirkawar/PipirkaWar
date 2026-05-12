@@ -93,6 +93,42 @@ _EXTERNAL_MESSAGE_TTL_SECONDS = 60
 _QUERY_ID_DIGEST_BYTES = 8
 
 
+def _parse_tvm_int(raw: str, *, context: str) -> int:
+    """Распарсить TVM-int из стек-записи `run_get_method`.
+
+    TON Center возвращает целые из TVM в одной из двух форм:
+    * decimal: `"42"`, `"-1"`;
+    * hex (чаще для крупных значений): `"0x2a"`, `"-0x2a"`,
+      `"0X2A"`. Префикс может быть в любом регистре.
+
+    `int(value, 0)` распознаёт оба варианта автоматически по префиксу
+    (`0x` / `0X` → 16, иначе 10). Заодно поддерживает unary-minus
+    и пробельные обрамления (TON Center иногда отдаёт `" 0x2a "`),
+    которые мы предварительно срезаем `strip()`-ом.
+
+    Любой другой тип / `None` / пустая строка / non-numeric →
+    `TonRpcCallError` с контекстом (имя вызывающего метода).
+    """
+    if not isinstance(raw, str):
+        raise TonRpcCallError(
+            f"{context}: stack[0] expected str, got {type(raw).__name__}={raw!r}",
+            method="seqno",
+        )
+    trimmed = raw.strip()
+    if not trimmed:
+        raise TonRpcCallError(
+            f"{context}: stack[0] is empty / whitespace-only string",
+            method="seqno",
+        )
+    try:
+        return int(trimmed, 0)
+    except ValueError as exc:
+        raise TonRpcCallError(
+            f"{context}: stack[0]={raw!r} is not a valid TVM-int (decimal/hex)",
+            method="seqno",
+        ) from exc
+
+
 class TonRpcAdapter:
     """Адаптер выплаты TON / USDT-jetton-а через TON-RPC.
 
@@ -270,6 +306,12 @@ class TonRpcAdapter:
         wallet-v3R2-контракт экспонирует `get_method seqno() -> int`.
         Возвращает 0 на свежем (uninitialized) wallet-е — это допустимо,
         первая отправка инициализирует его.
+
+        TON Center в ответе `run_get_method` отдаёт TVM-int одной из двух
+        строковых форм: decimal (`"42"`) или hex (`"0x2a"` / реже `"-0x..."`).
+        Парсим обе через `int(value, 0)` — Python автоматически выбирает
+        базу по префиксу. Пустая строка / non-numeric → `TonRpcCallError`
+        (контракт `_fetch_seqno: возвращает int`).
         """
         result = await self._client.run_get_method(
             address=payout_wallet,
@@ -288,7 +330,11 @@ class TonRpcAdapter:
                 f"for wallet={payout_wallet!r}",
                 method="seqno",
             )
-        return int(result.stack[0])
+        raw_seqno = result.stack[0]
+        return _parse_tvm_int(
+            raw_seqno,
+            context=f"TonRpcAdapter._fetch_seqno: wallet={payout_wallet!r}",
+        )
 
     # ------------------------------------------------------------------
     # BoC builders.  Возвращают `Cell` или base64-encoded BoC-строку.

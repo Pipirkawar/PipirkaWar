@@ -40,6 +40,7 @@ from pipirik_wars.application.admin import (
 )
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
+from pipirik_wars.application.monetization import FreezePayouts, RefundLot, UnfreezePayouts
 from pipirik_wars.bot.handlers.admin_support import (
     REPLY_NON_PRIVATE_RU,
     handle_ban,
@@ -699,8 +700,26 @@ def _stub_broadcast_task_spawner() -> IBroadcastTaskSpawner:
     return cast(IBroadcastTaskSpawner, fake)
 
 
+def _stub_refund_lot() -> RefundLot:
+    fake = MagicMock(spec=RefundLot)
+    fake.execute = AsyncMock()
+    return cast(RefundLot, fake)
+
+
+def _stub_freeze_payouts() -> FreezePayouts:
+    fake = MagicMock(spec=FreezePayouts)
+    fake.execute = AsyncMock()
+    return cast(FreezePayouts, fake)
+
+
+def _stub_unfreeze_payouts() -> UnfreezePayouts:
+    fake = MagicMock(spec=UnfreezePayouts)
+    fake.execute = AsyncMock()
+    return cast(UnfreezePayouts, fake)
+
+
 def _confirm_extra_kwargs() -> dict[str, object]:
-    """Дефолты новых параметров `handle_confirm` (Спринт 2.5-C/D.4)."""
+    """Дефолты новых параметров `handle_confirm` (Спринт 2.5-C/D.4 + 4.1-E.13/E.14)."""
     return {
         "grant_length": _stub_grant_length(),
         "grant_thickness": _stub_grant_thickness(),
@@ -708,6 +727,9 @@ def _confirm_extra_kwargs() -> dict[str, object]:
         "run_broadcast_announcement": _stub_run_broadcast_announcement(),
         "broadcast_task_spawner": _stub_broadcast_task_spawner(),
         "clock": _stub_clock(),
+        "refund_lot": _stub_refund_lot(),
+        "freeze_payouts": _stub_freeze_payouts(),
+        "unfreeze_payouts": _stub_unfreeze_payouts(),
     }
 
 

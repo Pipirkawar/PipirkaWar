@@ -728,3 +728,48 @@ roulette:
 # -----------------------------------------------------------------------------
 prize_lot:
   reserved_ttl_seconds: 172800   # 48 h; см. ГДД §12.6.3-§12.6.4
+
+# -----------------------------------------------------------------------------
+# §12.6.5 — лимит выплат на одного игрока (Спринт 4.1-E, шаг E.5).
+#
+# Защита крипто-пула от выкачивания одним игроком за короткий промежуток
+# времени (массовая регистрация фейковых аккаунтов одного физлица + farm
+# рулетки). Реализуется через rolling-window per currency:
+#
+#   sum( prize_lots.amount_native WHERE
+#           winner_id = :player AND
+#           currency  = :currency AND
+#           status    = 'CLAIMED' AND
+#           claimed_at >= now - window_days )
+#     + amount_native_of_pending_claim
+#     <= max_amount_native    ⇒ allow
+#     >  max_amount_native    ⇒ over-limit → лот в очередь (E.11),
+#                                cron вернёт в `ACTIVE`, когда самая
+#                                старая выплата выпадет из окна.
+#
+# Currency, не упомянутая в `per_currency`, считается «unlimited» — для
+# таких валют `IPayoutLimitChecker.check(...)` возвращает
+# `PayoutLimitWithin(remaining_native = sys.maxsize)`. `STARS` запрещён
+# валидатором — Stars-выплаты идут через TG-refund-канал и не подпадают
+# под этот лимит (ГДД §12.6.5).
+#
+# Стартовые гипотезы (финал — на ревью геймдиза):
+#   * `USDT_DECIMAL`: 50.00 USDT за 30 d  ⇒ `max_amount_native = 50_000_000`
+#     (jetton-decimals=6, 1 USDT = 10**6 минор-юнит).
+#   * `TON_NANO`:     10.00 TON  за 30 d  ⇒ `max_amount_native =
+#     10_000_000_000` (1 TON = 10**9 nano-TON; ~50 USD-eq при 1 TON ≈ 5 USD).
+#
+# Pydantic-границы (см. `domain/balance/config.py::PayoutLimitConfig`):
+#   * `window_days ∈ [1, 365]`;
+#   * `max_amount_native >= 0` (`0` — kill-switch на одну валюту,
+#     использовать для постоянного запрета лучше `/freeze_payouts`).
+# -----------------------------------------------------------------------------
+monetization:
+  payout_limit:
+    per_currency:
+      - currency: "usdt_decimal"
+        window_days: 30
+        max_amount_native: 50000000      # 50.00 USDT (6 decimals)
+      - currency: "ton_nano"
+        window_days: 30
+        max_amount_native: 10000000000   # 10.00 TON (9 decimals)

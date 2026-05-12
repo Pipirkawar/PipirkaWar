@@ -116,11 +116,16 @@ from pipirik_wars.application.i18n import IMessageBundle, IPlayerLocaleResolver
 from pipirik_wars.application.inventory import EnchantItem, GetInventory
 from pipirik_wars.application.monetization import (
     ClaimPrize,
+    EvaluatePayoutLimit,
     ExpireReservedPrizeLots,
+    FreezePayouts,
     GeneratePrizeLots,
+    GetPrizePoolStatus,
     LinkWallet,
     RecordDonation,
+    RefundLot,
     SpinPaidRoulette,
+    UnfreezePayouts,
 )
 from pipirik_wars.application.mountains import (
     FinishMountainRun,
@@ -221,6 +226,8 @@ from pipirik_wars.domain.inventory import (
 )
 from pipirik_wars.domain.monetization import (
     IPaymentLedger,
+    IPayoutFreezeRepository,
+    IPayoutLimitChecker,
     IPrizeLotRepository,
     IPrizePoolRepository,
     ITgStarsPayloadVerifier,
@@ -285,6 +292,7 @@ from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyMountainRunRepository,
     SqlAlchemyOracleHistoryRepository,
     SqlAlchemyPaymentLedger,
+    SqlAlchemyPayoutFreezeRepository,
     SqlAlchemyPlayerRepository,
     SqlAlchemyPrizeLotRepository,
     SqlAlchemyPrizePoolRepository,
@@ -505,12 +513,18 @@ class Container:
     # `ton_connect_verifier` (`SandboxTonConnectVerifier` stub до 4.1-E).
     prize_lot_repo: IPrizeLotRepository
     wallet_repo: IWalletRepository
+    payout_freeze_repo: IPayoutFreezeRepository
+    payout_limit_checker: IPayoutLimitChecker
     ton_payout_adapter: ITonPayoutAdapter
     ton_connect_verifier: ITonConnectVerifier
     tg_stars_verifier: ITgStarsPayloadVerifier
     generate_prize_lots: GeneratePrizeLots
     link_wallet: LinkWallet
     claim_prize: ClaimPrize
+    get_prize_pool_status: GetPrizePoolStatus
+    refund_lot: RefundLot
+    freeze_payouts: FreezePayouts
+    unfreeze_payouts: UnfreezePayouts
     expire_reserved_prize_lots: ExpireReservedPrizeLots
     upgrade_thickness: UpgradeThickness
     invoke_oracle: InvokeOracle
@@ -1207,6 +1221,16 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     # результат перевыронит `CRYPTO_LOT` в `LENGTH`. Резервирование лота +
     # audit `PRIZE_LOT_RESERVED` придут в C.6.c.
     prize_lot_repo = SqlAlchemyPrizeLotRepository(uow=uow)
+    # Спринт 4.1-E / E.10–E.11a: `IPayoutFreezeRepository` + `IPayoutLimitChecker`
+    # для `ClaimPrize.execute(...)` (freeze-check + rolling-window-лимит) и
+    # admin-команд `/freeze_payouts`/`/unfreeze_payouts`/`/prize_pool`.
+    payout_freeze_repo: IPayoutFreezeRepository = SqlAlchemyPayoutFreezeRepository(
+        uow=uow,
+    )
+    payout_limit_checker: IPayoutLimitChecker = EvaluatePayoutLimit(
+        lot_repo=prize_lot_repo,
+        balance_config=balance,
+    )
     spin_free_roulette = SpinFreeRoulette(
         uow=uow,
         players=players,
@@ -1238,6 +1262,57 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     # 10-step flow-а вызывает `record_donation.execute(...)` с тем же
     # `idempotency_key`, что и у платежа.
     prize_pool_repo = SqlAlchemyPrizePoolRepository(uow=uow)
+    # Спринт 4.1-E / E.12: admin-команда `/prize_pool` (super-admin
+    # read-only + audit `ADMIN_PRIZE_POOL_VIEWED`).
+    get_prize_pool_status = GetPrizePoolStatus(
+        uow=uow,
+        admins=admins,
+        prize_pool_repository=prize_pool_repo,
+        prize_lot_repository=prize_lot_repo,
+        payout_freeze_repo=payout_freeze_repo,
+        admin_audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    # Спринт 4.1-E / E.13: admin-команда `/refund_lot <lot_id> <reason>`
+    # (super-admin + TOTP). Двухфазный flow: handler `admin_refund_lot`
+    # → `RequestAdminConfirm` (фаза 1, выдаёт token), `admin_support.handle_confirm`
+    # → `dispatch_refund_lot` (фаза 2, после TOTP-verify, вызывает усе-кейс).
+    # Регистрация в `CONFIRM_DISPATCHERS` срабатывает при импорте
+    # модуля `bot/handlers/admin_refund_lot.py` (через `register_routers`).
+    refund_lot = RefundLot(
+        uow=uow,
+        admins=admins,
+        prize_lot_repository=prize_lot_repo,
+        prize_pool_repository=prize_pool_repo,
+        audit=audit,
+        admin_audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    # Спринт 4.1-E / E.14: admin-команды `/freeze_payouts <reason>` и
+    # `/unfreeze_payouts` (super-admin + TOTP). Двухфазный flow: handler
+    # `admin_freeze_payouts` → `RequestAdminConfirm` (фаза 1, выдаёт token),
+    # `admin_support.handle_confirm` → `dispatch_(un)freeze_payouts` (фаза 2,
+    # после TOTP-verify, вызывает `FreezePayouts` / `UnfreezePayouts`).
+    # Регистрация в `CONFIRM_DISPATCHERS` срабатывает при импорте
+    # `bot/handlers/admin_freeze_payouts.py` (через `register_routers`).
+    freeze_payouts_uc = FreezePayouts(
+        uow=uow,
+        admins=admins,
+        payout_freeze_repo=payout_freeze_repo,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    unfreeze_payouts_uc = UnfreezePayouts(
+        uow=uow,
+        admins=admins,
+        payout_freeze_repo=payout_freeze_repo,
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
     # 4.1-C / C.7.a + C.7.b: cron `GeneratePrizeLots` 1×/час per currency.
     # 4.1-C / C.7.d: тот же use-case прокидывается в `RecordDonation` как
     # внеочередной триггер «крупного» доната (>= 0.5 TON / >= 1 USDT),
@@ -1332,6 +1407,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         payout_adapter=ton_payout_adapter,
         audit_logger=audit,
         clock=clock,
+        payout_freeze_repository=payout_freeze_repo,
+        payout_limit_checker=payout_limit_checker,
     )
     spin_paid_roulette = SpinPaidRoulette(
         uow=uow,
@@ -1899,12 +1976,18 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         record_donation=record_donation,
         prize_lot_repo=prize_lot_repo,
         wallet_repo=wallet_repo,
+        payout_freeze_repo=payout_freeze_repo,
+        payout_limit_checker=payout_limit_checker,
         ton_payout_adapter=ton_payout_adapter,
         ton_connect_verifier=ton_connect_verifier,
         tg_stars_verifier=tg_stars_verifier,
         generate_prize_lots=generate_prize_lots,
         link_wallet=link_wallet,
         claim_prize=claim_prize,
+        get_prize_pool_status=get_prize_pool_status,
+        refund_lot=refund_lot,
+        freeze_payouts=freeze_payouts_uc,
+        unfreeze_payouts=unfreeze_payouts_uc,
         expire_reserved_prize_lots=expire_reserved_prize_lots,
         upgrade_thickness=upgrade_thickness,
         invoke_oracle=invoke_oracle,
@@ -2146,6 +2229,27 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     dispatcher["claim_prize"] = container.claim_prize
     dispatcher["wallet_repository"] = container.wallet_repo
     dispatcher["prize_lot_repository"] = container.prize_lot_repo
+    # Спринт 4.1-E — admin-команды `/prize_pool`, `/refund_lot`,
+    # `/freeze_payouts`, `/unfreeze_payouts` (E.12–E.14) требуют доступа
+    # к `IPayoutFreezeRepository` (set_frozen/set_unfrozen/get_state) и
+    # `IPayoutLimitChecker` (read-side для статус-отчёта `/prize_pool`).
+    dispatcher["payout_freeze_repository"] = container.payout_freeze_repo
+    dispatcher["payout_limit_checker"] = container.payout_limit_checker
+    dispatcher["get_prize_pool_status"] = container.get_prize_pool_status
+    # 4.1-E.13: `dispatch_refund_lot` (фаза 2 `/refund_lot`) живёт в
+    # `ConfirmDispatchDeps.refund_lot` — `admin_support.handle_confirm`
+    # резолвит его из workflow-data и вкладывает в `deps`-контейнер
+    # перед регистрированным dispatcher-ом. Сам handler фазы 1 вызывает
+    # только `RequestAdminConfirm` (уже проброшен в dispatcher раньше).
+    dispatcher["refund_lot"] = container.refund_lot
+    # 4.1-E.14: `dispatch_(un)freeze_payouts` (фаза 2 соотв-их команд)
+    # живёт в `ConfirmDispatchDeps.freeze_payouts` / `.unfreeze_payouts` —
+    # `admin_support.handle_confirm` резолвит оба из workflow-data и вкладывает
+    # в `deps`-контейнер перед вызовом зарегистрированного dispatcher-а.
+    # Сами handler-ы фазы 1 вызывают только `RequestAdminConfirm`
+    # (уже проброшен в dispatcher выше).
+    dispatcher["freeze_payouts"] = container.freeze_payouts
+    dispatcher["unfreeze_payouts"] = container.unfreeze_payouts
     return dispatcher
 
 

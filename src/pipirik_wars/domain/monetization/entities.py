@@ -50,6 +50,7 @@ from pipirik_wars.domain.monetization.value_objects import (
 __all__ = [
     "Payment",
     "PaymentStatus",
+    "PayoutFreeze",
     "PrizeLot",
     "PrizeLotStatus",
     "PrizePool",
@@ -655,4 +656,141 @@ class Wallet:
             raise ValueError(
                 "Wallet.linked_at must be timezone-aware "
                 "(naïve datetime would lose UTC offset on persistence)",
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class PayoutFreeze:
+    """Глобальный freeze-флаг крипто-выплат (ГДД §12.6.5, Спринт 4.1-E).
+
+    Singleton-сущность: на проекте одновременно существует ровно один
+    «срез» состояния выплат. В персистентной БД он хранится одной
+    строкой в таблице ``payout_freeze`` (миграция, Спринт 4.1-E,
+    шаг E.11); identity на уровне домена не нужна — два идентичных
+    снапшота неотличимы.
+
+    Используется в:
+
+    * use-case-е ``ClaimPrize`` (Спринт 4.1-E, E.10) —
+      ``if state.is_frozen: raise ClaimPrizePayoutsFrozenError``;
+    * админ-handler-е ``/prize_pool`` (E.12) — печатает
+      ``frozen_by`` / ``reason`` в карточке;
+    * админ-handler-ах ``/freeze_payouts`` / ``/unfreeze_payouts``
+      (E.14) — соответствующие use-case-ы обновляют это состояние через
+      ``IPayoutFreezeRepository.set_frozen(...)`` / ``set_unfrozen(...)``.
+
+    Поля:
+
+    * ``is_frozen: bool`` — ``True`` ⇒ ``ClaimPrize`` блокирует все
+      крипто-выплаты (``Currency.TON_NANO`` / ``Currency.USDT_DECIMAL``);
+      ``Currency.STARS`` идут отдельным каналом (Telegram Bot API
+      refund), их freeze не затрагивает.
+    * ``frozen_by_admin_id: int | None`` — id админа, который последним
+      изменил состояние. ``None`` ⇔ ``is_frozen=False`` (свежая БД,
+      seed-row после миграции). При ``set_frozen(...)`` обязателен;
+      при ``set_unfrozen(...)`` сбрасывается в ``None``.
+    * ``frozen_at: datetime | None`` — TZ-aware момент последнего
+      ``set_frozen(...)``. ``None`` ⇔ ``is_frozen=False``.
+    * ``reason: str | None`` — обязательный человекочитаемый
+      комментарий админа на момент ``set_frozen(...)``. ``None`` ⇔
+      ``is_frozen=False``.
+
+    Инварианты (``__post_init__``):
+
+    * ``is_frozen=True`` ⇒ все три атрибута заполнены (``frozen_by_admin_id``,
+      ``frozen_at``, ``reason``).
+    * ``is_frozen=False`` ⇒ все три атрибута равны ``None``
+      (детерминированное «чистое» состояние; нельзя оставлять «осиротевшие»
+      ``frozen_by_admin_id`` после ``unfreeze``).
+    * ``frozen_at`` обязан быть TZ-aware (naïve ``datetime`` потеряет
+      UTC-смещение при сохранении в БД).
+
+    Frozen + slots → агрегат без identity на доменном уровне.
+    """
+
+    is_frozen: bool
+    frozen_by_admin_id: int | None
+    frozen_at: datetime | None
+    reason: str | None
+
+    @classmethod
+    def unfrozen(cls) -> PayoutFreeze:
+        """Фабрика «по умолчанию свежий unfrozen-снапшот».
+
+        Используется в seed-логике миграции ``payout_freeze`` (одна
+        строка после ``CREATE TABLE``) и в ``FakePayoutFreezeRepository``
+        (in-memory дефолт для unit-тестов use-case-ов).
+        """
+        return cls(
+            is_frozen=False,
+            frozen_by_admin_id=None,
+            frozen_at=None,
+            reason=None,
+        )
+
+    @classmethod
+    def frozen(
+        cls,
+        *,
+        admin_id: int,
+        at: datetime,
+        reason: str,
+    ) -> PayoutFreeze:
+        """Фабрика frozen-снапшота с заданными атрибутами.
+
+        Используется ``FreezePayouts``-use-case-ом (E.7) для конструкции
+        нового состояния перед ``IPayoutFreezeRepository.set_frozen(...)``.
+        Все три атрибута обязательны; инварианты валидируются в
+        ``__post_init__``.
+        """
+        return cls(
+            is_frozen=True,
+            frozen_by_admin_id=admin_id,
+            frozen_at=at,
+            reason=reason,
+        )
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.is_frozen, bool):
+            raise TypeError(
+                f"PayoutFreeze.is_frozen must be bool, got {type(self.is_frozen).__name__}",
+            )
+        if self.is_frozen:
+            if self.frozen_by_admin_id is None:
+                raise ValueError(
+                    "PayoutFreeze(is_frozen=True) requires frozen_by_admin_id",
+                )
+            if not isinstance(self.frozen_by_admin_id, int) or isinstance(
+                self.frozen_by_admin_id,
+                bool,
+            ):
+                raise TypeError(
+                    f"PayoutFreeze.frozen_by_admin_id must be int, "
+                    f"got {type(self.frozen_by_admin_id).__name__}",
+                )
+            if self.frozen_by_admin_id <= 0:
+                raise ValueError(
+                    f"PayoutFreeze.frozen_by_admin_id must be > 0, got {self.frozen_by_admin_id}",
+                )
+            if self.frozen_at is None:
+                raise ValueError(
+                    "PayoutFreeze(is_frozen=True) requires frozen_at",
+                )
+            if self.frozen_at.tzinfo is None:
+                raise ValueError(
+                    "PayoutFreeze.frozen_at must be timezone-aware",
+                )
+            if self.reason is None or not self.reason.strip():
+                raise ValueError(
+                    "PayoutFreeze(is_frozen=True) requires non-empty reason",
+                )
+        elif (
+            self.frozen_by_admin_id is not None
+            or self.frozen_at is not None
+            or self.reason is not None
+        ):
+            raise ValueError(
+                "PayoutFreeze(is_frozen=False) must have "
+                "frozen_by_admin_id=frozen_at=reason=None "
+                "(unfrozen state must be clean)",
             )

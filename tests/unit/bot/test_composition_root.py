@@ -86,9 +86,13 @@ from pipirik_wars.application.inventory import EnchantItem, GetInventory
 from pipirik_wars.application.monetization import (
     ClaimPrize,
     ExpireReservedPrizeLots,
+    FreezePayouts,
+    GetPrizePoolStatus,
     LinkWallet,
     RecordDonation,
+    RefundLot,
     SpinPaidRoulette,
+    UnfreezePayouts,
 )
 from pipirik_wars.application.monetization.generate_prize_lots import GeneratePrizeLots
 from pipirik_wars.application.mountains import (
@@ -252,6 +256,8 @@ from tests.fakes import (
     FakeOracleHistoryRepository,
     FakeOracleTemplateProvider,
     FakePaymentLedger,
+    FakePayoutFreezeRepository,
+    FakePayoutLimitChecker,
     FakePlayerLocaleResolver,
     FakePlayerRepository,
     FakePrizeLotRepository,
@@ -1076,6 +1082,44 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         payout_adapter=ton_payout_adapter_fake,
         audit_logger=audit,
         clock=clock,
+        payout_freeze_repository=FakePayoutFreezeRepository(),
+        payout_limit_checker=FakePayoutLimitChecker(),
+    )
+    get_prize_pool_status_uc = GetPrizePoolStatus(
+        uow=uow,
+        admins=admins,
+        prize_pool_repository=prize_pool_repo_fake,
+        prize_lot_repository=prize_lot_repo_fake,
+        payout_freeze_repo=FakePayoutFreezeRepository(),
+        admin_audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    refund_lot_uc = RefundLot(
+        uow=uow,
+        admins=admins,
+        prize_lot_repository=prize_lot_repo_fake,
+        prize_pool_repository=prize_pool_repo_fake,
+        audit=audit,
+        admin_audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    freeze_payouts_uc = FreezePayouts(
+        uow=uow,
+        admins=admins,
+        payout_freeze_repo=FakePayoutFreezeRepository(),
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
+    )
+    unfreeze_payouts_uc = UnfreezePayouts(
+        uow=uow,
+        admins=admins,
+        payout_freeze_repo=FakePayoutFreezeRepository(),
+        audit=admin_audit,
+        clock=clock,
+        authz=admin_authz,
     )
     expire_reserved_prize_lots_uc = ExpireReservedPrizeLots(
         uow=uow,
@@ -1363,12 +1407,18 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         record_donation=record_donation_uc,
         prize_lot_repo=prize_lot_repo_fake,
         wallet_repo=wallet_repo_fake,
+        payout_freeze_repo=FakePayoutFreezeRepository(),
+        payout_limit_checker=FakePayoutLimitChecker(),
         ton_payout_adapter=ton_payout_adapter_fake,
         ton_connect_verifier=ton_connect_verifier_fake,
         tg_stars_verifier=tg_stars_verifier_fake,
         generate_prize_lots=generate_prize_lots_uc,
         link_wallet=link_wallet_uc,
         claim_prize=claim_prize_uc,
+        get_prize_pool_status=get_prize_pool_status_uc,
+        refund_lot=refund_lot_uc,
+        freeze_payouts=freeze_payouts_uc,
+        unfreeze_payouts=unfreeze_payouts_uc,
         expire_reserved_prize_lots=expire_reserved_prize_lots_uc,
     )
 

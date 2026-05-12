@@ -45,7 +45,10 @@ from dataclasses import dataclass, field
 __all__ = [
     "Cell",
     "CellBuilder",
+    "deserialize_boc",
+    "format_raw_address",
     "parse_address",
+    "parse_msgaddress_int_from_cell",
     "serialize_boc",
 ]
 
@@ -561,3 +564,396 @@ def _visit_cell(
         ordered.append(current)
         queue.extend(current.refs)
     return index_by_id[id(cell)]
+
+
+# ---------------------------------------------------------------------------
+# BoC deserialization (Спринт 4.1-E, шаг E.2).
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class _BocHeader:
+    off_bytes: int
+    cells_num: int
+    root_idx: int
+    cells_section: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class _CellSpec:
+    bits_count: int
+    refs_count: int
+    data_bytes: bytes
+    ref_indices: tuple[int, ...]
+
+
+def deserialize_boc(raw: bytes) -> Cell:
+    """Распарсить минимальный TON BoC обратно в корневую ``Cell``.
+
+    Симметрично к ``serialize_boc(...)`` — поддерживает single-root BoC
+    с ``size_bytes=1``, ``off_bytes ∈ {1, 2}``, без has_idx / без has_crc /
+    без cache_bits. Это та форма, в которой TON Center возвращает
+    cell-/slice-результаты ``get_wallet_address`` и подобных
+    ``runGetMethod``-вызовов.
+
+    Padding-биты trailing-байта канонического TON-формата (`1`-разделитель
+    + нули) отрезаются: возвращаемая ``Cell.bits_count`` отражает реальное
+    число значащих бит.
+
+    Поднимает ``ValueError`` при любой поломке (неверный magic /
+    неподдерживаемые флаги / форвард-рефы / truncated input / выход за границы).
+    """
+    if not isinstance(raw, bytes | bytearray):
+        raise ValueError(
+            f"deserialize_boc: raw must be bytes, got {type(raw).__name__}",
+        )
+    header = _parse_boc_header(bytes(raw))
+    specs = _parse_cell_specs(header.cells_section, header.cells_num)
+
+    # Build Cell-objects bottom-up (highest index first), so that by the time we
+    # build cell N, all its refs (indices > N) already exist. Each ref-index is
+    # strictly greater than parent-index (validated in `_validate_ref_indices`),
+    # therefore `cells_built[i]` for `i in spec.ref_indices` is guaranteed
+    # non-None when we read it.
+    cells_built: list[Cell | None] = [None] * header.cells_num
+    for cell_index in reversed(range(header.cells_num)):
+        spec = specs[cell_index]
+        ref_cells: list[Cell] = []
+        for i in spec.ref_indices:
+            built = cells_built[i]
+            if built is None:  # pragma: no cover — guarded by reverse-iteration order
+                raise ValueError(
+                    f"deserialize_boc: cell {cell_index} ref-target {i} not yet built",
+                )
+            ref_cells.append(built)
+        cells_built[cell_index] = Cell(
+            bits=spec.data_bytes,
+            bits_count=spec.bits_count,
+            refs=tuple(ref_cells),
+        )
+
+    root_cell = cells_built[header.root_idx]
+    if root_cell is None:  # pragma: no cover — guarded by cells_num >= 1 + root_idx < cells_num
+        raise ValueError("deserialize_boc: root cell unexpectedly missing after second pass")
+    return root_cell
+
+
+def _parse_boc_header(raw: bytes) -> _BocHeader:
+    """Разобрать BoC-хедер: валидировать флаги + извлечь секцию ячеек.
+
+    Поддерживаем только single-root + size_bytes=1 + off_bytes ∈ {1, 2}.
+    См. ``deserialize_boc`` для полного контракта.
+    """
+    min_header_len = len(_BOC_MAGIC) + 6  # magic + flag + off + cells + roots + absent
+    if len(raw) < min_header_len:
+        raise ValueError(
+            f"deserialize_boc: input too short ({len(raw)} bytes; minimal header = {min_header_len} bytes)",
+        )
+    if raw[: len(_BOC_MAGIC)] != _BOC_MAGIC:
+        raise ValueError(
+            f"deserialize_boc: invalid BoC magic (got {raw[:4].hex()}, expected b5ee9c72)",
+        )
+
+    cursor = len(_BOC_MAGIC)
+    flag_byte = raw[cursor]
+    cursor += 1
+    if flag_byte & 0b1110_0000 or (flag_byte >> 3) & 0b0000_0011:
+        raise ValueError(
+            f"deserialize_boc: unsupported flag-byte {flag_byte:#010b} "
+            "(has_idx/hash_crc32/has_cache_bits/flags not supported in minimal-decoder)",
+        )
+    if (flag_byte & 0b0000_0111) != 1:
+        raise ValueError(
+            f"deserialize_boc: size_bytes={flag_byte & 0b0000_0111} not supported (only 1)",
+        )
+
+    off_bytes = raw[cursor]
+    cursor += 1
+    if off_bytes not in (1, 2):
+        raise ValueError(
+            f"deserialize_boc: off_bytes={off_bytes} not supported (only 1 or 2)",
+        )
+
+    cells_num, roots_num, absent_num = raw[cursor], raw[cursor + 1], raw[cursor + 2]
+    cursor += 3
+    if roots_num != 1:
+        raise ValueError(f"deserialize_boc: roots_num={roots_num} not supported (only 1)")
+    if absent_num != 0:
+        raise ValueError(f"deserialize_boc: absent_num={absent_num} not supported (only 0)")
+    if cells_num == 0:
+        raise ValueError("deserialize_boc: cells_num must be >= 1")
+
+    if cursor + off_bytes + 1 > len(raw):
+        raise ValueError(
+            "deserialize_boc: input truncated in header (tot_cells_size + root_idx)",
+        )
+    tot_cells_size = int.from_bytes(raw[cursor : cursor + off_bytes], byteorder="big")
+    cursor += off_bytes
+    root_idx = raw[cursor]
+    cursor += 1
+    if root_idx >= cells_num:
+        raise ValueError(
+            f"deserialize_boc: root_idx={root_idx} >= cells_num={cells_num}",
+        )
+
+    cells_section = raw[cursor : cursor + tot_cells_size]
+    if len(cells_section) != tot_cells_size:
+        raise ValueError(
+            f"deserialize_boc: cells-section truncated (need {tot_cells_size} bytes, "
+            f"got {len(cells_section)})",
+        )
+    return _BocHeader(
+        off_bytes=off_bytes,
+        cells_num=cells_num,
+        root_idx=root_idx,
+        cells_section=bytes(cells_section),
+    )
+
+
+def _parse_cell_specs(cells_section: bytes, cells_num: int) -> list[_CellSpec]:
+    """Разобрать секцию ячеек в список `_CellSpec`-ов.
+
+    `Cell`-объекты эта функция ещё не строит (refs - forward-only); caller
+    собирает их bottom-up.
+    """
+    specs: list[_CellSpec] = []
+    cursor = 0
+    tot_size = len(cells_section)
+    for cell_index in range(cells_num):
+        cursor, spec = _parse_one_cell_spec(
+            cells_section,
+            cursor,
+            cell_index,
+            cells_num,
+            tot_size,
+        )
+        specs.append(spec)
+    if cursor != tot_size:
+        raise ValueError(
+            f"deserialize_boc: cells-section has {tot_size - cursor} trailing bytes",
+        )
+    return specs
+
+
+def _parse_one_cell_spec(
+    cells_section: bytes,
+    cursor: int,
+    cell_index: int,
+    cells_num: int,
+    tot_size: int,
+) -> tuple[int, _CellSpec]:
+    """Разобрать (d1, d2, data, refs) одной ячейки. Возвращает (new_cursor, spec)."""
+    if cursor + 2 > tot_size:
+        raise ValueError("deserialize_boc: cells-section truncated in descriptor")
+    d1 = cells_section[cursor]
+    d2 = cells_section[cursor + 1]
+    cursor += 2
+    if d1 & 0b0000_1000:
+        raise ValueError(
+            f"deserialize_boc: exotic cells not supported (cell {cell_index})",
+        )
+    refs_count = d1 & 0b0000_0111
+    if refs_count > _MAX_REFS_PER_CELL:
+        raise ValueError(
+            f"deserialize_boc: cell {cell_index} has refs_count={refs_count} > 4",
+        )
+    is_byte_aligned, data_byte_length = _decode_d2(d2)
+    if cursor + data_byte_length > tot_size:
+        raise ValueError(
+            f"deserialize_boc: cell {cell_index} data truncated",
+        )
+    data_bytes = bytes(cells_section[cursor : cursor + data_byte_length])
+    cursor += data_byte_length
+    if cursor + refs_count > tot_size:
+        raise ValueError(f"deserialize_boc: cell {cell_index} ref-table truncated")
+    ref_indices = tuple(cells_section[cursor + j] for j in range(refs_count))
+    cursor += refs_count
+    _validate_ref_indices(ref_indices, cell_index, cells_num)
+    if is_byte_aligned or data_byte_length == 0:
+        bits_count = data_byte_length * 8
+    else:
+        bits_count, data_bytes = _recover_bits_count_and_strip_padding(
+            data_bytes,
+            data_byte_length,
+        )
+    return cursor, _CellSpec(
+        bits_count=bits_count,
+        refs_count=refs_count,
+        data_bytes=data_bytes,
+        ref_indices=ref_indices,
+    )
+
+
+def _validate_ref_indices(
+    ref_indices: tuple[int, ...],
+    cell_index: int,
+    cells_num: int,
+) -> None:
+    """Forward-only constraint: parent.index < child.index < cells_num."""
+    for ref_idx in ref_indices:
+        if ref_idx <= cell_index:
+            raise ValueError(
+                f"deserialize_boc: cell {cell_index} references "
+                f"cell {ref_idx} (must be strictly greater than parent index)",
+            )
+        if ref_idx >= cells_num:
+            raise ValueError(
+                f"deserialize_boc: cell {cell_index} references "
+                f"cell {ref_idx} >= cells_num={cells_num}",
+            )
+
+
+def _decode_d2(d2: int) -> tuple[bool, int]:
+    """Декодировать ``d2`` дескриптор в ``(is_byte_aligned, data_byte_length)``.
+
+    ``d2 = floor(bits_count / 8) + ceil(bits_count / 8)``:
+    * для byte-aligned (``bits_count % 8 == 0``) — чётный, ``data_byte_length = d2 / 2``;
+    * для non-aligned — нечётный, ``data_byte_length = (d2 + 1) / 2``;
+      точный ``bits_count`` восстановим из padding `1`-бита в последнем байте.
+    """
+    data_byte_length = (d2 + 1) // 2
+    is_byte_aligned = d2 % 2 == 0
+    return is_byte_aligned, data_byte_length
+
+
+def _recover_bits_count_and_strip_padding(
+    data: bytes,
+    data_byte_length: int,
+) -> tuple[int, bytes]:
+    """Восстановить ``bits_count`` для non-aligned cell-а + срезать TON-padding.
+
+    Padding-схема: за последним значащим битом cell-а ставится `1`,
+    дальше — нули до конца последнего байта. Поэтому позиция самого
+    младшего set-бита последнего байта = позиция padding-`1`-бита,
+    а ``bits_count = (data_byte_length - 1) * 8 + (7 - pad_pos)``.
+
+    Возвращает ``(bits_count, data_bytes_with_padding_cleared)``.
+    Поднимает ``ValueError``, если последний байт = `0` (тогда нет
+    padding-`1`-бита — нарушение TON-protocol-а).
+    """
+    last_byte_idx = data_byte_length - 1
+    last_byte = data[last_byte_idx]
+    if last_byte == 0:
+        raise ValueError(
+            "deserialize_boc: non-aligned cell last byte is 0 (padding `1`-bit missing)",
+        )
+    pad_pos = (last_byte & -last_byte).bit_length() - 1  # 0..7, младший set-бит
+    bits_count = last_byte_idx * 8 + (7 - pad_pos)
+    cleared = last_byte & ~(1 << pad_pos)
+    result = bytearray(data)
+    result[last_byte_idx] = cleared
+    return bits_count, bytes(result)
+
+
+# ---------------------------------------------------------------------------
+# MsgAddressInt parsing from a Cell (Спринт 4.1-E, шаг E.2).
+# ---------------------------------------------------------------------------
+
+
+def parse_msgaddress_int_from_cell(cell: Cell) -> tuple[int, bytes]:
+    """Распарсить TL-B ``MsgAddressInt`` ``addr_std$10`` из первых 267 бит ``cell``.
+
+    Симметрично ``CellBuilder.store_address(workchain, account_hash)``:
+    структура (267 бит) — ``10`` (tag) + ``0`` (anycast None) +
+    ``workchain`` (int8) + ``account_hash`` (256 бит).
+
+    Это базовая форма, которую возвращает TON Center в ответе
+    ``get_wallet_address``-вызова на jetton-master (TEP-89). Поддерживает
+    оба варианта: cell содержит только адрес (267 бит) или адрес + хвост
+    (просто игнорируем хвост).
+
+    Поднимает ``ValueError`` при:
+    * ``cell.bits_count < 267``;
+    * tag != ``0b10`` (это не addr_std);
+    * anycast != ``0`` (этот upstream-вариант не поддерживаем).
+    """
+    if cell.bits_count < 267:
+        raise ValueError(
+            f"parse_msgaddress_int_from_cell: need >= 267 bits for addr_std$10, "
+            f"got {cell.bits_count}",
+        )
+    bits = _read_bits(cell.bits, count=11)  # tag(2) + anycast(1) + workchain(8)
+    tag = (bits >> 9) & 0b11
+    anycast = (bits >> 8) & 0b1
+    workchain_byte = bits & 0xFF
+    if tag != 0b10:
+        raise ValueError(
+            f"parse_msgaddress_int_from_cell: tag={tag:02b} != 10 (only addr_std$10 supported)",
+        )
+    if anycast != 0:
+        raise ValueError(
+            "parse_msgaddress_int_from_cell: anycast addresses not supported (only Maybe None)",
+        )
+    # workchain — int8 (signed).
+    workchain = workchain_byte if workchain_byte < 128 else workchain_byte - 256
+    # Read 256 bits of account_hash starting from bit-offset 11.
+    account_hash = _read_bit_slice(cell.bits, bit_offset=11, bit_count=256)
+    return workchain, account_hash
+
+
+def _read_bits(data: bytes, *, count: int) -> int:
+    """Прочитать первые ``count`` бит из ``data`` как big-endian uint.
+
+    ``count`` должен быть ``<= 64``. Bits packed left-to-right (MSB first).
+    """
+    if count == 0:
+        return 0
+    full_bytes = count // 8
+    rem = count % 8
+    value = 0
+    for i in range(full_bytes):
+        value = (value << 8) | data[i]
+    if rem:
+        last = data[full_bytes] >> (8 - rem)
+        value = (value << rem) | last
+    return value
+
+
+def _read_bit_slice(data: bytes, *, bit_offset: int, bit_count: int) -> bytes:
+    """Прочитать ``bit_count`` бит из ``data`` начиная с ``bit_offset``,
+    вернуть как big-endian byte-string длины ``ceil(bit_count / 8)``.
+    """
+    if bit_count == 0:
+        return b""
+    end_bit = bit_offset + bit_count
+    if (end_bit + 7) // 8 > len(data):
+        raise ValueError(
+            f"_read_bit_slice: data has {len(data)} bytes, "
+            f"need at least {(end_bit + 7) // 8} for bit_offset={bit_offset} + bit_count={bit_count}",
+        )
+    # Bit-shift подход: собираем биты в bigint, потом упаковываем в bytes.
+    skip_bytes = bit_offset // 8
+    skip_rem = bit_offset % 8
+    work_bytes = data[skip_bytes : (end_bit + 7) // 8]
+    value = int.from_bytes(work_bytes, byteorder="big")
+    total_bits = len(work_bytes) * 8
+    # Сдвигаем вправо, чтобы откинуть лишние биты в конце.
+    trailing_bits = total_bits - skip_rem - bit_count
+    value >>= trailing_bits
+    # Маскируем верхние биты (skip_rem).
+    value &= (1 << bit_count) - 1
+    out_byte_length = (bit_count + 7) // 8
+    # Если bit_count % 8 != 0, выравниваем по верхнему биту.
+    leftover = bit_count % 8
+    if leftover != 0:
+        value <<= 8 - leftover
+    return value.to_bytes(out_byte_length, byteorder="big")
+
+
+def format_raw_address(workchain: int, account_hash: bytes) -> str:
+    """Сформатировать ``(workchain, account_hash)`` в raw-форму ``"<wc>:<hex>"``.
+
+    Симметрично к ``_parse_raw_address(addr)``. ``account_hash`` должен быть
+    ровно 32 байта; ``workchain`` — int8 (-128..127). Hex выводится в
+    нижнем регистре (стандартная convention TON Center).
+    """
+    if not -128 <= workchain <= 127:
+        raise ValueError(
+            f"format_raw_address: workchain must fit in int8, got {workchain}",
+        )
+    if len(account_hash) != _ADDRESS_HASH_BYTES:
+        raise ValueError(
+            f"format_raw_address: account_hash must be {_ADDRESS_HASH_BYTES} bytes, "
+            f"got {len(account_hash)}",
+        )
+    return f"{workchain}:{account_hash.hex()}"
