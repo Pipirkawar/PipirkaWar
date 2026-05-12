@@ -1,4 +1,4 @@
-# AGENT HANDOFF — Спринт 4.1-H (шаг H.3+H.4/6)
+# AGENT HANDOFF — Спринт 4.1-H (шаг H.5/6)
 
 > Этот файл — временный safety-net на случай обрыва сессии (CONTRIBUTING.md «Уходящий агент»). Обновляется в том же коммите, что и основные изменения. Удаляется отдельным коммитом перед открытием PR-а.
 
@@ -12,18 +12,20 @@
 - H.0 (`52f4f11`) — pivot `docs/current_tasks.md` под старт 4.1-H + создан sticky `AGENT_HANDOFF.md`.
 - H.1 (`ad07984`) — `RedisGlobalLobbyRepository(IGlobalLobbyRepository)` + 18 unit-тестов.
 - H.2 (`98b6e78`) — config-flag `BOT_LOBBY_BACKEND` + composition-root switch + 5 composition-root-тестов.
-- H.3 + H.4 (этот коммит) — +7 integration-тестов в `tests/integration/redis/test_global_lobby_redis.py`: full lifecycle (enqueue → is_in_lobby → pop_oldest → empty); 3-actor FIFO; dedup (сохраняет оригинальный `enqueued_at`); remove clears queue; concurrent enqueue 10×gather → 1 winner; atomicity-инвариант после `pop_oldest` (ni LIST ni HASH не содержат следов); key_prefix isolation. **`make ci` локально зелён: 6943 passed + 2 skipped + 95.50 % cov, 522.07s** (вырос на +31 с baseline 6912 — 18 unit + 5 composition-root + 7 integration; ruff All checks passed, mypy 1067 files Success, lint-imports 4/4 contracts kept).
+- H.3 + H.4 (`3cd216a`) — +7 integration-тестов в `tests/integration/redis/test_global_lobby_redis.py`: full lifecycle (enqueue → is_in_lobby → pop_oldest → empty); 3-actor FIFO; dedup (сохраняет оригинальный `enqueued_at`); remove clears queue; concurrent enqueue 10×gather → 1 winner; atomicity-инвариант после `pop_oldest` (ni LIST ni HASH не содержат следов); key_prefix isolation. **`make ci` локально зелён: 6943 passed + 2 skipped + 95.50 % cov, 522.07s** (вырос на +31 с baseline 6912 — 18 unit + 5 composition-root + 7 integration; ruff All checks passed, mypy 1067 files Success, lint-imports 4/4 contracts kept).
+
+- H.5 (этот коммит) — doc-sync: новая запись «Спринт 4.1-H» в `docs/history.md`; `docs/current_tasks.md` «Снимок состояния» обновлён под `main = <future-merge-sha>` (PR 4.1-H замёрджен); чек-лист 4.1-H помечен `[x]` и перенесён в архив; развёрнут активный чек-лист 4.1-I «Redis DAU-миграция (sorted-set per day)» (третья из 4-х миграций 4.1.12; шаги I.0–I.6 по тому же шаблону G/H).
 
 ## На каком файле/задаче остановился
 
-- Файл: `docs/history.md` + `docs/current_tasks.md` — док-синк (следующий шаг).
-- Что планировал дальше: **H.5** — док-синк последним коммитом перед мерджем: `docs/history.md` — новая запись «Спринт 4.1-H «Redis Lobby-миграция (LIST + Lua-atomic)»» (аналогично 4.1-G); `docs/current_tasks.md` — снимок под `main = <будущий merge-sha 4.1-H>`, чек-лист 4.1-H в архив, поднят чек-лист 4.1-I (DAU). Затем **H.6** — удалить `AGENT_HANDOFF.md` отдельным коммитом + git_pr create + дождаться зелёного GitHub-CI.
+- Файл: `AGENT_HANDOFF.md` — удаление отдельным коммитом (следующий и последний шаг перед PR).
+- Что планировал дальше: **H.6** — `git rm AGENT_HANDOFF.md && git commit -m "chore(4.1-H): remove sticky AGENT_HANDOFF.md before PR"` (отдельный коммит по CONTRIBUTING.md «Уходящий агент»); затем `git push` + `git_pr(action="fetch_template")` + `git_pr(action="create")` с ссылкой на history.md-запись 4.1-H; дождаться зелёного GitHub-CI через `git(action="pr_checks", wait_mode="all")`.
 
 ## Состояние ветки
 
 - Ветка: `devin/1778613141-sprint-4-1-H-redis-lobby-migration`
 - База: `main = b49aec5` (merge PR #135 = 4.1-G «Redis-инфра + ActivityLocks-миграция»).
-- Последний коммит: `<этот коммит>` (H.3 + H.4 — integration-тесты + make ci зелён).
+- Последний коммит: `<этот коммит>` (H.5 — doc-sync history.md + current_tasks.md, развёрнут активный чек-лист 4.1-I). Предыдущие: `3cd216a` (H.3+H.4), `98b6e78` (H.2), `ad07984` (H.1), `52f4f11` (H.0).
 - Незакоммиченные изменения: нет (всё в этом коммите).
 - CI прогонялся? **Да**: `make ci` локально зелён — ruff + mypy --strict (1067 files) + lint-imports (4 contracts kept) + pytest (6943 passed + 2 skipped + 95.50 % cov, 522.07s).
 
