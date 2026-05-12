@@ -31,8 +31,10 @@
 
 from __future__ import annotations
 
+import base64
+import json
 from datetime import UTC, datetime, timedelta
-from typing import cast
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -120,6 +122,39 @@ _FIXED_NOW: datetime = datetime(2026, 5, 12, 12, 0, 0, tzinfo=UTC)
 _FIXED_EXPIRES_AT: datetime = _FIXED_NOW + timedelta(minutes=10)
 _DEFAULT_NONCE: str = "abcdefABCDEF0123456789-_.~test1234"
 _DEFAULT_DOMAIN: str = "pipirik.example.com"
+
+# Спринт 4.1-F (F.8.b) — канонический TON-Connect-`ton_proof` JSON.
+_VALID_SIG_B64: str = base64.b64encode(b"\x00" * 64).decode("ascii")
+_VALID_PUBKEY_HEX: str = "ab" * 32
+_VALID_TON_PROOF_RAW_ADDR: str = "0:" + "ab" * 32
+_VALID_PROOF_TIMESTAMP: int = 1_700_000_000
+
+
+def _build_valid_proof_json(
+    *,
+    payload: str = _DEFAULT_NONCE,
+    domain: str = _DEFAULT_DOMAIN,
+    address: str = _VALID_TON_PROOF_RAW_ADDR,
+) -> str:
+    """Канонический TON Connect wallet-response (Спринт 4.1-F, F.8.b)."""
+    obj: dict[str, Any] = {
+        "proof": {
+            "timestamp": _VALID_PROOF_TIMESTAMP,
+            "domain": {
+                "lengthBytes": len(domain.encode("utf-8")),
+                "value": domain,
+            },
+            "payload": payload,
+            "signature": _VALID_SIG_B64,
+        },
+        "account": {
+            "address": address,
+            "publicKey": _VALID_PUBKEY_HEX,
+        },
+    }
+    return json.dumps(obj, separators=(",", ":"))
+
+
 # Конкретный raw TON-адрес (workchain=0, 64-hex), проходит
 # `parse_address` → `format_raw_address` без изменения.
 _RAW_TON_ADDR: str = "0:" + "ab" * 32
@@ -684,10 +719,11 @@ class TestHandleLinkWalletConfirm:
             player_id=42,
         )
         bundle = cast(IMessageBundle, FakeMessageBundle())
+        proof_json = _build_valid_proof_json(payload="server-nonce-xyz")
 
         await handle_link_wallet_confirm(
             cast(Message, msg),
-            _command(f"ton {_TON_ADDR_FRIENDLY} proof123"),
+            _command(f"ton {_TON_ADDR_FRIENDLY} {proof_json}"),
             _identity("private"),
             cast(GetProfile, get_profile),
             cast(LinkWallet, link_wallet),
@@ -701,7 +737,11 @@ class TestHandleLinkWalletConfirm:
         assert cmd.player_id == 42
         assert cmd.currency == Currency.TON_NANO
         assert cmd.address == _TON_ADDR_FRIENDLY
-        assert cmd.proof == "proof123"
+        assert cmd.proof == proof_json
+        # Спринт 4.1-F (F.8.b): nonce = `proof.payload` (server-issued),
+        # scope = "link_wallet:<player_id>:<currency>".
+        assert cmd.nonce == "server-nonce-xyz"
+        assert cmd.scope == "link_wallet:42:ton_nano"
 
         msg.answer.assert_awaited_once()
         sent = msg.answer.await_args.args[0]
@@ -719,9 +759,10 @@ class TestHandleLinkWalletConfirm:
         )
         bundle = cast(IMessageBundle, FakeMessageBundle())
 
+        proof_json = _build_valid_proof_json(payload="another-nonce")
         await handle_link_wallet_confirm(
             cast(Message, msg),
-            _command(f"usdt {_TON_ADDR_FRIENDLY_NEW} proofZ"),
+            _command(f"usdt {_TON_ADDR_FRIENDLY_NEW} {proof_json}"),
             _identity("private"),
             cast(GetProfile, get_profile),
             cast(LinkWallet, link_wallet),
@@ -732,6 +773,7 @@ class TestHandleLinkWalletConfirm:
         link_wallet.execute.assert_awaited_once()
         cmd = link_wallet.execute.await_args.args[0]
         assert cmd.currency == Currency.USDT_DECIMAL
+        assert cmd.nonce == "another-nonce"
 
         sent = msg.answer.await_args.args[0]
         assert sent.startswith("en:link-wallet-confirm-relinked")
@@ -850,9 +892,10 @@ class TestHandleLinkWalletConfirm:
         )
         bundle = cast(IMessageBundle, FakeMessageBundle())
 
+        proof_json = _build_valid_proof_json()
         await handle_link_wallet_confirm(
             cast(Message, msg),
-            _command(f"ton {_TON_ADDR_FRIENDLY} badproof"),
+            _command(f"ton {_TON_ADDR_FRIENDLY} {proof_json}"),
             _identity("private"),
             cast(GetProfile, get_profile),
             cast(LinkWallet, link_wallet),
@@ -875,9 +918,10 @@ class TestHandleLinkWalletConfirm:
         )
         bundle = cast(IMessageBundle, FakeMessageBundle())
 
+        proof_json = _build_valid_proof_json()
         await handle_link_wallet_confirm(
             cast(Message, msg),
-            _command(f"ton {_TON_ADDR_FRIENDLY_OLD} proofX"),
+            _command(f"ton {_TON_ADDR_FRIENDLY_OLD} {proof_json}"),
             _identity("private"),
             cast(GetProfile, get_profile),
             cast(LinkWallet, link_wallet),
@@ -898,9 +942,10 @@ class TestHandleLinkWalletConfirm:
         link_wallet = _stub_link_wallet(currency=Currency.TON_NANO)
         bundle = cast(IMessageBundle, FakeMessageBundle())
 
+        proof_json = _build_valid_proof_json()
         await handle_link_wallet_confirm(
             cast(Message, msg),
-            _command(f"TON {_TON_ADDR_FRIENDLY} proofY"),
+            _command(f"TON {_TON_ADDR_FRIENDLY} {proof_json}"),
             _identity("private"),
             cast(GetProfile, get_profile),
             cast(LinkWallet, link_wallet),
@@ -912,6 +957,82 @@ class TestHandleLinkWalletConfirm:
         cmd = link_wallet.execute.await_args.args[0]
         assert cmd.currency == Currency.TON_NANO
 
+    # ─── F.8.b — TonProof-JSON parsing in confirm-handler ──────────
+
+    async def test_malformed_proof_json_renders_invalid_proof_and_skips_use_case(
+        self,
+    ) -> None:
+        msg = _build_message_mock("private")
+        get_profile = _stub_get_profile()
+        link_wallet = _stub_link_wallet()
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        await handle_link_wallet_confirm(
+            cast(Message, msg),
+            _command(f"ton {_TON_ADDR_FRIENDLY} not-a-json"),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            cast(LinkWallet, link_wallet),
+            bundle,
+            Locale("ru"),
+        )
+
+        # Парсер обвалился до вызова use-case-а — `LinkWallet.execute` не дёрнут.
+        link_wallet.execute.assert_not_awaited()
+        msg.answer.assert_awaited_once_with("ru:link-wallet-confirm-invalid-proof")
+
+    async def test_proof_missing_payload_renders_invalid_proof(self) -> None:
+        # JSON валидный, но `proof.payload` отсутствует — это malformed.
+        msg = _build_message_mock("private")
+        get_profile = _stub_get_profile()
+        link_wallet = _stub_link_wallet()
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        proof_json = _build_valid_proof_json()
+        broken = json.loads(proof_json)
+        broken["proof"].pop("payload")
+        broken_str = json.dumps(broken, separators=(",", ":"))
+
+        await handle_link_wallet_confirm(
+            cast(Message, msg),
+            _command(f"ton {_TON_ADDR_FRIENDLY} {broken_str}"),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            cast(LinkWallet, link_wallet),
+            bundle,
+            Locale("en"),
+        )
+
+        link_wallet.execute.assert_not_awaited()
+        msg.answer.assert_awaited_once_with("en:link-wallet-confirm-invalid-proof")
+
+    async def test_proof_payload_extracted_as_nonce_for_usdt(self) -> None:
+        msg = _build_message_mock("private")
+        get_profile = _stub_get_profile(player_id=99)
+        link_wallet = _stub_link_wallet(
+            replaced=False,
+            address=_TON_ADDR_FRIENDLY_NEW,
+            currency=Currency.USDT_DECIMAL,
+            player_id=99,
+        )
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        proof_json = _build_valid_proof_json(payload="usdt-nonce-9zZ")
+        await handle_link_wallet_confirm(
+            cast(Message, msg),
+            _command(f"usdt {_TON_ADDR_FRIENDLY_NEW} {proof_json}"),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            cast(LinkWallet, link_wallet),
+            bundle,
+            Locale("ru"),
+        )
+
+        link_wallet.execute.assert_awaited_once()
+        cmd = link_wallet.execute.await_args.args[0]
+        assert cmd.nonce == "usdt-nonce-9zZ"
+        assert cmd.scope == "link_wallet:99:usdt_decimal"
+
     async def test_no_locale_defaults_to_english(self) -> None:
         msg = _build_message_mock("private")
         get_profile = _stub_get_profile()
@@ -922,9 +1043,10 @@ class TestHandleLinkWalletConfirm:
         )
         bundle = cast(IMessageBundle, FakeMessageBundle())
 
+        proof_json = _build_valid_proof_json()
         await handle_link_wallet_confirm(
             cast(Message, msg),
-            _command(f"ton {_TON_ADDR_FRIENDLY} proof"),
+            _command(f"ton {_TON_ADDR_FRIENDLY} {proof_json}"),
             _identity("private"),
             cast(GetProfile, get_profile),
             cast(LinkWallet, link_wallet),

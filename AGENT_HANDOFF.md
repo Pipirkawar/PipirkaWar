@@ -1,4 +1,4 @@
-# AGENT HANDOFF — Спринт 4.1-F (шаг F.8.b/F.12)
+# AGENT HANDOFF — Спринт 4.1-F (шаг F.8.c/F.12)
 
 > Этот файл — временный safety-net. Обновляется в том же коммите, что и основные изменения, и лежит в ветке пока есть незаконченная работа. Удали его отдельным коммитом перед открытием PR-а.
 
@@ -27,21 +27,23 @@
 
 ## На каком файле/задаче остановился
 
-**F.8.a закрыт в этой сессии.** Следующий шаг — **F.8.b** «bot-handler `/link_wallet_confirm <currency> <address> <proof-json>` phase-2»:
-- Сейчас `bot/handlers/link_wallet.py::handle_link_wallet_confirm` принимает `proof: str` как sentinel-строку и передаёт в `LinkWalletCommand` с sentinel-ыми `scope=""` + `nonce=""`. Нужно вызвать `parse_ton_proof(raw_proof_arg) -> TonProof`, вынуть `nonce = proof.payload` + `domain.value` из proof-а, собрать `scope = f"link_wallet:{player_id}:{currency.value}"` (идентично F.4.a) и передать это в `LinkWalletCommand`.
-- На `TonProofMalformedError` — рендер `link-wallet-confirm-invalid-proof` (уже существует).
-- Существующие ветки (`WalletAlreadyLinkedError`, `TonProofInvalidError`, `TonProofReplayedError`) остаются.
-- Обновить `tests/unit/bot/handlers/test_link_wallet.py::TestHandleLinkWalletConfirm` (happy-path с пропаршенным proof → scope+nonce передаются в use-case, malformed-proof → invalid-proof, sandbox-mode pass-through).
+**F.8.a + F.8.b закрыты в этой сессии.** Следующий шаг — **F.8.c** «RU/EN-локали для phase-1»:
+- В `locales/{ru,en}.ftl` обновить плейсхолдер-тексты в ключах `link-wallet-request-usage` / `-invalid-currency` / `-invalid-address` / `-issued` на выверенные русские + английские формулировки.
+- `request-usage` — short usage `/link_wallet <ton|usdt> <address>`.
+- `request-invalid-currency` — поясняет, что валюта `{$code}` не поддерживается.
+- `request-invalid-address` — поясняет, что адрес `{$address}` не является TON-адресом.
+- `request-issued` — полный instructions-блок: «oткрой TonConnect-приложение, подпиши `{$nonce}` по домену `{$domain}` (истекает через `{$expires_at_minutes}` мин), отправь результат через /link_wallet_confirm {$currency} {$address} <proof-json>».
+- Добавить locale-snapshot-тест в `tests/unit/bot/i18n/test_message_bundle_keys.py` или равновесном файле для всех 4 ключей (RU и EN присутствуют + plurals-OK).
 
-**После F.8.b:** F.8.c (RU/EN-локали с финальными текстами), F.9 (httpx.MockTransport smoke), F.10 (make ci), F.11 (history.md +1), F.12 (remove AGENT_HANDOFF + open PR).
+**После F.8.c:** F.9 (httpx.MockTransport smoke), F.10 (make ci), F.11 (history.md +1), F.12 (remove AGENT_HANDOFF + open PR).
 
 ## Состояние ветки
 
-- **Last commit (планируемый после push):** `feat(4.1-F): F.8.a — bot-handler /link_wallet phase-1`. До этого: `ec9569a` (F.7).
-- **Незакоммиченные изменения:** F.8.a-изменения (handler, presenter, `bot/main.py`, RU/EN locales, tests) + обновление этого файла + `docs/current_tasks.md`.
-- **CI:** `make ci` зелёный после F.8.a: 6858 passed + 2 skipped + ~95% cov (было 6846 на F.7; +12 новых тестов).
+- **Last commit (планируемый после push):** `feat(4.1-F): F.8.b — /link_wallet_confirm TonProof-JSON parsing`. До этого: `771684c` (F.8.a) → `ec9569a` (F.7).
+- **Незакоммиченные изменения:** F.8.b-изменения (handler `handle_link_wallet_confirm` + 3 новых теста) + обновление этого файла + `docs/current_tasks.md`.
+- **CI:** `make ci` зелёный после F.8.b: 6861 passed + 2 skipped + 95.50% cov (+3 новых теста F.8.b).
 - **Sticky:** этот файл живёт в ветке до F.12 (отдельный `chore: remove AGENT_HANDOFF` коммит перед открытием PR).
-- **F.8.a выполнен в этой сессии**: bot-handler `/link_wallet` phase-1 + presenter + dispatcher-wiring + RU/EN локали-плейсхолдеры + 12 unit-тестов. `make ci` зелён: 6858 passed + 2 skipped (покрытие в норме).
+- **F.8.a + F.8.b выполнены в этой сессии**: F.8.a — phase-1 «/link_wallet»; F.8.b — phase-2 «/link_wallet_confirm» разбирает TonProof-JSON, извлекает nonce=payload + scope, передаёт в `LinkWalletCommand`. `make ci` зелён: 6861 passed + 2 skipped + 95.50% cov.
 
 ## Что НЕ сделано
 

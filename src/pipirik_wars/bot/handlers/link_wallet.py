@@ -52,11 +52,13 @@ from pipirik_wars.bot.presenters.link_wallet import (
     parse_link_wallet_callback_data,
 )
 from pipirik_wars.domain.monetization.errors import (
+    TonProofMalformedError,
     TonProofReplayedError,
     WalletAlreadyLinkedError,
 )
 from pipirik_wars.domain.monetization.value_objects import Currency
 from pipirik_wars.domain.shared.ports.clock import IClock
+from pipirik_wars.infrastructure.payments.ton_connect import parse_ton_proof
 from pipirik_wars.infrastructure.payments.ton_rpc import parse_address
 from pipirik_wars.infrastructure.payments.ton_rpc.boc import format_raw_address
 
@@ -299,6 +301,23 @@ async def handle_link_wallet_confirm(  # noqa: PLR0911 — каждая ветк
         await message.answer(presenter.confirm_not_registered(locale=effective_locale))
         return
 
+    # Спринт 4.1-F (шаг F.8.b) — разбираем TonProof-JSON здесь (в bot-
+    # слое), чтобы извлечь nonce (= `proof.payload`, server-issued в
+    # phase-1) и пробросить его вместе со скоупом в application-use-case
+    # `LinkWallet`. Сам верификатор внутри use-case-а проверит raw-`proof`
+    # ещё раз (parse + Ed25519). Sandbox-верификатор игнорирует этот
+    # parse; production-верификатор своим parse-ом верифицирует
+    # canonical-message-hash + Ed25519.
+    try:
+        parsed_proof = parse_ton_proof(proof)
+    except TonProofMalformedError:
+        _LOGGER.info(
+            "link_wallet.confirm: TON Connect proof JSON malformed",
+            extra={"tg_id": tg_identity.tg_user_id, "currency": currency.value},
+        )
+        await message.answer(presenter.confirm_invalid_proof(locale=effective_locale))
+        return
+
     try:
         result = await link_wallet.execute(
             LinkWalletCommand(
@@ -306,15 +325,12 @@ async def handle_link_wallet_confirm(  # noqa: PLR0911 — каждая ветк
                 address=address,
                 currency=currency,
                 proof=proof,
-                # Спринт 4.1-F (шаг F.4.b): scope/nonce пробрасываются в
-                # use-case для anti-replay через `INonceStore.consume_nonce`.
-                # В этом sandbox-handler-е (D.6) `scope`+`nonce` ещё не
-                # парсятся из proof-payload-а (это F.5.a + F.8.b);
-                # передаём sentinel — use-case бросит
-                # `TonProofReplayedError` (consume вернёт `False`), которая
-                # рендерится как «invalid proof» (бытым-CLI-debug-flow).
+                # F.4.b/F.8.b: scope-паттерн идентичен F.4.a
+                # (`RequestLinkWalletProof._build_scope`). nonce —
+                # `proof.payload`, который кошелёк подписал
+                # canonical-мессаджей (см. F.5.b).
                 scope=f"link_wallet:{view.player.id}:{currency.value}",
-                nonce=proof,
+                nonce=parsed_proof.payload,
             )
         )
     except WalletAlreadyLinkedError:
