@@ -340,6 +340,10 @@ from pipirik_wars.infrastructure.rate_limit import (
     InMemoryTokenBucketRateLimiter,
     IRateLimiter,
 )
+from pipirik_wars.infrastructure.redis import (
+    RedisActivityLockRepository,
+    build_redis_client,
+)
 from pipirik_wars.infrastructure.scheduler import APSchedulerDelayedJobScheduler
 from pipirik_wars.infrastructure.settings import Settings
 from pipirik_wars.infrastructure.telegram.broadcast import (
@@ -682,7 +686,23 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     clan_members = SqlAlchemyClanMembershipRepository(uow=uow)
     admins = SqlAlchemyAdminRepository(uow=uow)
     signup_queue = SqlAlchemySignupQueueRepository(uow=uow)
-    activity_locks = SqlAlchemyActivityLockRepository(uow=uow)
+    # Спринт 4.1-G (шаг G.4): config-flag-режим бэкенда `IActivityLockRepository`.
+    # `sql` (default) — `SqlAlchemyActivityLockRepository` поверх таблицы
+    # `activity_locks` (текущая, до 4.1-G, имплементация: INSERT ... ON CONFLICT
+    # DO NOTHING). `redis` — `RedisActivityLockRepository` поверх
+    # `redis.asyncio.Redis` (атомарный SET NX PX + DEL + GET/PTTL); требует
+    # поднятого Redis-инстанса по `settings.redis.url`. Default `sql` для
+    # backward-compatibility на момент 4.1-G-merge-а; Redis включается явным
+    # env-флагом `BOT_ACTIVITY_LOCK_BACKEND=redis`.
+    activity_locks: IActivityLockRepository
+    if settings.bot.activity_lock_backend == "redis":
+        redis_client = build_redis_client(settings.redis)
+        activity_locks = RedisActivityLockRepository(
+            client=redis_client,
+            clock=clock,
+        )
+    else:
+        activity_locks = SqlAlchemyActivityLockRepository(uow=uow)
     forest_runs = SqlAlchemyForestRunRepository(uow=uow, balance=balance)
     mountain_runs = SqlAlchemyMountainRunRepository(uow=uow, balance=balance)
     dungeon_runs = SqlAlchemyDungeonRunRepository(uow=uow, balance=balance)

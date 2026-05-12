@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -89,6 +91,17 @@ class BotSettings(BaseSettings):
         description=(
             "Стартовый MAX_DAU (ГДД §18.5: 200 для VPS 1 GB). "
             "Меняется на горячую через `/set_max_dau N`."
+        ),
+    )
+    activity_lock_backend: Literal["sql", "redis"] = Field(
+        default="sql",
+        description=(
+            "Бэкенд для `IActivityLockRepository` (Спринт 4.1-G, G.4). "
+            "`sql` (default) — `SqlAlchemyActivityLockRepository` поверх "
+            "таблицы `activity_locks`. `redis` — `RedisActivityLockRepository` "
+            "поверх `redis.asyncio.Redis` (требует поднятого Redis-инстанса "
+            "по `settings.redis.url`). Переключается env-флагом "
+            "`BOT_ACTIVITY_LOCK_BACKEND=redis`."
         ),
     )
 

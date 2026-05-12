@@ -215,6 +215,7 @@ from pipirik_wars.infrastructure.rate_limit import (
     InMemoryTokenBucketRateLimiter,
     IRateLimiter,
 )
+from pipirik_wars.infrastructure.redis import RedisActivityLockRepository
 from pipirik_wars.infrastructure.scheduler import APSchedulerDelayedJobScheduler
 from pipirik_wars.infrastructure.settings import (
     BootstrapSettings,
@@ -1692,6 +1693,34 @@ class TestBuildContainer:
         assert isinstance(c.spin_paid_roulette, SpinPaidRoulette)
         assert isinstance(c.prize_pool_repo, SqlAlchemyPrizePoolRepository)
         assert isinstance(c.record_donation, RecordDonation)
+
+    def test_build_container_activity_lock_backend_sql_is_default(self) -> None:
+        """`BOT_ACTIVITY_LOCK_BACKEND` unset ⇒ SQL-репозиторий (default).
+
+        Спринт 4.1-G, шаг G.4: config-flag-режим `activity_lock_backend`.
+        """
+        c = build_container(settings=_test_settings())
+        assert isinstance(c.activity_locks, SqlAlchemyActivityLockRepository)
+
+    def test_build_container_activity_lock_backend_redis_switches_repo(self) -> None:
+        """`BOT_ACTIVITY_LOCK_BACKEND=redis` ⇒ Redis-репозиторий.
+
+        Спринт 4.1-G, шаг G.4: composition-root switch на
+        `RedisActivityLockRepository`. `build_redis_client` создаёт
+        `ConnectionPool` лениво — никакого реального сетевого
+        подключения здесь не происходит.
+        """
+        settings = Settings(
+            environment="test",
+            db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+            bot=BotSettings(
+                token=SecretStr("test-token"),
+                activity_lock_backend="redis",
+            ),
+            bootstrap=BootstrapSettings(),
+        )
+        c = build_container(settings=settings)
+        assert isinstance(c.activity_locks, RedisActivityLockRepository)
 
 
 class TestBuildDispatcher:
