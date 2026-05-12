@@ -233,3 +233,14 @@ class FakePrizeLotRepository(IPrizeLotRepository):
 
         candidates.sort(key=_sort_key)
         return tuple(candidates[:limit])
+
+    async def count_by_status(
+        self,
+        *,
+        currency: Currency,
+        status: PrizeLotStatus,
+    ) -> int:
+        """Количество лотов в указанном `status` для `currency`."""
+        return sum(
+            1 for lot in self._storage.values() if lot.currency is currency and lot.status is status
+        )

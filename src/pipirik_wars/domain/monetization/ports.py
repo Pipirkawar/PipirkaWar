@@ -459,6 +459,35 @@ class IPrizeLotRepository(Protocol):
         """
         ...
 
+    async def count_by_status(
+        self,
+        *,
+        currency: Currency,
+        status: PrizeLotStatus,
+    ) -> int:
+        """Количество лотов в указанном `status` для `currency`.
+
+        Используется `GetPrizePoolStatus`-use-case-ом (Спринт 4.1-E,
+        шаг E.9) для построения admin-снимка пула: счётчики
+        `ACTIVE` / `RESERVED` / `CLAIMED` / `REFUNDED` per-currency.
+
+        Семантика SQL-реализации — ``SELECT COUNT(*) FROM prize_lots
+        WHERE currency = :currency AND status = :status``. В отличие
+        от ``sum_claimed_in_window`` / ``oldest_claimed_at_in_window``
+        этот метод НЕ зависит от ``winner_id``-схемы (E.11) — он
+        реализуется в SQL прямо сейчас. Existing-индексы
+        ``ix_prize_lots__currency_status`` покрывают этот запрос
+        индексным sequential-scan-ом.
+
+        Параметры:
+        * ``currency`` — фильтр валюты.
+        * ``status`` — фильтр статуса (любое значение
+          ``PrizeLotStatus``).
+
+        Возвращает: ``int >= 0``.
+        """
+        ...
+
 
 class IFeeEstimator(Protocol):
     """Порт оценки сетевой комиссии для лота (ГДД §12.6.3, Спринт 4.1-C).

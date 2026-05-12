@@ -892,3 +892,114 @@ class TestListExpiredReserved:
                 expired_before=cutoff,
             )
         assert [lot.id for lot in result] == [lot.id]
+
+
+# --------------------------------------------------------------------------- #
+# count_by_status(currency, status) — Спринт 4.1-E, E.9
+# --------------------------------------------------------------------------- #
+
+
+class TestCountByStatus:
+    @pytest.mark.asyncio
+    async def test_empty_table_returns_zero(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = _make_repo(uow)
+        async with uow:
+            for status in (
+                PrizeLotStatus.ACTIVE,
+                PrizeLotStatus.RESERVED,
+                PrizeLotStatus.CLAIMED,
+                PrizeLotStatus.REFUNDED,
+            ):
+                for currency in (
+                    Currency.STARS,
+                    Currency.TON_NANO,
+                    Currency.USDT_DECIMAL,
+                ):
+                    assert (
+                        await repo.count_by_status(
+                            currency=currency,
+                            status=status,
+                        )
+                        == 0
+                    )
+
+    @pytest.mark.asyncio
+    async def test_counts_match_mixed_population(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = _make_repo(uow)
+        async with uow:
+            # 2 ACTIVE USDT
+            await repo.add(lot=_fresh_lot(currency=Currency.USDT_DECIMAL))
+            await repo.add(lot=_fresh_lot(currency=Currency.USDT_DECIMAL))
+            # 1 ACTIVE TON
+            await repo.add(
+                lot=_fresh_lot(
+                    currency=Currency.TON_NANO,
+                    amount_native=500_000_000,
+                    fee_buffer_native=50_000_000,
+                ),
+            )
+            # 1 RESERVED USDT
+            reserved = await repo.add(lot=_fresh_lot(currency=Currency.USDT_DECIMAL))
+            assert reserved.id is not None
+            await repo.update_status(
+                lot_id=reserved.id,
+                new_status=PrizeLotStatus.RESERVED,
+                reserved_at=NOW,
+            )
+            # 1 REFUNDED USDT
+            refunded = await repo.add(lot=_fresh_lot(currency=Currency.USDT_DECIMAL))
+            assert refunded.id is not None
+            await repo.update_status(
+                lot_id=refunded.id,
+                new_status=PrizeLotStatus.REFUNDED,
+            )
+
+        async with uow:
+            assert (
+                await repo.count_by_status(
+                    currency=Currency.USDT_DECIMAL,
+                    status=PrizeLotStatus.ACTIVE,
+                )
+                == 2
+            )
+            assert (
+                await repo.count_by_status(
+                    currency=Currency.USDT_DECIMAL,
+                    status=PrizeLotStatus.RESERVED,
+                )
+                == 1
+            )
+            assert (
+                await repo.count_by_status(
+                    currency=Currency.USDT_DECIMAL,
+                    status=PrizeLotStatus.REFUNDED,
+                )
+                == 1
+            )
+            assert (
+                await repo.count_by_status(
+                    currency=Currency.USDT_DECIMAL,
+                    status=PrizeLotStatus.CLAIMED,
+                )
+                == 0
+            )
+            assert (
+                await repo.count_by_status(
+                    currency=Currency.TON_NANO,
+                    status=PrizeLotStatus.ACTIVE,
+                )
+                == 1
+            )
+            assert (
+                await repo.count_by_status(
+                    currency=Currency.STARS,
+                    status=PrizeLotStatus.ACTIVE,
+                )
+                == 0
+            )

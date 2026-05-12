@@ -283,3 +283,81 @@ class TestOldestClaimedAtInWindow:
             since=_NOW - timedelta(days=30),
         )
         assert result is None
+
+
+@pytest.mark.asyncio
+class TestCountByStatusFake:
+    async def test_empty_returns_zero(self) -> None:
+        repo = FakePrizeLotRepository()
+        assert (
+            await repo.count_by_status(
+                currency=Currency.USDT_DECIMAL,
+                status=PrizeLotStatus.ACTIVE,
+            )
+            == 0
+        )
+
+    async def test_counts_match_population(self) -> None:
+        repo = FakePrizeLotRepository()
+        # ACTIVE x2 USDT
+        for _ in range(2):
+            await repo.add(
+                lot=PrizeLot.freshly_generated(
+                    currency=Currency.USDT_DECIMAL,
+                    amount_native=1_000_000,
+                    fee_buffer_native=FeeBufferAmount(100_000),
+                    created_at=_NOW,
+                ),
+            )
+        # ACTIVE x1 TON
+        await repo.add(
+            lot=PrizeLot.freshly_generated(
+                currency=Currency.TON_NANO,
+                amount_native=500_000_000,
+                fee_buffer_native=FeeBufferAmount(50_000_000),
+                created_at=_NOW,
+            ),
+        )
+        # REFUNDED x1 USDT
+        ref = await repo.add(
+            lot=PrizeLot.freshly_generated(
+                currency=Currency.USDT_DECIMAL,
+                amount_native=1_000_000,
+                fee_buffer_native=FeeBufferAmount(100_000),
+                created_at=_NOW,
+            ),
+        )
+        assert ref.id is not None
+        await repo.update_status(
+            lot_id=ref.id,
+            new_status=PrizeLotStatus.REFUNDED,
+        )
+
+        assert (
+            await repo.count_by_status(
+                currency=Currency.USDT_DECIMAL,
+                status=PrizeLotStatus.ACTIVE,
+            )
+            == 2
+        )
+        assert (
+            await repo.count_by_status(
+                currency=Currency.USDT_DECIMAL,
+                status=PrizeLotStatus.REFUNDED,
+            )
+            == 1
+        )
+        assert (
+            await repo.count_by_status(
+                currency=Currency.TON_NANO,
+                status=PrizeLotStatus.ACTIVE,
+            )
+            == 1
+        )
+        assert (
+            await repo.count_by_status(
+                currency=Currency.STARS,
+                status=PrizeLotStatus.ACTIVE,
+            )
+            == 0
+        )

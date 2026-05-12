@@ -37,7 +37,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import CursorResult, select, update
+from sqlalchemy import CursorResult, func, select, update
 
 from pipirik_wars.domain.monetization.entities import PrizeLot, PrizeLotStatus
 from pipirik_wars.domain.monetization.errors import (
@@ -271,6 +271,21 @@ class SqlAlchemyPrizeLotRepository(IPrizeLotRepository):
             "migration `prize_lots.winner_id` ещё не сделана (Спринт 4.1-E "
             "шаг E.11)."
         )
+
+    async def count_by_status(
+        self,
+        *,
+        currency: Currency,
+        status: PrizeLotStatus,
+    ) -> int:
+        """Количество лотов в указанном `status` для `currency`."""
+        session = self._uow.session
+        stmt = select(func.count()).where(
+            PrizeLotORM.currency == currency.value,
+            PrizeLotORM.status == status.value,
+        )
+        result = await session.execute(stmt)
+        return int(result.scalar_one())
 
 
 def _orm_to_domain(orm: PrizeLotORM) -> PrizeLot:

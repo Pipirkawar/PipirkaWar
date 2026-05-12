@@ -47,6 +47,12 @@ from pipirik_wars.application.monetization.generate_prize_lots import (
     GeneratePrizeLotsCommand,
     GeneratePrizeLotsResult,
 )
+from pipirik_wars.application.monetization.get_prize_pool_status import (
+    CurrencyPoolStatus,
+    GetPrizePoolStatus,
+    GetPrizePoolStatusInput,
+    GetPrizePoolStatusOutput,
+)
 from pipirik_wars.application.monetization.link_wallet import (
     LinkWallet,
     LinkWalletCommand,
@@ -73,6 +79,7 @@ __all__ = [
     "ClaimPrize",
     "ClaimPrizeCommand",
     "ClaimPrizeResult",
+    "CurrencyPoolStatus",
     "EvaluatePayoutLimit",
     "ExpireReservedPrizeLots",
     "ExpireReservedPrizeLotsResult",
@@ -82,6 +89,9 @@ __all__ = [
     "GeneratePrizeLots",
     "GeneratePrizeLotsCommand",
     "GeneratePrizeLotsResult",
+    "GetPrizePoolStatus",
+    "GetPrizePoolStatusInput",
+    "GetPrizePoolStatusOutput",
     "LinkWallet",
     "LinkWalletCommand",
     "LinkWalletResult",
