@@ -1554,3 +1554,27 @@ admin-refund-lot-success = ✅ Lot <code>#{ $lot_id }</code> ({ $currency } <cod
 admin-refund-lot-already-refunded = ℹ️ Lot <code>#{ $lot_id }</code> has already been refunded. Pool balance: <code>{ $pool_after }</code>.
 admin-refund-lot-not-found = 🔍 Lot <code>#{ $lot_id }</code> not found.
 admin-refund-lot-bad-transition = 🚫 Lot <code>#{ $lot_id }</code> is in status <code>{ $status }</code> — refund via <code>/refund_lot</code> is not permitted (see GDD §12.6.6).
+
+# ───────────────────────────────────────────────────────────────────────────
+# Sprint 4.1-E.14 — admin commands `/freeze_payouts <reason>` + `/unfreeze_payouts`
+# (GDD §12.6.6). Globally halt / resume crypto payouts (super-admin +
+# TOTP-confirm). Access: SUPER_ADMIN (see `AdminCommandKind.FREEZE_PAYOUTS` /
+# `UNFREEZE_PAYOUTS`). Phase 1: command issues a token; phase 2:
+# `/confirm <token> <code>` invokes the corresponding use-case (`FreezePayouts`
+# / `UnfreezePayouts`). Idempotent: a repeat `/freeze_payouts` by the same
+# admin with the same reason is a no-op; `/unfreeze_payouts` while already
+# unfrozen is a no-op.
+# ───────────────────────────────────────────────────────────────────────────
+admin-freeze-payouts-usage = ⚠️ Usage: <code>/freeze_payouts &lt;reason&gt;</code>. Reason is required.
+admin-freeze-payouts-not-authorized = ❌ Only super-admins can freeze crypto payouts.
+admin-freeze-payouts-totp-not-configured = ❌ Your TOTP is not configured. <code>/freeze_payouts</code> is unavailable until you run <code>/admin_setup_totp</code>.
+admin-freeze-payouts-no-reason = ⚠️ Reason is required. Usage: <code>/freeze_payouts &lt;reason&gt;</code>.
+admin-freeze-payouts-confirm-issued = 🛡️ Confirm freezing payouts. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>. The token expires in { $ttl_seconds } seconds.
+admin-freeze-payouts-success = ✅ Crypto payouts are now frozen. Reason: { $reason }
+admin-freeze-payouts-already-frozen = ℹ️ Crypto payouts were already frozen by you earlier with the same reason — nothing to do. Reason: { $reason }
+
+admin-unfreeze-payouts-not-authorized = ❌ Only super-admins can unfreeze crypto payouts.
+admin-unfreeze-payouts-totp-not-configured = ❌ Your TOTP is not configured. <code>/unfreeze_payouts</code> is unavailable until you run <code>/admin_setup_totp</code>.
+admin-unfreeze-payouts-confirm-issued = 🛡️ Confirm unfreezing payouts. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>. The token expires in { $ttl_seconds } seconds.
+admin-unfreeze-payouts-success = ✅ Crypto payouts are now allowed again.
+admin-unfreeze-payouts-already-unfrozen = ℹ️ Crypto payouts were not frozen — nothing to unfreeze.
