@@ -56,6 +56,7 @@ from pipirik_wars.domain.monetization.value_objects import (
 
 __all__ = [
     "IFeeEstimator",
+    "INonceStore",
     "IPaymentLedger",
     "IPayoutFreezeRepository",
     "IPayoutLimitChecker",
@@ -875,5 +876,100 @@ class IPayoutLimitChecker(Protocol):
           в текущем окне (`>= 0`; при omitted-currency = ``sys.maxsize``).
         * ``PayoutLimitOverLimit(retry_after, exceeded_by_native)`` —
           лимит превышен, «приходи после ``retry_after``».
+        """
+        ...
+
+
+class INonceStore(Protocol):
+    """Порт server-side nonce-store для TON Connect 2.0 verify (Спринт 4.1-F).
+
+    Используется в two-phase-handler-е `/link_wallet`:
+
+    * Phase-1 (``RequestLinkWalletProof``-use-case, F.4.a): сервер
+      генерирует криптографически-сильный nonce (``secrets.token_urlsafe(24)``
+      → 32-байтовая URL-safe-строка), привязывает к scope-у (бизнес-
+      контекст: ``"link_wallet:{player_id}:{currency}"``) и сохраняет
+      через ``issue_nonce(scope, nonce, expires_at)``. Возвращает игроку
+      nonce + canonical-payload-инструкцию.
+    * Phase-2 (``LinkWallet``-use-case, F.4.b): игрок подписывает
+      ``ton_proof`` поверх canonical-message-а, включающего ``payload =
+      nonce``. После Ed25519-verify use-case вызывает ``consume_nonce(
+      scope, nonce)`` — атомарный CAS: либо ``True`` (nonce был выдан,
+      ещё не consumed, не expired → теперь помечается consumed; legacy
+      успех), либо ``False`` (nonce уже consumed, или истёк, или
+      никогда не выдавался). На ``False`` use-case бросает
+      ``TonProofReplayedError``.
+
+    Контракт **атомарный**: реализация (``SqlAlchemyNonceStore`` F.6.b)
+    обязана использовать ``UPDATE … WHERE consumed_at IS NULL AND
+    expires_at > now() RETURNING ...``-pattern, чтобы два параллельных
+    ``consume_nonce(...)`` для одного и того же ``(scope, nonce)``
+    гарантированно вернули один ``True`` и один ``False`` (а не два
+    ``True`` из-за race-condition на read-modify-write).
+
+    Все методы — асинхронные, выполняются внутри открытой
+    ``IUnitOfWork``-сессии. Тесты use-case-ов 4.1-F пользуются
+    ``FakeNonceStore`` (in-memory, F.3-тесты).
+    """
+
+    async def issue_nonce(
+        self,
+        *,
+        scope: str,
+        nonce: str,
+        expires_at: datetime,
+    ) -> None:
+        """Зарегистрировать только-что выданный server-issued nonce.
+
+        Параметры:
+
+        * ``scope: str`` — бизнес-контекст (``"link_wallet:{player_id}:
+          {currency}"``). Один и тот же ``(scope, nonce)`` дважды
+          ``issue_nonce`` — реализация бросает доменно-нейтральное
+          ``ValueError`` (вызов use-case-а сломан); в норме phase-1
+          генерирует уникальный nonce на каждый запрос.
+        * ``nonce: str`` — собственно nonce-значение (URL-safe-строка
+          из ``secrets.token_urlsafe(24)``; контракт VO ``TonProof.
+          payload``-формата гарантирует ASCII-printable [1,512]).
+        * ``expires_at: datetime`` — TZ-aware момент истечения
+          (``issue-time + TTL``; TTL ≈ 5 мин по умолчанию из config-а).
+          Хранится как-есть; ``consume_nonce`` будет сравнивать с
+          ``IClock.now()``.
+        """
+        ...
+
+    async def consume_nonce(
+        self,
+        *,
+        scope: str,
+        nonce: str,
+        now: datetime,
+    ) -> bool:
+        """Атомарный CAS-consume: пометить nonce использованным.
+
+        Параметры:
+
+        * ``scope: str`` — должен совпадать с тем scope-ом, под которым
+          nonce был выдан в ``issue_nonce``. Если не совпадает —
+          возвращаем ``False`` (attacker подсунул чужой nonce).
+        * ``nonce: str`` — собственно nonce-значение.
+        * ``now: datetime`` — TZ-aware момент (из ``IClock.now()``),
+          относительно которого сравнивается ``expires_at``. Если
+          ``expires_at <= now`` — nonce считается expired, возвращаем
+          ``False``.
+
+        Возвращает:
+
+        * ``True`` — nonce был зарегистрирован под этим scope-ом, не
+          consumed ранее, не expired → теперь помечен consumed.
+        * ``False`` — nonce не зарегистрирован под этим scope-ом,
+          либо уже consumed, либо истёк. В этих случаях use-case
+          ``LinkWallet`` бросает ``TonProofReplayedError(scope=...)``.
+
+        **Идемпотентность не гарантируется**: два параллельных
+        ``consume_nonce`` для одного и того же ``(scope, nonce)``
+        гарантированно вернут один ``True`` и один ``False`` (CAS-
+        семантика; реализация — F.6.b SqlAlchemy с ``UPDATE …
+        RETURNING ...``).
         """
         ...

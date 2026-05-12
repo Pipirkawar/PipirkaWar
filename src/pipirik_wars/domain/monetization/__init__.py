@@ -50,6 +50,7 @@ from pipirik_wars.domain.monetization.errors import (
 )
 from pipirik_wars.domain.monetization.ports import (
     IFeeEstimator,
+    INonceStore,
     IPaymentLedger,
     IPayoutFreezeRepository,
     IPayoutLimitChecker,
@@ -84,6 +85,7 @@ __all__ = [
     "Currency",
     "FeeBufferAmount",
     "IFeeEstimator",
+    "INonceStore",
     "IPaymentLedger",
     "IPayoutFreezeRepository",
     "IPayoutLimitChecker",
