@@ -69,8 +69,8 @@
 
 - [x] `git fetch && git checkout main && git pull` (свежий `main = 1601410`, merge PR #132 4.1-D).
 - [x] Создать ветку `devin/1778559360-sprint-4-1-E-admin-payout-limits` от свежего `main`.
-- [~] **E.0 — Snapshot pivot + sticky `AGENT_HANDOFF.md`** под старт Спринта 4.1-E: пересобрать «Снимок состояния» под `main = 1601410` (после мерджа 4.1-D), расписать чек-лист E.0–E.20, создать `AGENT_HANDOFF.md` (sticky-режим). Baseline `make ci` зелёный 6290 passed + 2 skipped, 96% cov на 1601410.
-- [ ] **E.1 — P0 фикс из 4.1-D**: `TonRpcAdapter._fetch_seqno` — поддержка hex/decimal от TON Center (`int(value, 0)` + edge cases: пустая стек-запись, None, нечисловое значение). +unit-тесты на оба формата.
+- [x] **E.0 — Snapshot pivot + sticky `AGENT_HANDOFF.md`** под старт Спринта 4.1-E: пересобрать «Снимок состояния» под `main = 1601410` (после мерджа 4.1-D), расписать чек-лист E.0–E.20, создать `AGENT_HANDOFF.md` (sticky-режим). Baseline `make ci` зелёный 6290 passed + 2 skipped, 96% cov на 1601410.
+- [~] **E.1 — P0 фикс из 4.1-D**: `TonRpcAdapter._fetch_seqno` — поддержка hex/decimal от TON Center (этот коммит). Введён module-level helper `_parse_tvm_int(raw, *, context) -> int` в `src/pipirik_wars/infrastructure/payments/ton_rpc/adapter.py` (поддержка decimal `"42"` / hex `"0x2a"` / `"0X2A"` / unary-minus / whitespace-обрамления через `int(trimmed, 0)` + edge cases: пустая строка / `None` / non-string / non-numeric → `TonRpcCallError` с контекст-меткой). `_fetch_seqno` вызывает хелпер. +35 unit-тестов (`TestTonRpcAdapterFetchSeqnoIntParsing`: 10 happy-path через `payout(...)` + 7 reject-кейсов; `TestParseTvmInt`: 10 happy-path + 7 reject + 1 non-string). Локально: 53 passed, ruff/mypy зелёные на изменённых файлах.
 - [ ] **E.2 — P0 фикс из 4.1-D**: `JettonUsdtProvider.resolve_wallet` — реальный парсинг slice-base64-cell, который TON Center возвращает в ответе `get_wallet_address`-метода → TON-address через `BocCell.deserialize(...).parse_address()`. +unit-тесты на TEP-89 jetton-master golden response.
 - [ ] **E.3 — Domain audit-actions**: `AdminAuditAction.{ADMIN_PRIZE_POOL_VIEWED, ADMIN_REFUND_LOT, ADMIN_FREEZE_PAYOUTS, ADMIN_UNFREEZE_PAYOUTS}` (расширение existing enum из 2.5-D) + новая Alembic-миграция `0036_audit_action_admin_prize_*` (CHECK whitelist sync). +unit-тесты на расширение enum.
 - [ ] **E.4 — Domain `PayoutFreeze`** aggregate (`is_frozen, frozen_by, frozen_at, reason`) + порт `IPayoutFreezeRepository(get_state, set_frozen, set_unfrozen)` (singleton-таблица). +unit-тесты на статус-машину.
@@ -100,7 +100,7 @@
 **Активный PR — 4.1-E «Админ-команды + лимиты выплат + 4.1-D backlog»** — пятый PR Спринта 4.1 (Фаза 4 «Монетизация и масштаб»).
 - **Ветка:** `devin/1778559360-sprint-4-1-E-admin-payout-limits` от `main` = `1601410` (merge PR #132 4.1-D).
 - **На `main` (после 4.1-D):** Фаза 3 закрыта полностью (3.1–3.6), Спринт 4.1: A, B, C, D закрыты. TON-RPC HTTP-стек + Ed25519-подпись + BoC encoder + `ClaimPrize` / `LinkWallet` use-cases + composition root + smoke-tests все в проде.
-- **Текущая позиция:** E.0 (этот коммит) — pivot doc-ов + sticky `AGENT_HANDOFF.md` под 4.1-E. Baseline `make ci` зелёный (6290 passed + 2 skipped, 96% cov, 8m). Следующий — E.1 (фикс `_fetch_seqno` hex-parse).
+- **Текущая позиция:** E.1 (этот коммит) — P0 фикс `TonRpcAdapter._fetch_seqno` → helper `_parse_tvm_int(...)` + 35 unit-тестов. Локально все 53 теста `test_adapter.py` зелёные. Следующий — E.2 (фикс `JettonUsdtProvider.resolve_wallet` slice-base64 → TON-address).
 - **Передача работы 2026-05-12 (приёмка 4.1-E).** Тот же агент, что закрыл 4.1-D (Devin-сессия `6b5380ef4ab741bb959987c6edf6953c`), продолжает в 4.1-E. После мерджа PR #132 запустил приёмку 4.1-E (HANDOFF → git fetch → доки → `make ci` зелёный 6290 passed на `1601410` → sticky-обновление HANDOFF → current_tasks.md → начало работы E.1).
 - **Скоуп 4.1-E:** admin-команды `/prize_pool`, `/refund_lot`, `/freeze_payouts`, `/unfreeze_payouts` (super_admin + TOTP, audit `ADMIN_PRIZE_*`); rolling-30d-payout-limit per player (50 USDT-eq дефолт, конфигурируется в `balance.yaml`); over-limit-queue; P0 фиксы из 4.1-D (`_fetch_seqno` hex-parse, `JettonUsdtProvider.resolve_wallet` slice-decode).
 - **Открытые решения:** конкретное число rolling-limit-а в `balance.yaml` (ГДД §12.6.5: «TODO(balance) ориентировочно 50 USDT-eq») — будет дефолт `50.00 USDT_DECIMAL = 50_000_000` + `0.0 TON_NANO` (TON не лимитируем отдельно? — ревью на E.5); очередь над-лимитных выплат — `PrizeLotStatus.QUEUED` (extends enum) или отдельная `payout_queue` таблица; **real `TonConnectVerifier` отложен в отдельный PR** (после 4.1-E).
@@ -123,7 +123,7 @@
 
 ## 📌 Последний коммит на ветке (обновляется в каждом коммите)
 
-E.0 (этот коммит) — pivot doc-ов под старт 4.1-E + sticky `AGENT_HANDOFF.md`.
+E.1 (этот коммит) — P0 фикс `TonRpcAdapter._fetch_seqno`: поддержка hex/decimal от TON Center через `_parse_tvm_int(...)` helper + 35 unit-тестов.
 
 ## 📌 История коммитов (ранее)
 

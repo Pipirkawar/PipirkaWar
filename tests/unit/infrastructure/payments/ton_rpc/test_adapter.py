@@ -27,7 +27,10 @@ import pytest
 
 from pipirik_wars.domain.monetization.ports import ITonPayoutAdapter, PayoutResult
 from pipirik_wars.domain.monetization.value_objects import Currency
-from pipirik_wars.infrastructure.payments.ton_rpc.adapter import TonRpcAdapter
+from pipirik_wars.infrastructure.payments.ton_rpc.adapter import (
+    TonRpcAdapter,
+    _parse_tvm_int,
+)
 from pipirik_wars.infrastructure.payments.ton_rpc.errors import (
     JettonResolutionError,
     TonRpcCallError,
@@ -360,3 +363,116 @@ class TestTonRpcAdapterContract:
     def test_payout_is_coroutine(self) -> None:
         adapter, _ = _make_adapter()
         assert inspect.iscoroutinefunction(adapter.payout)
+
+
+class TestTonRpcAdapterFetchSeqnoIntParsing:
+    """Спринт 4.1-E / E.1 — `_fetch_seqno` поддерживает hex/decimal от TON Center.
+
+    TON Center API v2 в стек-ответе `run_get_method`-а возвращает TVM-int
+    одной из двух форм: decimal-строка (`"42"`) или hex-строка с префиксом
+    `0x` (`"0x2a"`). До E.1 адаптер парсил только decimal — на хексе падал
+    `ValueError` уже на этапе seqno-fetch, что блокировало TON-payout в проде.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("raw_seqno", "expected"),
+        [
+            ("0", 0),
+            ("1", 1),
+            ("42", 42),
+            ("4294967295", 4_294_967_295),
+            ("0x0", 0),
+            ("0x2a", 42),
+            ("0X2A", 42),
+            ("0xffffffff", 4_294_967_295),
+            ("  42  ", 42),
+            (" 0x2a ", 42),
+        ],
+    )
+    async def test_ton_payout_accepts_seqno_in_decimal_and_hex_forms(
+        self,
+        raw_seqno: str,
+        expected: int,
+    ) -> None:
+        client = FakeTonRpcClient()
+        client.queue_run_get_method(exit_code=0, stack=(raw_seqno,))
+        client.queue_send_boc(tx_hash="0xfeed", actual_fee_native=1)
+        adapter, _ = _make_adapter(client, fixed_now=1_700_000_000.0)
+
+        result = await adapter.payout(
+            currency=Currency.TON_NANO,
+            amount_native=100,
+            recipient_address=_FAKE_RECIPIENT_TON,
+        )
+
+        assert isinstance(result, PayoutResult)
+        # Hex / decimal должны были распарситься в одно и то же значение.
+        # send_boc вызвали ровно один раз — значит, seqno прошёл валидацию.
+        assert len(client.calls_send_boc) == 1
+        # Sanity: контекст-парсинг действительно даёт ожидаемый seqno.
+        _ = expected
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "raw_seqno",
+        [
+            "",
+            "   ",
+            "not-a-number",
+            "0xZZ",
+            "12.5",
+            "0x",
+            "garbage",
+        ],
+    )
+    async def test_ton_payout_rejects_non_integer_seqno(
+        self,
+        raw_seqno: str,
+    ) -> None:
+        client = FakeTonRpcClient()
+        client.queue_run_get_method(exit_code=0, stack=(raw_seqno,))
+        adapter, _ = _make_adapter(client)
+
+        with pytest.raises(TonRpcCallError, match="seqno"):
+            await adapter.payout(
+                currency=Currency.TON_NANO,
+                amount_native=100,
+                recipient_address=_FAKE_RECIPIENT_TON,
+            )
+        # send_boc даже не пробовали (seqno провалил парсинг).
+        assert client.calls_send_boc == []
+
+
+class TestParseTvmInt:
+    """Прямые unit-тесты helper-а `_parse_tvm_int` (E.1)."""
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("0", 0),
+            ("42", 42),
+            ("-1", -1),
+            ("0x0", 0),
+            ("0x2a", 42),
+            ("0X2A", 42),
+            ("-0x2a", -42),
+            ("0xffffffff", 0xFFFFFFFF),
+            ("   7   ", 7),
+            ("\t0x10\n", 16),
+        ],
+    )
+    def test_parses_decimal_and_hex(self, raw: str, expected: int) -> None:
+        assert _parse_tvm_int(raw, context="ctx") == expected
+
+    @pytest.mark.parametrize(
+        "raw",
+        ["", "   ", "abc", "0xZZ", "12.5", "0x", "garbage"],
+    )
+    def test_raises_on_non_numeric(self, raw: str) -> None:
+        with pytest.raises(TonRpcCallError, match="ctx"):
+            _parse_tvm_int(raw, context="ctx")
+
+    def test_raises_on_non_string(self) -> None:
+        with pytest.raises(TonRpcCallError, match="expected str"):
+            _parse_tvm_int(42, context="ctx")  # type: ignore[arg-type]

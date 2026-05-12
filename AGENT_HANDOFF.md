@@ -15,8 +15,8 @@
 
 | Шаг | Описание | Статус |
 |-----|----------|--------|
-| **E.0** | Pivot `docs/current_tasks.md` под 4.1-E + создать sticky `AGENT_HANDOFF.md` | 🔄 in_progress (этот коммит) |
-| **E.1** | **P0 bug-1**: `TonRpcAdapter._fetch_seqno` — поддержка hex/decimal от TON Center (`int(value, 0)` + edge cases) + unit-тесты | ⏳ pending |
+| **E.0** | Pivot `docs/current_tasks.md` под 4.1-E + создать sticky `AGENT_HANDOFF.md` | ✅ done |
+| **E.1** | **P0 bug-1**: `TonRpcAdapter._fetch_seqno` — поддержка hex/decimal от TON Center (`int(value, 0)` + edge cases) + unit-тесты | 🔄 in_progress (этот коммит) |
 | **E.2** | **P0 bug-2**: `JettonUsdtProvider.resolve_wallet` — парсинг slice-base64-cell → TON-address через `BocCell`-decoder + unit/integration | ⏳ pending |
 | **E.3** | Domain: `AdminAuditAction.{ADMIN_PRIZE_POOL_VIEWED, ADMIN_REFUND_LOT, ADMIN_FREEZE_PAYOUTS, ADMIN_UNFREEZE_PAYOUTS}` + Alembic CHECK whitelist | ⏳ pending |
 | **E.4** | Domain: `PayoutFreeze` aggregate + `IPayoutFreezeRepository` port | ⏳ pending |
@@ -39,13 +39,18 @@
 
 ## Состояние ветки
 
-- **Текущий коммит**: TBD (будет обновлён в E.0)
+- **Текущий коммит**: E.1 (этот коммит) — `_parse_tvm_int(...)` helper + замена `int(result.stack[0])` в `TonRpcAdapter._fetch_seqno`; +18 unit-тестов (10 параметризованных hex/decimal happy-path-ов через `payout(...)`, 7 негативных кейсов, 10 happy-path + 7 reject + 1 non-string для `_parse_tvm_int`-helper-а).
 - **Baseline CI** (на свежем main + новой ветке без коммитов): **6290 passed + 2 skipped, 96% cov, 8m** — зелёный.
 - **Local env**: `.venv` активирована; `httpx`, `pynacl`, `pyotp` уже в lock-файле (после 4.1-D).
 
+## Что я сделал в этой сессии
+
+- E.1: `TonRpcAdapter._fetch_seqno` — фикс P0 bug-а из 4.1-D backlog. TON Center API v2 в стек-ответе `run_get_method`-а возвращает TVM-int одной из двух форм: decimal (`"42"`) или hex (`"0x2a"`, `"0X2A"`). До E.1 адаптер парсил только decimal (`int(result.stack[0])`) — на хексе падал `ValueError`, что блокировало TON-payout в production. Введён module-level helper `_parse_tvm_int(raw, *, context) -> int` с двумя гарантиями: (а) поддержка decimal/hex/unary-minus/whitespace-обрамления через `int(trimmed, 0)`; (б) any non-numeric / non-string → `TonRpcCallError` с контекст-меткой (имя вызывающего метода). `_fetch_seqno` теперь возвращает `_parse_tvm_int(raw_seqno, context=...)`. +18 unit-тестов (`TestTonRpcAdapterFetchSeqnoIntParsing` через payout-flow + `TestParseTvmInt` напрямую).
+- E.0: pivot doc-ов под 4.1-E + sticky `AGENT_HANDOFF.md` (предыдущий коммит на ветке).
+
 ## На каком файле / задаче остановился
 
-E.0 — pivot doc-ов под старт 4.1-E. Следующий шаг — **E.1** (фикс `_fetch_seqno` в `src/pipirik_wars/infrastructure/payments/ton_rpc/adapter.py` на строке `int(stack[0])`).
+E.1 завершён локально (`pytest tests/unit/infrastructure/payments/ton_rpc/test_adapter.py -q` → 53 passed, ruff/mypy зелёные на изменённых файлах). Следующий шаг — **E.2**: фикс `JettonUsdtProvider.resolve_wallet` (slice-base64-cell → TON-address через BoC-decoder). Файл — `src/pipirik_wars/infrastructure/payments/ton_rpc/jetton.py`.
 
 ## Команды для разогрева
 
