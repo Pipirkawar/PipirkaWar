@@ -100,8 +100,8 @@
 **Активный PR — 4.1-E «Админ-команды + лимиты выплат + 4.1-D backlog»** — пятый PR Спринта 4.1 (Фаза 4 «Монетизация и масштаб»).
 - **Ветка:** `devin/1778559360-sprint-4-1-E-admin-payout-limits` от `main` = `1601410` (merge PR #132 4.1-D).
 - **На `main` (после 4.1-D):** Фаза 3 закрыта полностью (3.1–3.6), Спринт 4.1: A, B, C, D закрыты. TON-RPC HTTP-стек + Ed25519-подпись + BoC encoder + `ClaimPrize` / `LinkWallet` use-cases + composition root + smoke-tests все в проде.
-- **Текущая позиция:** ветка `devin/1778559360-sprint-4-1-E-admin-payout-limits` от `main = 1601410`; выполнены E.0–E.8 (`ded52b4`) + E.9 (этот коммит, `GetPrizePoolStatus`). Сессия: https://app.devin.ai/sessions/ba3b3f787335465f995742b5aba6799c. `make lint typecheck imports` зелёные; full `pytest -q --no-cov` → 6512 passed, 2 skipped. Дальше: **E.11** (перепрямуется ДО E.10 из-за `prize_lots.winner_id`-зависимости) — Alembic-миграция + `SqlAlchemyPayoutFreezeRepository`, затем E.10 (hook в `ClaimPrize`), E.12–E.14 (bot-handler-ы), E.15 (DI), E.16 (smoke), E.17–E.20 (CI / doc-sync / handoff cleanup / PR).
-- **Передача работы 2026-05-12 (приёмка 4.1-E).** Тот же агент, что закрыл 4.1-D (Devin-сессия `6b5380ef4ab741bb959987c6edf6953c`), продолжает в 4.1-E. После мерджа PR #132 запустил приёмку 4.1-E (HANDOFF → git fetch → доки → `make ci` зелёный 6290 passed на `1601410` → sticky-обновление HANDOFF → current_tasks.md → начало работы E.1).
+- **Текущая позиция:** ветка `devin/1778559360-sprint-4-1-E-admin-payout-limits` от `main = 1601410`; выполнены E.0–E.9 (`2b6b2cf`) + E.11a (этот коммит: Alembic `0037` payout_freeze + winner_id + `SqlAlchemyPayoutFreezeRepository` + SQL sum/oldest window). Сессия: https://app.devin.ai/sessions/f1baa58dac484f88a557431fc74959bb. `make lint typecheck imports` зелёные; full `pytest -q --no-cov` → 6526 passed, 2 skipped. Дальше: **E.10** (hook в `ClaimPrize`: freeze-check + EvaluatePayoutLimit), затем E.11b (очередь), E.12–E.20.
+- **Передача работы 2026-05-12 (приёмка 4.1-E, сессия `f1baa58dac484f88a557431fc74959bb`).** Новый агент подключился после E.9. Выполнена 7-шаговая приёмка (HANDOFF → git fetch → доки → `make ci` 6512 passed → clean status → current_tasks.md → E.11a). Предыдущая сессия: `ba3b3f787335465f995742b5aba6799c` (E.6–E.9).
 - **Скоуп 4.1-E:** admin-команды `/prize_pool`, `/refund_lot`, `/freeze_payouts`, `/unfreeze_payouts` (super_admin + TOTP, audit `ADMIN_PRIZE_*`); rolling-30d-payout-limit per player (50 USDT-eq дефолт, конфигурируется в `balance.yaml`); over-limit-queue; P0 фиксы из 4.1-D (`_fetch_seqno` hex-parse, `JettonUsdtProvider.resolve_wallet` slice-decode).
 - **Открытые решения:** конкретное число rolling-limit-а в `balance.yaml` (ГДД §12.6.5: «TODO(balance) ориентировочно 50 USDT-eq») — будет дефолт `50.00 USDT_DECIMAL = 50_000_000` + `0.0 TON_NANO` (TON не лимитируем отдельно? — ревью на E.5); очередь над-лимитных выплат — `PrizeLotStatus.QUEUED` (extends enum) или отдельная `payout_queue` таблица; **real `TonConnectVerifier` отложен в отдельный PR** (после 4.1-E).
 - **После мерджа PR 4.1-E:** старт **либо 4.1-E.next** «Real TON Connect verifier + Ed25519-replay-protection», **либо** **Спринт 4.1-F** «Redis + ИИ + многоязычность + метрики» (задачи 4.1.12–4.1.15) — решение принимает агент-преемник по приоритетам.
@@ -123,13 +123,17 @@
 
 ## 📌 Последний коммит на ветке (обновляется в каждом коммите)
 
-E.5 (этот коммит) — доменные VO `PayoutLimitWithin` / `PayoutLimitOverLimit` + sum-type `PayoutLimitCheckResult` + `IPayoutLimitChecker` Protocol + pydantic-схема `MonetizationConfig.payout_limit` (`PayoutLimitConfig` / `PayoutLimitsConfig`) + `config/balance.yaml::monetization` + `FakePayoutLimitChecker` + 56 unit-тестов.
+E.11a (этот коммит) — Alembic `0037_payout_freeze_and_prize_lot_winner_id`: singleton `payout_freeze` + `prize_lots.winner_id` + покрывающий индекс + `PayoutFreezeORM` + `SqlAlchemyPayoutFreezeRepository` + SQL `sum_claimed_in_window`/`oldest_claimed_at_in_window` + `ClaimPrize` передаёт `winner_id` + 14 новых тестов. 6526 passed, 2 skipped.
 
 ## 📌 История коммитов (ранее)
 
 > Обновляется автоматически перед каждым `git push`. После `git log --oneline -1` — short sha + subject.
 
-- `7c7acaf` — **E.4**: `PayoutFreeze` aggregate + `IPayoutFreezeRepository` port + `FakePayoutFreezeRepository` + 17 unit-тестов.
+- `2b6b2cf` — **E.9**: `GetPrizePoolStatus` use-case + `count_by_status` + 13 тестов.
+- `ded52b4` — **E.8**: `RefundLot` use-case + 11 unit-тестов.
+- `0ee165f` — **E.7**: `FreezePayouts`/`UnfreezePayouts` use-cases + 36 тестов.
+- `750de27` — **E.6**: `EvaluatePayoutLimit` use-case + 25 тестов.
+- `7c7acaf` — **E.4**: `PayoutFreeze` aggregate + `IPayoutFreezeRepository` port + 17 unit-тестов.
 - `5fffc6f` — **E.3**: `AdminAuditAction` расширен 4 новыми admin-prize-pool значениями + 4 unit-теста.
 - `f5a7048` — **E.2**: `JettonUsdtProvider.resolve_wallet` BoC cell parsing + 29 unit-тестов.
 - `9c3878b` — **E.1**: `TonRpcAdapter._fetch_seqno` hex/decimal парсер + 35 unit-тестов.

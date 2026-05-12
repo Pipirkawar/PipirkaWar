@@ -67,6 +67,14 @@ class PrizeLotORM(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    # E.11a (Спринт 4.1-E): winner_id заполняется в одной транзакции с
+    # `status='claimed'`. Используется покрывающим индексом
+    # `(winner_id, currency, status, claimed_at)` для rolling-30d
+    # `EvaluatePayoutLimit`-проверки (E.6/E.10).
+    winner_id: Mapped[int | None] = mapped_column(
+        BigInteger(),
+        nullable=True,
+    )
 
     __table_args__ = (
         CheckConstraint(
@@ -115,5 +123,26 @@ class PrizeLotORM(Base):
             "ix_prize_lots_status_reserved_at",
             "status",
             "reserved_at",
+        ),
+        # E.11a (Спринт 4.1-E): покрывающий индекс для rolling-30d
+        # payout-limit-чека (`sum_claimed_in_window` /
+        # `oldest_claimed_at_in_window`).
+        Index(
+            "ix_prize_lots_winner_currency_status_claimed_at",
+            "winner_id",
+            "currency",
+            "status",
+            "claimed_at",
+        ),
+        # E.11a invariants: winner_id заполняется только для
+        # status='claimed'; legacy CLAIMED-лоты (до E.11a) с
+        # winner_id=NULL допускаются.
+        CheckConstraint(
+            "(status = 'claimed') OR (winner_id IS NULL)",
+            name="ck_prize_lots_winner_id_iff_claimed_or_null",
+        ),
+        CheckConstraint(
+            "winner_id IS NULL OR winner_id > 0",
+            name="ck_prize_lots_winner_id_positive",
         ),
     )

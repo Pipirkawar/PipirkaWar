@@ -159,6 +159,7 @@ class ClaimPrize:
             lot_id=lot.id,
             new_status=PrizeLotStatus.CLAIMED,
             claimed_at=now,
+            winner_id=command.player_id,
         )
         await self._audit.record(
             AuditEntry(

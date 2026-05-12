@@ -295,6 +295,7 @@ class TestUpdateStatus:
                 lot_id=saved.id,
                 new_status=PrizeLotStatus.CLAIMED,
                 claimed_at=claimed_at,
+                winner_id=42,
             )
             assert claimed.status is PrizeLotStatus.CLAIMED
             assert claimed.claimed_at == claimed_at
@@ -377,6 +378,7 @@ class TestUpdateStatus:
                     lot_id=saved.id,
                     new_status=PrizeLotStatus.CLAIMED,
                     claimed_at=NOW,
+                    winner_id=42,
                 )
         assert exc_info.value.lot_id == saved.id
         assert exc_info.value.from_status is PrizeLotStatus.ACTIVE
@@ -451,6 +453,7 @@ class TestUpdateStatus:
                 await repo.update_status(
                     lot_id=saved.id,
                     new_status=PrizeLotStatus.CLAIMED,
+                    winner_id=42,
                 )
 
     @pytest.mark.asyncio
@@ -782,6 +785,7 @@ class TestListExpiredReserved:
                 lot_id=claimed_lot.id,
                 new_status=PrizeLotStatus.CLAIMED,
                 claimed_at=NOW + timedelta(minutes=5),
+                winner_id=42,
             )
             # refunded: ACTIVE → REFUNDED (reserved_at=None)
             await repo.update_status(
@@ -1003,3 +1007,169 @@ class TestCountByStatus:
                 )
                 == 0
             )
+
+
+# --------------------------------------------------------------------------- #
+# sum_claimed_in_window / oldest_claimed_at_in_window — Спринт 4.1-E, E.11a
+# --------------------------------------------------------------------------- #
+
+_WINDOW_PLAYER_ID = 42
+
+
+async def _reserve_and_claim(
+    repo: SqlAlchemyPrizeLotRepository,
+    lot_id: int,
+    claimed_at: datetime,
+    winner_id: int = _WINDOW_PLAYER_ID,
+) -> None:
+    await repo.update_status(
+        lot_id=lot_id,
+        new_status=PrizeLotStatus.RESERVED,
+        reserved_at=claimed_at - timedelta(minutes=5),
+    )
+    await repo.update_status(
+        lot_id=lot_id,
+        new_status=PrizeLotStatus.CLAIMED,
+        claimed_at=claimed_at,
+        winner_id=winner_id,
+    )
+
+
+class TestSumClaimedInWindow:
+    @pytest.mark.asyncio
+    async def test_empty_returns_zero(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = _make_repo(uow)
+        async with uow:
+            total = await repo.sum_claimed_in_window(
+                player_id=_WINDOW_PLAYER_ID,
+                currency=Currency.USDT_DECIMAL,
+                since=NOW - timedelta(days=30),
+            )
+        assert total == 0
+
+    @pytest.mark.asyncio
+    async def test_sums_claimed_lots_for_player(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = _make_repo(uow)
+        async with uow:
+            lot1 = await repo.add(lot=_fresh_lot(amount_native=1_000_000))
+            lot2 = await repo.add(lot=_fresh_lot(amount_native=2_000_000))
+            assert lot1.id is not None
+            assert lot2.id is not None
+            claimed_at = NOW + timedelta(hours=1)
+            await _reserve_and_claim(repo, lot1.id, claimed_at)
+            await _reserve_and_claim(repo, lot2.id, claimed_at + timedelta(hours=1))
+
+        async with uow:
+            total = await repo.sum_claimed_in_window(
+                player_id=_WINDOW_PLAYER_ID,
+                currency=Currency.USDT_DECIMAL,
+                since=NOW,
+            )
+        assert total == 3_000_000
+
+    @pytest.mark.asyncio
+    async def test_excludes_other_player(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = _make_repo(uow)
+        async with uow:
+            lot1 = await repo.add(lot=_fresh_lot(amount_native=1_000_000))
+            lot2 = await repo.add(lot=_fresh_lot(amount_native=5_000_000))
+            assert lot1.id is not None
+            assert lot2.id is not None
+            await _reserve_and_claim(repo, lot1.id, NOW + timedelta(hours=1), winner_id=42)
+            await _reserve_and_claim(repo, lot2.id, NOW + timedelta(hours=2), winner_id=99)
+
+        async with uow:
+            total_42 = await repo.sum_claimed_in_window(
+                player_id=42,
+                currency=Currency.USDT_DECIMAL,
+                since=NOW,
+            )
+            total_99 = await repo.sum_claimed_in_window(
+                player_id=99,
+                currency=Currency.USDT_DECIMAL,
+                since=NOW,
+            )
+        assert total_42 == 1_000_000
+        assert total_99 == 5_000_000
+
+    @pytest.mark.asyncio
+    async def test_excludes_outside_window(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = _make_repo(uow)
+        async with uow:
+            # Claimed before window
+            old_lot = await repo.add(lot=_fresh_lot(amount_native=10_000_000))
+            # Claimed inside window
+            new_lot = await repo.add(lot=_fresh_lot(amount_native=2_000_000))
+            assert old_lot.id is not None
+            assert new_lot.id is not None
+            await _reserve_and_claim(
+                repo,
+                old_lot.id,
+                NOW - timedelta(days=31),
+            )
+            await _reserve_and_claim(
+                repo,
+                new_lot.id,
+                NOW + timedelta(hours=1),
+            )
+
+        since = NOW - timedelta(days=30)
+        async with uow:
+            total = await repo.sum_claimed_in_window(
+                player_id=_WINDOW_PLAYER_ID,
+                currency=Currency.USDT_DECIMAL,
+                since=since,
+            )
+        assert total == 2_000_000
+
+
+class TestOldestClaimedAtInWindow:
+    @pytest.mark.asyncio
+    async def test_empty_returns_none(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = _make_repo(uow)
+        async with uow:
+            oldest = await repo.oldest_claimed_at_in_window(
+                player_id=_WINDOW_PLAYER_ID,
+                currency=Currency.USDT_DECIMAL,
+                since=NOW - timedelta(days=30),
+            )
+        assert oldest is None
+
+    @pytest.mark.asyncio
+    async def test_returns_earliest_claimed_at(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+    ) -> None:
+        repo = _make_repo(uow)
+        earlier = NOW + timedelta(hours=1)
+        later = NOW + timedelta(hours=5)
+        async with uow:
+            lot1 = await repo.add(lot=_fresh_lot(amount_native=1_000_000))
+            lot2 = await repo.add(lot=_fresh_lot(amount_native=2_000_000))
+            assert lot1.id is not None
+            assert lot2.id is not None
+            await _reserve_and_claim(repo, lot1.id, earlier)
+            await _reserve_and_claim(repo, lot2.id, later)
+
+        async with uow:
+            oldest = await repo.oldest_claimed_at_in_window(
+                player_id=_WINDOW_PLAYER_ID,
+                currency=Currency.USDT_DECIMAL,
+                since=NOW,
+            )
+        assert oldest == earlier

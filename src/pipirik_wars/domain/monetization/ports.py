@@ -329,6 +329,7 @@ class IPrizeLotRepository(Protocol):
         new_status: PrizeLotStatus,
         reserved_at: datetime | None = None,
         claimed_at: datetime | None = None,
+        winner_id: int | None = None,
     ) -> PrizeLot:
         """Атомарно перевести лот в `new_status` с проверкой машины состояний.
 
@@ -342,6 +343,11 @@ class IPrizeLotRepository(Protocol):
           REFUNDED сохраняется существующий `reserved_at` лота).
         - `claimed_at` — TZ-aware момент claim-а; обязателен на
           `new_status=CLAIMED`, на остальных — `None`.
+        - `winner_id` — id игрока-получателя CLAIMED-лота (`>= 1`).
+          Обязателен на `new_status=CLAIMED` (Спринт 4.1-E, шаг E.11a:
+          колонка `prize_lots.winner_id` появилась для rolling-30d
+          payout-limit-проверки). На остальных статусах должен быть
+          `None`.
 
         Возвращает: обновлённый `PrizeLot`-снапшот.
 
@@ -350,6 +356,7 @@ class IPrizeLotRepository(Protocol):
         - `PrizeLotStatusTransitionError` — если текущий статус
           не разрешает переход в `new_status` (см.
           `_PRIZE_LOT_TRANSITIONS`).
+        - `ValueError` — невалидная комбинация параметров (см. выше).
         """
         ...
 

@@ -134,6 +134,7 @@ async def _seed_lot(
             lot_id=stored.id,
             new_status=PrizeLotStatus.CLAIMED,
             claimed_at=_NOW,
+            winner_id=42,
         )
     if status is PrizeLotStatus.REFUNDED:
         return await lots.update_status(

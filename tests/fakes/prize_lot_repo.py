@@ -97,6 +97,7 @@ class FakePrizeLotRepository(IPrizeLotRepository):
         new_status: PrizeLotStatus,
         reserved_at: datetime | None = None,
         claimed_at: datetime | None = None,
+        winner_id: int | None = None,
     ) -> PrizeLot:
         """Перевести лот в `new_status`, делегируя домену state-machine."""
         self.update_status_calls.append((lot_id, new_status, reserved_at, claimed_at))
@@ -116,6 +117,10 @@ class FakePrizeLotRepository(IPrizeLotRepository):
                     "FakePrizeLotRepository.update_status: reserved_at is "
                     "required for RESERVED transition"
                 )
+            if winner_id is not None:
+                raise ValueError(
+                    "FakePrizeLotRepository.update_status: winner_id must be None for RESERVED"
+                )
             updated = current.reserve(reserved_at=reserved_at)
         elif new_status is PrizeLotStatus.CLAIMED:
             if claimed_at is None:
@@ -123,8 +128,22 @@ class FakePrizeLotRepository(IPrizeLotRepository):
                     "FakePrizeLotRepository.update_status: claimed_at is "
                     "required for CLAIMED transition"
                 )
+            if winner_id is None:
+                raise ValueError(
+                    "FakePrizeLotRepository.update_status: winner_id is "
+                    "required for CLAIMED transition"
+                )
+            if winner_id <= 0:
+                raise ValueError(
+                    f"FakePrizeLotRepository.update_status: winner_id must be > 0, got {winner_id}"
+                )
             updated = current.claim(claimed_at=claimed_at)
+            self.winners[lot_id] = winner_id
         elif new_status is PrizeLotStatus.REFUNDED:
+            if winner_id is not None:
+                raise ValueError(
+                    "FakePrizeLotRepository.update_status: winner_id must be None for REFUNDED"
+                )
             updated = current.refund()
         else:
             raise ValueError(

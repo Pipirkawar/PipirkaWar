@@ -65,6 +65,49 @@ _VALID_SOURCES_FOR_TARGET: dict[PrizeLotStatus, frozenset[PrizeLotStatus]] = {
 }
 
 
+def _validate_update_status_args(
+    new_status: PrizeLotStatus,
+    reserved_at: datetime | None,
+    claimed_at: datetime | None,
+    winner_id: int | None,
+) -> None:
+    """Валидировать аргументы ``update_status`` (fail-fast до SQL-запроса)."""
+    if new_status is PrizeLotStatus.ACTIVE:
+        raise ValueError(
+            "PrizeLotRepository.update_status: ACTIVE is not a valid target "
+            "(lots are created in ACTIVE via add(...))",
+        )
+    if new_status is PrizeLotStatus.RESERVED and reserved_at is None:
+        raise ValueError(
+            "PrizeLotRepository.update_status: reserved_at is required for RESERVED",
+        )
+    if new_status is not PrizeLotStatus.RESERVED and reserved_at is not None:
+        raise ValueError(
+            f"PrizeLotRepository.update_status: reserved_at must be None for {new_status.value!r}",
+        )
+    if new_status is PrizeLotStatus.CLAIMED and claimed_at is None:
+        raise ValueError(
+            "PrizeLotRepository.update_status: claimed_at is required for CLAIMED",
+        )
+    if new_status is not PrizeLotStatus.CLAIMED and claimed_at is not None:
+        raise ValueError(
+            f"PrizeLotRepository.update_status: claimed_at must be None for {new_status.value!r}",
+        )
+    if new_status is PrizeLotStatus.CLAIMED:
+        if winner_id is None:
+            raise ValueError(
+                "PrizeLotRepository.update_status: winner_id is required for CLAIMED",
+            )
+        if winner_id <= 0:
+            raise ValueError(
+                f"PrizeLotRepository.update_status: winner_id must be > 0, got {winner_id}",
+            )
+    elif winner_id is not None:
+        raise ValueError(
+            f"PrizeLotRepository.update_status: winner_id must be None for {new_status.value!r}",
+        )
+
+
 class SqlAlchemyPrizeLotRepository(IPrizeLotRepository):
     """SQLAlchemy-реализация `IPrizeLotRepository` поверх `prize_lots`."""
 
@@ -135,31 +178,10 @@ class SqlAlchemyPrizeLotRepository(IPrizeLotRepository):
         new_status: PrizeLotStatus,
         reserved_at: datetime | None = None,
         claimed_at: datetime | None = None,
+        winner_id: int | None = None,
     ) -> PrizeLot:
         """Атомарно перевести лот в `new_status`."""
-        if new_status is PrizeLotStatus.ACTIVE:
-            raise ValueError(
-                "PrizeLotRepository.update_status: ACTIVE is not a valid target "
-                "(lots are created in ACTIVE via add(...))",
-            )
-        if new_status is PrizeLotStatus.RESERVED and reserved_at is None:
-            raise ValueError(
-                "PrizeLotRepository.update_status: reserved_at is required for RESERVED",
-            )
-        if new_status is not PrizeLotStatus.RESERVED and reserved_at is not None:
-            raise ValueError(
-                f"PrizeLotRepository.update_status: reserved_at must be None for "
-                f"{new_status.value!r}",
-            )
-        if new_status is PrizeLotStatus.CLAIMED and claimed_at is None:
-            raise ValueError(
-                "PrizeLotRepository.update_status: claimed_at is required for CLAIMED",
-            )
-        if new_status is not PrizeLotStatus.CLAIMED and claimed_at is not None:
-            raise ValueError(
-                f"PrizeLotRepository.update_status: claimed_at must be None for "
-                f"{new_status.value!r}",
-            )
+        _validate_update_status_args(new_status, reserved_at, claimed_at, winner_id)
 
         session = self._uow.session
         valid_sources = _VALID_SOURCES_FOR_TARGET[new_status]
@@ -175,6 +197,7 @@ class SqlAlchemyPrizeLotRepository(IPrizeLotRepository):
             values["reserved_at"] = reserved_at
         if new_status is PrizeLotStatus.CLAIMED:
             values["claimed_at"] = claimed_at
+            values["winner_id"] = winner_id
 
         stmt = (
             update(PrizeLotORM)
@@ -234,25 +257,29 @@ class SqlAlchemyPrizeLotRepository(IPrizeLotRepository):
     ) -> int:
         """Сумма `amount_native` по CLAIMED-лотам игрока в окне `claimed_at >= since`.
 
-        Не реализовано до шага **E.11** (`prize_lots.winner_id`-миграция).
-        До того момента порт всё ещё валидно объявлен в `IPrizeLotRepository`,
-        реализация в этом классе возвращает `NotImplementedError`, чтобы
-        случайный вызов до E.11 не приводил к silent-zero (`0` без winner-
-        фильтра был бы крайне опасен — он отключил бы лимит для всех игроков).
-
-        После E.11 здесь будет::
+        SQL (Спринт 4.1-E шаг E.11a, миграция ``0037``)::
 
             SELECT COALESCE(SUM(amount_native), 0) FROM prize_lots
             WHERE winner_id = :player_id AND currency = :currency
-              AND status = 'CLAIMED' AND claimed_at >= :since;
+              AND status = 'claimed' AND claimed_at >= :since;
+
+        Покрывающий индекс ``ix_prize_lots_winner_currency_status_claimed_at``
+        обеспечивает index-only scan на Postgres-е.
         """
-        del player_id, currency, since  # used by E.11
-        raise NotImplementedError(
-            "SqlAlchemyPrizeLotRepository.sum_claimed_in_window: schema "
-            "migration `prize_lots.winner_id` ещё не сделана (Спринт 4.1-E "
-            "шаг E.11). До E.11 этот метод не подключён к ClaimPrize-flow "
-            "(IPayoutLimitChecker hook делается в E.10 ПОСЛЕ E.11)."
+        if player_id <= 0:
+            raise ValueError(
+                f"SqlAlchemyPrizeLotRepository.sum_claimed_in_window: "
+                f"player_id must be > 0, got {player_id}",
+            )
+        session = self._uow.session
+        stmt = select(func.coalesce(func.sum(PrizeLotORM.amount_native), 0)).where(
+            PrizeLotORM.winner_id == player_id,
+            PrizeLotORM.currency == currency.value,
+            PrizeLotORM.status == PrizeLotStatus.CLAIMED.value,
+            PrizeLotORM.claimed_at >= since,
         )
+        result = await session.execute(stmt)
+        return int(result.scalar_one())
 
     async def oldest_claimed_at_in_window(
         self,
@@ -263,14 +290,32 @@ class SqlAlchemyPrizeLotRepository(IPrizeLotRepository):
     ) -> datetime | None:
         """Самый ранний `claimed_at` для player+currency в окне (>= since).
 
-        Не реализовано до шага **E.11** (см. `sum_claimed_in_window`).
+        SQL (Спринт 4.1-E шаг E.11a, миграция ``0037``)::
+
+            SELECT MIN(claimed_at) FROM prize_lots
+            WHERE winner_id = :player_id AND currency = :currency
+              AND status = 'claimed' AND claimed_at >= :since;
+
+        Тот же покрывающий индекс обеспечивает быстрый ``MIN``-запрос.
+        Если в окне нет CLAIMED-лотов — возвращает ``None``.
         """
-        del player_id, currency, since  # used by E.11
-        raise NotImplementedError(
-            "SqlAlchemyPrizeLotRepository.oldest_claimed_at_in_window: schema "
-            "migration `prize_lots.winner_id` ещё не сделана (Спринт 4.1-E "
-            "шаг E.11)."
+        if player_id <= 0:
+            raise ValueError(
+                f"SqlAlchemyPrizeLotRepository.oldest_claimed_at_in_window: "
+                f"player_id must be > 0, got {player_id}",
+            )
+        session = self._uow.session
+        stmt = select(func.min(PrizeLotORM.claimed_at)).where(
+            PrizeLotORM.winner_id == player_id,
+            PrizeLotORM.currency == currency.value,
+            PrizeLotORM.status == PrizeLotStatus.CLAIMED.value,
+            PrizeLotORM.claimed_at >= since,
         )
+        result = await session.execute(stmt)
+        oldest: datetime | None = result.scalar_one_or_none()
+        if oldest is None:
+            return None
+        return _ensure_utc(oldest)
 
     async def count_by_status(
         self,

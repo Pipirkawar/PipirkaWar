@@ -81,6 +81,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0030_prize_lots" in revisions
         assert "0031_audit_source_prize_lot_refunded" in revisions
         assert "0032_audit_source_prize_lot_reserved" in revisions
+        assert "0037_payout_freeze_and_prize_lot_winner_id" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -292,6 +293,13 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0032 is not None
         assert rev_0032.down_revision == "0031_audit_source_prize_lot_refunded"
 
+    def test_0037_descends_from_0036(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0037 = script.get_revision("0037_payout_freeze_and_prize_lot_winner_id")
+        assert rev_0037 is not None
+        assert rev_0037.down_revision == "0036_prize_lots_reserved_at"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -332,6 +340,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260511_0034_audit_source_wallet_linked.py",
             "20260511_0035_wallets.py",
             "20260511_0036_prize_lots_reserved_at.py",
+            "20260512_0037_payout_freeze_and_prize_lot_winner_id.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -392,6 +401,7 @@ class TestAlembicMigrationsApplyCleanly:
             "prize_pool_balance",
             "prize_lots",
             "wallets",
+            "payout_freeze",
         }
         assert expected.issubset(table_names), f"missing tables: {expected - table_names}"
 
