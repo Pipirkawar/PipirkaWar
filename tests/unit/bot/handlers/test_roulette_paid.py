@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import cast
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiogram import Bot
@@ -826,25 +826,28 @@ class TestHandleSuccessfulPayment:
         spin.execute.assert_not_awaited()
         msg.answer.assert_awaited_once_with("ru:roulette-paid-payment-invalid")
 
-    async def test_invalid_payload_logs_machine_readable_reason(
-        self,
-        caplog: pytest.LogCaptureFixture,
-    ) -> None:
+    async def test_invalid_payload_logs_machine_readable_reason(self) -> None:
         """D.8.c: machine-readable `reason` и `payload_len` уходят в
         structured-log (не к игроку).
-        """
-        import logging  # noqa: PLC0415 — тест-локальный import для caplog-фикстуры.
 
+        Патчим `_LOGGER.warning` напрямую, чтобы не зависеть от состояния propagate-
+        цепочки stdlib-логгеров после других тестов в том же xdist-worker-е
+        (`pytest-xdist --dist loadfile` группирует тесты по файлам, но один
+        worker прогоняет много файлов последовательно в одном процессе, и
+        `caplog.at_level("WARNING", logger=...)` может не увидеть record-ы,
+        если предыдущий тест поленил root-handler-ы). Аналогичный фикс уже
+        сделан в `tests/unit/domain/balance/test_config.py::
+        test_total_above_contract_limit_warns`.
+        """
         msg = _msg_with_payment(payload=_signed_payload(pack_value="single"))
         spin = _stub_spin()
         verifier = _verifier(
             error=InvalidStarsPayloadError(reason="hmac_mismatch", payload_len=64),
         )
 
-        with caplog.at_level(
-            logging.WARNING,
-            logger="pipirik_wars.bot.handlers.roulette_paid",
-        ):
+        with patch(
+            "pipirik_wars.bot.handlers.roulette_paid._LOGGER.warning",
+        ) as mock_warning:
             await handle_successful_payment(
                 cast(Message, msg),
                 _identity("private"),
@@ -855,17 +858,15 @@ class TestHandleSuccessfulPayment:
                 Locale("ru"),
             )
 
-        # Ровно одна warning-запись с reason + payload_len + provider_id.
-        warnings = [
-            r
-            for r in caplog.records
-            if r.name == "pipirik_wars.bot.handlers.roulette_paid" and r.levelno == logging.WARNING
-        ]
-        assert len(warnings) == 1
-        rec = warnings[0]
-        assert getattr(rec, "reason", None) == "hmac_mismatch"
-        assert getattr(rec, "payload_len", None) == 64
-        assert getattr(rec, "tg_payment_charge_id", None) == "tg-charge-001"
+        # Ровно одна warning-запись с нужным message + extra (reason +
+        # payload_len + tg_payment_charge_id).
+        assert mock_warning.call_count == 1
+        call = mock_warning.call_args
+        assert call.args[0] == "roulette_paid.successful_payment: invalid invoice_payload"
+        extra = call.kwargs["extra"]
+        assert extra["reason"] == "hmac_mismatch"
+        assert extra["payload_len"] == 64
+        assert extra["tg_payment_charge_id"] == "tg-charge-001"
         spin.execute.assert_not_awaited()
 
     async def test_legacy_v0_payload_rejected_by_verifier(self) -> None:
