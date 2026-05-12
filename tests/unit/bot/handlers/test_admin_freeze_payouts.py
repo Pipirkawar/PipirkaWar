@@ -1,0 +1,374 @@
+"""Unit-тесты handler-ов `/freeze_payouts` и `/unfreeze_payouts` (Спринт 4.1-E, E.14).
+
+Покрывает фазу 1 (`handle_freeze_payouts` / `handle_unfreeze_payouts`):
+
+`/freeze_payouts <reason>`:
+- non-private chat / отсутствие identity → REPLY_NON_PRIVATE_RU.
+- пустые args / только whitespace → no_reason.
+- AuthorizationError / TotpNotConfiguredError из RequestAdminConfirm →
+  соответствующие отказы (`not_authorized` / `totp_not_configured`).
+- успешный путь → confirm_issued с token и ttl_seconds + проверка контракта
+  `RequestAdminConfirmInput` (command_kind, target_kind, target_id, payload).
+
+`/unfreeze_payouts`:
+- non-private chat / отсутствие identity → REPLY_NON_PRIVATE_RU.
+- AuthorizationError / TotpNotConfiguredError из RequestAdminConfirm →
+  соответствующие отказы.
+- успешный путь → confirm_issued с token и ttl_seconds + проверка контракта
+  `RequestAdminConfirmInput` (пустой payload).
+
+Фаза 2 (dispatch_*) добавится в E.14.c — её тесты живут отдельно.
+"""
+
+from __future__ import annotations
+
+from typing import cast
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from aiogram.filters.command import CommandObject
+from aiogram.types import Chat, Message
+
+from pipirik_wars.application.admin import (
+    RequestAdminConfirm,
+    RequestAdminConfirmOutput,
+)
+from pipirik_wars.application.auth.decorators import AuthorizationError
+from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
+from pipirik_wars.bot.handlers.admin_freeze_payouts import (
+    COMMAND_KIND_FREEZE_PAYOUTS,
+    COMMAND_KIND_UNFREEZE_PAYOUTS,
+    REPLY_NON_PRIVATE_RU,
+    handle_freeze_payouts,
+    handle_unfreeze_payouts,
+)
+from pipirik_wars.bot.middlewares.auth import TgIdentity
+from pipirik_wars.domain.admin import TotpNotConfiguredError
+
+_RU = Locale("ru")
+
+
+class _StubBundle(IMessageBundle):
+    def format(self, key: MessageKey, *, locale: Locale, **kwargs: object) -> str:
+        params = ",".join(f"{k}={v}" for k, v in sorted(kwargs.items()))
+        return f"{key}|{locale.code}|{params}"
+
+
+@pytest.fixture
+def bundle() -> IMessageBundle:
+    return _StubBundle()
+
+
+def _msg_mock(chat_type: str = "private") -> MagicMock:
+    msg = MagicMock()
+    msg.chat = Chat(id=42, type=chat_type)
+    msg.answer = AsyncMock()
+    return msg
+
+
+def _identity(chat_kind: str = "private", tg_user_id: int = 42) -> TgIdentity:
+    return TgIdentity(
+        tg_user_id=tg_user_id,
+        chat_id=42,
+        chat_kind=chat_kind,
+        language_code=None,
+    )
+
+
+def _command(args: str | None) -> CommandObject:
+    return CommandObject(prefix="/", command="freeze_payouts", mention=None, args=args)
+
+
+def _stub_request_confirm(
+    *,
+    output: RequestAdminConfirmOutput | None = None,
+) -> RequestAdminConfirm:
+    fake = MagicMock(spec=RequestAdminConfirm)
+    fake.execute = AsyncMock(return_value=output) if output is not None else AsyncMock()
+    return cast(RequestAdminConfirm, fake)
+
+
+def _confirm_token() -> RequestAdminConfirmOutput:
+    return RequestAdminConfirmOutput(token="TOK-FREEZE", ttl_seconds=60)
+
+
+@pytest.mark.asyncio
+class TestHandleFreezePayouts:
+    async def test_non_private_chat_replies_only_dm(
+        self,
+        bundle: IMessageBundle,
+    ) -> None:
+        msg = _msg_mock(chat_type="group")
+        rc = _stub_request_confirm()
+        await handle_freeze_payouts(
+            message=cast(Message, msg),
+            command=_command("payouts exploit suspected"),
+            tg_identity=_identity(chat_kind="group"),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        msg.answer.assert_awaited_once_with(REPLY_NON_PRIVATE_RU)
+        rc.execute.assert_not_awaited()  # type: ignore[attr-defined]
+
+    async def test_missing_identity_replies_only_dm(
+        self,
+        bundle: IMessageBundle,
+    ) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm()
+        await handle_freeze_payouts(
+            message=cast(Message, msg),
+            command=_command("payouts exploit suspected"),
+            tg_identity=None,
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        msg.answer.assert_awaited_once_with(REPLY_NON_PRIVATE_RU)
+        rc.execute.assert_not_awaited()  # type: ignore[attr-defined]
+
+    async def test_empty_args_replies_no_reason(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm()
+        await handle_freeze_payouts(
+            message=cast(Message, msg),
+            command=_command(""),
+            tg_identity=_identity(),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        assert "admin-freeze-payouts-no-reason" in msg.answer.await_args.args[0]
+        rc.execute.assert_not_awaited()  # type: ignore[attr-defined]
+
+    async def test_whitespace_only_args_replies_no_reason(
+        self,
+        bundle: IMessageBundle,
+    ) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm()
+        await handle_freeze_payouts(
+            message=cast(Message, msg),
+            command=_command("    "),
+            tg_identity=_identity(),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        assert "admin-freeze-payouts-no-reason" in msg.answer.await_args.args[0]
+        rc.execute.assert_not_awaited()  # type: ignore[attr-defined]
+
+    async def test_none_args_replies_no_reason(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm()
+        await handle_freeze_payouts(
+            message=cast(Message, msg),
+            command=_command(None),
+            tg_identity=_identity(),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        assert "admin-freeze-payouts-no-reason" in msg.answer.await_args.args[0]
+        rc.execute.assert_not_awaited()  # type: ignore[attr-defined]
+
+    async def test_authorization_error(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm()
+        rc.execute = AsyncMock(  # type: ignore[method-assign]
+            side_effect=AuthorizationError(requirement="x", detail="y"),
+        )
+        await handle_freeze_payouts(
+            message=cast(Message, msg),
+            command=_command("exploit"),
+            tg_identity=_identity(),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        assert "admin-freeze-payouts-not-authorized" in msg.answer.await_args.args[0]
+
+    async def test_totp_not_configured(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm()
+        rc.execute = AsyncMock(  # type: ignore[method-assign]
+            side_effect=TotpNotConfiguredError("no totp"),
+        )
+        await handle_freeze_payouts(
+            message=cast(Message, msg),
+            command=_command("exploit"),
+            tg_identity=_identity(),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        assert "admin-freeze-payouts-totp-not-configured" in msg.answer.await_args.args[0]
+
+    async def test_confirm_issued(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm(output=_confirm_token())
+        await handle_freeze_payouts(
+            message=cast(Message, msg),
+            command=_command("payouts exploit suspected"),
+            tg_identity=_identity(),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        text = msg.answer.await_args.args[0]
+        assert "admin-freeze-payouts-confirm-issued" in text
+        assert "token=TOK-FREEZE" in text
+        assert "ttl_seconds=60" in text
+
+        # Контракт payload-а зафиксирован для dispatch_freeze_payouts (E.14.c).
+        rc.execute.assert_awaited_once()  # type: ignore[attr-defined]
+        call_input = rc.execute.await_args.args[0]  # type: ignore[attr-defined]
+        assert call_input.command_kind == COMMAND_KIND_FREEZE_PAYOUTS
+        assert call_input.target_kind == "payout_freeze"
+        assert call_input.target_id == "all"
+        assert call_input.actor_tg_id == 42
+        assert call_input.tg_chat_id == 42
+        assert dict(call_input.payload) == {"reason": "payouts exploit suspected"}
+
+    async def test_reason_with_surrounding_whitespace_is_trimmed(
+        self,
+        bundle: IMessageBundle,
+    ) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm(output=_confirm_token())
+        await handle_freeze_payouts(
+            message=cast(Message, msg),
+            command=_command("   exploit detected   "),
+            tg_identity=_identity(),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        rc.execute.assert_awaited_once()  # type: ignore[attr-defined]
+        call_input = rc.execute.await_args.args[0]  # type: ignore[attr-defined]
+        assert dict(call_input.payload) == {"reason": "exploit detected"}
+
+    async def test_default_locale_when_locale_is_none(
+        self,
+        bundle: IMessageBundle,
+    ) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm(output=_confirm_token())
+        await handle_freeze_payouts(
+            message=cast(Message, msg),
+            command=_command("reason"),
+            tg_identity=_identity(),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=None,
+        )
+        # DEFAULT_LOCALE = "en" (см. application.i18n.DEFAULT_LOCALE).
+        assert "|en|" in msg.answer.await_args.args[0]
+
+
+@pytest.mark.asyncio
+class TestHandleUnfreezePayouts:
+    async def test_non_private_chat_replies_only_dm(
+        self,
+        bundle: IMessageBundle,
+    ) -> None:
+        msg = _msg_mock(chat_type="group")
+        rc = _stub_request_confirm()
+        await handle_unfreeze_payouts(
+            message=cast(Message, msg),
+            tg_identity=_identity(chat_kind="group"),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        msg.answer.assert_awaited_once_with(REPLY_NON_PRIVATE_RU)
+        rc.execute.assert_not_awaited()  # type: ignore[attr-defined]
+
+    async def test_missing_identity_replies_only_dm(
+        self,
+        bundle: IMessageBundle,
+    ) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm()
+        await handle_unfreeze_payouts(
+            message=cast(Message, msg),
+            tg_identity=None,
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        msg.answer.assert_awaited_once_with(REPLY_NON_PRIVATE_RU)
+        rc.execute.assert_not_awaited()  # type: ignore[attr-defined]
+
+    async def test_authorization_error(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm()
+        rc.execute = AsyncMock(  # type: ignore[method-assign]
+            side_effect=AuthorizationError(requirement="x", detail="y"),
+        )
+        await handle_unfreeze_payouts(
+            message=cast(Message, msg),
+            tg_identity=_identity(),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        assert "admin-unfreeze-payouts-not-authorized" in msg.answer.await_args.args[0]
+
+    async def test_totp_not_configured(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm()
+        rc.execute = AsyncMock(  # type: ignore[method-assign]
+            side_effect=TotpNotConfiguredError("no totp"),
+        )
+        await handle_unfreeze_payouts(
+            message=cast(Message, msg),
+            tg_identity=_identity(),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        assert "admin-unfreeze-payouts-totp-not-configured" in msg.answer.await_args.args[0]
+
+    async def test_confirm_issued(self, bundle: IMessageBundle) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm(output=_confirm_token())
+        await handle_unfreeze_payouts(
+            message=cast(Message, msg),
+            tg_identity=_identity(),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=_RU,
+        )
+        text = msg.answer.await_args.args[0]
+        assert "admin-unfreeze-payouts-confirm-issued" in text
+        assert "token=TOK-FREEZE" in text
+        assert "ttl_seconds=60" in text
+
+        # Контракт payload-а зафиксирован для dispatch_unfreeze_payouts (E.14.c):
+        # пустой, так как unfreeze не имеет параметров.
+        rc.execute.assert_awaited_once()  # type: ignore[attr-defined]
+        call_input = rc.execute.await_args.args[0]  # type: ignore[attr-defined]
+        assert call_input.command_kind == COMMAND_KIND_UNFREEZE_PAYOUTS
+        assert call_input.target_kind == "payout_freeze"
+        assert call_input.target_id == "all"
+        assert call_input.actor_tg_id == 42
+        assert call_input.tg_chat_id == 42
+        assert dict(call_input.payload) == {}
+
+    async def test_default_locale_when_locale_is_none(
+        self,
+        bundle: IMessageBundle,
+    ) -> None:
+        msg = _msg_mock()
+        rc = _stub_request_confirm(output=_confirm_token())
+        await handle_unfreeze_payouts(
+            message=cast(Message, msg),
+            tg_identity=_identity(),
+            request_admin_confirm=rc,
+            bundle=bundle,
+            locale=None,
+        )
+        # DEFAULT_LOCALE = "en" (см. application.i18n.DEFAULT_LOCALE).
+        assert "|en|" in msg.answer.await_args.args[0]
