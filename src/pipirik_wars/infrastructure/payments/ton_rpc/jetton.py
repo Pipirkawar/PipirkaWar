@@ -25,8 +25,16 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 from dataclasses import dataclass
 
+from pipirik_wars.infrastructure.payments.ton_rpc.boc import (
+    deserialize_boc,
+    format_raw_address,
+    parse_address,
+    parse_msgaddress_int_from_cell,
+)
 from pipirik_wars.infrastructure.payments.ton_rpc.client import ITonRpcClient
 from pipirik_wars.infrastructure.payments.ton_rpc.errors import JettonResolutionError
 
@@ -36,6 +44,17 @@ __all__ = ["JettonTransferPayload", "JettonUsdtProvider"]
 # Op-code TEP-74 jetton-transfer-а. Стабилен на уровне стандарта TON
 # jetton (см. https://github.com/ton-blockchain/TEPs/blob/master/text/0074-jettons-standard.md).
 _JETTON_TRANSFER_OP_CODE = 0x0F8A7EA5
+
+
+def _b64_decode_permissive(raw: str) -> bytes:
+    """Декодировать base64 с возможным `-_`-алфавитом + опциональным padding-ом.
+
+    TON Center иногда отдаёт base64url-стрингу без padding-а (`=`),
+    иногда стандартный base64. Делаем permissive-decode для обоих случаев.
+    """
+    normalized = raw.replace("-", "+").replace("_", "/")
+    padding = (-len(normalized)) % 4
+    return base64.b64decode(normalized + "=" * padding, validate=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,15 +159,71 @@ class JettonUsdtProvider:
                 owner_address=owner_address,
             )
 
-        jetton_wallet = result.stack[0]
-        if not jetton_wallet:
+        jetton_wallet_raw = result.stack[0]
+        if not jetton_wallet_raw:
             raise JettonResolutionError(
                 "jetton-master returned empty jetton-wallet address for "
                 f"owner_address={owner_address!r}",
                 master_address=self._jetton_master_address,
                 owner_address=owner_address,
             )
-        return jetton_wallet
+        return self._decode_jetton_wallet_address(
+            jetton_wallet_raw,
+            owner_address=owner_address,
+        )
+
+    def _decode_jetton_wallet_address(
+        self,
+        raw: str,
+        *,
+        owner_address: str,
+    ) -> str:
+        """Распарсить ``stack[0]`` ответа ``get_wallet_address`` в TON-адрес.
+
+        TON Center отдаёт результат ``get_wallet_address`` как
+        slice-/cell-stack-entry: ``["slice"|"cell", {"bytes": "<base64-BoC>"}]``.
+        Http-client flattens это в base64-строку (см.
+        ``http_client._stack_entry_to_str``). Здесь мы:
+
+        1. Если ``raw`` уже выглядит как готовый TON-адрес (raw ``"<wc>:<hex>"``
+           или friendly base64url-48-chars-с-CRC) — возвращаем как есть
+           (это путь для ``FakeTonRpcClient`` и для backward-compat-сценариев).
+        2. Иначе пробуем ``base64-decode → deserialize_boc → parse_msgaddress_int``
+           → ``format_raw_address``. На любую ошибку парсинга →
+           ``JettonResolutionError`` с диагностикой.
+        """
+        # 1. Try direct address parsing (raw "wc:hex" / friendly base64url).
+        try:
+            workchain, account_hash = parse_address(raw)
+        except ValueError:
+            pass
+        else:
+            return format_raw_address(workchain, account_hash)
+
+        # 2. Try BoC deserialization (base64-encoded slice/cell from TON Center).
+        try:
+            boc_bytes = _b64_decode_permissive(raw)
+        except (binascii.Error, ValueError) as exc:
+            raise JettonResolutionError(
+                f"jetton-master returned non-address non-base64-BoC string for "
+                f"owner_address={owner_address!r}: stack[0]={raw!r}",
+                master_address=self._jetton_master_address,
+                owner_address=owner_address,
+            ) from exc
+
+        try:
+            cell = deserialize_boc(boc_bytes)
+            workchain, account_hash = parse_msgaddress_int_from_cell(cell)
+        except ValueError as exc:
+            raise JettonResolutionError(
+                f"jetton-master returned base64-BoC that does not decode to "
+                f"MsgAddressInt for owner_address={owner_address!r}: "
+                f"stack[0]={raw!r}, decode-error={exc}",
+                master_address=self._jetton_master_address,
+                owner_address=owner_address,
+            ) from exc
+
+        return format_raw_address(workchain, account_hash)
 
     def build_transfer_payload(
         self,

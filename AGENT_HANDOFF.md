@@ -16,8 +16,8 @@
 | Шаг | Описание | Статус |
 |-----|----------|--------|
 | **E.0** | Pivot `docs/current_tasks.md` под 4.1-E + создать sticky `AGENT_HANDOFF.md` | ✅ done |
-| **E.1** | **P0 bug-1**: `TonRpcAdapter._fetch_seqno` — поддержка hex/decimal от TON Center (`int(value, 0)` + edge cases) + unit-тесты | 🔄 in_progress (этот коммит) |
-| **E.2** | **P0 bug-2**: `JettonUsdtProvider.resolve_wallet` — парсинг slice-base64-cell → TON-address через `BocCell`-decoder + unit/integration | ⏳ pending |
+| **E.1** | **P0 bug-1**: `TonRpcAdapter._fetch_seqno` — поддержка hex/decimal от TON Center (`int(value, 0)` + edge cases) + unit-тесты | ✅ done |
+| **E.2** | **P0 bug-2**: `JettonUsdtProvider.resolve_wallet` — парсинг slice-base64-cell → TON-address через `BocCell`-decoder + unit/integration | 🔄 in_progress (этот коммит) |
 | **E.3** | Domain: `AdminAuditAction.{ADMIN_PRIZE_POOL_VIEWED, ADMIN_REFUND_LOT, ADMIN_FREEZE_PAYOUTS, ADMIN_UNFREEZE_PAYOUTS}` + Alembic CHECK whitelist | ⏳ pending |
 | **E.4** | Domain: `PayoutFreeze` aggregate + `IPayoutFreezeRepository` port | ⏳ pending |
 | **E.5** | Domain: `PayoutLimitConfig` VO + `IPayoutLimitChecker` port | ⏳ pending |
@@ -39,18 +39,19 @@
 
 ## Состояние ветки
 
-- **Текущий коммит**: E.1 (этот коммит) — `_parse_tvm_int(...)` helper + замена `int(result.stack[0])` в `TonRpcAdapter._fetch_seqno`; +18 unit-тестов (10 параметризованных hex/decimal happy-path-ов через `payout(...)`, 7 негативных кейсов, 10 happy-path + 7 reject + 1 non-string для `_parse_tvm_int`-helper-а).
+- **Текущий коммит**: E.2 (этот коммит) — BoC-deserializer + `MsgAddressInt addr_std$10`-парсер в `boc.py` (`deserialize_boc(...)`, `parse_msgaddress_int_from_cell(...)`, `format_raw_address(...)` + выведены helper-ы `_parse_boc_header` / `_parse_cell_specs` / `_parse_one_cell_spec` / `_validate_ref_indices` / `_decode_d2` / `_recover_bits_count_and_strip_padding` / `_read_bits` / `_read_bit_slice` для читаемости); `JettonUsdtProvider.resolve_wallet` теперь parse-address-first с fallback на base64-BoC декодинг (+ permissive base64/base64url-decode). +29 новых unit-тестов: 7 на jetton-resolver (`TestJettonUsdtProviderResolveWalletDecodesBoc`), 11 на `deserialize_boc` (round-trip, errors), 6 на `parse_msgaddress_int_from_cell`, 5 на `format_raw_address`. Все 305 тестов пакета `ton_rpc/` зелёные; ruff/mypy/lint-imports зелёные на изменённых файлах.
 - **Baseline CI** (на свежем main + новой ветке без коммитов): **6290 passed + 2 skipped, 96% cov, 8m** — зелёный.
 - **Local env**: `.venv` активирована; `httpx`, `pynacl`, `pyotp` уже в lock-файле (после 4.1-D).
 
 ## Что я сделал в этой сессии
 
-- E.1: `TonRpcAdapter._fetch_seqno` — фикс P0 bug-а из 4.1-D backlog. TON Center API v2 в стек-ответе `run_get_method`-а возвращает TVM-int одной из двух форм: decimal (`"42"`) или hex (`"0x2a"`, `"0X2A"`). До E.1 адаптер парсил только decimal (`int(result.stack[0])`) — на хексе падал `ValueError`, что блокировало TON-payout в production. Введён module-level helper `_parse_tvm_int(raw, *, context) -> int` с двумя гарантиями: (а) поддержка decimal/hex/unary-minus/whitespace-обрамления через `int(trimmed, 0)`; (б) any non-numeric / non-string → `TonRpcCallError` с контекст-меткой (имя вызывающего метода). `_fetch_seqno` теперь возвращает `_parse_tvm_int(raw_seqno, context=...)`. +18 unit-тестов (`TestTonRpcAdapterFetchSeqnoIntParsing` через payout-flow + `TestParseTvmInt` напрямую).
-- E.0: pivot doc-ов под 4.1-E + sticky `AGENT_HANDOFF.md` (предыдущий коммит на ветке).
+- E.2: фикс P0 bug-2 из 4.1-D backlog. TON Center API v2 в ответе `runGetMethod("get_wallet_address", ...)` возвращает stack-entry вида `["slice"|"cell", {"bytes": "<base64-BoC>"}]`, который `http_client._stack_entry_to_str` flatten-ит в base64-стрингу. До E.2 `JettonUsdtProvider.resolve_wallet` возвращал `stack[0]` как-есть — в production это была base64-BoC-стринга вместо TON-адреса, блокируя все USDT jetton-transfer-ы. Реализованы: (1) `deserialize_boc(raw: bytes) -> Cell` (симметрично к `serialize_boc`, поддерживает single-root + size_bytes=1 + off_bytes ∈ {1, 2} + non-aligned padding-stripping); (2) `parse_msgaddress_int_from_cell(cell) -> (workchain: int, account_hash: bytes)` (парсит TL-B `addr_std$10` из первых 267 бит ячейки); (3) `format_raw_address(workchain, account_hash) -> str` (inverse к `parse_address` для raw-формы "wc:hex"). `resolve_wallet` теперь сначала пробует `parse_address(stack[0])` (backward-compat с `FakeTonRpcClient` и raw-адресами), иначе делает `_b64_decode_permissive` → `deserialize_boc` → `parse_msgaddress_int_from_cell` → `format_raw_address`. На любую ошибку → `JettonResolutionError` с диагностикой (`raw`, `error`). +29 unit-тестов.
+- E.1: `TonRpcAdapter._fetch_seqno` hex/decimal парсер (предыдущий коммит `9c3878b`).
+- E.0: pivot doc-ов под 4.1-E + sticky `AGENT_HANDOFF.md` (`862260b`).
 
 ## На каком файле / задаче остановился
 
-E.1 завершён локально (`pytest tests/unit/infrastructure/payments/ton_rpc/test_adapter.py -q` → 53 passed, ruff/mypy зелёные на изменённых файлах). Следующий шаг — **E.2**: фикс `JettonUsdtProvider.resolve_wallet` (slice-base64-cell → TON-address через BoC-decoder). Файл — `src/pipirik_wars/infrastructure/payments/ton_rpc/jetton.py`.
+E.2 завершён локально (`pytest tests/unit/infrastructure/payments/ton_rpc/ -q` → 305 passed, ruff/mypy/lint-imports зелёные на изменённых файлах). Следующий шаг — **E.3**: расширить `AdminAuditAction`-enum четырьмя новыми значениями (`ADMIN_PRIZE_POOL_VIEWED`, `ADMIN_REFUND_LOT`, `ADMIN_FREEZE_PAYOUTS`, `ADMIN_UNFREEZE_PAYOUTS`) + Alembic CHECK whitelist. Файлы — `src/pipirik_wars/domain/admin/...` + миграция в `migrations/versions/`.
 
 ## Команды для разогрева
 
