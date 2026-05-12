@@ -1478,6 +1478,27 @@ link-wallet-confirm-linked =
 link-wallet-confirm-relinked =
     ✅ Адрес для `{ $currency }` заменён на `{ $address }`. Новые призовые лоты придут на новый адрес.
 
+# /link_wallet <ton|usdt> <address> — phase-1 (Спринт 4.1-F, F.8.a).
+link-wallet-request-usage =
+    Использование: `/link_wallet <ton|usdt> <address>`.
+
+    `currency` — `ton` или `usdt`, `address` — TON-адрес (raw `workchain:hex64` или friendly base64url).
+
+link-wallet-request-invalid-currency = Валюта `{ $code }` не поддерживается. Доступно: `ton`, `usdt`.
+
+link-wallet-request-invalid-address =
+    ❌ Адрес `{ $address }` не похож на TON-адрес. Проверь формат: raw `workchain:hex64` или friendly base64url-строка.
+
+link-wallet-request-issued =
+    🔗 <b>Подпиши `ton_proof` через TON Connect</b>
+
+    1. Открой TON-Connect-совместимый кошелёк (Tonkeeper, MyTonWallet, Tonhub) и подключись к боту.
+    2. Подпиши `ton_proof` с такими параметрами:
+       • <code>domain</code> = <code>{ $domain }</code>
+       • <code>payload</code> = <code>{ $nonce }</code>
+    3. У тебя есть <b>{ $expires_at_minutes }</b> мин — потом nonce истечёт и нужно будет повторить.
+    4. Получишь JSON-ответ от кошелька — вызови `/link_wallet_confirm { $currency } { $address } <proof-json>`.
+
 # /claim_prize <lot_id> (Спринт 4.1-D, D.7).
 claim-prize-group = Команда `/claim_prize` доступна только в личке бота. Зайди в ЛС.
 claim-prize-other = Команда `/claim_prize` доступна только в личке бота.

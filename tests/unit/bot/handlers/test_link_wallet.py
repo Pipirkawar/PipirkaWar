@@ -31,7 +31,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
@@ -43,6 +43,10 @@ from pipirik_wars.application.i18n import IMessageBundle, Locale
 from pipirik_wars.application.monetization.link_wallet import (
     LinkWallet,
     LinkWalletResult,
+)
+from pipirik_wars.application.monetization.request_link_wallet_proof import (
+    RequestLinkWalletProof,
+    RequestLinkWalletProofResult,
 )
 from pipirik_wars.application.player import GetProfile, ProfileView
 from pipirik_wars.bot.handlers.link_wallet import (
@@ -63,6 +67,7 @@ from pipirik_wars.domain.player import (
     Title,
 )
 from pipirik_wars.domain.player.value_objects import Length, Username
+from pipirik_wars.domain.shared.ports.clock import IClock
 from tests.fakes import FakeMessageBundle
 
 # Реальные валидные TON-адреса для тестов: `Wallet` пропускает адрес
@@ -104,6 +109,51 @@ def _identity(chat_kind: str = "private", tg_user_id: int = 100) -> TgIdentity:
 
 def _command(args: str | None) -> CommandObject:
     return CommandObject(prefix="/", command="link_wallet_confirm", args=args)
+
+
+def _link_wallet_command(args: str | None) -> CommandObject:
+    """`/link_wallet [args]` — используется phase-1 (Спринт 4.1-F, F.8.a)."""
+    return CommandObject(prefix="/", command="link_wallet", args=args)
+
+
+_FIXED_NOW: datetime = datetime(2026, 5, 12, 12, 0, 0, tzinfo=UTC)
+_FIXED_EXPIRES_AT: datetime = _FIXED_NOW + timedelta(minutes=10)
+_DEFAULT_NONCE: str = "abcdefABCDEF0123456789-_.~test1234"
+_DEFAULT_DOMAIN: str = "pipirik.example.com"
+# Конкретный raw TON-адрес (workchain=0, 64-hex), проходит
+# `parse_address` → `format_raw_address` без изменения.
+_RAW_TON_ADDR: str = "0:" + "ab" * 32
+# Friendly base64url-адрес из существующего тест-фикстура.
+_FRIENDLY_TON_ADDR: str = _TON_ADDR_FRIENDLY
+
+
+def _build_clock(now: datetime = _FIXED_NOW) -> MagicMock:
+    clock = MagicMock(spec=IClock)
+    clock.now = MagicMock(return_value=now)
+    return clock
+
+
+def _stub_request_link_wallet_proof(
+    *,
+    nonce: str = _DEFAULT_NONCE,
+    domain: str = _DEFAULT_DOMAIN,
+    expires_at: datetime = _FIXED_EXPIRES_AT,
+    scope: str = "link_wallet:7:nanoton",
+    raise_error: Exception | None = None,
+) -> MagicMock:
+    use_case = MagicMock(spec=RequestLinkWalletProof)
+    if raise_error is not None:
+        use_case.execute = AsyncMock(side_effect=raise_error)
+        return use_case
+    use_case.execute = AsyncMock(
+        return_value=RequestLinkWalletProofResult(
+            nonce=nonce,
+            domain=domain,
+            scope=scope,
+            expires_at=expires_at,
+        ),
+    )
+    return use_case
 
 
 def _stub_get_profile(
@@ -165,20 +215,26 @@ def _stub_link_wallet(
 
 @pytest.mark.asyncio
 class TestHandleLinkWallet:
-    async def test_private_registered_renders_prompt_with_keyboard(self) -> None:
+    async def test_private_no_args_renders_prompt_with_keyboard(self) -> None:
         msg = _build_message_mock("private")
         get_profile = _stub_get_profile()
+        request_proof = _stub_request_link_wallet_proof()
+        clock = _build_clock()
         bundle = cast(IMessageBundle, FakeMessageBundle())
 
         await handle_link_wallet(
             cast(Message, msg),
+            _link_wallet_command(args=None),
             _identity("private"),
             cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, request_proof),
+            cast(IClock, clock),
             bundle,
             Locale("ru"),
         )
 
         get_profile.execute.assert_awaited_once_with(tg_id=100)
+        request_proof.execute.assert_not_awaited()
         msg.answer.assert_awaited_once()
         sent_text = msg.answer.await_args.args[0]
         assert sent_text == "ru:link-wallet-prompt"
@@ -190,36 +246,68 @@ class TestHandleLinkWallet:
         assert keyboard.inline_keyboard[1][0].callback_data == "link_wallet:select:usdt"
         assert keyboard.inline_keyboard[1][0].text == "ru:link-wallet-button-usdt"
 
-    async def test_private_unregistered_replies_not_registered(self) -> None:
+    async def test_private_blank_args_renders_prompt_with_keyboard(self) -> None:
+        # Пустая строка-аргумент (пробелы) трактуется как no-args.
         msg = _build_message_mock("private")
-        get_profile = _stub_get_profile(found=False)
+        get_profile = _stub_get_profile()
+        request_proof = _stub_request_link_wallet_proof()
         bundle = cast(IMessageBundle, FakeMessageBundle())
 
         await handle_link_wallet(
             cast(Message, msg),
+            _link_wallet_command(args="   "),
             _identity("private"),
             cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, request_proof),
+            cast(IClock, _build_clock()),
+            bundle,
+            Locale("ru"),
+        )
+
+        request_proof.execute.assert_not_awaited()
+        msg.answer.assert_awaited_once()
+        assert msg.answer.await_args.args[0] == "ru:link-wallet-prompt"
+
+    async def test_private_unregistered_replies_not_registered(self) -> None:
+        msg = _build_message_mock("private")
+        get_profile = _stub_get_profile(found=False)
+        request_proof = _stub_request_link_wallet_proof()
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        await handle_link_wallet(
+            cast(Message, msg),
+            _link_wallet_command(args=None),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, request_proof),
+            cast(IClock, _build_clock()),
             bundle,
             Locale("ru"),
         )
 
         get_profile.execute.assert_awaited_once()
+        request_proof.execute.assert_not_awaited()
         msg.answer.assert_awaited_once_with("ru:link-wallet-not-registered")
 
     async def test_group_replies_group_message_no_use_case(self) -> None:
         msg = _build_message_mock("group")
         get_profile = _stub_get_profile()
+        request_proof = _stub_request_link_wallet_proof()
         bundle = cast(IMessageBundle, FakeMessageBundle())
 
         await handle_link_wallet(
             cast(Message, msg),
+            _link_wallet_command(args=None),
             _identity("group"),
             cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, request_proof),
+            cast(IClock, _build_clock()),
             bundle,
             Locale("ru"),
         )
 
         get_profile.execute.assert_not_awaited()
+        request_proof.execute.assert_not_awaited()
         msg.answer.assert_awaited_once_with("ru:link-wallet-group")
 
     async def test_supergroup_replies_group_message(self) -> None:
@@ -229,8 +317,11 @@ class TestHandleLinkWallet:
 
         await handle_link_wallet(
             cast(Message, msg),
+            _link_wallet_command(args=None),
             _identity("supergroup"),
             cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, _stub_request_link_wallet_proof()),
+            cast(IClock, _build_clock()),
             bundle,
             Locale("en"),
         )
@@ -245,8 +336,11 @@ class TestHandleLinkWallet:
 
         await handle_link_wallet(
             cast(Message, msg),
+            _link_wallet_command(args=None),
             _identity("channel"),
             cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, _stub_request_link_wallet_proof()),
+            cast(IClock, _build_clock()),
             bundle,
             Locale("ru"),
         )
@@ -261,8 +355,11 @@ class TestHandleLinkWallet:
 
         await handle_link_wallet(
             cast(Message, msg),
+            _link_wallet_command(args=None),
             _identity("private"),
             cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, _stub_request_link_wallet_proof()),
+            cast(IClock, _build_clock()),
             bundle,
             None,  # locale не передана — fallback на DEFAULT_LOCALE = en
         )
@@ -270,6 +367,235 @@ class TestHandleLinkWallet:
         msg.answer.assert_awaited_once()
         sent_text = msg.answer.await_args.args[0]
         assert sent_text.startswith("en:link-wallet-prompt")
+
+    # ─── phase-1 `/link_wallet <ton|usdt> <address>` (F.8.a) ────────────
+
+    async def test_request_happy_path_ton_calls_use_case_and_renders_issued(
+        self,
+    ) -> None:
+        msg = _build_message_mock("private")
+        get_profile = _stub_get_profile(player_id=7)
+        request_proof = _stub_request_link_wallet_proof(
+            nonce=_DEFAULT_NONCE,
+            domain=_DEFAULT_DOMAIN,
+            expires_at=_FIXED_EXPIRES_AT,
+            scope="link_wallet:7:nanoton",
+        )
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        await handle_link_wallet(
+            cast(Message, msg),
+            _link_wallet_command(args=f"ton {_RAW_TON_ADDR}"),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, request_proof),
+            cast(IClock, _build_clock()),
+            bundle,
+            Locale("ru"),
+        )
+
+        request_proof.execute.assert_awaited_once()
+        command = request_proof.execute.await_args.args[0]
+        assert command.player_id == 7
+        assert command.address == _RAW_TON_ADDR
+        assert command.currency == Currency.TON_NANO
+        msg.answer.assert_awaited_once()
+        sent = msg.answer.await_args.args[0]
+        # FakeMessageBundle рисует "<locale>:<key>:<ключ>=<val>;..."
+        assert sent.startswith("ru:link-wallet-request-issued[")
+        assert sent.endswith("]")
+        assert f"nonce={_DEFAULT_NONCE}" in sent
+        assert f"domain={_DEFAULT_DOMAIN}" in sent
+        assert "expires_at_minutes=10" in sent
+        assert "currency=ton_nano" in sent
+        assert f"address={_RAW_TON_ADDR}" in sent
+
+    async def test_request_happy_path_usdt_uses_correct_currency_enum(
+        self,
+    ) -> None:
+        msg = _build_message_mock("private")
+        get_profile = _stub_get_profile(player_id=11)
+        request_proof = _stub_request_link_wallet_proof()
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        await handle_link_wallet(
+            cast(Message, msg),
+            _link_wallet_command(args=f"usdt {_RAW_TON_ADDR}"),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, request_proof),
+            cast(IClock, _build_clock()),
+            bundle,
+            Locale("en"),
+        )
+
+        request_proof.execute.assert_awaited_once()
+        command = request_proof.execute.await_args.args[0]
+        assert command.player_id == 11
+        assert command.currency == Currency.USDT_DECIMAL
+
+    async def test_request_friendly_address_is_normalized_to_raw(self) -> None:
+        msg = _build_message_mock("private")
+        get_profile = _stub_get_profile(player_id=7)
+        request_proof = _stub_request_link_wallet_proof()
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        await handle_link_wallet(
+            cast(Message, msg),
+            _link_wallet_command(args=f"ton {_FRIENDLY_TON_ADDR}"),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, request_proof),
+            cast(IClock, _build_clock()),
+            bundle,
+            Locale("en"),
+        )
+
+        request_proof.execute.assert_awaited_once()
+        command = request_proof.execute.await_args.args[0]
+        # friendly base64url → raw `0:<64-hex>`. Какие именно конкретно байты
+        # вернутся — решает `parse_address`; здесь важно только формат.
+        assert command.address.startswith("0:")
+        # "0" + ":" + 64 hex chars = 66 символов.
+        assert len(command.address) == 2 + 64
+
+    async def test_request_invalid_currency_renders_invalid_currency(self) -> None:
+        msg = _build_message_mock("private")
+        get_profile = _stub_get_profile(player_id=7)
+        request_proof = _stub_request_link_wallet_proof()
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        await handle_link_wallet(
+            cast(Message, msg),
+            _link_wallet_command(args=f"btc {_RAW_TON_ADDR}"),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, request_proof),
+            cast(IClock, _build_clock()),
+            bundle,
+            Locale("ru"),
+        )
+
+        request_proof.execute.assert_not_awaited()
+        msg.answer.assert_awaited_once()
+        sent = msg.answer.await_args.args[0]
+        assert sent.startswith("ru:link-wallet-request-invalid-currency[")
+        assert "code=btc" in sent
+
+    async def test_request_invalid_address_renders_invalid_address(self) -> None:
+        msg = _build_message_mock("private")
+        get_profile = _stub_get_profile(player_id=7)
+        request_proof = _stub_request_link_wallet_proof()
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        await handle_link_wallet(
+            cast(Message, msg),
+            _link_wallet_command(args="ton not-a-ton-address"),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, request_proof),
+            cast(IClock, _build_clock()),
+            bundle,
+            Locale("en"),
+        )
+
+        request_proof.execute.assert_not_awaited()
+        msg.answer.assert_awaited_once()
+        sent = msg.answer.await_args.args[0]
+        assert sent.startswith("en:link-wallet-request-invalid-address[")
+        assert "address=not-a-ton-address" in sent
+
+    @pytest.mark.parametrize(
+        "args",
+        ["ton", f"ton {_RAW_TON_ADDR} extra", "a b c"],
+    )
+    async def test_request_invalid_token_count_renders_usage(
+        self,
+        args: str,
+    ) -> None:
+        msg = _build_message_mock("private")
+        get_profile = _stub_get_profile(player_id=7)
+        request_proof = _stub_request_link_wallet_proof()
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        await handle_link_wallet(
+            cast(Message, msg),
+            _link_wallet_command(args=args),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, request_proof),
+            cast(IClock, _build_clock()),
+            bundle,
+            Locale("ru"),
+        )
+
+        request_proof.execute.assert_not_awaited()
+        msg.answer.assert_awaited_once_with("ru:link-wallet-request-usage")
+
+    async def test_request_use_case_value_error_renders_not_registered(self) -> None:
+        msg = _build_message_mock("private")
+        get_profile = _stub_get_profile(player_id=7)
+        request_proof = _stub_request_link_wallet_proof(
+            raise_error=ValueError("player_id must be > 0"),
+        )
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        await handle_link_wallet(
+            cast(Message, msg),
+            _link_wallet_command(args=f"ton {_RAW_TON_ADDR}"),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, request_proof),
+            cast(IClock, _build_clock()),
+            bundle,
+            Locale("ru"),
+        )
+
+        request_proof.execute.assert_awaited_once()
+        msg.answer.assert_awaited_once_with("ru:link-wallet-not-registered")
+
+    async def test_request_currency_case_insensitive(self) -> None:
+        msg = _build_message_mock("private")
+        get_profile = _stub_get_profile(player_id=7)
+        request_proof = _stub_request_link_wallet_proof()
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        await handle_link_wallet(
+            cast(Message, msg),
+            _link_wallet_command(args=f"TON {_RAW_TON_ADDR}"),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, request_proof),
+            cast(IClock, _build_clock()),
+            bundle,
+            Locale("ru"),
+        )
+
+        request_proof.execute.assert_awaited_once()
+        assert request_proof.execute.await_args.args[0].currency == Currency.TON_NANO
+
+    async def test_request_expires_at_minutes_rounded_up_min_one(self) -> None:
+        # clock.now() == время выдачи; expires_at через 30 сек → «1 минута».
+        msg = _build_message_mock("private")
+        get_profile = _stub_get_profile(player_id=7)
+        request_proof = _stub_request_link_wallet_proof(
+            expires_at=_FIXED_NOW + timedelta(seconds=30),
+        )
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        await handle_link_wallet(
+            cast(Message, msg),
+            _link_wallet_command(args=f"ton {_RAW_TON_ADDR}"),
+            _identity("private"),
+            cast(GetProfile, get_profile),
+            cast(RequestLinkWalletProof, request_proof),
+            cast(IClock, _build_clock()),
+            bundle,
+            Locale("ru"),
+        )
+
+        sent = msg.answer.await_args.args[0]
+        assert "expires_at_minutes=1" in sent
 
 
 # ────────────────────── callback link_wallet:select ───────────────

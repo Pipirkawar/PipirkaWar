@@ -2277,6 +2277,15 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     # и обрабатывает refund-ветку (`actual_fee > fee_buffer`). Handler-ы
     # требуют доступа к `wallet_repo` / `prize_lot_repo` для read-side
     # отображения карточек.
+    # Спринт 4.1-F (шаг F.8.a) — `RequestLinkWalletProof`-use-case (phase-1
+    # двухфазного flow привязки кошелька): bot-handler `/link_wallet
+    # <ton|usdt> <address>` через него получает server-issued nonce +
+    # canonical-domain + expires_at и рендерит инструкцию игроку
+    # «подпишите nonce в TonConnect-app-е, отправьте через
+    # /link_wallet_confirm». Composition root (F.7) уже собрал use-case
+    # из `TonConnectSettings` + `INonceStore`-имплементации, осталось
+    # пробросить в workflow_data.
+    dispatcher["request_link_wallet_proof"] = container.request_link_wallet_proof
     dispatcher["link_wallet"] = container.link_wallet
     dispatcher["claim_prize"] = container.claim_prize
     dispatcher["wallet_repository"] = container.wallet_repo
