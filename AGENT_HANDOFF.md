@@ -1,4 +1,4 @@
-# AGENT HANDOFF — Спринт 4.1-D (шаг D.10.c/D.15, после декомпозиции — шаг D.10.c / D.15 + 14 микрошагов D.7.a–D.10.d)
+# AGENT HANDOFF — Спринт 4.1-D (шаг D.10.d/D.15, после декомпозиции — шаг D.10.d / D.15 + 14 микрошагов D.7.a–D.10.d)
 
 > Этот файл — временный safety-net. Обновляется в том же коммите, что и основные изменения, и лежит в ветке пока есть незаконченная работа. Удали его отдельным коммитом перед открытием PR-а.
 
@@ -93,7 +93,9 @@
   - **CI:** `make lint` зелёный, `make typecheck` 999 source files зелён, `make imports` 4 contracts kept, `pytest tests/unit/` 5678 passed + 2 skipped.
   - **Известные ограничения:** real-seqno-fetch требует рабочего payout-wallet-а на testnet/mainnet (не проверяем в unit-suite, покрывается в D.10.d smoke). Subwallet_id в settings—default `698_983_191`; production-override обязателен при использовании non-standard wallet.
 
-- **D.10.c (этот коммит):** Composition root для крипто-выплат в `bot/main.py::Container` + `build_dispatcher(...)`:
+- **D.10.d (этот коммит):** Smoke-tests production TON-RPC payout-стека через `httpx.MockTransport`. См. секцию «На каком файле / задаче остановился» выше.
+
+- **D.10.c (предыдущий коммит):** Composition root для крипто-выплат в `bot/main.py::Container` + `build_dispatcher(...)`:
   - **Settings (`infrastructure/settings/settings.py`)** расширен полями `ton_rpc: TonRpcSettings | None = None` и `tg_stars: TgStarsSettings | None = None`. Оба `Optional`, чтобы Settings() без env не падал (unit-tests).
   - **TonRpcSettings (`infrastructure/payments/ton_rpc/settings.py`)** расширен полем `payout_wallet_signing_key_seed: SecretStr` (default `"0"*64` placeholder; production читает из env `TON_RPC_PAYOUT_WALLET_SIGNING_KEY_SEED`) + hex-validator (64 hex char = 32 byte Ed25519 seed); не декодирует, только валидирует формат.
   - **`infrastructure/payments/ton_connect/__init__.py`** новый модуль: `SandboxTonConnectVerifier(is_sandbox: bool)` — stub до 4.1-E. `is_sandbox=True` → accept non-empty proof (для testnet/manual-entry); `is_sandbox=False` → fail-closed (returns False, WARNING-log).
@@ -105,14 +107,22 @@
   - **CI:** `make lint` зелёный, `make typecheck` 1000 source files зелёный (новый `payments/ton_connect/`-модуль), `make imports` 4 contracts kept, `pytest tests/unit/bot/test_container_ton_rpc.py tests/unit/bot/test_composition_root.py` 20 passed.
 
 ## На каком файле / задаче остановился
-- D.10.c завершён. Следующий шаг — **D.10.d «Smoke-test TON-RPC payout-stack»**:
-  - `tests/smoke/test_ton_rpc_payout.py` (новый файл): отдельный marker `@pytest.mark.smoke`, запуск через `make smoke` или `pytest tests/smoke/`.
-  - 3 сценария payout через `httpx.MockTransport` (без live network): (1) TON payout — `TonRpcAdapter.payout(currency=TON, ...)` через mocked `/runGetMethod` (seqno) + `/sendBoc` (tx_hash + actual_fee_native); (2) USDT-success — `currency=USDT` через mocked `get_wallet_address` resolve + `sendBoc` (jetton-transfer-body); (3) USDT-jetton-resolution-failure — mocked `get_wallet_address` returns 4xx → `JettonResolutionError`.
-  - DI: использовать реальный `build_container(...)` или собирать минимальный `TonRpcAdapter` напрямую (зависит от того, нужен ли whole Container).
-  - Дополнить `Makefile`-target `smoke: pytest -m smoke tests/smoke/` (если ещё нет).
-  - **D.11–D.15:** локальный `make ci`, doc-commit, удалить HANDOFF, PR, CI.
-- *Note for D.10.d:* `SandboxTonConnectVerifier` создаёт WARNING-log при mainnet-fail-closed — может всплыть в caplog-фикстурах parallel pytest-xdist. Локализовать через `caplog.set_level(...)` или мок.
-- *Note for D.10.d:* placeholder-seed `0`*32 → Ed25519 deterministic public_key. Это валидное Ed25519, но не безопасное для production. Smoke-test может детерминистично проверять `signer.public_key` против эталона.
+- **D.10.d завершён (этот коммит).** Production-стек TON-RPC payout-а собран через `httpx.MockTransport` без живой сети:
+  - `tests/smoke/__init__.py` + `tests/smoke/test_ton_rpc_payout.py` — 4 smoke-теста под marker-ом `@pytest.mark.smoke`:
+    1. `TestTonPayoutFullStack.test_ton_payout_success` — TON_NANO payout: `POST /runGetMethod seqno` + `POST /sendBoc`; assert sha256-derived `tx_hash`, BoC начинается с TON-magic `b5ee9c72`.
+    2. `TestTonPayoutFullStack.test_ton_payout_propagates_send_boc_failure` — `sendBoc` `ok=false` → `TonRpcCallError("invalid boc")`.
+    3. `TestUsdtPayoutFullStack.test_usdt_payout_success` — USDT_DECIMAL payout: `POST /runGetMethod get_wallet_address` (jetton-master) → `POST /runGetMethod seqno` (payout-wallet) → `POST /sendBoc`; assert порядок вызовов + валидный BoC.
+    4. `TestUsdtJettonResolutionFailure.test_jetton_master_returns_non_zero_exit_code` — `exit_code=5` от jetton-master-а → `JettonResolutionError` (fail-fast, seqno/sendBoc не вызываются).
+  - **DI:** smoke собирает production-цепочку напрямую (`TonRpcHttpClient(http_client=AsyncClient(MockTransport))` → `Ed25519MessageSigner(seed)` → `JettonUsdtProvider` → `TonRpcAdapter`). Эмулирует `bot/main.py::build_container(...)` без поднятия SQLAlchemy/aiogram — фокус на TON-стеке.
+  - **`pyproject.toml`:** новый marker `smoke: production-stack assembly через mocked-транспорт (без живой сети)` в `[tool.pytest.ini_options].markers`.
+  - **`Makefile`:** новый target `smoke: pytest -m smoke tests/smoke/ --no-cov` (быстрый запуск без cov-fail-under).
+  - **CI на этом коммите:** локально `ruff check tests/smoke/ pyproject.toml Makefile` зелён, `mypy tests/smoke/test_ton_rpc_payout.py` зелён, `pytest -m smoke tests/smoke/` 4 passed в 0.54s. Полный `make ci` — следующий шаг.
+- **Следующий шаг — D.11 «Локальный `make ci` зелёный»**: `make ci` (lint + typecheck + imports + test, full coverage) + `pre-commit run --all-files`.
+  - **D.12–D.15:** doc-commit history.md + current_tasks.md под 4.1-E, удалить HANDOFF, PR, GitHub CI.
+- *Note D.10.d (закрыто):* `SandboxTonConnectVerifier` НЕ участвует в smoke-payout-стеке (он на пути `LinkWallet`-flow-а, не payout-а). caplog WARNING-нот не всплыл.
+- *Note D.10.d (закрыто):* smoke использует фиксированный Ed25519-seed `11`*32 (не дефолтный `0`*32), чтобы избежать degenerate-pubkey-случая и обеспечить детерминированный BoC.
+- *Note D.10.d (выявленный известный bug, OUT-OF-SCOPE на D.10.d):* `TonRpcAdapter._fetch_seqno` делает `int(result.stack[0])` без `base=0`. TON Center иногда возвращает seqno в hex-форме (`"0x..."`), что вызовет `ValueError`. Smoke-тест и unit-тесты используют decimal-форму (`"42"`), потому что adapter так и читает. Production-fix — отдельный коммит / задача (`_fetch_seqno` должен делать `int(value, 0)` или аналог).
+- *Note D.10.d (аналогичный bug, OUT-OF-SCOPE):* `JettonUsdtProvider.resolve_wallet` сохраняет `result.stack[0]` как plain string. TON Center возвращает slice-тип как base64-cell, а не plain TON address. Smoke передаёт plain TON-address-форму и проходит, но production должен парсить slice → TON-address (отдельная задача).
 - *Note for D.9.a:* pre-checkout-HMAC-валидация (handler `handle_pre_checkout_query`, `roulette_paid.py:~302`) перенесена в 4.1-E (см. plan); сейчас pre-checkout валидирует только `parse_invoice_payload` + amount, без HMAC.
 - *Note for D.10.c (закрыто):* `MissingDependencyError`-blocker в handler-е `/roulette_paid` закрыт в этом коммите — `tg_stars_verifier` пробрасывается в workflow-data через build_dispatcher.
 - Где брать ТЗ: `docs/current_tasks.md` чек-лист D.9.a–D.10.d; `docs/development_plan.md` Спринт 4.1, задача 4.1.2 (TON Connect) + 4.1.4 (антифрод/idempotency).
@@ -120,10 +130,10 @@
 ## Состояние ветки
 - Ветка: `devin/1778501374-sprint-4-1-D-ton-connect-usdt-claim-prize`
 - База: `main` (= `db8e630 Merge pull request #131`)
-- Предыдущий коммит: `e3a5f9e feat(4.1-D): D.10.b-3 — real TEP-67/74 + Ed25519 signing + adaptive off_bytes + 33 BoC golden-tests`.
-- Последний коммит (этот): `feat(4.1-D): D.10.c — composition root DI assembly (TON-RPC + TG-Stars verifier + LinkWallet/ClaimPrize)`.
+- Предыдущий коммит: `feat(4.1-D): D.10.c — composition root DI assembly (TON-RPC + TG-Stars verifier + LinkWallet/ClaimPrize)`.
+- Последний коммит (этот): `feat(4.1-D): D.10.d — smoke-test TON-RPC payout-stack via httpx.MockTransport`.
 - Незакоммиченные изменения: нет (после коммита).
-- CI прогонялся локально на этом коммите выборочно: `make lint` зелён, `make typecheck` 1000 source files зелён, `make imports` 4 contracts kept, `pytest tests/unit/bot/test_container_ton_rpc.py tests/unit/bot/test_composition_root.py` 20 passed. Полный `make ci` запустится после D.10.d (smoke-test).
+- CI прогонялся локально на этом коммите: `ruff check tests/smoke/ pyproject.toml Makefile` зелён, `mypy tests/smoke/test_ton_rpc_payout.py` зелён, `pytest -m smoke tests/smoke/ --no-cov` 4 passed в 0.54s. **Бейзлайн на старте сессии — `make ci` 6286 passed + 2 skipped, 95.56% cov на коммите D.10.c.** Полный `make ci` после этого коммита — следующий шаг (D.11).
 - GitHub CI: не открыт PR (по протоколу — PR откроется после D.13/D.14).
 
 ## Команды для следующего агента
@@ -139,7 +149,9 @@
 - Запустить только D.9.b-тесты: `pytest tests/unit/domain/monetization/test_prize_lot.py tests/integration/db/test_prize_lot_repository.py -q --no-cov`.
 - Запустить только D.9.c-тесты: `pytest tests/unit/application/monetization/test_expire_reserved_prize_lots.py -q --no-cov`.
 - Запустить только D.9.d-тесты: `pytest tests/unit/infrastructure/scheduler/test_aps.py::TestExpireReservedPrizeLotsCron -q --no-cov`.
-- Следующий шаг (**D.10.c — composition-root DI**): инстанцировать `TonRpcHttpClient` + `Ed25519MessageSigner` + `JettonUsdtProvider` + `TonRpcAdapter` + `HmacTgStarsPayloadVerifier` в `bot/main.py::Container`; `wallet_repo` + use-case-и (`LinkWallet`, `ClaimPrize`, `ExpireReservedPrizeLots`); 4-6 unit-тестов в `test_register_routers.py` или новый `test_container_ton_rpc.py`. Затем: D.10.d (smoke-tests `tests/smoke/test_ton_rpc_payout.py` с mocked HTTP через `httpx.MockTransport`); D.11 (финальный `make ci` + `pre-commit run --all-files`); D.12 (док-коммит history.md + current_tasks.md под 4.1-E); D.13 (удаление AGENT_HANDOFF.md); D.14 (Открыть PR); D.15 (дождаться зелёного GitHub CI).
+- Запустить только D.10.c-тесты: `pytest tests/unit/bot/test_container_ton_rpc.py tests/unit/bot/test_composition_root.py -q --no-cov`.
+- Запустить только D.10.d-тесты (smoke): `make smoke` либо `pytest -m smoke tests/smoke/ --no-cov`.
+- Следующий шаг (**D.11 — финальный локальный `make ci`**): `make ci` (lint + typecheck + imports + test) + `pre-commit run --all-files`. Coverage должен оставаться ≥ 80% (на бейзлайне 95.56%). Затем: D.12 (док-коммит `docs/history.md` + перестроить «Снимок состояния» в `docs/current_tasks.md` под `main = <merge-of-4.1-D>` + чек-лист 4.1-E); D.13 (отдельным коммитом `chore: remove AGENT_HANDOFF before PR`); D.14 (`git_pr(fetch_template)` → `git_pr(create)` по шаблону); D.15 (`git(pr_checks wait_mode=all)`).
 
 ## Известные блокеры / открытые вопросы
 - `reserved_ttl_seconds` для RESERVED-таймаута (D.9.a) — зафиксирован в `config/balance.yaml::prize_lot.reserved_ttl_seconds = 172800` (48 h). Pydantic-границы `[60, 30 d]`. На ревью геймдиза можем поменять — `hot-reload` без рестарта (см. `TestReloadPrizeLot.test_reload_picks_up_new_reserved_ttl`).

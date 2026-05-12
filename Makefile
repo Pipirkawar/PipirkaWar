@@ -1,4 +1,4 @@
-.PHONY: help install install-dev lint format typecheck test cov audit imports ci pre-commit clean
+.PHONY: help install install-dev lint format typecheck test cov audit imports ci pre-commit smoke clean
 
 PY ?= python3
 
@@ -46,6 +46,9 @@ cov:
 
 audit:
 	pip-audit --skip-editable
+
+smoke:
+	pytest -m smoke tests/smoke/ --no-cov
 
 pre-commit:
 	pre-commit run --all-files

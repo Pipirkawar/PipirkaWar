@@ -169,6 +169,7 @@ markers = [
   "integration: requires DB or other infra",
   "e2e: full-flow, slow",
   "slow: long-running scenario tests (load, stress)",
+  "smoke: production-stack assembly через mocked-транспорт (без живой сети)",
 ]
 filterwarnings = [
   "error",
