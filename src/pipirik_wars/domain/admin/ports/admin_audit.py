@@ -149,6 +149,42 @@ class AdminAuditAction(str, enum.Enum):
     # уже отбивается use-case-ом.
     ADMIN_TOTP_SETUP = "admin_totp_setup"
 
+    # ── Спринт 4.1-E (админ-команды управления призовым пулом) ──
+    # Read-side: super-admin прочитал статус призового пула через
+    # `/prize_pool` (per-currency баланс + active/reserved/claimed-lots
+    # + freeze-state). По аналогии с `ADMIN_BALANCE_GET` — каждое чтение
+    # призового пула должно быть видно в `/audit`, чтобы super-admin
+    # видел, кто и когда снимал срез пула. `target_kind="prize_pool"` /
+    # `target_id="all"`; `after.snapshot` хранит короткий summary
+    # (per-currency `{free, reserved, frozen}` + freeze-state).
+    ADMIN_PRIZE_POOL_VIEWED = "admin_prize_pool_viewed"
+    # Write-side: ручной refund конкретного лота админом
+    # (`/refund_lot <lot_id> <reason>`, TOTP-обязательная). Переводит
+    # лот `RESERVED|ACTIVE → REFUNDED` + возвращает `amount + fee_buffer`
+    # обратно в `prize_pool.apply_increment(...)` (с `AuditSource
+    # .ADMIN_REFUND` в общем audit-логе). `target_kind="prize_lot"` /
+    # `target_id=<lot.id>`; `before.status` / `after.status` фиксируют
+    # переход; `after.refunded_amount_native` дублируется в admin-audit
+    # для удобства /audit-фильтра. Идемпотентна через
+    # `prize_lot_status`-инвариант: повторный refund уже-REFUNDED
+    # лота отбивается доменом.
+    ADMIN_REFUND_LOT = "admin_refund_lot"
+    # Write-side: super-admin заморозил все криптовалютные выплаты
+    # (`/freeze_payouts <reason>`, TOTP-обязательная). После этого
+    # `ClaimPrize` отвергает все попытки claim-а с
+    # `ClaimPrizePayoutsFrozenError` (over-limit + freeze-check —
+    # E.10). Идемпотентна: повторный freeze того же админа — no-op
+    # (только обновляет `reason`). `target_kind="payout_freeze"` /
+    # `target_id="all"`; `before.is_frozen=False` / `after.is_frozen=True`.
+    ADMIN_FREEZE_PAYOUTS = "admin_freeze_payouts"
+    # Write-side: super-admin снял заморозку выплат
+    # (`/unfreeze_payouts`, TOTP-обязательная). По аналогии с
+    # `ADMIN_FREEZE_PAYOUTS` — идемпотентна. После этого
+    # `ClaimPrize` снова обслуживает claim-ы (если игрок не упёрся
+    # в payout-limit). `target_kind="payout_freeze"` /
+    # `target_id="all"`; `before.is_frozen=True` / `after.is_frozen=False`.
+    ADMIN_UNFREEZE_PAYOUTS = "admin_unfreeze_payouts"
+
 
 class AdminAuditSource(str, enum.Enum):
     """Источник админ-команды.
