@@ -49,7 +49,8 @@ Key-prefix: ``lobby`` (default через параметр конструкто�
 
 from __future__ import annotations
 
-from collections.abc import Awaitable
+from collections.abc import AsyncIterator, Awaitable
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import cast
 
@@ -57,10 +58,12 @@ from redis.asyncio import Redis
 from redis.commands.core import AsyncScript
 
 from pipirik_wars.domain.pvp.lobby import IGlobalLobbyRepository, LobbyEntry
+from pipirik_wars.infrastructure.observability.redis_metrics import RedisMetrics
 
 __all__ = ["RedisGlobalLobbyRepository"]
 
 _KEY_PREFIX_DEFAULT = "lobby"
+_BACKEND = "lobby"
 
 # Lua: enqueue + dedup-check.
 #   KEYS[1] = lobby:queue (LIST)
@@ -135,17 +138,34 @@ class RedisGlobalLobbyRepository(IGlobalLobbyRepository):
         "_enqueue_script",
         "_hash_key",
         "_list_key",
+        "_metrics",
         "_pop_oldest_script",
         "_remove_script",
     )
 
-    def __init__(self, *, client: Redis, key_prefix: str = _KEY_PREFIX_DEFAULT) -> None:
+    def __init__(
+        self,
+        *,
+        client: Redis,
+        key_prefix: str = _KEY_PREFIX_DEFAULT,
+        metrics: RedisMetrics | None = None,
+    ) -> None:
         self._client = client
         self._list_key = f"{key_prefix}:queue"
         self._hash_key = f"{key_prefix}:enqueued_at"
         self._enqueue_script: AsyncScript = client.register_script(_ENQUEUE_LUA)
         self._pop_oldest_script: AsyncScript = client.register_script(_POP_OLDEST_LUA)
         self._remove_script: AsyncScript = client.register_script(_REMOVE_LUA)
+        self._metrics = metrics
+
+    @asynccontextmanager
+    async def _track(self, op: str) -> AsyncIterator[None]:
+        """Обёртка для опциональной Prometheus-instrumentation."""
+        if self._metrics is None:
+            yield
+            return
+        async with self._metrics.track(backend=_BACKEND, op=op):
+            yield
 
     async def enqueue(self, *, duel_id: int, enqueued_at: datetime) -> bool:
         """Поставить дуэль в очередь.
@@ -158,11 +178,12 @@ class RedisGlobalLobbyRepository(IGlobalLobbyRepository):
         Возвращает ``True`` если запись реально добавлена; ``False``
         если такая ``duel_id`` уже стоит в очереди.
         """
-        raw = await self._enqueue_script(
-            keys=[self._list_key, self._hash_key],
-            args=[str(duel_id), enqueued_at.isoformat()],
-        )
-        return int(cast(int, raw)) == 1
+        async with self._track("enqueue"):
+            raw = await self._enqueue_script(
+                keys=[self._list_key, self._hash_key],
+                args=[str(duel_id), enqueued_at.isoformat()],
+            )
+            return int(cast(int, raw)) == 1
 
     async def pop_oldest(self) -> LobbyEntry | None:
         """Атомарно извлечь самую старую запись из очереди.
@@ -172,15 +193,16 @@ class RedisGlobalLobbyRepository(IGlobalLobbyRepository):
         «выхватят» одну и ту же запись). Возвращает ``None`` если
         очередь пустая.
         """
-        raw = await self._pop_oldest_script(
-            keys=[self._list_key, self._hash_key],
-        )
-        if raw is None:
-            return None
-        pair = cast(list[bytes | str], raw)
-        duel_id_str = _decode(pair[0])
-        iso = _decode(pair[1])
-        return LobbyEntry(duel_id=int(duel_id_str), enqueued_at=datetime.fromisoformat(iso))
+        async with self._track("pop_oldest"):
+            raw = await self._pop_oldest_script(
+                keys=[self._list_key, self._hash_key],
+            )
+            if raw is None:
+                return None
+            pair = cast(list[bytes | str], raw)
+            duel_id_str = _decode(pair[0])
+            iso = _decode(pair[1])
+            return LobbyEntry(duel_id=int(duel_id_str), enqueued_at=datetime.fromisoformat(iso))
 
     async def remove(self, *, duel_id: int) -> bool:
         """Удалить запись по `duel_id`.
@@ -189,11 +211,12 @@ class RedisGlobalLobbyRepository(IGlobalLobbyRepository):
         ``True`` если запись была удалена; ``False`` если её не было
         (NO-OP).
         """
-        raw = await self._remove_script(
-            keys=[self._list_key, self._hash_key],
-            args=[str(duel_id)],
-        )
-        return int(cast(int, raw)) == 1
+        async with self._track("remove"):
+            raw = await self._remove_script(
+                keys=[self._list_key, self._hash_key],
+                args=[str(duel_id)],
+            )
+            return int(cast(int, raw)) == 1
 
     async def is_in_lobby(self, *, duel_id: int) -> bool:
         """Проверить, стоит ли указанная дуэль в очереди.
@@ -204,8 +227,9 @@ class RedisGlobalLobbyRepository(IGlobalLobbyRepository):
         # (один и тот же сигнатурный шим используется sync- и async-клиентом);
         # на async-клиенте всегда возвращается `Awaitable[bool]`. Сужаем тип
         # через `cast`, чтобы mypy --strict видел корректный `await`.
-        result = await cast(
-            "Awaitable[bool]",
-            self._client.hexists(self._hash_key, str(duel_id)),
-        )
-        return bool(result)
+        async with self._track("is_in_lobby"):
+            result = await cast(
+                "Awaitable[bool]",
+                self._client.hexists(self._hash_key, str(duel_id)),
+            )
+            return bool(result)

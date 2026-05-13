@@ -46,7 +46,8 @@ bucket-а), что несущественно при MVP-масштабе DAU=20
 
 from __future__ import annotations
 
-from collections.abc import Awaitable
+from collections.abc import AsyncIterator, Awaitable
+from contextlib import asynccontextmanager
 from datetime import date, timedelta, timezone
 from typing import cast
 
@@ -54,12 +55,14 @@ from redis.asyncio import Redis
 
 from pipirik_wars.domain.dau import IDauCounter
 from pipirik_wars.domain.shared.ports.clock import IClock
+from pipirik_wars.infrastructure.observability.redis_metrics import RedisMetrics
 
 __all__ = ["RedisDauCounter"]
 
 _KEY_PREFIX_DEFAULT = "dau"
 _TTL_SECONDS = 172_800  # 48h — cross-midnight чтения «вчерашнего» key-а
 _MOSCOW_TZ = timezone(timedelta(hours=3), name="Europe/Moscow")
+_BACKEND = "dau"
 
 
 class RedisDauCounter(IDauCounter):
@@ -72,7 +75,7 @@ class RedisDauCounter(IDauCounter):
     по TTL 48h).
     """
 
-    __slots__ = ("_client", "_clock", "_key_prefix")
+    __slots__ = ("_client", "_clock", "_key_prefix", "_metrics")
 
     def __init__(
         self,
@@ -80,10 +83,26 @@ class RedisDauCounter(IDauCounter):
         client: Redis,
         clock: IClock,
         key_prefix: str = _KEY_PREFIX_DEFAULT,
+        metrics: RedisMetrics | None = None,
     ) -> None:
         self._client = client
         self._clock = clock
         self._key_prefix = key_prefix
+        self._metrics = metrics
+
+    @asynccontextmanager
+    async def _track(self, op: str) -> AsyncIterator[None]:
+        """Обёртка для опциональной Prometheus-instrumentation.
+
+        Если ``metrics is None`` (default-конфигурация без observability)
+        — yield-им без инкрементов. Иначе делегируем в
+        ``RedisMetrics.track(backend=_BACKEND, op=op)``.
+        """
+        if self._metrics is None:
+            yield
+            return
+        async with self._metrics.track(backend=_BACKEND, op=op):
+            yield
 
     def _moscow_today(self) -> date:
         """Текущий игровой день по ``Europe/Moscow``."""
@@ -101,14 +120,15 @@ class RedisDauCounter(IDauCounter):
         ``EXPIRE``. Повторный ``record_active`` того же ``tg_user_id``
         — `ZADD` обновляет score (``current()`` остаётся прежним).
         """
-        now = self._clock.now()
-        key = self._key_for_day(now.astimezone(_MOSCOW_TZ).date())
-        score = now.timestamp()
-        member = str(tg_user_id)
-        async with self._client.pipeline(transaction=True) as pipe:
-            pipe.zadd(key, {member: score})
-            pipe.expire(key, _TTL_SECONDS)
-            await pipe.execute()
+        async with self._track("record_active"):
+            now = self._clock.now()
+            key = self._key_for_day(now.astimezone(_MOSCOW_TZ).date())
+            score = now.timestamp()
+            member = str(tg_user_id)
+            async with self._client.pipeline(transaction=True) as pipe:
+                pipe.zadd(key, {member: score})
+                pipe.expire(key, _TTL_SECONDS)
+                await pipe.execute()
 
     async def current(self) -> int:
         """Сколько уникальных активных игроков за сегодня.
@@ -116,10 +136,11 @@ class RedisDauCounter(IDauCounter):
         Single ``ZCARD`` по key-у текущего дня. Если key не существует
         (никто ещё не пришёл / TTL истёк) — Redis возвращает ``0``.
         """
-        key = self._key_for_day(self._moscow_today())
-        # `redis-py` объявляет `Redis.zcard` как `Awaitable[int] | int`
-        # (один и тот же шим для sync- и async-клиента); на async всегда
-        # `Awaitable[int]`. Сужаем тип через `cast`, чтобы mypy --strict
-        # видел корректный `await`.
-        raw = await cast("Awaitable[int]", self._client.zcard(key))
-        return int(raw)
+        async with self._track("current"):
+            key = self._key_for_day(self._moscow_today())
+            # `redis-py` объявляет `Redis.zcard` как `Awaitable[int] | int`
+            # (один и тот же шим для sync- и async-клиента); на async всегда
+            # `Awaitable[int]`. Сужаем тип через `cast`, чтобы mypy --strict
+            # видел корректный `await`.
+            raw = await cast("Awaitable[int]", self._client.zcard(key))
+            return int(raw)

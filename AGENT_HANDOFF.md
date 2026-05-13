@@ -7,7 +7,8 @@
 
 ## Контекст
 
-* **Сессия:** https://app.devin.ai/sessions/6c5ba011a4b7439ea5b274f397440c59
+* **Сессия:** https://app.devin.ai/sessions/f9b7820cdcef4ef59385b24f323c3dce
+  (предыдущая: https://app.devin.ai/sessions/6c5ba011a4b7439ea5b274f397440c59 — J.0)
 * **База:** `main = 21bde6e` (merge PR #137 — Спринт 4.1-I «Redis DAU-миграция»).
 * **Ветка:** `devin/1778653875-sprint-4-1-J-redis-loadtest-metrics`.
 * **Скоуп:** добавить Prometheus-метрики на все логические Redis-операции
@@ -30,27 +31,38 @@
   метрик — **logical-op-level** (`backend=dau, op=record_active`),
   load-test backend — FakeRedis, scale — 2000 ops/test ~30 s.
 
-* [ ] **J.1** — `prometheus_client>=0.20,<1` в runtime-deps; модуль
-  `src/pipirik_wars/infrastructure/observability/redis_metrics.py` с
-  классом `RedisMetrics(registry: CollectorRegistry | None = None)`:
+* [x] **J.1** — `prometheus_client>=0.20,<1` добавлен в runtime-deps
+  (`pyproject.toml`) + mypy-additional-deps (`.pre-commit-config.yaml`).
+  Модуль `src/pipirik_wars/infrastructure/observability/redis_metrics.py`:
+  класс `RedisMetrics(registry: CollectorRegistry | None = None)` —
   counter `pipirik_redis_op_total{backend,op,outcome}` + histogram
   `pipirik_redis_op_duration_seconds{backend,op}` (buckets
   `[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]`);
-  async-context-manager `track(backend, op)` измеряет
-  `time.perf_counter()`-elapsed и инкрементирует метрики в finally
-  (outcome=`error` при любом исключении, then re-raise). Все три
-  Redis-репозитория обёрнуты через `async with self._metrics.track(...)`.
-  Tests: counter on success/error / histogram bucket precision / no-op
-  при `metrics=None` / isolated `CollectorRegistry`-fixture (избежать
-  Duplicated timeseries при повторной инстанциации).
+  async-context-manager `track(backend, op)` меряет
+  `time.perf_counter()`-elapsed и в `finally` инкрементирует counter
+  (`outcome="error"` при любом исключении, then re-raise) + observe
+  histogram. Три Redis-репозитория получили опциональный параметр
+  конструктора `metrics: RedisMetrics | None = None` + локальный
+  `_track`-хелпер (no-op при `metrics=None`); обёрнуты:
+  `RedisDauCounter.record_active/current`,
+  `RedisActivityLockRepository.try_acquire/release/get`,
+  `RedisGlobalLobbyRepository.enqueue/pop_oldest/remove/is_in_lobby`.
+  Тесты: `tests/unit/infrastructure/observability/test_redis_metrics.py`
+  — counter success/error/accumulation/partitioning + histogram
+  observe-elapsed/bucket-inheritance/on-error + registry-isolation +
+  nested-track + no-op `metrics=None`-smoke на `RedisDauCounter`.
+  `make ci` зелён: **6982 passed + 2 skipped + 95 % cov**.
 
 * [ ] **J.2** — `src/pipirik_wars/infrastructure/observability/http.py`:
   `build_metrics_app(registry) -> aiohttp.web.Application` с одним
-  GET-route `/metrics` (Content-Type `text/plain; version=0.0.4;
-  charset=utf-8`); на отдельном порту `BOT_METRICS_PORT` (default
-  `9100`). Регистрация в composition-root под `needs_redis`. Тесты:
-  200 OK + Content-Type + payload содержит имена метрик / 404 на
-  других путях.
+  GET-route `/metrics`. Content-Type — `prometheus_client.CONTENT_TYPE_LATEST`
+  (на 0.25.x: `text/plain; version=1.0.0; charset=utf-8`; HANDOFF J.0
+  упоминал `version=0.0.4` — устаревшая формулировка, тесты сверяют
+  с константой библиотеки). Отдельный порт `BOT_METRICS_PORT` (default
+  `9100`). Регистрация в composition-root **только** при
+  `needs_redis=True`. Тесты: 200 OK + Content-Type + payload содержит
+  имена `pipirik_redis_op_total` / `pipirik_redis_op_duration_seconds`
+  / 404 на других путях.
 
 * [ ] **J.3** — `tests/load/` с `pytest.mark.load` (исключён из default
   `make ci` через `addopts = "-m 'not load'"`); `make load-test`. Три
@@ -88,8 +100,9 @@
 
 * В каждом коммите обновить раздел «📌 Последний коммит на ветке»
   в `docs/current_tasks.md` (см. ритуалы документации).
-* Перед PR — `make ci` локально должен дать **6969+ passed +
-  2 skipped + ≥95.51 % cov** (load-тесты исключены через mark).
+* Перед PR — `make ci` локально должен дать **6982+ passed +
+  2 skipped + ≥95 % cov** (load-тесты исключены через mark).
+  Baseline после J.1: 6982 passed + 2 skipped + 95 % cov, 496.90 s.
 * После открытия PR — `git(action="pr_checks", wait_mode="all")`,
   дождаться зелёного GitHub-CI; если упало — `ci_job_logs(job_id=...)`
   и фикс.
