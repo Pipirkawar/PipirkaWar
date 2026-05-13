@@ -29,9 +29,9 @@ def _make_env(**overrides: str) -> dict[str, str]:
 async def test_deny_all_when_empty_allowlist() -> None:
     env = _make_env(ADMIN_WEB_ALLOWED_IPS="")
     with mock.patch.dict(os.environ, env, clear=False):
-        settings = AdminWebSettings()  # type: ignore[call-arg]
+        settings = AdminWebSettings()
     app = create_app(settings)
-    transport = ASGITransport(app=app)  # type: ignore[arg-type]
+    transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         response = await c.get("/")
         assert response.status_code == 403
@@ -41,9 +41,9 @@ async def test_deny_all_when_empty_allowlist() -> None:
 async def test_allow_all_with_wildcard() -> None:
     env = _make_env(ADMIN_WEB_ALLOWED_IPS="*")
     with mock.patch.dict(os.environ, env, clear=False):
-        settings = AdminWebSettings()  # type: ignore[call-arg]
+        settings = AdminWebSettings()
     app = create_app(settings)
-    transport = ASGITransport(app=app)  # type: ignore[arg-type]
+    transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         response = await c.get("/")
         assert response.status_code == 200
@@ -53,9 +53,9 @@ async def test_allow_all_with_wildcard() -> None:
 async def test_healthz_always_allowed() -> None:
     env = _make_env(ADMIN_WEB_ALLOWED_IPS="")
     with mock.patch.dict(os.environ, env, clear=False):
-        settings = AdminWebSettings()  # type: ignore[call-arg]
+        settings = AdminWebSettings()
     app = create_app(settings)
-    transport = ASGITransport(app=app)  # type: ignore[arg-type]
+    transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         response = await c.get("/healthz")
         assert response.status_code == 200

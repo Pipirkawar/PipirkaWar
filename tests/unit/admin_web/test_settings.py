@@ -20,7 +20,7 @@ _REQUIRED_ENV = {
 class TestAdminWebSettings:
     def test_defaults(self) -> None:
         with mock.patch.dict(os.environ, _REQUIRED_ENV, clear=False):
-            s = AdminWebSettings()  # type: ignore[call-arg]
+            s = AdminWebSettings()
         assert s.host == "127.0.0.1"
         assert s.port == 8080
         assert s.secret_key.get_secret_value() == "a" * 32
@@ -44,7 +44,7 @@ class TestAdminWebSettings:
             "ADMIN_WEB_BOOTSTRAP_ADMIN_PASSWORD": "hunter2",
         }
         with mock.patch.dict(os.environ, env, clear=False):
-            s = AdminWebSettings()  # type: ignore[call-arg]
+            s = AdminWebSettings()
         assert s.host == "0.0.0.0"
         assert s.port == 9999
         assert s.allowed_ips == "10.0.0.0/8"
@@ -60,7 +60,7 @@ class TestAdminWebSettings:
             "ADMIN_WEB_BOT_TOKEN": "123:abc",
         }
         with mock.patch.dict(os.environ, env, clear=True), pytest.raises(ValidationError):
-            AdminWebSettings()  # type: ignore[call-arg]
+            AdminWebSettings()
 
     def test_bot_username_required(self) -> None:
         env = {
@@ -68,4 +68,4 @@ class TestAdminWebSettings:
             "ADMIN_WEB_BOT_TOKEN": "123:abc",
         }
         with mock.patch.dict(os.environ, env, clear=True), pytest.raises(ValidationError):
-            AdminWebSettings()  # type: ignore[call-arg]
+            AdminWebSettings()

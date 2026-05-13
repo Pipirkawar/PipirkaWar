@@ -26,12 +26,12 @@ _TEST_ENV = {
 @pytest.fixture()
 def admin_web_settings() -> AdminWebSettings:
     with mock.patch.dict(os.environ, _TEST_ENV, clear=False):
-        return AdminWebSettings()  # type: ignore[call-arg]
+        return AdminWebSettings()
 
 
 @pytest_asyncio.fixture()
 async def client(admin_web_settings: AdminWebSettings) -> AsyncGenerator[AsyncClient]:
     app = create_app(admin_web_settings)
-    transport = ASGITransport(app=app)  # type: ignore[arg-type]
+    transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
