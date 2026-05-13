@@ -1,18 +1,19 @@
-# AGENT HANDOFF — Спринт 4.1-I (Redis DAU-миграция, шаг 2/6)
+# AGENT HANDOFF — Спринт 4.1-I (Redis DAU-миграция, шаг 4/6)
 
 > Этот файл — временный safety-net. Обновляется в том же коммите, что и основные изменения, и лежит в ветке пока есть незаконченная работа. Удали его отдельным коммитом перед открытием PR-а.
 
 ## Что я сделал в этой сессии
 
 - I.0 (commit `ab4684d`) — pivot `docs/current_tasks.md` под старт 4.1-I + создан sticky `AGENT_HANDOFF.md`. Baseline `make ci` на `main = f6d2fa0` зелён: 6943 passed + 2 skipped + 95.50 % cov.
-- I.1 (commit `b2e5efe`) — `RedisDauCounter(IDauCounter)` в `infrastructure/redis/repositories/dau.py`. Key-format `dau:{YYYY-MM-DD}` ZSET (`ZADD` + `EXPIRE 172800`) в MULTI/EXEC-pipeline; `current()` = `ZCARD`. Lazy-reset на границе МСК-полуночи через смену key-а. +14 unit-тестов.
-- I.2 (этот коммит) — config-flag `BotSettings.dau_backend: Literal["sql","redis"] = "sql"` (env `BOT_DAU_BACKEND`); composition-root switch в `bot/main.py::build_container`: `needs_redis = activity_lock_backend == "redis" or lobby_backend == "redis" or dau_backend == "redis"`; `dau_counter: IDauCounter` ⇒ `RedisDauCounter(client=redis_client, clock=clock)` при `redis`, иначе `InMemoryDauCounter(clock=clock)`. +4 composition-root-теста в `tests/unit/bot/test_composition_root.py` (default sql / explicit redis / all-three-redis-share-single-client / only-dau-redis-triggers-needs_redis). Общий прогон `test_composition_root.py` — 22 passed. `ruff` All checks passed, `mypy` Success (2 source files).
+- I.1 (commit `b2e5efe`) — `RedisDauCounter(IDauCounter)` в `infrastructure/redis/repositories/dau.py`. Key-format `dau:{YYYY-MM-DD}` ZSET (`ZADD` + `EXPIRE 172800`) в MULTI/EXEC-pipeline; `current()` = `ZCARD`. +14 unit-тестов.
+- I.2 (commit `c1c190f`) — config-flag `BotSettings.dau_backend: Literal["sql","redis"] = "sql"` (env `BOT_DAU_BACKEND`); composition-root switch в `bot/main.py::build_container`: `needs_redis` расширен на dau; `dau_counter: IDauCounter` ⇒ `RedisDauCounter` при `redis`, иначе `InMemoryDauCounter`. +4 composition-root-теста.
+- I.3 + I.4 (этот коммит) — +7 integration-тестов в `tests/integration/redis/test_dau_redis.py` через `fakeredis.aioredis.FakeRedis` (full lifecycle 0→3→0→1 через МСК-полночь / dedup-инвариант по ZADD-score / cross-midnight вчерашний key жив / TTL-expiry-эмуляция через `redis.delete(...)` / 50×gather distinct / 10×gather same / key_prefix isolation). Полный `make ci` локально зелён: **6969 passed + 2 skipped, 95.51 % cov** (было 6943 на baseline; +14 unit-dau / +4 composition-root / +7 integration-dau-redis / +1 в др. модуле; 0 regression). ruff + mypy + lint-imports (4/4 KEPT) + pytest — всё зелёное.
 
 ## На каком файле/задаче остановился
 
-- **Файл:** ещё не создан — `tests/integration/redis/test_dau_redis.py`; предстоит шаг I.3.
-- **Что планировал дальше:** I.3 — integration-тесты через `fakeredis.aioredis.FakeRedis` (full lifecycle / dedup-по-ZADD-score-инварианту / cross-midnight cleanup / concurrent record_active 50×gather / TTL-key-expires эмуляция через `redis.delete(...)` / key_prefix isolation). По паттерну `tests/integration/redis/test_activity_lock_redis.py` + `test_global_lobby_redis.py`.
-- **Где брать ТЗ:** `docs/current_tasks.md` секция «Чек-лист текущего PR — 4.1-I» (шаги I.0–I.6). Архивы 4.1-G (`activity_lock.py`) и 4.1-H (`global_lobby.py`) — образцы кодстайла + integration-тестов.
+- **Файл:** ещё не открыт — `docs/history.md` (новая запись 4.1-I) + `docs/current_tasks.md` (снимок под `main = <future merge-sha>` + предварительный чек-лист 4.1-J «load-test 10× + Prometheus metrics»). Предстоит шаг I.5.
+- **Что планировал дальше:** I.5 — doc-sync последним коммитом перед мерджем. После I.5 → I.6 (удалить `AGENT_HANDOFF.md` отдельным коммитом, открыть PR, дождаться зелёного GitHub-CI).
+- **Где брать ТЗ:** `docs/current_tasks.md` секция «Чек-лист текущего PR — 4.1-I» (шаги I.0–I.6). Архивы 4.1-G (`infrastructure/redis/repositories/activity_lock.py` + history.md записи) и 4.1-H — образцы оформления doc-sync.
 
 ## Расхождение факта и плана (зафиксировано в I.0)
 
@@ -22,15 +23,15 @@
 
 - Ветка: `devin/1778643622-sprint-4-1-I-redis-dau-migration`
 - База: `main` (`f6d2fa0`)
-- Последний коммит: `<this commit>` `feat(4.1-I): I.2 — BOT_DAU_BACKEND config-flag + composition-root switch + tests`
+- Последний коммит: `<this commit>` `feat(4.1-I): I.3-I.4 — integration tests + make ci green`
 - Незакоммиченные изменения: нет
-- CI прогонялся? частично: `pytest tests/unit/bot/test_composition_root.py` (22 passed), `pytest tests/unit/infrastructure/redis/repositories/test_dau.py` (14 passed), `ruff` + `mypy` на изменённые файлы — зелёные. Полный `make ci` будет в I.4.
+- CI прогонялся? **Полный `make ci` локально — зелёный** (6969 passed + 2 skipped + 95.51 % cov). GitHub-CI будет в I.6 после открытия PR.
 
 ## Команды для следующего агента
 
 - Поднять окружение: см. `README.md` «Локальная разработка» (`python3.12 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]" && pre-commit install`).
 - Прогнать CI: `make ci`.
-- Запустить только нужные тесты: `pytest tests/unit/infrastructure/redis/repositories/test_dau.py -q` (после I.1) / `pytest tests/unit/bot/test_composition_root.py -q -k dau_backend` (после I.2) / `pytest tests/integration/redis/test_dau_redis.py -q` (после I.3).
+- Запустить только нужные тесты: `pytest tests/unit/infrastructure/redis/repositories/test_dau.py -q` / `pytest tests/unit/bot/test_composition_root.py -q -k dau` / `pytest tests/integration/redis/test_dau_redis.py -q`.
 
 ## Известные блокеры / открытые вопросы
 
