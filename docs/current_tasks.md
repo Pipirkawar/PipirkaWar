@@ -17,7 +17,11 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**Активный PR — Спринт 4.9: Канал-анонсы** — Ветка: `devin/1778711591-sprint-4-9-announcements`. Полная реализация автоматической публикации контента в Telegram-канал бота: domain (порт + сущности), application (PublishWeeklyDigest, PublishLeaderboard), infrastructure (AiogramAnnouncementPublisher, SqlAlchemyAnnouncementStatsQuery), настройки (announcement_channel_id, weekly_enabled, weekly_cron), фоновый scheduler с cron-matching, admin-команды (/announce_weekly, /announce_leaderboard) с TOTP-flow, web-панель, локализация (8 файлов), 45 unit-тестов.
+**Активный PR — Расширение display_names до 1154 записей** — Ветка: `devin/1778711531-expand-display-names`. Расширена секция `display_names` в `config/balance.yaml` с 7 заглушек до 1154 записей с полным покрытием [0, +∞).
+
+**На `main` (АРХИВ):** Спринт 4.9: Канал-анонсы смержен.
+
+**На `main` (АРХИВ):** Полная испанская локализация (locales/es.ftl) смержена.
 
 **На `main` (АРХИВ):** Полная испанская локализация (locales/es.ftl) смержена. 4.5-A через 4.5-I смержены (auth, RBAC, дашборд, игроки, племена, аудит-лог, баланс, rate-limiting/CORS, паритет use-cases).
 
