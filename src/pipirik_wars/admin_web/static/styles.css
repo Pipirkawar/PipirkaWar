@@ -13,7 +13,7 @@ header nav { display: flex; justify-content: space-between; align-items: center;
 header strong { font-size: 1.1rem; }
 .nav-right { font-size: 0.9rem; }
 
-main { max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
 
 .center-card {
     background: #fff;
@@ -68,3 +68,25 @@ img { max-width: 100%; }
 @keyframes fadeout { 0% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
 
 #tg-login-widget { margin: 1.5rem 0; }
+
+/* Dashboard (Sprint 4.5-C) */
+.dashboard-container { padding: 0 0.5rem; }
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+.widget {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.widget h3 { font-size: 0.85rem; color: #7f8c8d; margin-bottom: 0.5rem; }
+.widget-value { font-size: 2rem; font-weight: 700; color: #2c3e50; }
+.widget-wide { grid-column: 1 / -1; margin-top: 0.5rem; }
+.audit-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-top: 0.75rem; }
+.audit-table th, .audit-table td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #ecf0f1; }
+.audit-table th { color: #7f8c8d; font-weight: 600; }
+.audit-table tr:hover { background: #fafafa; }
