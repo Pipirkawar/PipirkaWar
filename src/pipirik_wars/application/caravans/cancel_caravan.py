@@ -35,6 +35,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pipirik_wars.application.dto.inputs import CancelCaravanInput
+from pipirik_wars.application.observability import IBusinessMetrics, NullBusinessMetrics
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.domain.caravan import (
     Caravan,
@@ -75,6 +76,7 @@ class CancelCaravan:
 
     __slots__ = (
         "_audit",
+        "_business_metrics",
         "_caravan_participants",
         "_caravans",
         "_clock",
@@ -95,6 +97,7 @@ class CancelCaravan:
         audit: IAuditLogger,
         clock: IClock,
         scheduler: IDelayedJobScheduler,
+        business_metrics: IBusinessMetrics | None = None,
     ) -> None:
         self._uow = uow
         self._caravans = caravans
@@ -104,6 +107,7 @@ class CancelCaravan:
         self._audit = audit
         self._clock = clock
         self._scheduler = scheduler
+        self._business_metrics: IBusinessMetrics = business_metrics or NullBusinessMetrics()
 
     async def execute(self, input_dto: CancelCaravanInput) -> CaravanCancelled:
         """Отменить караван. См. docstring модуля для контракта."""
@@ -149,6 +153,8 @@ class CancelCaravan:
                 )
             )
 
+        self._business_metrics.dec_caravan_active()
+        self._business_metrics.inc_caravan_outcome("cancelled")
         return CaravanCancelled(caravan=saved, was_already_cancelled=False)
 
     # -------- helpers --------

@@ -67,6 +67,11 @@ from pipirik_wars.application.monetization.generate_prize_lots import (
     GeneratePrizeLots,
     GeneratePrizeLotsCommand,
 )
+from pipirik_wars.application.observability import (
+    BusinessMetricsCurrency,
+    IBusinessMetrics,
+    NullBusinessMetrics,
+)
 from pipirik_wars.domain.monetization.entities import PrizePool
 from pipirik_wars.domain.monetization.ports import IPrizePoolRepository
 from pipirik_wars.domain.monetization.value_objects import Currency, IdempotencyKey
@@ -106,6 +111,14 @@ _REASON_PRIZE_POOL_INCREMENT = "prize_pool_increment"
 # STARS — `None`, т. е. без триггера: STARS-донаты накапливаются медленно
 # (50 ⭐ = 0.5 USD; 100 ⭐ на лот = ~50 платежей в худшем случае), hourly cron их
 # собирает без вреда для UX. На 4.1-D пороги переедут в `balance.yaml`.
+_METRIC_CURRENCY: Mapping[Currency, BusinessMetricsCurrency] = MappingProxyType(
+    {
+        Currency.STARS: "stars",
+        Currency.TON_NANO: "ton",
+        Currency.USDT_DECIMAL: "usdt",
+    }
+)
+
 _DONATION_TRIGGER_THRESHOLD: Mapping[Currency, int | None] = MappingProxyType(
     {
         Currency.STARS: None,
@@ -188,7 +201,13 @@ class RecordDonation:
     Только репозиторий пула, audit-логгер, часы и чистая арифметика.
     """
 
-    __slots__ = ("_audit", "_clock", "_generate_prize_lots", "_pool_repo")
+    __slots__ = (
+        "_audit",
+        "_business_metrics",
+        "_clock",
+        "_generate_prize_lots",
+        "_pool_repo",
+    )
 
     def __init__(
         self,
@@ -197,6 +216,7 @@ class RecordDonation:
         audit_logger: IAuditLogger,
         clock: IClock,
         generate_prize_lots: GeneratePrizeLots,
+        business_metrics: IBusinessMetrics | None = None,
     ) -> None:
         """DI-конструктор.
 
@@ -220,6 +240,7 @@ class RecordDonation:
         self._audit = audit_logger
         self._clock = clock
         self._generate_prize_lots = generate_prize_lots
+        self._business_metrics: IBusinessMetrics = business_metrics or NullBusinessMetrics()
 
     async def execute(self, command: RecordDonationCommand) -> RecordDonationResult:
         """Выполнить расчёт + инкремент пула + audit-запись.
@@ -288,6 +309,11 @@ class RecordDonation:
                 )
             )
 
+        metric_currency = _METRIC_CURRENCY[command.currency]
+        self._business_metrics.set_prize_pool_balance(
+            metric_currency,
+            float(pool_after.balance_for(command.currency)),
+        )
         return RecordDonationResult(
             donation_amount_native=donation_amount_native,
             pool_after=pool_after,

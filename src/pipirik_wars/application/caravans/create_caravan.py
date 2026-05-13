@@ -48,6 +48,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from pipirik_wars.application.dto.inputs import CreateCaravanInput
+from pipirik_wars.application.observability import IBusinessMetrics, NullBusinessMetrics
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.caravan import (
@@ -100,6 +101,7 @@ class CreateCaravan:
     __slots__ = (
         "_audit",
         "_balance",
+        "_business_metrics",
         "_caravan_participants",
         "_caravans",
         "_clan_members",
@@ -127,6 +129,7 @@ class CreateCaravan:
         audit: IAuditLogger,
         clock: IClock,
         scheduler: IDelayedJobScheduler,
+        business_metrics: IBusinessMetrics | None = None,
     ) -> None:
         self._uow = uow
         self._clans = clans
@@ -140,6 +143,7 @@ class CreateCaravan:
         self._audit = audit
         self._clock = clock
         self._scheduler = scheduler
+        self._business_metrics: IBusinessMetrics = business_metrics or NullBusinessMetrics()
 
     async def execute(self, input_dto: CreateCaravanInput) -> CaravanCreated:
         """Создать караван. См. docstring модуля для контракта."""
@@ -234,6 +238,7 @@ class CreateCaravan:
                 )
             )
 
+        self._business_metrics.inc_caravan_active()
         return CaravanCreated(caravan=saved, leader_participant=stored_leader)
 
     # -------- helpers --------
