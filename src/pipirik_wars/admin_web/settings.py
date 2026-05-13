@@ -1,4 +1,4 @@
-"""Configuration for admin web panel (Sprint 4.5-A).
+"""Configuration for admin web panel (Sprint 4.5-A, extended 4.5-H).
 
 All settings are read from env-vars with ``ADMIN_WEB_`` prefix.
 """
@@ -22,7 +22,7 @@ class AdminWebSettings(BaseSettings):
     host: str = Field(default="127.0.0.1", description="Bind host")
     port: int = Field(default=8080, ge=1, le=65535, description="Bind port")
 
-    secret_key: SecretStr = Field(min_length=32, description="Signed-cookie key (≥32 chars)")
+    secret_key: SecretStr = Field(min_length=32, description="Signed-cookie key (>=32 chars)")
     bot_username: str = Field(description="Telegram bot username for Login Widget")
     bot_token: SecretStr = Field(description="Telegram bot token for HMAC verification")
 
@@ -39,6 +39,14 @@ class AdminWebSettings(BaseSettings):
         default=False,
         description="Trust X-Forwarded-For header",
     )
+    trusted_proxy_cidrs: str = Field(
+        default="",
+        description=(
+            "CSV of CIDR ranges identifying trusted reverse-proxies. "
+            "Used to walk X-Forwarded-For chain right-to-left. "
+            "Empty = use private-range heuristic."
+        ),
+    )
     cookie_insecure_dev: bool = Field(
         default=False,
         description="Allow non-HTTPS cookies (dev only)",
@@ -50,4 +58,29 @@ class AdminWebSettings(BaseSettings):
     bootstrap_admin_password: str | None = Field(
         default=None,
         description="Bootstrap password for TOTP self-service setup",
+    )
+
+    # --- Sprint 4.5-H: rate-limiting ---
+    rate_limit_max_requests: int = Field(
+        default=10,
+        ge=1,
+        description="Max auth requests per window per IP",
+    )
+    rate_limit_window_seconds: int = Field(
+        default=60,
+        ge=1,
+        description="Rate-limit sliding window (seconds)",
+    )
+
+    # --- Sprint 4.5-H: subdomain / CORS ---
+    subdomain: str = Field(
+        default="admin.pipirik.example.com",
+        description="Subdomain for admin panel deployment",
+    )
+    cors_allowed_origins: str = Field(
+        default="",
+        description=(
+            "CSV of allowed CORS origins for the admin panel. "
+            "Empty = no CORS headers (same-origin only)."
+        ),
     )
