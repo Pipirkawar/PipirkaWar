@@ -128,6 +128,35 @@
 
 ---
 
+## 2026-05-13 — Спринт 4.5-H «Сетевой доступ к панели — proxy-chain, rate-limit, CORS, subdomain»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 «Фаза 4 — Монетизация и масштаб», задача 4.5.9 «Сетевой доступ к панели — белый список IP / VPN / SSH-tunnel». PR #145. Базируется на `main` после мерджа PR #144 (Sprint 4.5-A).
+
+Что сделано:
+- `ip_allowlist.py`: `extract_client_ip_from_xff()` — правильный right-to-left обход X-Forwarded-For цепочки с поддержкой explicit trusted-proxy CIDR и private-range heuristic; `is_private_ip()` — детекция RFC 1918 / loopback / ULA; `trusted_proxy_cidrs` в `IpAllowlistMiddleware`
+- `rate_limit.py`: новый `RateLimitMiddleware` — sliding-window per-IP rate-limiter для auth-эндпоинтов (`/auth/telegram/callback`, `/totp/verify`, `/totp/setup`); HTTP 429 + Retry-After
+- `settings.py`: +5 полей (`trusted_proxy_cidrs`, `rate_limit_max_requests`, `rate_limit_window_seconds`, `subdomain`, `cors_allowed_origins`)
+- `main.py`: wiring RateLimitMiddleware + trusted_proxy_cidrs + conditional CORSMiddleware
+- `ops/runbooks/deploy_vps.md`: секция «Деплой admin web panel» — 3 сценария (SSH-tunnel, VPN/WireGuard, reverse-proxy/nginx), docker-compose.admin.yml, systemd unit, env-var reference table, post-deploy checklist
+
+Результат / артефакты:
+- `src/pipirik_wars/admin_web/auth/rate_limit.py` — новый модуль
+- `src/pipirik_wars/admin_web/auth/ip_allowlist.py` — расширен (extract_client_ip_from_xff, is_private_ip)
+- `src/pipirik_wars/admin_web/settings.py` — +5 полей Sprint 4.5-H
+- `src/pipirik_wars/admin_web/main.py` — wiring новых middleware
+- 45 новых тестов (34 unit + 11 integration), все проходят (7297 passed total)
+- ruff: 0 errors, mypy --strict: 0 errors, import-linter: 6 contracts kept / 0 broken
+
+Заметки / решения:
+- Rate-limiter in-memory (per-process) — достаточно для single-process admin panel за IP allowlist
+- XFF chain parsing right-to-left — стандартный подход (RFC 7239), устойчив к спуфингу клиентом
+- CORS по умолчанию отключён (same-origin only) — включается явно через env-var
+- Деплой привязан к localhost по умолчанию — «никаких публичных дёргалок» (критерий приёмки)
+
+---
+
 ## 2026-05-13 — Спринт 4.5-A «Foundation: FastAPI scaffold + Telegram Login Widget + TOTP 2FA gate»
 
 **Автор:** Devin (агентская цепочка)

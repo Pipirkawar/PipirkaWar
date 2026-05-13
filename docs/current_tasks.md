@@ -17,7 +17,11 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**Активный PR — 4.5-B «RBAC из таблицы `admins` для admin_web»** — второй PR Спринта 4.5 «Веб-админ-панель» (Фаза 4). Покрывает задачу 4.5.2 (RBAC). Ветка: `devin/1778705780-sprint-4-5-B-rbac`. Новый файл `admin_web/auth/rbac.py` — dependency-factory `require_permission(AdminCommandKind)`, audit-лог отказов. Route `/dashboard` защищён ADMIN_STATS. 62 новых теста (48 unit + 14 integration), ruff 0, mypy 0, 6 import contracts kept.
+**Активный PR — не открыт.** Последние смерженные PR-ы Спринта 4.5: **4.5-B** (RBAC), **4.5-C** (Dashboard), **4.5-D** (Players), **4.5-H** (PR #145, сетевой доступ). Следующая задача — по ПД §7 Sprint 4.5.
+
+**На `main` — 4.5-H** (PR #145) «Сетевой доступ к панели — proxy-chain, rate-limit, CORS, subdomain» (задача 4.5.9). XFF chain walk, RateLimitMiddleware, CORSMiddleware, subdomain config, deploy docs.
+
+**На `main` — 4.5-B** «RBAC из таблицы `admins` для admin_web» — задача 4.5.2. `require_permission(AdminCommandKind)`, audit-лог отказов.
 
 **На `main` (АРХИВ):** Sprint 4.5-C — Dashboard: real data widgets (задача 4.5.4). 18 тестов (11 unit + 7 integration).
 
