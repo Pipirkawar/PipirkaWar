@@ -1,4 +1,4 @@
-"""Admin web panel entrypoint (Sprint 4.5-A, §A.6).
+"""Admin web panel entrypoint (Sprint 4.5-A, extended 4.5-H §4.5.9).
 
 ``create_app(settings)`` — FastAPI application factory.
 ``run()`` — console-script entrypoint (reads env, starts uvicorn).
@@ -18,9 +18,10 @@ from starlette.responses import Response
 
 from pipirik_wars.admin_web.auth.csrf import CsrfMiddleware
 from pipirik_wars.admin_web.auth.ip_allowlist import IpAllowlistMiddleware
+from pipirik_wars.admin_web.auth.rate_limit import RateLimitMiddleware
 from pipirik_wars.admin_web.auth.session import AdminSession
 from pipirik_wars.admin_web.composition import AdminWebContainer, build_admin_web_container
-from pipirik_wars.admin_web.routes import auth, clans, dashboard, health, totp
+from pipirik_wars.admin_web.routes import auth, clans, dashboard, health, players, totp
 from pipirik_wars.admin_web.settings import AdminWebSettings
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,25 @@ def _security_headers_middleware(app: FastAPI) -> None:
         return response
 
 
+def _setup_cors(app: FastAPI, settings: AdminWebSettings) -> None:
+    """Add CORS middleware if origins are configured."""
+    origins_raw = settings.cors_allowed_origins.strip()
+    if not origins_raw:
+        return
+
+    from starlette.middleware.cors import CORSMiddleware  # noqa: PLC0415
+
+    origins = [o.strip() for o in origins_raw.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST"],
+        allow_headers=["X-CSRF-Token", "Content-Type"],
+        max_age=600,
+    )
+
+
 def create_app(settings: AdminWebSettings | None = None) -> FastAPI:
     """Application factory."""
     if settings is None:
@@ -95,16 +115,25 @@ def create_app(settings: AdminWebSettings | None = None) -> FastAPI:
         CsrfMiddleware,
     )
     app.add_middleware(
+        RateLimitMiddleware,
+        max_requests=settings.rate_limit_max_requests,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
+    app.add_middleware(
         IpAllowlistMiddleware,
         allowed_ips_raw=settings.allowed_ips,
         trust_proxy=settings.trust_proxy,
+        trusted_proxy_cidrs=settings.trusted_proxy_cidrs,
     )
+
+    _setup_cors(app, settings)
 
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(totp.router)
     app.include_router(dashboard.router)
     app.include_router(clans.router)
+    app.include_router(players.router)
 
     return app
 
@@ -115,9 +144,10 @@ def run() -> None:
 
     settings = AdminWebSettings()  # type: ignore[call-arg]
     logger.info(
-        "Starting admin web panel on %s:%s",
+        "Starting admin web panel on %s:%s (subdomain: %s)",
         settings.host,
         settings.port,
+        settings.subdomain,
     )
     uvicorn.run(
         create_app(settings),

@@ -1,0 +1,26 @@
+{% if records %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Дата</th>
+            <th>Действие</th>
+            <th>Актор (tg_id)</th>
+            <th>Источник</th>
+            <th>Причина</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in records %}
+        <tr>
+            <td>{{ r.occurred_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+            <td><code>{{ r.action.value }}</code></td>
+            <td>{{ r.actor_tg_id }}</td>
+            <td>{{ r.source.value }}</td>
+            <td>{{ r.reason or "—" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="text-muted">Нет записей в журнале активности для этого игрока.</p>
+{% endif %}

@@ -1,4 +1,4 @@
-"""Unit-тесты AdminWebSettings (Sprint 4.5-A)."""
+"""Unit-тесты AdminWebSettings (Sprint 4.5-A, extended 4.5-H)."""
 
 from __future__ import annotations
 
@@ -69,3 +69,29 @@ class TestAdminWebSettings:
         }
         with mock.patch.dict(os.environ, env, clear=True), pytest.raises(ValidationError):
             AdminWebSettings()  # type: ignore[call-arg]
+
+    def test_sprint_45h_defaults(self) -> None:
+        with mock.patch.dict(os.environ, _REQUIRED_ENV, clear=False):
+            s = AdminWebSettings()  # type: ignore[call-arg]
+        assert s.trusted_proxy_cidrs == ""
+        assert s.rate_limit_max_requests == 10
+        assert s.rate_limit_window_seconds == 60
+        assert s.subdomain == "admin.pipirik.example.com"
+        assert s.cors_allowed_origins == ""
+
+    def test_sprint_45h_custom_values(self) -> None:
+        env = {
+            **_REQUIRED_ENV,
+            "ADMIN_WEB_TRUSTED_PROXY_CIDRS": "10.0.0.0/8",
+            "ADMIN_WEB_RATE_LIMIT_MAX_REQUESTS": "5",
+            "ADMIN_WEB_RATE_LIMIT_WINDOW_SECONDS": "120",
+            "ADMIN_WEB_SUBDOMAIN": "admin.example.com",
+            "ADMIN_WEB_CORS_ALLOWED_ORIGINS": "https://admin.example.com",
+        }
+        with mock.patch.dict(os.environ, env, clear=False):
+            s = AdminWebSettings()  # type: ignore[call-arg]
+        assert s.trusted_proxy_cidrs == "10.0.0.0/8"
+        assert s.rate_limit_max_requests == 5
+        assert s.rate_limit_window_seconds == 120
+        assert s.subdomain == "admin.example.com"
+        assert s.cors_allowed_origins == "https://admin.example.com"

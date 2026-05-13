@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Игроки — Pipirik Wars Admin{% endblock %}
+
+{% block content %}
+<div class="center-card" style="max-width:900px;">
+    <h1>Игроки</h1>
+
+    <div class="search-box">
+        <input
+            type="search"
+            name="q"
+            placeholder="tg_id, @username или имя…"
+            value="{{ query }}"
+            hx-get="/players/search"
+            hx-trigger="input changed delay:300ms, search"
+            hx-target="#search-results"
+            hx-indicator="#search-spinner"
+            hx-include="this"
+            autofocus
+        />
+        <span id="search-spinner" class="htmx-indicator">⏳</span>
+    </div>
+
+    <div id="search-results">
+        {% include "partials/players_rows.html" %}
+    </div>
+</div>
+{% endblock %}
