@@ -74,6 +74,65 @@ class TestFallback:
         assert "does-not-exist" in str(exc.value)
 
 
+# Спринт 4.1-K (пункт 4.1.14): расширяем каталог локалей до 8 языков.
+# Для каждой из 6 новых локалей (`pt`/`es`/`tr`/`id`/`fa`/`uk`) проверяем два
+# базовых сценария фолбэка:
+#   1. Ключ **есть в своём языке** → выбирается из своего языка (PT-значение).
+#   2. Ключ **есть только в EN** → фолбэк на EN (подтверждает, что ~1550
+#      оставшихся ключей работают в новых локалях из коробки).
+# Для изоляции от реальных `locales/*.ftl` — пишем временные файлы в `tmp_path`.
+
+_EXTRA_LOCALES: tuple[str, ...] = ("pt", "es", "tr", "id", "fa", "uk")
+
+
+class TestExtraLocalesFallback:
+    """Sprint 4.1-K: fallback на EN работает для каждой из 6 новых локалей."""
+
+    @pytest.mark.parametrize("code", _EXTRA_LOCALES)
+    def test_key_present_in_extra_locale_takes_precedence(
+        self,
+        tmp_path: Path,
+        code: str,
+    ) -> None:
+        """K.5 сценарий 1: ключ есть и в EN, и в экстра-локали — рендерится экстра."""
+        (tmp_path / "en.ftl").write_text(
+            "greeting = Hi, { $name }!\n",
+            encoding="utf-8",
+        )
+        (tmp_path / f"{code}.ftl").write_text(
+            f"greeting = Hola-{code}, {{ $name }}!\n",
+            encoding="utf-8",
+        )
+        bundle = FluentMessageBundle(locales_dir=tmp_path)
+
+        text = bundle.format(MessageKey("greeting"), locale=Locale(code), name="P")
+
+        assert text == f"Hola-{code}, P!"
+
+    @pytest.mark.parametrize("code", _EXTRA_LOCALES)
+    def test_key_missing_in_extra_locale_falls_back_to_english(
+        self,
+        tmp_path: Path,
+        code: str,
+    ) -> None:
+        """K.5 сценарий 2: ключ есть только в `en.ftl` — fallback возвращает EN."""
+        (tmp_path / "en.ftl").write_text(
+            "english-only = Only in EN\n",
+            encoding="utf-8",
+        )
+        # Экстра-локаль файл есть, но без этого ключа. Другой ключ проверяет,
+        # что файл вообще загружается в `FluentBundle`-кеш.
+        (tmp_path / f"{code}.ftl").write_text(
+            f"native-key = Native {code}\n",
+            encoding="utf-8",
+        )
+        bundle = FluentMessageBundle(locales_dir=tmp_path)
+
+        assert bundle.format(MessageKey("english-only"), locale=Locale(code)) == "Only in EN"
+        # Проверяем, что файл экстра-локали действительно подхватился (sanity check):
+        assert bundle.format(MessageKey("native-key"), locale=Locale(code)) == f"Native {code}"
+
+
 class TestCaching:
     def test_bundle_is_loaded_once_per_locale(self, locales_dir: Path) -> None:
         """Удаляем .ftl ПОСЛЕ первого вызова — второй вызов всё ещё работает,
