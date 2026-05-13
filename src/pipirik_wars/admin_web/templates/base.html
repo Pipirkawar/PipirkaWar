@@ -15,6 +15,10 @@
         <nav>
             <strong>🍆 Pipirik Wars Admin</strong>
             {% if session and session.totp_verified_at %}
+            <span class="nav-links">
+                <a href="/dashboard" class="nav-link">Dashboard</a>
+                <a href="/players" class="nav-link">Игроки</a>
+            </span>
             <span class="nav-right">
                 {{ session.tg_username or "admin" }}
                 <form method="POST" action="/logout" style="display:inline;">
