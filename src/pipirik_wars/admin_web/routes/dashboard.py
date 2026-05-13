@@ -1,15 +1,12 @@
-"""Dashboard route with real data widgets (Sprint 4.5-C, ПД §7 задача 4.5.4).
-
-Виджеты: DAU / MAU / total players, очередь регистраций,
-активные караваны / рейды, последние админ-ошибки.
-"""
+"""Dashboard route with RBAC + real data widgets (Sprint 4.5-B RBAC, Sprint 4.5-C widgets)."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 
+from pipirik_wars.admin_web.auth.rbac import require_permission
 from pipirik_wars.admin_web.deps import get_container, require_totp_verified
 from pipirik_wars.application.admin.get_dashboard_stats import (
     DashboardStats,
@@ -17,6 +14,8 @@ from pipirik_wars.application.admin.get_dashboard_stats import (
     thirty_days_ago_msk,
     today_msk,
 )
+from pipirik_wars.domain.admin.authorization import AdminCommandKind
+from pipirik_wars.domain.admin.entities import Admin
 from pipirik_wars.infrastructure.db.models import (
     AdminAuditLogORM,
     BossFightORM,
@@ -25,11 +24,12 @@ from pipirik_wars.infrastructure.db.models import (
     UserORM,
 )
 from pipirik_wars.infrastructure.db.models.daily_active import DailyActiveORM
-from pipirik_wars.infrastructure.db.repositories import SqlAlchemyAdminRepository
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
 from pipirik_wars.infrastructure.db.utils import ensure_utc
 
 router = APIRouter()
+
+_require_admin_stats = require_permission(AdminCommandKind.ADMIN_STATS)
 
 _CARAVAN_ACTIVE_STATUSES = ("lobby", "in_battle")
 _RAID_ACTIVE_STATUSES = ("lobby", "in_battle")
@@ -120,13 +120,14 @@ async def _fetch_dashboard_stats(uow: SqlAlchemyUnitOfWork) -> DashboardStats:
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request) -> HTMLResponse:
+async def dashboard(
+    request: Request,
+    admin: Admin = Depends(_require_admin_stats),  # noqa: B008
+) -> HTMLResponse:
     session = require_totp_verified(request)
     container = get_container(request)
 
     async with SqlAlchemyUnitOfWork(container.session_factory) as uow:
-        repo = SqlAlchemyAdminRepository(uow=uow)
-        admin = await repo.get_by_tg_id(session.admin_id)
         stats = await _fetch_dashboard_stats(uow)
 
     templates = request.app.state.templates
