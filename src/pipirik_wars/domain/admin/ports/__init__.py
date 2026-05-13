@@ -23,6 +23,7 @@ from pipirik_wars.domain.admin.ports.admin_audit import (
     AdminAuditSource,
     IAdminAuditLogger,
     IAdminAuditQuery,
+    IAdminAuditWebQuery,
 )
 from pipirik_wars.domain.admin.ports.admin_confirm import (
     IAdminConfirmStore,
@@ -39,6 +40,7 @@ __all__ = [
     "AdminAuditSource",
     "IAdminAuditLogger",
     "IAdminAuditQuery",
+    "IAdminAuditWebQuery",
     "IAdminConfirmStore",
     "ITotpSecretGenerator",
     "ITotpVerifier",

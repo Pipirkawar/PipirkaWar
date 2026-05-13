@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Balance — Pipirik Wars Admin{% endblock %}
+
+{% block content %}
+<div class="center-card" style="max-width: 900px;">
+    <h1>Баланс <small>(v{{ version }})</small></h1>
+    <p><a href="/dashboard">← Dashboard</a></p>
+
+    {% if error is defined and error %}
+    <div class="flash flash-error">{{ error }}</div>
+    {% endif %}
+    {% if success is defined and success %}
+    <div class="flash flash-success">{{ success }}</div>
+    {% endif %}
+
+    <form method="POST" action="/balance/reload" style="margin-bottom: 1rem;">
+        {% if session and session.csrf_token %}
+        <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+        {% endif %}
+        <button type="submit" class="btn">🔄 Hot-reload баланса</button>
+    </form>
+
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr>
+                <th style="text-align: left; padding: 0.5rem; border-bottom: 2px solid #ccc;">Секция</th>
+                <th style="text-align: left; padding: 0.5rem; border-bottom: 2px solid #ccc;">Описание</th>
+                <th style="text-align: center; padding: 0.5rem; border-bottom: 2px solid #ccc;">Действие</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in sections %}
+            <tr>
+                <td style="padding: 0.5rem; border-bottom: 1px solid #eee;">
+                    <code>{{ s.name }}</code>
+                </td>
+                <td style="padding: 0.5rem; border-bottom: 1px solid #eee;">
+                    {{ s.description }}
+                </td>
+                <td style="text-align: center; padding: 0.5rem; border-bottom: 1px solid #eee;">
+                    <a href="/balance/{{ s.name }}" class="btn btn-sm">Редактировать</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

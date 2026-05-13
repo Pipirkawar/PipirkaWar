@@ -23,6 +23,109 @@
 
 ---
 
+## 2026-05-13 — Спринт 4.5-G «Редактор balance.yaml»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 «Фаза 4 — Монетизация и масштаб», задача 4.5.8 (Редактор `display_names` и других секций `balance.yaml`). Спринт 4.5-G.
+
+Что сделано:
+- Route `GET /balance` — обзор всех секций `balance.yaml` (таблица с описаниями)
+- Route `GET /balance/{section}` — YAML-редактор для конкретной секции
+- Route `POST /balance/{section}` — сохранение с pydantic-валидацией, атомарной записью и audit-trail
+- Route `POST /balance/reload` — hot-reload баланса из файла
+- Шаблоны `balance_overview.html` и `balance_editor.html` (HTMX, extends base.html)
+- Расширение `AdminWebContainer` — добавлены `IBalanceConfig`, `IBalanceReloader`, `IBalanceWriter`
+- Настройка `ADMIN_WEB_BALANCE_YAML_PATH` в `AdminWebSettings`
+- Аудит через `AdminAuditEntry` с `source=WEB`, `action=ADMIN_BALANCE_SET`
+- Ссылка «Редактор баланса» в dashboard
+
+Результат / артефакты:
+- `src/pipirik_wars/admin_web/routes/balance.py`
+- `src/pipirik_wars/admin_web/templates/balance_overview.html`
+- `src/pipirik_wars/admin_web/templates/balance_editor.html`
+- 12 unit-тестов + 5 integration-тестов
+- CI: lint ✓, typecheck ✓, imports (6 contracts kept) ✓, tests ✓
+
+Заметки / решения:
+- Секционный YAML-редактор вместо построчного: проще UX, меньше ошибок
+- Атомарная запись (tmp + os.replace) — как в `YamlBalanceWriter`
+- Валидация полного файла через `BalanceConfig.model_validate` перед записью
+
+---
+
+## 2026-05-13 — Спринт 4.5-F «Раздел Аудит-лог: фильтрация по audit_log и admin_audit_log»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 задача 4.5.7 «Раздел Аудит-лог». Sprint 4.5-F.
+
+Что сделано:
+- Domain: `AuditRecord` (read-side DTO) + `IAuditLogQuery` порт в `domain/shared/ports/audit.py`
+- Domain: `IAdminAuditWebQuery` порт в `domain/admin/ports/admin_audit.py` (ISP: отдельный от bot-side `IAdminAuditQuery`)
+- Infrastructure: `SqlAlchemyAuditLogQuery` и `SqlAlchemyAdminAuditWebQuery` — SQL-адаптеры с фильтрами (date, actor, action, source) и offset-пагинацией
+- Application: `GetWebAuditLog` use-case — объединяет оба аудит-лога, поддерживает переключение log_type (all/bot/admin)
+- Admin Web: route `/audit` (полная страница) + `/audit/table` (HTMX partial), фильтры, пагинация
+- Templates: `audit_log.html` + `partials/audit_table.html` с HTMX-интеграцией
+- CSS: стили для таблицы аудит-лога, фильтров, пагинации, badge-ей source
+- Nav: ссылка «Audit Log» в base.html
+- Tests: 11 unit + 9 integration (фильтрация, пагинация, пустые данные, авторизация, TOTP guard)
+- CI: ruff 0, mypy 0, 6 import contracts kept, все тесты проходят
+
+---
+## 2026-05-13 — Спринт 4.5-B «RBAC из таблицы `admins` для admin_web»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 «Фаза 4 — Монетизация и масштаб», задача 4.5.2 (RBAC). Второй PR Спринта 4.5 «Веб-админ-панель». Базируется на PR #144 (Sprint 4.5-A).
+
+Что сделано:
+- Реализован `admin_web/auth/rbac.py` — dependency-factory `require_permission(AdminCommandKind)` для FastAPI
+- Переиспользована доменная модель: `RoleBasedAdminAuthorizationPolicy`, `AdminCommandKind` (20+ команд), `AdminRole` (4 роли)
+- Нет отдельной системы пользователей — единственная таблица `admins`
+- При отказе в доступе: запись `ADMIN_AUTHORIZATION_DENIED` в `admin_audit_log` с `source=web`, IP-адресом, ролью
+- Route `/dashboard` защищён permission `ADMIN_STATS`
+- 48 unit-тестов (полная матрица RBAC: 4 роли × 20 команд, inactive-deny, confirm-flow)
+- 14 integration-тестов (HTTP flow: cookie → TOTP → DB → policy → 200/403)
+
+Результат / артефакты:
+- `src/pipirik_wars/admin_web/auth/rbac.py` — RBAC dependency
+- `src/pipirik_wars/admin_web/routes/dashboard.py` — обновлён с RBAC
+- `tests/unit/admin_web/auth/test_rbac.py` — 48 unit-тестов
+- `tests/integration/admin_web/test_rbac.py` — 14 integration-тестов
+
+Заметки / решения:
+- `require_permission` возвращает `Callable[[Request], Coroutine[..., Admin]]` — каждый route декларирует required `AdminCommandKind`
+- Audit-запись пишется в той же UoW-транзакции, коммитится перед raise HTTP 403
+- Import-linter контракты сохранены: `bot ⇏ admin_web`, `admin_web ⇏ bot`
+
+---
+## 2026-05-13 — Спринт 4.5-C «Dashboard: real data widgets»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 «Фаза 4 — Монетизация и масштаб», задача 4.5.4 (Дашборд). Третий PR Спринта 4.5 «Веб-админ-панель». Ветка: `devin/1778705833-sprint-4-5-C-dashboard`.
+
+Что сделано:
+- `application/admin/get_dashboard_stats.py`: DTO `DashboardStats` (dau, mau, total_players, signup_queue_size, active_caravans, active_raids, recent_errors) + `ErrorEntry` + хелперы `today_msk()` / `thirty_days_ago_msk()`
+- `admin_web/routes/dashboard.py`: полная реализация маршрута `/dashboard` с 6 SQL-агрегациями (DAU из `daily_active`, MAU за 30 дней, total active players из `users`, signup queue size из `signup_queue`, active caravans из `caravans`, active raids из `boss_fights`) + маршрут `/dashboard/stats` (HTMX-partial)
+- `admin_web/templates/dashboard.html`: шаблон с HTMX auto-refresh (каждые 30с через `hx-get="/dashboard/stats"`)
+- `admin_web/templates/partials/dashboard_widgets.html`: grid-виджеты (DAU, MAU, Total Players, Signup Queue, Active Caravans, Active Raids) + таблица последних админ-действий из `admin_audit_log`
+- `admin_web/static/styles.css`: CSS-grid для виджетов дашборда, стили таблицы аудита
+- 11 unit-тестов: DTO frozen, поля, zero/large values, date helpers
+- 7 integration-тестов: auth guard (anon → 401), empty data, seeded data (players, clans, caravans, raids, signup queue, audit log), HTMX trigger, audit entries
+
+Результат / артефакты:
+- Все CI-гейты пройдены: ruff 0, mypy 0, 6 import contracts kept, 7271 passed + 2 skipped
+
+Заметки / решения:
+- DAU/MAU считаются из таблицы `daily_active` (реальные данные), а не из Prometheus — Prometheus-метрики отражают snapshot бота, а дашборд читает из PG напрямую
+- «Последние ошибки» реализованы как последние записи `admin_audit_log` (т.к. отдельного error-tracking в проекте нет; admin audit — единственный источник ошибок/действий)
+- Для HTMX-partial используется отдельный endpoint `/dashboard/stats`, чтобы обновлять только виджеты без перезагрузки всей страницы
+- `max-width` CSS для `main` расширен с 600px до 960px для размещения grid-виджетов
+
+---
+
 ## 2026-05-13 — Спринт 4.5-D «Players section: search, card, activity, actions» (задача 4.5.5)
 
 **Автор:** Devin (агентская цепочка)
@@ -51,6 +154,35 @@
 - HTMX live-search с debounce 300ms для отзывчивости
 - Audit trail в карточке фильтруется по target_kind=player + target_id=tg_id
 - ForestRunRepository требует IBalanceConfig — добавлен YamlBalanceLoader в контейнер
+
+---
+
+## 2026-05-13 — Спринт 4.5-H «Сетевой доступ к панели — proxy-chain, rate-limit, CORS, subdomain»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 «Фаза 4 — Монетизация и масштаб», задача 4.5.9 «Сетевой доступ к панели — белый список IP / VPN / SSH-tunnel». PR #145. Базируется на `main` после мерджа PR #144 (Sprint 4.5-A).
+
+Что сделано:
+- `ip_allowlist.py`: `extract_client_ip_from_xff()` — правильный right-to-left обход X-Forwarded-For цепочки с поддержкой explicit trusted-proxy CIDR и private-range heuristic; `is_private_ip()` — детекция RFC 1918 / loopback / ULA; `trusted_proxy_cidrs` в `IpAllowlistMiddleware`
+- `rate_limit.py`: новый `RateLimitMiddleware` — sliding-window per-IP rate-limiter для auth-эндпоинтов (`/auth/telegram/callback`, `/totp/verify`, `/totp/setup`); HTTP 429 + Retry-After
+- `settings.py`: +5 полей (`trusted_proxy_cidrs`, `rate_limit_max_requests`, `rate_limit_window_seconds`, `subdomain`, `cors_allowed_origins`)
+- `main.py`: wiring RateLimitMiddleware + trusted_proxy_cidrs + conditional CORSMiddleware
+- `ops/runbooks/deploy_vps.md`: секция «Деплой admin web panel» — 3 сценария (SSH-tunnel, VPN/WireGuard, reverse-proxy/nginx), docker-compose.admin.yml, systemd unit, env-var reference table, post-deploy checklist
+
+Результат / артефакты:
+- `src/pipirik_wars/admin_web/auth/rate_limit.py` — новый модуль
+- `src/pipirik_wars/admin_web/auth/ip_allowlist.py` — расширен (extract_client_ip_from_xff, is_private_ip)
+- `src/pipirik_wars/admin_web/settings.py` — +5 полей Sprint 4.5-H
+- `src/pipirik_wars/admin_web/main.py` — wiring новых middleware
+- 45 новых тестов (34 unit + 11 integration), все проходят (7297 passed total)
+- ruff: 0 errors, mypy --strict: 0 errors, import-linter: 6 contracts kept / 0 broken
+
+Заметки / решения:
+- Rate-limiter in-memory (per-process) — достаточно для single-process admin panel за IP allowlist
+- XFF chain parsing right-to-left — стандартный подход (RFC 7239), устойчив к спуфингу клиентом
+- CORS по умолчанию отключён (same-origin only) — включается явно через env-var
+- Деплой привязан к localhost по умолчанию — «никаких публичных дёргалок» (критерий приёмки)
 
 ---
 
