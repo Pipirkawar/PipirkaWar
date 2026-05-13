@@ -101,10 +101,12 @@
   2 skipped + 95 % cov, 502.85 s**) + `make load-test` локально
   зелён (**9 passed, 5.04 s**).
 
-* [ ] **J.6** — Doc-sync: `docs/history.md` запись 4.1-J + `docs/current_tasks.md`
-  снимок под `main = <future-merge-sha 4.1-J>` + предварительный
-  чек-лист 4.1-K (i18n PT/ES/TR/ID/FA/UK + ИИ-предсказания опц. +
-  Grafana-дашборд).
+* [x] **J.6** — Doc-sync: `docs/history.md` запись «2026-05-13 — Спринт
+  4.1-J» на самом верху (полный отчёт по 8 шагам + список артефактов
+  + 8 заметок-решений) + `docs/current_tasks.md` чек-лист 4.1-J
+  полностью закрыт (J.0–J.7 → `[x]`). Снимок под `main =
+  <future-merge-sha 4.1-J>` обновится автоматически после merge PR-а
+  (sticky-протокол: следующий агент сделает pivot под 4.1-K).
 
 * [ ] **J.7** — Удалить этот `AGENT_HANDOFF.md` отдельным коммитом +
   `git_pr(action="fetch_template")` → `git_pr(action="create")` +
