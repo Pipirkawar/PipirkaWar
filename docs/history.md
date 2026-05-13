@@ -23,6 +23,34 @@
 
 ---
 
+## 2026-05-13 — Спринт 4.5-B «RBAC из таблицы `admins` для admin_web»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 «Фаза 4 — Монетизация и масштаб», задача 4.5.2 (RBAC). Второй PR Спринта 4.5 «Веб-админ-панель». Базируется на PR #144 (Sprint 4.5-A).
+
+Что сделано:
+- Реализован `admin_web/auth/rbac.py` — dependency-factory `require_permission(AdminCommandKind)` для FastAPI
+- Переиспользована доменная модель: `RoleBasedAdminAuthorizationPolicy`, `AdminCommandKind` (20+ команд), `AdminRole` (4 роли)
+- Нет отдельной системы пользователей — единственная таблица `admins`
+- При отказе в доступе: запись `ADMIN_AUTHORIZATION_DENIED` в `admin_audit_log` с `source=web`, IP-адресом, ролью
+- Route `/dashboard` защищён permission `ADMIN_STATS`
+- 48 unit-тестов (полная матрица RBAC: 4 роли × 20 команд, inactive-deny, confirm-flow)
+- 14 integration-тестов (HTTP flow: cookie → TOTP → DB → policy → 200/403)
+
+Результат / артефакты:
+- `src/pipirik_wars/admin_web/auth/rbac.py` — RBAC dependency
+- `src/pipirik_wars/admin_web/routes/dashboard.py` — обновлён с RBAC
+- `tests/unit/admin_web/auth/test_rbac.py` — 48 unit-тестов
+- `tests/integration/admin_web/test_rbac.py` — 14 integration-тестов
+
+Заметки / решения:
+- `require_permission` возвращает `Callable[[Request], Coroutine[..., Admin]]` — каждый route декларирует required `AdminCommandKind`
+- Audit-запись пишется в той же UoW-транзакции, коммитится перед raise HTTP 403
+- Import-linter контракты сохранены: `bot ⇏ admin_web`, `admin_web ⇏ bot`
+
+---
+
 ## 2026-05-13 — Спринт 4.5-A «Foundation: FastAPI scaffold + Telegram Login Widget + TOTP 2FA gate»
 
 **Автор:** Devin (агентская цепочка)
