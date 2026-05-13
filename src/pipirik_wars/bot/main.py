@@ -143,6 +143,10 @@ from pipirik_wars.application.mountains import (
     IMountainFinishNotifier,
     StartMountainRun,
 )
+from pipirik_wars.application.observability import (
+    IBusinessMetrics,
+    NullBusinessMetrics,
+)
 from pipirik_wars.application.oracle import (
     InvokeOracle,
     IOracleTemplateProvider,
@@ -333,7 +337,11 @@ from pipirik_wars.infrastructure.i18n import (
     FluentMessageBundle,
     PlayerLocaleResolverDB,
 )
-from pipirik_wars.infrastructure.observability import RedisMetrics, build_metrics_app
+from pipirik_wars.infrastructure.observability import (
+    PrometheusBusinessMetrics,
+    RedisMetrics,
+    build_metrics_app,
+)
 from pipirik_wars.infrastructure.payments.tg_stars import HmacTgStarsPayloadVerifier
 from pipirik_wars.infrastructure.payments.tg_stars.settings import TgStarsSettings
 from pipirik_wars.infrastructure.payments.ton_connect import (
@@ -442,6 +450,14 @@ class Container:
     # конфигурации Redis-операций нет и observability-endpoint не поднимается.
     # `None` → web-runner в `run()` пропускается.
     metrics_registry: CollectorRegistry | None
+
+    # Спринт 4.1-N: бизнес-метрики (DAU/караваны/рейды/призовой пул).
+    # Регистрируются в тот же `metrics_registry`, что и `RedisMetrics`, —
+    # один `/metrics`-endpoint на оба класса. При `needs_redis=False`
+    # (default-sql-конфигурация) field = `NullBusinessMetrics()` no-op;
+    # реальный Prometheus-адаптер создаётся только при
+    # `needs_redis=True` (cleanly связано с поднятием HTTP `/metrics`).
+    business_metrics: IBusinessMetrics
 
     # Шаблоны (Спринт 1.4.B / 1.5.G / 2.1.H)
     oracle_templates: IOracleTemplateProvider
@@ -744,6 +760,17 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
     # покрыты (см. 4.1-J скоуп — метрики только на Redis-бэкенды).
     metrics_registry: CollectorRegistry | None = CollectorRegistry() if needs_redis else None
     redis_metrics = RedisMetrics(registry=metrics_registry) if needs_redis else None
+    # Спринт 4.1-N: PrometheusBusinessMetrics регистрируется в тот же
+    # `metrics_registry`-инстанс (общий `/metrics`-endpoint). При default-
+    # sql-конфигурации (`needs_redis=False`) HTTP-endpoint не поднимается,
+    # поэтому бизнес-метрики тоже null-object — это позволяет use-case-ам
+    # звать `self._business_metrics.inc_X()` без условных проверок.
+    business_metrics: IBusinessMetrics
+    if needs_redis:
+        assert metrics_registry is not None
+        business_metrics = PrometheusBusinessMetrics(registry=metrics_registry)
+    else:
+        business_metrics = NullBusinessMetrics()
     # Спринт 4.1-G (шаг G.4): config-flag-режим бэкенда `IActivityLockRepository`.
     # `sql` (default) — `SqlAlchemyActivityLockRepository` поверх таблицы
     # `activity_locks` (текущая, до 4.1-G, имплементация: INSERT ... ON CONFLICT
@@ -1259,6 +1286,7 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         audit=audit,
         clock=clock,
         scheduler=delayed_jobs,
+        business_metrics=business_metrics,
     )
     join_caravan_lobby = JoinCaravanLobby(
         uow=uow,
@@ -1291,6 +1319,7 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         audit=audit,
         clock=clock,
         scheduler=delayed_jobs,
+        business_metrics=business_metrics,
     )
     close_caravan_lobby = CloseCaravanLobby(
         uow=uow,
@@ -1315,6 +1344,7 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         clock=clock,
         balance=balance.get().caravans,
         random_factory=SeededRandom,
+        business_metrics=business_metrics,
     )
     # Спринт 3.3-B: рейд-босс use-case-ы (ГДД §10). `close_boss_lobby`
     # вызывается двумя путями: APScheduler-job-ом из `delayed_jobs`
@@ -1332,6 +1362,7 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         audit=audit,
         clock=clock,
         scheduler=delayed_jobs,
+        business_metrics=business_metrics,
     )
     join_boss_lobby = JoinBossLobby(
         uow=uow,
@@ -1388,6 +1419,7 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         scheduler=delayed_jobs,
         balance=balance.get().bosses,
         random_factory=SeededRandom,
+        business_metrics=business_metrics,
     )
     # Спринт 3.4-C: use-case заточки (`EnchantItem`) + read-only
     # инвентарь (`GetInventory`). `EnchantItem` требует уже открытый
@@ -1536,6 +1568,7 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         audit_logger=audit,
         clock=clock,
         generate_prize_lots=generate_prize_lots,
+        business_metrics=business_metrics,
     )
     # 4.1-D / D.9.c + D.9.d: refund RESERVED-лотов по TTL
     # (`balance.prize_lot.reserved_ttl_seconds`, дефолт 48 h). Дёргается
@@ -1662,6 +1695,7 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         audit=audit,
         clock=clock,
         scheduler=delayed_jobs,
+        business_metrics=business_metrics,
     )
     upgrade_thickness = UpgradeThickness(
         uow=uow,
@@ -2145,6 +2179,7 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         anticheat=anticheat,
         anticheat_admin_alerter=anticheat_admin_alerter,
         metrics_registry=metrics_registry,
+        business_metrics=business_metrics,
         oracle_templates=oracle_templates,
         duel_log_templates=duel_log_templates,
         ai_oracle_provider=ai_oracle_provider,
@@ -2506,6 +2541,32 @@ _ALLOWED_UPDATES = (
 )
 
 
+async def _business_metrics_dau_poller(
+    container: Container, *, interval_seconds: float = 60.0
+) -> None:
+    """Фоновый таск-snapshot DAU в `pipirik_dau_active_users`-gauge (Спринт 4.1-N).
+
+    Hot-path use-case `RecordPlayerActivity` НЕ инструментирован — это
+    счётчик-на-message, который дорожает на больших чатах и не несёт
+    самостоятельной ценности. Вместо инкрементов на каждый event здесь
+    раз в `interval_seconds` секунд (default = 60) считывается актуальное
+    значение через `IDauCounter.current()` и устанавливается в gauge.
+
+    Запускается только при `business_metrics`-нумере (`needs_redis=True` +
+    `PrometheusBusinessMetrics`). При `NullBusinessMetrics()`-default-е
+    task сразу завершается (зачем тратить asyncio-цикл на no-op).
+    """
+    if isinstance(container.business_metrics, NullBusinessMetrics):
+        return
+    while True:
+        try:
+            value = await container.dau_counter.current()
+            container.business_metrics.set_dau(value)
+        except Exception:
+            logger.warning("DAU snapshot failed", exc_info=True)
+        await asyncio.sleep(interval_seconds)
+
+
 async def _ai_refresh_loop(container: Container, *, interval_seconds: float) -> None:
     """Фоновый таск периодического refresh-а AI-шаблонов (Спринт 4.1-M).
 
@@ -2609,12 +2670,23 @@ async def run(
             name="ai-refresh-loop",
         )
 
+    # Спринт 4.1-N: фоновый DAU-poller. При NullBusinessMetrics()-default-е
+    # task сам завершится сразу — мы это не проверяем здесь повторно,
+    # чтобы не дублировать isinstance-проверку.
+    dau_metrics_task: asyncio.Task[None] = asyncio.create_task(
+        _business_metrics_dau_poller(container),
+        name="business-metrics-dau-poller",
+    )
+
     try:
         await dispatcher.start_polling(
             bot,
             allowed_updates=list(_ALLOWED_UPDATES),
         )
     finally:
+        dau_metrics_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await dau_metrics_task
         if ai_refresh_task is not None:
             ai_refresh_task.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):

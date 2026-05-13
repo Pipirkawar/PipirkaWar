@@ -101,6 +101,7 @@ from pipirik_wars.application.mountains import (
     FinishMountainRun,
     StartMountainRun,
 )
+from pipirik_wars.application.observability import NullBusinessMetrics
 from pipirik_wars.application.oracle import InvokeOracle
 from pipirik_wars.application.player import (
     GetProfile,
@@ -1284,6 +1285,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         anticheat=anticheat,
         anticheat_admin_alerter=anticheat_admin_alerter,
         metrics_registry=None,
+        business_metrics=NullBusinessMetrics(),
         oracle_templates=oracle_templates,
         duel_log_templates=duel_log_templates,
         ai_oracle_provider=None,
