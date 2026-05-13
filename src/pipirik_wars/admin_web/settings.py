@@ -51,3 +51,8 @@ class AdminWebSettings(BaseSettings):
         default=None,
         description="Bootstrap password for TOTP self-service setup",
     )
+
+    balance_yaml_path: str = Field(
+        default="config/balance.yaml",
+        description="Path to balance.yaml (absolute or relative to CWD)",
+    )

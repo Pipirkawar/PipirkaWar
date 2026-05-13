@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}{{ section }} — Balance Editor{% endblock %}
+
+{% block content %}
+<div class="center-card" style="max-width: 900px;">
+    <h1>Редактор: <code>{{ section }}</code></h1>
+    <p>
+        <a href="/balance">← Все секции</a>
+        {% if description %} | {{ description }}{% endif %}
+        | Версия баланса: <strong>{{ version }}</strong>
+    </p>
+
+    {% if error is defined and error %}
+    <div class="flash flash-error" style="white-space: pre-wrap;">{{ error }}</div>
+    {% endif %}
+    {% if success is defined and success %}
+    <div class="flash flash-success">{{ success }}</div>
+    {% endif %}
+
+    <form method="POST" action="/balance/{{ section }}" id="balance-form">
+        {% if session and session.csrf_token %}
+        <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+        {% endif %}
+        <label for="yaml_text"><strong>YAML:</strong></label>
+        <textarea
+            id="yaml_text"
+            name="yaml_text"
+            rows="30"
+            style="width: 100%; font-family: monospace; font-size: 0.9rem; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; resize: vertical;"
+        >{{ yaml_text }}</textarea>
+        <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+            <button type="submit" class="btn">Сохранить</button>
+            <a href="/balance/{{ section }}" class="btn" style="text-decoration: none;">Сбросить</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
