@@ -26,7 +26,7 @@ _TEST_ENV = {
 @pytest.fixture()
 def admin_web_settings() -> AdminWebSettings:
     with mock.patch.dict(os.environ, _TEST_ENV, clear=False):
-        return AdminWebSettings()
+        return AdminWebSettings()  # type: ignore[call-arg]
 
 
 @pytest_asyncio.fixture()
