@@ -100,10 +100,11 @@ lang-group = O comando `/lang` é apenas para chat privado. Abra a DM.
 
 lang-other = O comando `/lang` é apenas para usuários comuns.
 
-lang-not-registered = Aperte /start primeiro, depois execute /lang ru|en|pt|es|tr|id|fa|uk.
+lang-not-registered = Aperte /start primeiro, depois execute /lang ru|en|pt|es|tr|id|fa|uk|ar.
 
-lang-usage = Uso: /lang ru|en|pt|es|tr|id|fa|uk.
+lang-usage = Uso: /lang ru|en|pt|es|tr|id|fa|uk|ar.
 
-lang-unsupported = Idioma `{ $code }` não é suportado. Disponíveis: ru, en, pt, es, tr, id, fa, uk.
+lang-unsupported = Idioma `{ $code }` não é suportado. Disponíveis: ru, en, pt, es, tr, id, fa, uk, ar.
 
 lang-set-pt = Idioma da interface alterado para português. Todas as respostas e mensagens em segundo plano agora serão em português.
+lang-set-ar = تم تغيير لغة الواجهة إلى العربية. جميع الردود والرسائل في الخلفية ستكون الآن باللغة العربية.

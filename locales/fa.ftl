@@ -106,10 +106,11 @@ lang-group = دستور `/lang` فقط برای چت خصوصی است. DM را 
 
 lang-other = دستور `/lang` فقط برای کاربران معمولی است.
 
-lang-not-registered = ابتدا /start را بزنید، سپس /lang ru|en|pt|es|tr|id|fa|uk را اجرا کنید.
+lang-not-registered = ابتدا /start را بزنید، سپس /lang ru|en|pt|es|tr|id|fa|uk|ar را اجرا کنید.
 
-lang-usage = طرز استفاده: /lang ru|en|pt|es|tr|id|fa|uk.
+lang-usage = طرز استفاده: /lang ru|en|pt|es|tr|id|fa|uk|ar.
 
-lang-unsupported = زبان `{ $code }` پشتیبانی نمی‌شود. موجود: ru, en, pt, es, tr, id, fa, uk.
+lang-unsupported = زبان `{ $code }` پشتیبانی نمی‌شود. موجود: ru, en, pt, es, tr, id, fa, uk, ar.
 
 lang-set-fa = زبان رابط به فارسی تغییر یافت. تمام پاسخ‌ها و پیام‌های پس‌زمینه اکنون به فارسی خواهد بود.
+lang-set-ar = تم تغيير لغة الواجهة إلى العربية. جميع الردود والرسائل في الخلفية ستكون الآن باللغة العربية.

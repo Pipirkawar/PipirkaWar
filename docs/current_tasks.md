@@ -17,7 +17,9 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**Активный PR — 4.5-I «Паритет use-cases bot/web + audit source»** — Спринт 4.5-I (Фаза 4, задача 4.5.10). Ветка: `devin/1778709046-sprint-4-5-I-parity`. Добавлен `source: AdminAuditSource` и `ip: str | None` во все 17 admin use-case Input dataclass-ов; web-маршруты передают `source=WEB` и `ip=client_ip`; новые маршруты `POST /players/{id}/grant-length` и `/grant-thickness`; 20 unit-тестов на паритет bot/web. CI: lint 0, typecheck 0, 6 import contracts kept. **Закрывает Sprint 4.5.**
+**Активный PR — Спринт 4.5 (локализация): добавлена поддержка арабского (ar)** — Ветка: `devin/1778711095-add-ar-locale`. Добавлен `ar` в `SUPPORTED_LOCALES` (`locale.py`), `_KEY_SET_AR` + маппинг в `lang.py`; обновлены все 8 `.ftl` файлов (`lang-usage`, `lang-unsupported`, `lang-not-registered`, `lang-set-ar`); создан полный `locales/ar.ftl` — перевод всех 658 ключей из `en.ftl` на арабский.
+
+**На `main` (АРХИВ):** 4.5-A через 4.5-I смержены (auth, RBAC, дашборд, игроки, племена, аудит-лог, баланс, rate-limiting/CORS, паритет use-cases).
 
 **На `main` (АРХИВ):** 4.5-A через 4.5-H смержены (auth, RBAC, дашборд, игроки, племена, аудит-лог, баланс, rate-limiting/CORS).
 
