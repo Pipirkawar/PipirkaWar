@@ -217,6 +217,7 @@ from pipirik_wars.infrastructure.rate_limit import (
 )
 from pipirik_wars.infrastructure.redis import (
     RedisActivityLockRepository,
+    RedisDauCounter,
     RedisGlobalLobbyRepository,
 )
 from pipirik_wars.infrastructure.scheduler import APSchedulerDelayedJobScheduler
@@ -1822,6 +1823,86 @@ class TestBuildContainer:
         # protected `_client` оправдано контрактом — в `build_container`
         # один `build_redis_client(...)` инжектится в оба репозитория.
         assert c.activity_locks._client is c.global_lobby._client
+
+    def test_build_container_dau_backend_sql_is_default(self) -> None:
+        """`BOT_DAU_BACKEND` unset ⇒ in-memory `InMemoryDauCounter` (default).
+
+        Спринт 4.1-I, шаг I.2: config-flag-режим `dau_backend`. Имя
+        `sql` сохранено для единообразия с другими backend-флагами;
+        реально pre-4.1-I-бэкенд — in-memory (`InMemoryDauCounter`).
+        """
+        c = build_container(settings=_test_settings())
+        assert isinstance(c.dau_counter, InMemoryDauCounter)
+
+    def test_build_container_dau_backend_redis_switches_repo(self) -> None:
+        """`BOT_DAU_BACKEND=redis` ⇒ `RedisDauCounter`.
+
+        Спринт 4.1-I, шаг I.2: composition-root switch на
+        `RedisDauCounter`. `build_redis_client` создаёт `ConnectionPool`
+        лениво — никакого реального сетевого подключения здесь не
+        происходит.
+        """
+        settings = Settings(
+            environment="test",
+            db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+            bot=BotSettings(
+                token=SecretStr("test-token"),
+                dau_backend="redis",
+            ),
+            bootstrap=BootstrapSettings(),
+        )
+        c = build_container(settings=settings)
+        assert isinstance(c.dau_counter, RedisDauCounter)
+
+    def test_build_container_all_three_redis_share_single_client(self) -> None:
+        """Все три бэкенда=redis ⇒ один общий Redis-клиент на все.
+
+        Спринт 4.1-I (I.2): расширение sanity-инварианта 4.1-H.
+        `needs_redis = lock or lobby or dau` ⇒
+        `build_redis_client(settings.redis)` вызывается ровно один раз,
+        полученный клиент инжектится во все три Redis-репозитория.
+        """
+        settings = Settings(
+            environment="test",
+            db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+            bot=BotSettings(
+                token=SecretStr("test-token"),
+                activity_lock_backend="redis",
+                lobby_backend="redis",
+                dau_backend="redis",
+            ),
+            bootstrap=BootstrapSettings(),
+        )
+        c = build_container(settings=settings)
+        assert isinstance(c.activity_locks, RedisActivityLockRepository)
+        assert isinstance(c.global_lobby, RedisGlobalLobbyRepository)
+        assert isinstance(c.dau_counter, RedisDauCounter)
+        # Все три указывают на один `Redis`-instance.
+        assert c.activity_locks._client is c.global_lobby._client
+        assert c.global_lobby._client is c.dau_counter._client
+
+    def test_build_container_only_dau_redis_creates_client(self) -> None:
+        """`dau_backend=redis` (при остальных sql) триггерит `build_redis_client`.
+
+        Спринт 4.1-I (I.2): `needs_redis`-флаг должен включаться, даже
+        если только DAU-бэкенд redis-овый. SQL-репозитории остальных
+        двух — обычные SQLAlchemy.
+        """
+        settings = Settings(
+            environment="test",
+            db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+            bot=BotSettings(
+                token=SecretStr("test-token"),
+                activity_lock_backend="sql",
+                lobby_backend="sql",
+                dau_backend="redis",
+            ),
+            bootstrap=BootstrapSettings(),
+        )
+        c = build_container(settings=settings)
+        assert isinstance(c.activity_locks, SqlAlchemyActivityLockRepository)
+        assert isinstance(c.global_lobby, SqlAlchemyGlobalLobbyRepository)
+        assert isinstance(c.dau_counter, RedisDauCounter)
 
 
 class TestBuildDispatcher:

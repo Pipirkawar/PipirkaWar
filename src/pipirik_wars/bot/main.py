@@ -342,6 +342,7 @@ from pipirik_wars.infrastructure.rate_limit import (
 )
 from pipirik_wars.infrastructure.redis import (
     RedisActivityLockRepository,
+    RedisDauCounter,
     RedisGlobalLobbyRepository,
     build_redis_client,
 )
@@ -694,7 +695,9 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     # не создаётся (`needs_redis is False`), чтобы default-sql-конфигурация
     # не открывала лишний TCP-resolver.
     needs_redis = (
-        settings.bot.activity_lock_backend == "redis" or settings.bot.lobby_backend == "redis"
+        settings.bot.activity_lock_backend == "redis"
+        or settings.bot.lobby_backend == "redis"
+        or settings.bot.dau_backend == "redis"
     )
     redis_client = build_redis_client(settings.redis) if needs_redis else None
     # Спринт 4.1-G (шаг G.4): config-flag-режим бэкенда `IActivityLockRepository`.
@@ -787,7 +790,25 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         ttl_seconds=60,
     )
     clan_mass_duel_history_query = SqlAlchemyClanMassDuelHistoryQuery(uow=uow)
-    dau_counter = InMemoryDauCounter(clock=clock)
+    # Спринт 4.1-I (шаг I.2): config-flag-режим бэкенда
+    # `IDauCounter`. `sql` (default-name; реально — in-memory
+    # `InMemoryDauCounter`, имя сохранено для единообразия
+    # с `activity_lock_backend`/`lobby_backend` config-flag-ами) —
+    # `asyncio`-Lock-нутый `set[int]` теряется на рестарте.
+    # `redis` — `RedisDauCounter` поверх `redis.asyncio.Redis`
+    # (per-day ZSET `dau:{YYYY-MM-DD}` + TTL 48h; pipelined ZADD+EXPIRE);
+    # переживает рестарт бота, lazy-reset на МСК-полночи
+    # через смену key-а. Требует поднятого Redis-инстанса по
+    # `settings.redis.url`. Default `sql` — backward-compat на момент
+    # 4.1-I-merge-а; Redis включается явным env-флагом
+    # `BOT_DAU_BACKEND=redis`.
+    dau_counter: IDauCounter
+    if settings.bot.dau_backend == "redis":
+        # `needs_redis` гарантирует not-None; ассерт сужает mypy-типы.
+        assert redis_client is not None
+        dau_counter = RedisDauCounter(client=redis_client, clock=clock)
+    else:
+        dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=settings.bot.max_dau)
     dau_threshold_alerter = StructlogDauThresholdAlerter()
     idempotency = SqlAlchemyIdempotencyService(uow=uow)
