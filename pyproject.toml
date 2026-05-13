@@ -51,7 +51,7 @@ dev = [
   "types-PyYAML>=6.0,<7",
   "aiosqlite>=0.20,<1",          # async SQLite для integration-тестов БД-адаптеров
   "freezegun>=1.5,<2",           # подмена времени в integration-тестах
-  "fakeredis>=2.21,<3",          # in-memory Redis для unit/integration-тестов (Спринт 4.1-G)
+  "fakeredis[lua]>=2.21,<3",     # in-memory Redis для unit/integration-тестов (Спринт 4.1-G); [lua] extra тащит `lupa` — нужен для EVAL/EVALSHA в Lua-скриптах `RedisGlobalLobbyRepository` (Спринт 4.1-H)
 ]
 
 [project.urls]

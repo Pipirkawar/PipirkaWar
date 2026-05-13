@@ -342,6 +342,7 @@ from pipirik_wars.infrastructure.rate_limit import (
 )
 from pipirik_wars.infrastructure.redis import (
     RedisActivityLockRepository,
+    RedisGlobalLobbyRepository,
     build_redis_client,
 )
 from pipirik_wars.infrastructure.scheduler import APSchedulerDelayedJobScheduler
@@ -686,6 +687,16 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     clan_members = SqlAlchemyClanMembershipRepository(uow=uow)
     admins = SqlAlchemyAdminRepository(uow=uow)
     signup_queue = SqlAlchemySignupQueueRepository(uow=uow)
+    # Спринт 4.1-G/H: config-flag-режимы Redis-бэкендов. Один
+    # `build_redis_client(settings.redis)` создаётся ровно один раз
+    # (long-lived `ConnectionPool` singleton) и переиспользуется всеми
+    # Redis-репозиториями. Если ни один Redis-бэкенд не включён — клиент
+    # не создаётся (`needs_redis is False`), чтобы default-sql-конфигурация
+    # не открывала лишний TCP-resolver.
+    needs_redis = (
+        settings.bot.activity_lock_backend == "redis" or settings.bot.lobby_backend == "redis"
+    )
+    redis_client = build_redis_client(settings.redis) if needs_redis else None
     # Спринт 4.1-G (шаг G.4): config-flag-режим бэкенда `IActivityLockRepository`.
     # `sql` (default) — `SqlAlchemyActivityLockRepository` поверх таблицы
     # `activity_locks` (текущая, до 4.1-G, имплементация: INSERT ... ON CONFLICT
@@ -696,7 +707,8 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     # env-флагом `BOT_ACTIVITY_LOCK_BACKEND=redis`.
     activity_locks: IActivityLockRepository
     if settings.bot.activity_lock_backend == "redis":
-        redis_client = build_redis_client(settings.redis)
+        # `needs_redis` гарантирует not-None; ассерт сужает mypy-типы.
+        assert redis_client is not None
         activity_locks = RedisActivityLockRepository(
             client=redis_client,
             clock=clock,
@@ -729,7 +741,21 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     oracle_history = SqlAlchemyOracleHistoryRepository(uow=uow)
     duels = SqlAlchemyDuelRepository(uow=uow)
     mass_duels = SqlAlchemyMassDuelRepository(uow=uow)
-    global_lobby = SqlAlchemyGlobalLobbyRepository(uow=uow)
+    # Спринт 4.1-H (шаг H.2): config-flag-режим бэкенда
+    # `IGlobalLobbyRepository`. `sql` (default) —
+    # `SqlAlchemyGlobalLobbyRepository` поверх таблицы `pvp_global_lobby`
+    # (FIFO ON CONFLICT DO NOTHING + SELECT FOR UPDATE SKIP LOCKED).
+    # `redis` — `RedisGlobalLobbyRepository` поверх `redis.asyncio.Redis`
+    # (LIST `lobby:queue` + HASH `lobby:enqueued_at` + 3 атомарных Lua-
+    # скрипта). Default `sql` — backward-compat на момент 4.1-H-merge-а;
+    # Redis включается явным env-флагом `BOT_LOBBY_BACKEND=redis`.
+    global_lobby: IGlobalLobbyRepository
+    if settings.bot.lobby_backend == "redis":
+        # `needs_redis` гарантирует not-None; ассерт сужает mypy-типы.
+        assert redis_client is not None
+        global_lobby = RedisGlobalLobbyRepository(client=redis_client)
+    else:
+        global_lobby = SqlAlchemyGlobalLobbyRepository(uow=uow)
     referrals = SqlAlchemyReferralRepository(uow=uow)
     anticheat = SqlAlchemyAnticheatRepository(uow=uow)
     anticheat_admin_alerter = StructlogAnticheatAdminAlerter()

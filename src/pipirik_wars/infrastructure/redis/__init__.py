@@ -25,10 +25,14 @@ from pipirik_wars.infrastructure.redis.client import build_redis_client
 from pipirik_wars.infrastructure.redis.repositories.activity_lock import (
     RedisActivityLockRepository,
 )
+from pipirik_wars.infrastructure.redis.repositories.global_lobby import (
+    RedisGlobalLobbyRepository,
+)
 from pipirik_wars.infrastructure.redis.settings import RedisSettings
 
 __all__ = [
     "RedisActivityLockRepository",
+    "RedisGlobalLobbyRepository",
     "RedisSettings",
     "build_redis_client",
 ]

@@ -104,6 +104,17 @@ class BotSettings(BaseSettings):
             "`BOT_ACTIVITY_LOCK_BACKEND=redis`."
         ),
     )
+    lobby_backend: Literal["sql", "redis"] = Field(
+        default="sql",
+        description=(
+            "Бэкенд для `IGlobalLobbyRepository` (Спринт 4.1-H, H.2). "
+            "`sql` (default) — `SqlAlchemyGlobalLobbyRepository` поверх "
+            "таблицы `pvp_global_lobby`. `redis` — `RedisGlobalLobbyRepository` "
+            "поверх `redis.asyncio.Redis` (LIST + HASH + atomic Lua-скрипты; "
+            "требует поднятого Redis-инстанса по `settings.redis.url`). "
+            "Переключается env-флагом `BOT_LOBBY_BACKEND=redis`."
+        ),
+    )
 
 
 class BootstrapSettings(BaseSettings):
