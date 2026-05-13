@@ -23,6 +23,63 @@
 
 ---
 
+## 2026-05-13 — Спринт 4.1-N «Бизнес-метрики Prometheus + панели Grafana»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature + infra
+**Связано:** ПД §7 «Фаза 4 — Монетизация и масштаб», задача 4.1.15 «Метрики и дашборд» (остаток после 4.1-J/L). Базируется на `main = f43d7a3` (merge PR #141 «Спринт 4.1-M ИИ-генерация»). **Четырнадцатый и финальный PR Спринта 4.1 — Спринт 4.1 закрыт целиком.**
+
+Что сделано:
+- **N.0 — Snapshot pivot + sticky `AGENT_HANDOFF.md`**. Baseline `make ci` на `main = f43d7a3` зелён: **7124 passed + 2 skipped + 95.37 % cov, 1024.46 с**. Архитектурные решения для бизнес-метрик зафиксированы в HANDOFF.
+- **N.1 — Порт `IBusinessMetrics` + null-object + Prometheus-адаптер.**
+  - `src/pipirik_wars/application/observability/business_metrics.py` (port + null-object, 233 строки): абстрактный класс `IBusinessMetrics` с 13 sync-методами (`set_dau`, `inc/dec_caravan_active`, `inc_caravan_outcome`, `inc/dec_raid_active`, `inc_raid_outcome`, `set_prize_pool_balance`, `inc_roulette_spin`, `inc_duel_resolved`, `inc_forest_started`, `inc_forest_finished`) + Literal-типы (`BusinessMetricsCurrency`/`CaravanOutcome`/`RaidOutcome`/`DuelResolvedOutcome`/`ForestRunOutcome`/`RouletteKind`) + `NullBusinessMetrics` (no-op default).
+  - `src/pipirik_wars/infrastructure/observability/business_metrics.py` (Prometheus-адаптер, 205 строк): `PrometheusBusinessMetrics(registry: CollectorRegistry | None = None)` с 10 метриками — 4 Gauge (`pipirik_dau_active_users`, `pipirik_caravan_active`, `pipirik_raid_active`, `pipirik_prize_pool_balance{currency}`) + 6 Counter (`pipirik_caravan_outcomes_total{outcome}`, `pipirik_raid_outcomes_total{outcome}`, `pipirik_duel_resolved_total{outcome}`, `pipirik_forest_run_started_total`, `pipirik_forest_run_finished_total{outcome}`, `pipirik_roulette_spins_total{kind, prize_class}`). Регистрируются в shared `CollectorRegistry` с RedisMetrics (общий `/metrics`-endpoint на 9100). Все методы wrapped в try/except с `logger.warning` (no-throw guarantee — метрики не должны падать use-case).
+- **N.2 — Инструментация 7 use-case-ов** через kw-only `business_metrics: IBusinessMetrics | None = None` параметр + null-object default:
+  - `CreateCaravan.execute()` → `inc_caravan_active()` после UoW commit.
+  - `CancelCaravan.execute()` → `dec_caravan_active() + inc_caravan_outcome('cancelled')`.
+  - `FinishCaravanBattle.execute()` → `dec_caravan_active() + inc_caravan_outcome('raiders_win' | 'owner_win')`.
+  - `SummonBoss.execute()` → `inc_raid_active()` после UoW commit.
+  - `CancelBossFight.execute()` → `dec_raid_active() + inc_raid_outcome('cancelled')`.
+  - `FinishBossFight.execute()` → `dec_raid_active() + inc_raid_outcome('raiders_win' | 'boss_win')`.
+  - `RecordDonation.execute()` (success path, `applied=True`) → `set_prize_pool_balance(metric_currency, pool_balance_native)`. Currency маппится через `_METRIC_CURRENCY: Mapping[Currency, BusinessMetricsCurrency]` (`STARS → "stars"`, `TON_NANO → "ton"`, `USDT_DECIMAL → "usdt"`).
+- **N.3 — Wire-up в `bot/main.py`**:
+  - `Container.business_metrics: IBusinessMetrics` field прокинут в dataclass.
+  - В `build_container()`: при `needs_redis=True` создаётся `PrometheusBusinessMetrics(registry=metrics_registry)` (тот же `CollectorRegistry`, что и `RedisMetrics`); иначе — `NullBusinessMetrics()`.
+  - Все 7 инструментированных use-case-фабрик получили `business_metrics=business_metrics` в kw-arg-ах.
+  - `_business_metrics_dau_poller(container, *, interval_seconds=60.0)` — фоновая async-функция, читает `container.dau_counter.current()` и пишет в gauge раз в 60 секунд. Запускается через `asyncio.create_task()` в `run()` после поднятия metrics-runner. При `isinstance(container.business_metrics, NullBusinessMetrics)` — `return` сразу (тесты + sql-конфиг). Cancel в finally через `contextlib.suppress(asyncio.CancelledError, Exception)`. **Hot-path RecordPlayerActivity НЕ инструментирован** — DAU как snapshot-gauge точнее и дешевле, чем counter-на-message.
+  - Тест `tests/unit/bot/test_composition_root.py` обновлён: `business_metrics=NullBusinessMetrics()` в test-Container.
+- **N.4 — Grafana dashboard `monitoring/grafana/dashboards/business-metrics.json`** (`schemaVersion: 39`, `uid: pipirik-business-ops`, 6 row-разделителей + 12 data-панелей):
+  - **Активность**: DAU stat / Активные караваны stat / Активные рейды stat (3 Gauge-метрики).
+  - **Призовой пул**: Stars / TON / USDT (3 stat-панели, конвертация TON через `/1e9`, USDT через `/1e6` прямо в PromQL).
+  - **Караваны: исходы**: timeseries `sum by (outcome) (rate(pipirik_caravan_outcomes_total[5m]))`.
+  - **Рейды: исходы**: аналогичный timeseries.
+  - **PvE: лес**: started rate + finished rate by outcome (2 панели).
+  - **PvP & Рулетка**: duel resolved rate by outcome + roulette spins rate by kind/prize_class.
+  - DS_PROMETHEUS templating variable — оператор подставляет datasource при импорте. Auto-provisioning через 4.1-L `provisioning/dashboards/dashboards.yml` (`/var/lib/grafana/dashboards`).
+- **N.5 — Тесты**:
+  - `tests/unit/infrastructure/observability/test_business_metrics.py` (29 тестов): happy-path для каждого из 13 методов PrometheusBusinessMetrics (state-assertions через `registry.get_sample_value`) + параметризация по outcome/currency/kind/prize_class + `TestNullBusinessMetrics` для no-op-проверки.
+  - `tests/integration/monitoring/test_business_metrics_dashboard.py` (10 smoke-тестов): JSON-валидность, top-level schema, ≥5 row + ≥10 data-панелей, у каждой data-панели есть PromQL-target, все `pipirik_*`-литералы из dashboard объявлены в `business_metrics.py`, все 10 expected metric-имён покрыты, все targets ссылаются на `${DS_PROMETHEUS}`, `DS_PROMETHEUS` присутствует в templating.
+- **N.6 — Doc-sync + PR**. Финальный `make ci`: **7166 passed + 2 skipped + 95.26 % cov, 508.71 с** (+42 новых теста к baseline 7124).
+
+Результат / артефакты:
+- `src/pipirik_wars/application/observability/` (port + null-object).
+- `src/pipirik_wars/infrastructure/observability/business_metrics.py` (Prometheus-adapter).
+- Инструментация: `caravans/create_caravan.py`, `caravans/cancel_caravan.py`, `caravans/finish_caravan_battle.py`, `bosses/summon_boss.py`, `bosses/cancel_boss_fight.py`, `bosses/finish_boss_fight.py`, `monetization/record_donation.py`.
+- `src/pipirik_wars/bot/main.py` — Container.business_metrics + DAU poller + cleanup.
+- `monitoring/grafana/dashboards/business-metrics.json`.
+- `tests/unit/infrastructure/observability/test_business_metrics.py` (29 тестов).
+- `tests/integration/monitoring/test_business_metrics_dashboard.py` (10 тестов).
+
+Заметки / решения:
+- **Null-object pattern.** Use-case-конструкторы принимают `IBusinessMetrics | None = None` с null-object default-ом. Это позволяет тестам не настраивать DI для optional-метрик; production-сборка через composition root прокидывает реальный `PrometheusBusinessMetrics`.
+- **Shared CollectorRegistry.** PrometheusBusinessMetrics регистрируется в тот же `CollectorRegistry`, что и `RedisMetrics` (4.1-J/L). Один `/metrics`-endpoint обслуживает обе группы метрик — оператор настраивает один scrape-target в Prometheus.
+- **DAU как gauge, не counter.** Counter-на-message-в-RecordPlayerActivity дорожает на больших чатах и при этом не несёт самостоятельной ценности относительно polling-snapshot. Gauge через background-poller с `IDauCounter.current()` точнее (отражает текущее число активных), дешевле (1 read раз в 60s) и не блокирует hot-path.
+- **No-throw guarantee.** Все методы PrometheusBusinessMetrics обёрнуты в try/except с `logger.warning`. Если prometheus_client упадёт (например, race-условие в `Counter.labels(...)`), метрика будет потеряна, но use-case не упадёт.
+- **Architecture.** Контракты `layered_architecture` / `domain_must_not_import_infrastructure` / `application_must_not_import_io_libs` / `balance_must_not_import_inventory` — 4 kept, 0 broken (import-linter).
+- **Спринт 4.1 закрыт целиком.** После merge 4.1-N все 7 задач Спринта 4.1 (4.1.1–4.1.15 по ПД §7) выполнены: монетизация (Stars/TON/USDT/Prize Pool), Redis-миграция + load-test, ИИ-предсказания, i18n PT/ES/TR/ID/FA/UK, бизнес-метрики + Grafana. Следующий спринт по ПД — 4.2 «Web-админ-панель» или 4.3 «Веб-витрина прайз-пула» (опц.).
+
+---
+
 ## 2026-05-13 — Спринт 4.1-M «ИИ-генерация предсказаний / forest-логов / duel-логов»
 
 **Автор:** Devin (агентская цепочка)
