@@ -1,21 +1,32 @@
 """`Locale` — иммутабельный value object «язык игрока» (ПД 1.5.2).
 
-Поддерживаем только `ru` и `en` на MVP (ПД §3 «Работает RU + EN»).
-Остальные локали из ГДД (PT/ES/TR/ID/FA/UK) появятся в Спринте 4.1.7.
+Каталог локалей расширен в Спринте 4.1-K (PR 4.1-K, задача 4.1.14):
+- MVP-набор: `ru`, `en` (Спринт 1.5.A).
+- 4.1-K: добавлены `pt`, `es`, `tr`, `id`, `fa`, `uk` — для каждого из
+  6 новых языков создан собственный `locales/{code}.ftl`-файл с
+  30-50 ключевыми переводами (`start-*`/`profile-*`/`lang-*`);
+  остальные ~1550 ключей рендерятся через fallback на EN внутри
+  `FluentMessageBundle`. Это backward-compat-расширение: никаких
+  изменений для пользователей `ru`/`en`.
 
 `LocaleResolver` — чистая функция-стратегия, переводящая Telegram
-`language_code` (BCP-47, e.g. `"ru"`, `"ru-RU"`, `"en-US"`, `"en-GB"`)
-в одну из поддерживаемых нами локалей. Стратегия (см. ПД 1.5.2):
+`language_code` (BCP-47, e.g. `"ru"`, `"ru-RU"`, `"en-US"`, `"en-GB"`,
+`"pt-BR"`, `"es-MX"`, `"fa-IR"`, `"uk-UA"`) в одну из поддерживаемых
+нами локалей. Стратегия (см. ПД 1.5.2):
 
-1. `language_code` начинается на `"ru"` (case-insensitive) → `Locale("ru")`
-2. `language_code` начинается на `"en"` (case-insensitive) → `Locale("en")`
-3. иначе (включая `None`, пустую строку, любой другой язык) → `DEFAULT_LOCALE`,
+1. `language_code` начинается на короткий BCP-47-префикс одной из
+   поддерживаемых локалей (case-insensitive) → соответствующая `Locale`.
+2. иначе (включая `None`, пустую строку, любой другой язык) → `DEFAULT_LOCALE`,
    которая равна `Locale("en")` (English fallback из ПД 1.5.2).
+
+Реализация перебирает `SUPPORTED_LOCALES` в **отсортированном** порядке
+по длине-убыванию tie-breaker-а по алфавиту — на момент K.1 все
+поддерживаемые коды двухбуквенные, коллизий префиксов нет.
 
 Решение «русскоговорящие пользователи иногда регистрируются с английской
 телегой» — НЕ делаем эвристик в `LocaleResolver`-е (это не его слой);
-если игроку нужно переключить язык, он делает это командой `/lang ru` или
-`/lang en` (Спринт 1.5.B+, отдельный handler).
+если игроку нужно переключить язык, он делает это командой `/lang <code>`
+(Спринт 1.5.F расширен в 4.1-K на 8 поддерживаемых кодов).
 """
 
 from __future__ import annotations
@@ -42,7 +53,20 @@ class Locale:
             )
 
 
-SUPPORTED_LOCALES: Final[frozenset[str]] = frozenset({"ru", "en"})
+SUPPORTED_LOCALES: Final[frozenset[str]] = frozenset(
+    {
+        # MVP (Спринт 1.5.A)
+        "ru",
+        "en",
+        # Расширение каталога — Спринт 4.1-K (задача 4.1.14)
+        "pt",  # Portuguese (`pt`, `pt-BR`, `pt-PT`)
+        "es",  # Spanish (`es`, `es-ES`, `es-MX`)
+        "tr",  # Turkish (`tr`)
+        "id",  # Indonesian (`id`)
+        "fa",  # Persian / Farsi (`fa`, `fa-IR`) — RTL
+        "uk",  # Ukrainian (`uk`, `uk-UA`)
+    },
+)
 DEFAULT_LOCALE: Final[Locale] = Locale("en")
 
 

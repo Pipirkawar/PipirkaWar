@@ -32,8 +32,8 @@
 
 ## Шаги PR-а (K.0–K.6)
 
-* [x] **K.0** — Snapshot pivot `docs/current_tasks.md` + sticky `AGENT_HANDOFF.md` (этот коммит). Baseline `make ci` зелён.
-* [ ] **K.1** — Application/domain: `SUPPORTED_LOCALES = frozenset({"ru","en","pt","es","tr","id","fa","uk"})` + LocaleResolver-тесты для 6 новых BCP-47 префиксов.
+* [x] **K.0** — Snapshot pivot `docs/current_tasks.md` + sticky `AGENT_HANDOFF.md` (commit `76c2a91`). Baseline `make ci` зелён.
+* [x] **K.1** — Application/domain: `SUPPORTED_LOCALES = frozenset({"ru","en","pt","es","tr","id","fa","uk"})` + LocaleResolver-тесты для 16 BCP-47-вариантов 6 новых локалей. Обновлён расширенный docstring `application/i18n/locale.py`. 54 tests passed.
 * [ ] **K.2** — Infrastructure DB: Alembic-миграция `0008` + UserORM CheckConstraint + integration-тест миграции.
 * [ ] **K.3** — 6 новых `.ftl`-файлов в `locales/{pt,es,tr,id,fa,uk}.ftl` с 30-50 ключевыми ключами на язык.
 * [ ] **K.4** — `LangPresenter.confirmed()` + 6 `_KEY_SET_*` + `lang-set-{pt,es,tr,id,fa,uk}` в `en.ftl`+`ru.ftl` + `lang-usage`/`lang-unsupported` + handler/presenter-тесты.
@@ -58,4 +58,5 @@ pre-commit run --all-files
 
 ## Текущее состояние коммитов на ветке
 
-- (этот коммит K.0) `docs(4.1-K): K.0 — snapshot pivot + sticky AGENT_HANDOFF`
+- `76c2a91` — `docs(4.1-K): K.0 — snapshot pivot + sticky AGENT_HANDOFF`
+- (этот коммит K.1) `feat(4.1-K): K.1 — expand SUPPORTED_LOCALES to 8 (+pt/es/tr/id/fa/uk)`
