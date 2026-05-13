@@ -115,6 +115,23 @@ class BotSettings(BaseSettings):
             "Переключается env-флагом `BOT_LOBBY_BACKEND=redis`."
         ),
     )
+    dau_backend: Literal["sql", "redis"] = Field(
+        default="sql",
+        description=(
+            "Бэкенд для `IDauCounter` (Спринт 4.1-I, I.2). "
+            "`sql` (default-name; реально — in-memory `InMemoryDauCounter` "
+            "из `infrastructure/dau`; имя `sql` сохранено для единообразия "
+            "с `activity_lock_backend`/`lobby_backend`) — счётчик активных "
+            "за день живёт в `asyncio`-Lock-нутом `set[int]` и теряется на "
+            "рестарте бота (по-прежнему достаточно для MVP DAU=200). "
+            "`redis` — `RedisDauCounter` поверх `redis.asyncio.Redis` "
+            "(per-day ZSET `dau:{YYYY-MM-DD}` + TTL 48h; pipelined "
+            "ZADD+EXPIRE; ZCARD-based `current()`). Переживает рестарт, "
+            "lazy-reset на МСК-полночи через смену key-а. Требует поднятого "
+            "Redis-инстанса по `settings.redis.url`. Переключается "
+            "env-флагом `BOT_DAU_BACKEND=redis`."
+        ),
+    )
 
 
 class BootstrapSettings(BaseSettings):

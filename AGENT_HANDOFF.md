@@ -1,17 +1,18 @@
-# AGENT HANDOFF — Спринт 4.1-I (Redis DAU-миграция, шаг 1/6)
+# AGENT HANDOFF — Спринт 4.1-I (Redis DAU-миграция, шаг 2/6)
 
 > Этот файл — временный safety-net. Обновляется в том же коммите, что и основные изменения, и лежит в ветке пока есть незаконченная работа. Удали его отдельным коммитом перед открытием PR-а.
 
 ## Что я сделал в этой сессии
 
 - I.0 (commit `ab4684d`) — pivot `docs/current_tasks.md` под старт 4.1-I + создан sticky `AGENT_HANDOFF.md`. Baseline `make ci` на `main = f6d2fa0` зелён: 6943 passed + 2 skipped + 95.50 % cov.
-- I.1 (этот коммит) — `RedisDauCounter(IDauCounter)` в `src/pipirik_wars/infrastructure/redis/repositories/dau.py`. Key-format `dau:{YYYY-MM-DD}` ZSET (`ZADD score=unix_ts member=str(tg_user_id)` + `EXPIRE 172800`) в одном MULTI/EXEC-pipeline; `current()` — `ZCARD` по key-у текущего МСК-дня. Lazy-reset на границе МСК-полуночи через смену key-а (`InMemoryDauCounter`-семантика воспроизводится 1-в-1). Кастомный `key_prefix` (default `"dau"`); namespace-н с `lock` (4.1-G) и `lobby` (4.1-H). Экспорты добавлены в `infrastructure/redis/__init__.py` + `infrastructure/redis/repositories/__init__.py`. +14 unit-тестов в `tests/unit/infrastructure/redis/repositories/test_dau.py` через `fakeredis.aioredis.FakeRedis` (empty / уникальность / score=timestamp / TTL 48h / repeated update / 5× МСК-границ / key_prefix / concurrent 10×same + 50×distinct). `ruff` All checks passed, `mypy` Success (1 source file), `lint-imports` 4/4 KEPT.
+- I.1 (commit `b2e5efe`) — `RedisDauCounter(IDauCounter)` в `infrastructure/redis/repositories/dau.py`. Key-format `dau:{YYYY-MM-DD}` ZSET (`ZADD` + `EXPIRE 172800`) в MULTI/EXEC-pipeline; `current()` = `ZCARD`. Lazy-reset на границе МСК-полуночи через смену key-а. +14 unit-тестов.
+- I.2 (этот коммит) — config-flag `BotSettings.dau_backend: Literal["sql","redis"] = "sql"` (env `BOT_DAU_BACKEND`); composition-root switch в `bot/main.py::build_container`: `needs_redis = activity_lock_backend == "redis" or lobby_backend == "redis" or dau_backend == "redis"`; `dau_counter: IDauCounter` ⇒ `RedisDauCounter(client=redis_client, clock=clock)` при `redis`, иначе `InMemoryDauCounter(clock=clock)`. +4 composition-root-теста в `tests/unit/bot/test_composition_root.py` (default sql / explicit redis / all-three-redis-share-single-client / only-dau-redis-triggers-needs_redis). Общий прогон `test_composition_root.py` — 22 passed. `ruff` All checks passed, `mypy` Success (2 source files).
 
 ## На каком файле/задаче остановился
 
-- **Файл:** ещё не открыт — `src/pipirik_wars/infrastructure/settings/settings.py` (`BotSettings.dau_backend`) + `src/pipirik_wars/bot/main.py` (composition-root switch); предстоит шаг I.2.
-- **Что планировал дальше:** I.2 — config-flag `BOT_DAU_BACKEND: Literal["sql","redis"] = "sql"` в `BotSettings` (по аналогии с `activity_lock_backend` / `lobby_backend`). `bot/main.py::build_container::needs_redis` расширить: `needs_redis = activity_lock_backend == "redis" or lobby_backend == "redis" or dau_backend == "redis"`. Switch для `dau_counter: IDauCounter`: при `dau_backend == "redis"` инжектить `RedisDauCounter(client=redis_client, clock=clock)`, иначе `InMemoryDauCounter(clock=clock)`. +composition-root-тесты: default sql, explicit redis, mixed-комбинации (по аналогии с H.2 — все пермутации флагов).
-- **Где брать ТЗ:** `docs/current_tasks.md` секция «Чек-лист текущего PR — 4.1-I» (шаги I.0–I.6). Архивы 4.1-G (`infrastructure/redis/repositories/activity_lock.py`) и 4.1-H (`global_lobby.py`) — образцы кодстайла + unit/integration-тестов.
+- **Файл:** ещё не создан — `tests/integration/redis/test_dau_redis.py`; предстоит шаг I.3.
+- **Что планировал дальше:** I.3 — integration-тесты через `fakeredis.aioredis.FakeRedis` (full lifecycle / dedup-по-ZADD-score-инварианту / cross-midnight cleanup / concurrent record_active 50×gather / TTL-key-expires эмуляция через `redis.delete(...)` / key_prefix isolation). По паттерну `tests/integration/redis/test_activity_lock_redis.py` + `test_global_lobby_redis.py`.
+- **Где брать ТЗ:** `docs/current_tasks.md` секция «Чек-лист текущего PR — 4.1-I» (шаги I.0–I.6). Архивы 4.1-G (`activity_lock.py`) и 4.1-H (`global_lobby.py`) — образцы кодстайла + integration-тестов.
 
 ## Расхождение факта и плана (зафиксировано в I.0)
 
@@ -21,9 +22,9 @@
 
 - Ветка: `devin/1778643622-sprint-4-1-I-redis-dau-migration`
 - База: `main` (`f6d2fa0`)
-- Последний коммит: `<this commit>` `feat(4.1-I): I.1 — RedisDauCounter (per-day ZSET + 48h TTL) + unit-tests`
+- Последний коммит: `<this commit>` `feat(4.1-I): I.2 — BOT_DAU_BACKEND config-flag + composition-root switch + tests`
 - Незакоммиченные изменения: нет
-- CI прогонялся? частично: только `pytest tests/unit/infrastructure/redis/repositories/test_dau.py` (14 passed), `ruff` + `mypy` на новый файл — зелёные. Полный `make ci` будет в I.4.
+- CI прогонялся? частично: `pytest tests/unit/bot/test_composition_root.py` (22 passed), `pytest tests/unit/infrastructure/redis/repositories/test_dau.py` (14 passed), `ruff` + `mypy` на изменённые файлы — зелёные. Полный `make ci` будет в I.4.
 
 ## Команды для следующего агента
 
