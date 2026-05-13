@@ -107,3 +107,10 @@ lang-usage = Uso: /lang ru|en|pt|es|tr|id|fa|uk.
 lang-unsupported = Idioma `{ $code }` não é suportado. Disponíveis: ru, en, pt, es, tr, id, fa, uk.
 
 lang-set-pt = Idioma da interface alterado para português. Todas as respostas e mensagens em segundo plano agora serão em português.
+
+# ───────────────────────────────────────────────────────────────────────────
+# Announcement Channel (Sprint 4.9)
+# ───────────────────────────────────────────────────────────────────────────
+announce-channel-disabled = ❌ Announcement channel not configured. Set <code>BOT_ANNOUNCEMENT_CHANNEL_ID</code>.
+announce-weekly-confirm = 🛡️ Confirm publishing weekly digest. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.
+announce-leaderboard-confirm = 🛡️ Confirm publishing leaderboard. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.

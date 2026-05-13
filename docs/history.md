@@ -23,6 +23,37 @@
 
 ---
 
+## 2026-05-13 — Спринт 4.9: Канал-анонсы (Announcement Channel)
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** Спринт 4.9 (ГДД §1.2, development_plan.md §11). Ветка: `devin/1778711591-sprint-4-9-announcements`.
+
+Что сделано:
+- Новый domain-пакет `domain/announcements/`: порт `IAnnouncementPublisher`, сущности `WeeklyDigest`, `LeaderboardSnapshot`, `PlayerWeeklyEntry`, `ClanWeeklyEntry`
+- Application use-cases: `PublishWeeklyDigest` (топ-10 игроков, топ-5 кланов, игрок/племя недели, статистика), `PublishLeaderboard`
+- Infrastructure: `AiogramAnnouncementPublisher` (через `Bot.send_message`), `SqlAlchemyAnnouncementStatsQuery` (SQL-агрегация за период)
+- Настройки в `BotSettings`: `announcement_channel_id`, `announcement_weekly_enabled`, `announcement_weekly_cron`
+- Фоновый scheduler `_announcement_scheduler()` с custom cron-matching в `bot/main.py`
+- Admin-команды `/announce_weekly`, `/announce_leaderboard` (двухфазный TOTP-flow)
+- Web-панель: POST-эндпоинты для публикации дайджеста и лидерборда
+- Локализация: 3 новых ключа в 8 locale-файлах (ru, en, es, fa, id, pt, tr, uk)
+- 45 unit-тестов (domain, application, infrastructure, bot/cron)
+
+Результат / артефакты:
+- `src/pipirik_wars/domain/announcements/` — порт и сущности
+- `src/pipirik_wars/application/announcements/` — use-cases и stats query
+- `src/pipirik_wars/infrastructure/announcements/` — publisher и SQL stats
+- `src/pipirik_wars/bot/handlers/admin_announcements.py` — admin handlers
+- `src/pipirik_wars/admin_web/routes/announcements.py` — web panel routes
+- `tests/unit/*/announcements/` — 45 тестов
+
+Заметки / решения:
+- Cron-matching реализован custom-парсером (без APScheduler), поддерживает *, точные значения, ranges, steps, comma-separated
+- Tracking «уже опубликовано на этой неделе» через `isocalendar()` (год, номер недели) in-memory set
+
+---
+
 ## 2026-05-13 — Полная испанская локализация (locales/es.ftl)
 
 **Автор:** Devin (агентская цепочка)

@@ -107,3 +107,10 @@ lang-usage = Kullanım: /lang ru|en|pt|es|tr|id|fa|uk.
 lang-unsupported = `{ $code }` dili desteklenmiyor. Mevcut: ru, en, pt, es, tr, id, fa, uk.
 
 lang-set-tr = Arayüz dili Türkçe olarak değiştirildi. Tüm yanıtlar ve arka plan mesajları artık Türkçe olacak.
+
+# ───────────────────────────────────────────────────────────────────────────
+# Announcement Channel (Sprint 4.9)
+# ───────────────────────────────────────────────────────────────────────────
+announce-channel-disabled = ❌ Announcement channel not configured. Set <code>BOT_ANNOUNCEMENT_CHANNEL_ID</code>.
+announce-weekly-confirm = 🛡️ Confirm publishing weekly digest. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.
+announce-leaderboard-confirm = 🛡️ Confirm publishing leaderboard. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.

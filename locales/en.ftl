@@ -1607,3 +1607,11 @@ admin-unfreeze-payouts-totp-not-configured = ❌ Your TOTP is not configured. <c
 admin-unfreeze-payouts-confirm-issued = 🛡️ Confirm unfreezing payouts. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>. The token expires in { $ttl_seconds } seconds.
 admin-unfreeze-payouts-success = ✅ Crypto payouts are now allowed again.
 admin-unfreeze-payouts-already-unfrozen = ℹ️ Crypto payouts were not frozen — nothing to unfreeze.
+
+# ───────────────────────────────────────────────────────────────────────────
+# Announcement Channel (Sprint 4.9) — `/announce_weekly`, `/announce_leaderboard`
+# Publish weekly digest and leaderboard to public channel.
+# ───────────────────────────────────────────────────────────────────────────
+announce-channel-disabled = ❌ Announcement channel not configured. Set <code>BOT_ANNOUNCEMENT_CHANNEL_ID</code>.
+announce-weekly-confirm = 🛡️ Confirm publishing weekly digest. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.
+announce-leaderboard-confirm = 🛡️ Confirm publishing leaderboard. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.

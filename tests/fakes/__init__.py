@@ -14,6 +14,8 @@ from tests.fakes.admin_authz import (
     FakeAdminAuthzMatrix,
 )
 from tests.fakes.admin_repo import FakeAdminRepository
+from tests.fakes.announcement_publisher import FakeAnnouncementPublisher
+from tests.fakes.announcement_stats import FakeAnnouncementStatsQuery
 from tests.fakes.anticheat_admin_alerter import (
     AnticheatAdminAlertEvent,
     FakeAnticheatAdminAlerter,
@@ -101,6 +103,8 @@ __all__ = [
     "FakeAdminAuthzDenyAll",
     "FakeAdminAuthzMatrix",
     "FakeAdminRepository",
+    "FakeAnnouncementPublisher",
+    "FakeAnnouncementStatsQuery",
     "FakeAnticheatAdminAlerter",
     "FakeAnticheatRepository",
     "FakeAuditLogger",

@@ -107,3 +107,10 @@ lang-usage = Penggunaan: /lang ru|en|pt|es|tr|id|fa|uk.
 lang-unsupported = Bahasa `{ $code }` tidak didukung. Tersedia: ru, en, pt, es, tr, id, fa, uk.
 
 lang-set-id = Bahasa antarmuka diubah ke Bahasa Indonesia. Semua balasan dan pesan latar belakang sekarang akan dalam Bahasa Indonesia.
+
+# ───────────────────────────────────────────────────────────────────────────
+# Announcement Channel (Sprint 4.9)
+# ───────────────────────────────────────────────────────────────────────────
+announce-channel-disabled = ❌ Announcement channel not configured. Set <code>BOT_ANNOUNCEMENT_CHANNEL_ID</code>.
+announce-weekly-confirm = 🛡️ Confirm publishing weekly digest. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.
+announce-leaderboard-confirm = 🛡️ Confirm publishing leaderboard. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.

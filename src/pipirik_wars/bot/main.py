@@ -31,6 +31,7 @@ import contextlib
 import logging
 import secrets
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher
@@ -62,6 +63,13 @@ from pipirik_wars.application.admin import (
     UnfreezeClanAdmin,
     UnfreezePlayer,
     VerifyAdminConfirm,
+)
+from pipirik_wars.application.announcements import (
+    PublishLeaderboard,
+    PublishWeeklyDigest,
+)
+from pipirik_wars.application.announcements.stats_query import (
+    IAnnouncementStatsQuery,
 )
 from pipirik_wars.application.anticheat import LiftAnticheatBan
 from pipirik_wars.application.balance import ReloadBalance
@@ -215,6 +223,7 @@ from pipirik_wars.domain.admin import (
     ITotpVerifier,
     RoleBasedAdminAuthorizationPolicy,
 )
+from pipirik_wars.domain.announcements.ports import IAnnouncementPublisher
 from pipirik_wars.domain.anticheat import IAnticheatAdminAlerter, IAnticheatRepository
 from pipirik_wars.domain.balance import IBalanceConfig, IBalanceReloader
 from pipirik_wars.domain.bosses import (
@@ -279,6 +288,10 @@ from pipirik_wars.infrastructure.ai import (
     AiForestLogTemplateProvider,
     AiOracleTemplateProvider,
     OpenAiTextGenerator,
+)
+from pipirik_wars.infrastructure.announcements import (
+    AiogramAnnouncementPublisher,
+    SqlAlchemyAnnouncementStatsQuery,
 )
 from pipirik_wars.infrastructure.anticheat import StructlogAnticheatAdminAlerter
 from pipirik_wars.infrastructure.balance import YamlBalanceLoader
@@ -686,6 +699,12 @@ class Container:
     broadcast_task_spawner: IBroadcastTaskSpawner
     # Спринт 2.5-D.6: self-service выдача TOTP-секрета (`/admin_setup_totp`).
     setup_admin_totp: SetupAdminTotp
+
+    # Канал-анонсы (Спринт 4.9)
+    announcement_publisher: IAnnouncementPublisher | None
+    announcement_stats_query: IAnnouncementStatsQuery | None
+    publish_weekly_digest: PublishWeeklyDigest | None
+    publish_leaderboard: PublishLeaderboard | None
 
 
 def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоский DI-список оправдан
@@ -2156,6 +2175,30 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         secret_generator=totp_secret_generator,
         bootstrap_password=bootstrap_admin_password,
     )
+
+    # ── Спринт 4.9: Канал-анонсы ──
+    announcement_publisher: IAnnouncementPublisher | None = None
+    announcement_stats_query: IAnnouncementStatsQuery | None = None
+    publish_weekly_digest: PublishWeeklyDigest | None = None
+    publish_leaderboard: PublishLeaderboard | None = None
+    if settings.bot.announcement_channel_id is not None and bot is not None:
+        announcement_publisher = AiogramAnnouncementPublisher(bot=bot)
+        announcement_stats_query = SqlAlchemyAnnouncementStatsQuery(
+            session_factory=session_maker,
+        )
+        publish_weekly_digest = PublishWeeklyDigest(
+            publisher=announcement_publisher,
+            players_query=top_players_query,
+            clans_query=top_clans_query,
+            stats_query=announcement_stats_query,
+            clock=clock,
+        )
+        publish_leaderboard = PublishLeaderboard(
+            publisher=announcement_publisher,
+            players_query=top_players_query,
+            clans_query=top_clans_query,
+        )
+
     return Container(
         clock=clock,
         random=RealRandom(),
@@ -2321,6 +2364,10 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         broadcast_sender=broadcast_sender,
         broadcast_task_spawner=broadcast_task_spawner,
         setup_admin_totp=setup_admin_totp,
+        announcement_publisher=announcement_publisher,
+        announcement_stats_query=announcement_stats_query,
+        publish_weekly_digest=publish_weekly_digest,
+        publish_leaderboard=publish_leaderboard,
     )
 
 
@@ -2531,6 +2578,10 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
     # (уже проброшен в dispatcher выше).
     dispatcher["freeze_payouts"] = container.freeze_payouts
     dispatcher["unfreeze_payouts"] = container.unfreeze_payouts
+    # Канал-анонсы (Спринт 4.9)
+    dispatcher["publish_weekly_digest"] = container.publish_weekly_digest
+    dispatcher["publish_leaderboard"] = container.publish_leaderboard
+    dispatcher["announcement_channel_id"] = container.settings.bot.announcement_channel_id
     return dispatcher
 
 
@@ -2543,6 +2594,84 @@ _ALLOWED_UPDATES = (
     "my_chat_member",
     "chat_member",
 )
+
+
+async def _announcement_scheduler(container: Container, *, interval_seconds: float = 60.0) -> None:
+    """Фоновый таск проверки расписания еженедельного дайджеста (Спринт 4.9).
+
+    Каждые `interval_seconds` секунд проверяет, совпадает ли текущее
+    время с cron-выражением и не публиковался ли дайджест на этой неделе.
+    """
+    channel_id = container.settings.bot.announcement_channel_id
+    if (
+        channel_id is None
+        or container.publish_weekly_digest is None
+        or not container.settings.bot.announcement_weekly_enabled
+    ):
+        return
+
+    cron_expr = container.settings.bot.announcement_weekly_cron
+    published_weeks: set[tuple[int, int]] = set()
+
+    while True:
+        try:
+            now = container.clock.now()
+            iso = now.isocalendar()
+            week_key = (iso[0], iso[1])
+
+            if week_key not in published_weeks and _cron_matches(cron_expr, now):
+                await container.publish_weekly_digest.execute(
+                    channel_id=channel_id,
+                )
+                published_weeks.add(week_key)
+                logger.info(
+                    "announcement_scheduler_published",
+                    extra={"week_key": week_key},
+                )
+        except Exception:
+            logger.warning("announcement_scheduler_error", exc_info=True)
+        await asyncio.sleep(interval_seconds)
+
+
+def _cron_matches(cron_expr: str, now: datetime) -> bool:
+    """Check if current time matches the cron expression (minute hour dom month dow)."""
+
+    parts = cron_expr.split()
+    if len(parts) != 5:
+        return False
+
+    minute_str, hour_str, dom_str, month_str, dow_str = parts
+    return (
+        _cron_field_matches(minute_str, now.minute)
+        and _cron_field_matches(hour_str, now.hour)
+        and _cron_field_matches(dom_str, now.day)
+        and _cron_field_matches(month_str, now.month)
+        and _cron_field_matches(dow_str, now.isoweekday() % 7)
+    )
+
+
+def _cron_field_matches(field: str, value: int) -> bool:
+    """Check if a single cron field matches the value."""
+    if field == "*":
+        return True
+    for part in field.split(","):
+        if "/" in part:
+            base, step = part.split("/", 1)
+            step_val = int(step)
+            if base == "*":
+                if value % step_val == 0:
+                    return True
+            else:
+                base_val = int(base)
+                if value >= base_val and (value - base_val) % step_val == 0:
+                    return True
+        elif "-" in part:
+            low, high = part.split("-", 1)
+            if int(low) <= value <= int(high):
+                return True
+        elif int(part) == value:
+            return True
+    return False
 
 
 async def _business_metrics_dau_poller(
@@ -2682,6 +2811,14 @@ async def run(
         name="business-metrics-dau-poller",
     )
 
+    # Спринт 4.9: фоновый таск расписания еженедельных анонсов.
+    announcement_task: asyncio.Task[None] | None = None
+    if container.publish_weekly_digest is not None:
+        announcement_task = asyncio.create_task(
+            _announcement_scheduler(container),
+            name="announcement-scheduler",
+        )
+
     try:
         await dispatcher.start_polling(
             bot,
@@ -2691,6 +2828,10 @@ async def run(
         dau_metrics_task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await dau_metrics_task
+        if announcement_task is not None:
+            announcement_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await announcement_task
         if ai_refresh_task is not None:
             ai_refresh_task.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):

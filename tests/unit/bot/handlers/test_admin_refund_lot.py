@@ -43,6 +43,7 @@ from pipirik_wars.application.admin import (
     SetBalanceValue,
     VerifyAdminConfirmOutput,
 )
+from pipirik_wars.application.announcements import PublishLeaderboard, PublishWeeklyDigest
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
 from pipirik_wars.application.monetization import (
@@ -162,6 +163,8 @@ def _deps(*, refund_lot: RefundLot | None = None) -> ConfirmDispatchDeps:
         refund_lot=refund_lot or _stub_refund_lot(),
         freeze_payouts=cast(FreezePayouts, MagicMock(spec=FreezePayouts)),
         unfreeze_payouts=cast(UnfreezePayouts, MagicMock(spec=UnfreezePayouts)),
+        publish_weekly_digest=cast(PublishWeeklyDigest, MagicMock(spec=PublishWeeklyDigest)),
+        publish_leaderboard=cast(PublishLeaderboard, MagicMock(spec=PublishLeaderboard)),
     )
 
 

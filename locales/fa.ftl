@@ -113,3 +113,10 @@ lang-usage = طرز استفاده: /lang ru|en|pt|es|tr|id|fa|uk.
 lang-unsupported = زبان `{ $code }` پشتیبانی نمی‌شود. موجود: ru, en, pt, es, tr, id, fa, uk.
 
 lang-set-fa = زبان رابط به فارسی تغییر یافت. تمام پاسخ‌ها و پیام‌های پس‌زمینه اکنون به فارسی خواهد بود.
+
+# ───────────────────────────────────────────────────────────────────────────
+# Announcement Channel (Sprint 4.9)
+# ───────────────────────────────────────────────────────────────────────────
+announce-channel-disabled = ❌ Announcement channel not configured. Set <code>BOT_ANNOUNCEMENT_CHANNEL_ID</code>.
+announce-weekly-confirm = 🛡️ Confirm publishing weekly digest. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.
+announce-leaderboard-confirm = 🛡️ Confirm publishing leaderboard. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.
