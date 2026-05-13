@@ -60,7 +60,9 @@ class UserORM(Base):
         CheckConstraint("length_cm >= 0", name="length_non_negative"),
         CheckConstraint("thickness_level >= 1", name="thickness_positive"),
         CheckConstraint(
-            "locale_override IS NULL OR locale_override IN ('ru', 'en')",
+            # Расширено в Спринте 4.1-K (миграция 0039) до 8 локалей.
+            "locale_override IS NULL OR locale_override IN "
+            "('ru', 'en', 'pt', 'es', 'tr', 'id', 'fa', 'uk')",
             name="users_locale_override_supported",
         ),
     )

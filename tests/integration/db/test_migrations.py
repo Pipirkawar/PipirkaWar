@@ -8,13 +8,15 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 
 
 def _alembic_config(db_url: str) -> Config:
@@ -83,6 +85,7 @@ class TestAlembicMigrationsApplyCleanly:
         assert "0032_audit_source_prize_lot_reserved" in revisions
         assert "0037_payout_freeze_and_prize_lot_winner_id" in revisions
         assert "0038_ton_connect_nonces" in revisions
+        assert "0039_users_locale_override_extended_languages" in revisions
 
     def test_0002_descends_from_0001(self) -> None:
         cfg = _alembic_config("sqlite:///:memory:")
@@ -308,6 +311,15 @@ class TestAlembicMigrationsApplyCleanly:
         assert rev_0038 is not None
         assert rev_0038.down_revision == "0037_payout_freeze_and_prize_lot_winner_id"
 
+    def test_0039_descends_from_0038(self) -> None:
+        cfg = _alembic_config("sqlite:///:memory:")
+        script = ScriptDirectory.from_config(cfg)
+        rev_0039 = script.get_revision(
+            "0039_users_locale_override_extended_languages",
+        )
+        assert rev_0039 is not None
+        assert rev_0039.down_revision == "0038_ton_connect_nonces"
+
     def test_versions_dir_lists_only_known_files(self) -> None:
         """Если кто-то добавил миграцию мимо общего пайплайна — увидим."""
         files = sorted(p.name for p in _migrations_path().glob("*.py"))
@@ -350,6 +362,7 @@ class TestAlembicMigrationsApplyCleanly:
             "20260511_0036_prize_lots_reserved_at.py",
             "20260512_0037_payout_freeze_and_prize_lot_winner_id.py",
             "20260512_0038_ton_connect_nonces.py",
+            "20260513_0039_users_locale_override_extended_languages.py",
         ]
 
     def test_upgrade_head_creates_all_tables(
@@ -611,6 +624,116 @@ class TestAlembicMigrationsApplyCleanly:
         assert set(pk["constrained_columns"]) == {"nonce"}
         assert "ix_ton_connect_nonces_expires_at" in index_names
         assert "ix_ton_connect_nonces_scope_nonce_consumed_at" in index_names
+
+    def test_0039_extends_locale_override_check_to_eight_locales(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Спринт 4.1-K, K.2: миграция 0039 разрешает 6 новых локалей.
+
+        Сценарий: upgrade-to-head создаёт CHECK с 8 значениями; INSERT-ы
+        с новыми `pt`/`es`/`tr`/`id`/`fa`/`uk` проходят; INSERT с
+        неподдерживаемым значением (`fr`) валится IntegrityError-ом.
+        """
+        db_path = tmp_path / "alembic_0039.sqlite"
+        async_url = f"sqlite+aiosqlite:///{db_path}"
+        monkeypatch.setenv("DATABASE_URL", async_url)
+
+        cfg = _alembic_config(async_url)
+        command.upgrade(cfg, "head")
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            with engine.begin() as conn:
+                # SQLite по умолчанию игнорирует CHECK-ограничения, пока
+                # не включён `PRAGMA foreign_keys` — для CHECK-constraint
+                # они работают всегда, но фиксируем явно.
+                now_iso = datetime.now(UTC).isoformat()
+                for idx, code in enumerate(
+                    ["ru", "en", "pt", "es", "tr", "id", "fa", "uk"],
+                ):
+                    conn.execute(
+                        text(
+                            "INSERT INTO users "
+                            "(tg_id, length_cm, thickness_level, "
+                            "locale_override, created_at, updated_at) "
+                            "VALUES (:tg, 0, 1, :loc, :now, :now)"
+                        ),
+                        {"tg": 1_000_000 + idx, "loc": code, "now": now_iso},
+                    )
+                # NULL — всегда валидное значение (нет override-а).
+                conn.execute(
+                    text(
+                        "INSERT INTO users "
+                        "(tg_id, length_cm, thickness_level, "
+                        "locale_override, created_at, updated_at) "
+                        "VALUES (:tg, 0, 1, NULL, :now, :now)"
+                    ),
+                    {"tg": 2_000_000, "now": now_iso},
+                )
+
+            # Неподдерживаемое значение должно ронять CHECK.
+            with pytest.raises(IntegrityError), engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "INSERT INTO users "
+                        "(tg_id, length_cm, thickness_level, "
+                        "locale_override, created_at, updated_at) "
+                        "VALUES (:tg, 0, 1, 'fr', :now, :now)"
+                    ),
+                    {"tg": 3_000_000, "now": now_iso},
+                )
+        finally:
+            engine.dispose()
+
+    def test_0039_downgrade_reverts_to_two_locales(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Спринт 4.1-K, K.2: downgrade 0039 → 0038 возвращает старый CHECK.
+
+        После downgrade INSERT с расширенной локалью (`pt`) валится
+        IntegrityError-ом; INSERT с MVP-локалью (`ru`/`en`) — проходит.
+        """
+        db_path = tmp_path / "alembic_0039_down.sqlite"
+        async_url = f"sqlite+aiosqlite:///{db_path}"
+        monkeypatch.setenv("DATABASE_URL", async_url)
+
+        cfg = _alembic_config(async_url)
+        command.upgrade(cfg, "head")
+        command.downgrade(cfg, "0038_ton_connect_nonces")
+
+        engine = create_engine(f"sqlite:///{db_path}")
+        try:
+            now_iso = datetime.now(UTC).isoformat()
+            with engine.begin() as conn:
+                # MVP-локали остаются валидными.
+                for idx, code in enumerate(["ru", "en"]):
+                    conn.execute(
+                        text(
+                            "INSERT INTO users "
+                            "(tg_id, length_cm, thickness_level, "
+                            "locale_override, created_at, updated_at) "
+                            "VALUES (:tg, 0, 1, :loc, :now, :now)"
+                        ),
+                        {"tg": 4_000_000 + idx, "loc": code, "now": now_iso},
+                    )
+
+            # `pt` после downgrade-а уже не валиден.
+            with pytest.raises(IntegrityError), engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "INSERT INTO users "
+                        "(tg_id, length_cm, thickness_level, "
+                        "locale_override, created_at, updated_at) "
+                        "VALUES (:tg, 0, 1, 'pt', :now, :now)"
+                    ),
+                    {"tg": 5_000_000, "now": now_iso},
+                )
+        finally:
+            engine.dispose()
 
     def test_downgrade_then_upgrade_round_trips(
         self,
