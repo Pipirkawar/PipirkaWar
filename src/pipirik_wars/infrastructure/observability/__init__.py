@@ -9,6 +9,7 @@
 «счётчик/гистограмма», `domain` про observability не знает.
 """
 
+from pipirik_wars.infrastructure.observability.http import build_metrics_app
 from pipirik_wars.infrastructure.observability.redis_metrics import RedisMetrics
 
-__all__ = ["RedisMetrics"]
+__all__ = ["RedisMetrics", "build_metrics_app"]

@@ -132,6 +132,21 @@ class BotSettings(BaseSettings):
             "env-флагом `BOT_DAU_BACKEND=redis`."
         ),
     )
+    metrics_port: int = Field(
+        default=9100,
+        ge=1,
+        le=65535,
+        description=(
+            "TCP-порт для Prometheus-scrape-endpoint-а `/metrics` "
+            "(Спринт 4.1-J, J.2). Поднимается в composition-root-е "
+            "**только** если активирован хотя бы один Redis-бэкенд "
+            "(`activity_lock_backend=redis` / `lobby_backend=redis` / "
+            "`dau_backend=redis`) — observability включается строго "
+            "вместе с Redis. Default `9100` (стандартный Prometheus "
+            "node-exporter-конвенция); кастомизируется env-флагом "
+            "`BOT_METRICS_PORT`."
+        ),
+    )
 
 
 class BootstrapSettings(BaseSettings):

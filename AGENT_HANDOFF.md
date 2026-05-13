@@ -53,16 +53,28 @@
   nested-track + no-op `metrics=None`-smoke на `RedisDauCounter`.
   `make ci` зелён: **6982 passed + 2 skipped + 95 % cov**.
 
-* [ ] **J.2** — `src/pipirik_wars/infrastructure/observability/http.py`:
-  `build_metrics_app(registry) -> aiohttp.web.Application` с одним
-  GET-route `/metrics`. Content-Type — `prometheus_client.CONTENT_TYPE_LATEST`
-  (на 0.25.x: `text/plain; version=1.0.0; charset=utf-8`; HANDOFF J.0
-  упоминал `version=0.0.4` — устаревшая формулировка, тесты сверяют
-  с константой библиотеки). Отдельный порт `BOT_METRICS_PORT` (default
-  `9100`). Регистрация в composition-root **только** при
-  `needs_redis=True`. Тесты: 200 OK + Content-Type + payload содержит
-  имена `pipirik_redis_op_total` / `pipirik_redis_op_duration_seconds`
-  / 404 на других путях.
+* [x] **J.2** — `src/pipirik_wars/infrastructure/observability/http.py`:
+  `build_metrics_app(registry: CollectorRegistry) -> aiohttp.web.Application`
+  с одним GET-route `/metrics` (Content-Type =
+  `prometheus_client.CONTENT_TYPE_LATEST`; на 0.25.x — `text/plain;
+  version=1.0.0; charset=utf-8`). `BotSettings.metrics_port: int = 9100`
+  (env `BOT_METRICS_PORT`, range 1–65535). Composition-root
+  (`bot/main.py::build_container`): при `needs_redis=True` собирается
+  ровно один `CollectorRegistry()` + `RedisMetrics(registry=...)`,
+  который инжектируется во все три Redis-репозитория через
+  `metrics=...`-параметр. `Container` расширен полем
+  `metrics_registry: CollectorRegistry | None` (`None` при default-sql).
+  `run()`: если `container.metrics_registry is not None`, поднимается
+  `web.AppRunner` + `web.TCPSite("0.0.0.0", settings.bot.metrics_port)`,
+  в `finally` — `await metrics_runner.cleanup()`. Тесты: `tests/unit/
+  infrastructure/observability/test_http.py` (6 тестов) — 200 OK +
+  `CONTENT_TYPE_LATEST` + metric-names в payload + sample-values
+  + 404 на другом path + 405 на POST + empty-registry sanity.
+  `tests/unit/bot/test_composition_root.py` (+5 тестов) —
+  metrics_registry=None при default-sql / metrics_registry-not-None
+  на каждый из трёх Redis-backend-ов + sanity-инвариант «все
+  три Redis-repo-я share `_metrics`-instance». `make ci` зелён:
+  **6994 passed + 2 skipped + 95 % cov**.
 
 * [ ] **J.3** — `tests/load/` с `pytest.mark.load` (исключён из default
   `make ci` через `addopts = "-m 'not load'"`); `make load-test`. Три
@@ -100,9 +112,9 @@
 
 * В каждом коммите обновить раздел «📌 Последний коммит на ветке»
   в `docs/current_tasks.md` (см. ритуалы документации).
-* Перед PR — `make ci` локально должен дать **6982+ passed +
+* Перед PR — `make ci` локально должен дать **6994+ passed +
   2 skipped + ≥95 % cov** (load-тесты исключены через mark).
-  Baseline после J.1: 6982 passed + 2 skipped + 95 % cov, 496.90 s.
+  Baseline после J.2: 6994 passed + 2 skipped + 95 % cov, 497.19 s.
 * После открытия PR — `git(action="pr_checks", wait_mode="all")`,
   дождаться зелёного GitHub-CI; если упало — `ci_job_logs(job_id=...)`
   и фикс.
