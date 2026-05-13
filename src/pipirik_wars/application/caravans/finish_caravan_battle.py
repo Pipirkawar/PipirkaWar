@@ -65,6 +65,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from pipirik_wars.application.dto.inputs import FinishCaravanBattleInput
+from pipirik_wars.application.observability import IBusinessMetrics, NullBusinessMetrics
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.domain.balance.config import CaravansConfig
 from pipirik_wars.domain.caravan import (
@@ -122,6 +123,7 @@ class FinishCaravanBattle:
     __slots__ = (
         "_audit",
         "_balance",
+        "_business_metrics",
         "_caravan_participants",
         "_caravans",
         "_clan_memberships",
@@ -147,6 +149,7 @@ class FinishCaravanBattle:
         clock: IClock,
         balance: CaravansConfig,
         random_factory: Callable[[int], IRandom],
+        business_metrics: IBusinessMetrics | None = None,
     ) -> None:
         self._uow = uow
         self._caravans = caravans
@@ -159,6 +162,7 @@ class FinishCaravanBattle:
         self._clock = clock
         self._balance = balance
         self._random_factory = random_factory
+        self._business_metrics: IBusinessMetrics = business_metrics or NullBusinessMetrics()
 
     async def execute(
         self,
@@ -290,6 +294,10 @@ class FinishCaravanBattle:
                 )
             )
 
+        self._business_metrics.dec_caravan_active()
+        self._business_metrics.inc_caravan_outcome(
+            "raiders_win" if result.raiders_won else "owner_win"
+        )
         return CaravanBattleFinished(
             caravan=finished_caravan,
             result=result,

@@ -45,6 +45,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from pipirik_wars.application.dto.inputs import SummonBossInput
+from pipirik_wars.application.observability import IBusinessMetrics, NullBusinessMetrics
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.bosses import (
@@ -91,6 +92,7 @@ class SummonBoss:
         "_balance",
         "_boss_fights",
         "_boss_participants",
+        "_business_metrics",
         "_clock",
         "_locks",
         "_players",
@@ -112,6 +114,7 @@ class SummonBoss:
         audit: IAuditLogger,
         clock: IClock,
         scheduler: IDelayedJobScheduler,
+        business_metrics: IBusinessMetrics | None = None,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -123,6 +126,7 @@ class SummonBoss:
         self._audit = audit
         self._clock = clock
         self._scheduler = scheduler
+        self._business_metrics: IBusinessMetrics = business_metrics or NullBusinessMetrics()
 
     async def execute(self, input_dto: SummonBossInput) -> BossSummoned:
         """Призвать рейд-босса. См. docstring модуля для контракта."""
@@ -205,6 +209,7 @@ class SummonBoss:
                 )
             )
 
+        self._business_metrics.inc_raid_active()
         return BossSummoned(
             boss_fight=saved,
             summoner_participant=stored_summoner,

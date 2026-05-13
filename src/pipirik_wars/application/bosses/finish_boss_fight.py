@@ -87,6 +87,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from pipirik_wars.application.dto.inputs import FinishBossFightInput
+from pipirik_wars.application.observability import IBusinessMetrics, NullBusinessMetrics
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.domain.balance.config import BossesConfig
 from pipirik_wars.domain.bosses import (
@@ -165,6 +166,7 @@ class FinishBossFight:
         "_balance",
         "_boss_fights",
         "_boss_participants",
+        "_business_metrics",
         "_clock",
         "_length_granter",
         "_locks",
@@ -188,6 +190,7 @@ class FinishBossFight:
         scheduler: IDelayedJobScheduler,
         balance: BossesConfig,
         random_factory: Callable[[int], IRandom],
+        business_metrics: IBusinessMetrics | None = None,
     ) -> None:
         self._uow = uow
         self._boss_fights = boss_fights
@@ -200,6 +203,7 @@ class FinishBossFight:
         self._scheduler = scheduler
         self._balance = balance
         self._random_factory = random_factory
+        self._business_metrics: IBusinessMetrics = business_metrics or NullBusinessMetrics()
 
     async def execute(self, input_dto: FinishBossFightInput) -> BossFightFinished:
         """Финиш рейд-боя. См. docstring модуля для контракта."""
@@ -350,6 +354,8 @@ class FinishBossFight:
                 )
             )
 
+        self._business_metrics.dec_raid_active()
+        self._business_metrics.inc_raid_outcome("raiders_win" if raiders_won else "boss_win")
         return BossFightFinished(
             boss_fight=finished_boss_fight,
             raiders_won=raiders_won,

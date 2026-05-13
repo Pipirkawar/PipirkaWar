@@ -44,6 +44,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pipirik_wars.application.dto.inputs import CancelBossFightInput
+from pipirik_wars.application.observability import IBusinessMetrics, NullBusinessMetrics
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.domain.bosses import (
     BossFight,
@@ -86,6 +87,7 @@ class CancelBossFight:
         "_audit",
         "_boss_fights",
         "_boss_participants",
+        "_business_metrics",
         "_clock",
         "_locks",
         "_players",
@@ -104,6 +106,7 @@ class CancelBossFight:
         audit: IAuditLogger,
         clock: IClock,
         scheduler: IDelayedJobScheduler,
+        business_metrics: IBusinessMetrics | None = None,
     ) -> None:
         self._uow = uow
         self._boss_fights = boss_fights
@@ -113,6 +116,7 @@ class CancelBossFight:
         self._audit = audit
         self._clock = clock
         self._scheduler = scheduler
+        self._business_metrics: IBusinessMetrics = business_metrics or NullBusinessMetrics()
 
     async def execute(self, input_dto: CancelBossFightInput) -> BossFightCancelled:
         """Отменить рейд-бой. См. docstring модуля для контракта."""
@@ -163,6 +167,8 @@ class CancelBossFight:
                 )
             )
 
+        self._business_metrics.dec_raid_active()
+        self._business_metrics.inc_raid_outcome("cancelled")
         return BossFightCancelled(boss_fight=saved, was_already_cancelled=False)
 
     # -------- helpers --------
