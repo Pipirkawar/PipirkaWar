@@ -163,6 +163,7 @@ addopts = [
   "--cov-fail-under=80",
   "-n", "auto",                  # параллельный pytest через pytest-xdist
   "--dist", "loadfile",          # тесты одного файла идут в одном воркере (UoW/seed-стабильность)
+  "-m", "not load",              # 4.1-J: load-тесты исключены из дефолтного `make ci`; запуск через `make load-test`
 ]
 testpaths = ["tests"]
 asyncio_mode = "auto"
@@ -171,6 +172,7 @@ markers = [
   "integration: requires DB or other infra",
   "e2e: full-flow, slow",
   "slow: long-running scenario tests (load, stress)",
+  "load: load/performance tests (Sprint 4.1-J); excluded from default pytest run, executed via `make load-test`",
   "smoke: production-stack assembly через mocked-транспорт (без живой сети)",
 ]
 filterwarnings = [

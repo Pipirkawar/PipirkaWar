@@ -76,18 +76,30 @@
   три Redis-repo-я share `_metrics`-instance». `make ci` зелён:
   **6994 passed + 2 skipped + 95 % cov**.
 
-* [ ] **J.3** — `tests/load/` с `pytest.mark.load` (исключён из default
-  `make ci` через `addopts = "-m 'not load'"`); `make load-test`. Три
-  файла: `test_dau_load.py` / `test_lobby_load.py` /
-  `test_activity_lock_load.py` — каждый 2000-ops-сценарий через
-  `asyncio.gather` на FakeRedis с p99-метриками (`time.perf_counter()`)
-  и assert p99 < 50ms. Параметризация через env `LOAD_OPS_COUNT`.
+* [x] **J.3** — `tests/load/` с `pytest.mark.load` (исключён из default
+  `make ci` через `addopts = "-m 'not load'"` в `pyproject.toml`).
+  `make load-test` в `Makefile` → `pytest -o addopts= -m load --no-cov
+  tests/load/` (обнуляет cov+xdist-addopts, профиль считается внутри
+  asyncio.gather, xdist дабы CPU-noise). Три файла (+ `__init__.py` +
+  `conftest.py` с фикстурами `ops_count`/`p99_budget_ms` +
+  утилитой `measure_p99` (nearest-rank percentile)):
+  - `test_dau_load.py` (3 теста) — `record_active` p99-budget,
+    `current()` sanity-cardinality инвариант, observability-overhead
+    sanity (`RedisMetrics` в hot-path не превышает budget).
+  - `test_lobby_load.py` (3 теста) — `enqueue` (gather),
+    `pop_oldest` (sequential FIFO-pop), `is_in_lobby` (gather hot-read).
+  - `test_activity_lock_load.py` (3 теста) — `try_acquire`, `release`,
+    `get` (MULTI/EXEC GET+PTTL).
+  Параметризация через env `LOAD_OPS_COUNT` (default 2000) +
+  `LOAD_P99_BUDGET_MS` (default 50). `make load-test` зелён локально
+  — **9 passed in 5.04 s** (FakeRedis-overhead ниже budget-а).
 
-* [ ] **J.4** — Profile-анализ узких мест **если** на J.3 p99 не уложился
-  в таргет; иначе пропустить.
+* [x] **J.4** — Profile-анализ узких мест **не понадобился**: на J.3
+  все 9 сценариев уложились в p99 < 50 мс на FakeRedis-overhead-е.
 
-* [ ] **J.5** — `make ci` локально зелён + `make load-test` локально
-  зелён.
+* [x] **J.5** — `make ci` локально зелён (**6994 passed +
+  2 skipped + 95 % cov, 502.85 s**) + `make load-test` локально
+  зелён (**9 passed, 5.04 s**).
 
 * [ ] **J.6** — Doc-sync: `docs/history.md` запись 4.1-J + `docs/current_tasks.md`
   снимок под `main = <future-merge-sha 4.1-J>` + предварительный
