@@ -1,0 +1,56 @@
+<div class="dashboard-grid">
+    <div class="widget">
+        <h3>DAU (today)</h3>
+        <p class="widget-value">{{ stats.dau }}</p>
+    </div>
+    <div class="widget">
+        <h3>MAU (30d)</h3>
+        <p class="widget-value">{{ stats.mau }}</p>
+    </div>
+    <div class="widget">
+        <h3>Total Players</h3>
+        <p class="widget-value">{{ stats.total_players }}</p>
+    </div>
+    <div class="widget">
+        <h3>Signup Queue</h3>
+        <p class="widget-value">{{ stats.signup_queue_size }}</p>
+    </div>
+    <div class="widget">
+        <h3>Active Caravans</h3>
+        <p class="widget-value">{{ stats.active_caravans }}</p>
+    </div>
+    <div class="widget">
+        <h3>Active Raids</h3>
+        <p class="widget-value">{{ stats.active_raids }}</p>
+    </div>
+</div>
+
+<div class="widget widget-wide">
+    <h3>Recent Admin Actions</h3>
+    {% if stats.recent_errors %}
+    <table class="audit-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Action</th>
+                <th>Admin ID</th>
+                <th>Target</th>
+                <th>Reason</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in stats.recent_errors %}
+            <tr>
+                <td>{{ e.occurred_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td><code>{{ e.action }}</code></td>
+                <td>{{ e.admin_id }}</td>
+                <td>{{ e.target_kind }}:{{ e.target_id }}</td>
+                <td>{{ e.reason[:80] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p><em>No recent admin actions.</em></p>
+    {% endif %}
+</div>
