@@ -57,6 +57,8 @@ class VerifyAdminConfirmInput:
     token: str
     code: str
     tg_chat_id: int | None = None
+    source: AdminAuditSource = AdminAuditSource.BOT
+    ip: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +121,8 @@ class VerifyAdminConfirm:
             target_id=inp.token,
             tg_chat_id=inp.tg_chat_id,
             occurred_at=self._clock.now(),
+            source=inp.source,
+            ip=inp.ip,
         )
 
         # `pop` сразу удаляет запись — токен одноразовый.
@@ -140,6 +144,8 @@ class VerifyAdminConfirm:
                 token=inp.token,
                 reason="admin_mismatch",
                 tg_chat_id=inp.tg_chat_id,
+                source=inp.source,
+                ip=inp.ip,
             )
             raise ConfirmAdminMismatchError(
                 f"token={inp.token!r} belongs to admin id={entry.request.admin_id}",
@@ -155,6 +161,8 @@ class VerifyAdminConfirm:
                 token=inp.token,
                 reason="token_expired",
                 tg_chat_id=inp.tg_chat_id,
+                source=inp.source,
+                ip=inp.ip,
             )
             raise ConfirmTokenExpiredError(
                 f"token={inp.token!r} expired at {entry.expires_at.isoformat()}",
@@ -170,6 +178,8 @@ class VerifyAdminConfirm:
                 token=inp.token,
                 reason="code_invalid",
                 tg_chat_id=inp.tg_chat_id,
+                source=inp.source,
+                ip=inp.ip,
             )
             raise ConfirmCodeInvalidError(
                 f"invalid totp code for admin id={admin_id}",
@@ -186,9 +196,9 @@ class VerifyAdminConfirm:
                     after=None,
                     reason=f"confirm_verified:{entry.request.command_kind}",
                     idempotency_key=inp.token,
-                    source=AdminAuditSource.BOT,
+                    source=inp.source,
                     tg_chat_id=inp.tg_chat_id,
-                    ip=None,
+                    ip=inp.ip,
                     occurred_at=now,
                 ),
             )
@@ -211,6 +221,8 @@ class VerifyAdminConfirm:
         token: str,
         reason: str,
         tg_chat_id: int | None,
+        source: AdminAuditSource = AdminAuditSource.BOT,
+        ip: str | None = None,
     ) -> None:
         async with self._uow:
             await self._audit.record(
@@ -226,9 +238,9 @@ class VerifyAdminConfirm:
                     },
                     reason=f"confirm_failed:{command_kind}:{reason}",
                     idempotency_key=token,
-                    source=AdminAuditSource.BOT,
+                    source=source,
                     tg_chat_id=tg_chat_id,
-                    ip=None,
+                    ip=ip,
                     occurred_at=self._clock.now(),
                 ),
             )

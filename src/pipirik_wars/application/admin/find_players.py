@@ -45,6 +45,8 @@ class FindPlayersInput:
     actor_tg_id: int
     query: str
     tg_chat_id: int | None = None
+    source: AdminAuditSource = AdminAuditSource.BOT
+    ip: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +146,8 @@ class FindPlayers:
             target_id=normalized_query or "<empty>",
             tg_chat_id=inp.tg_chat_id,
             occurred_at=now,
+            source=inp.source,
+            ip=inp.ip,
         )
         async with self._uow:
             if not normalized_query:
@@ -163,9 +167,9 @@ class FindPlayers:
                     after={"matches": len(rows)},
                     reason=f"find_player:{normalized_query or '<empty>'}",
                     idempotency_key=None,
-                    source=AdminAuditSource.BOT,
+                    source=inp.source,
                     tg_chat_id=inp.tg_chat_id,
-                    ip=None,
+                    ip=inp.ip,
                     occurred_at=now,
                 ),
             )

@@ -73,6 +73,8 @@ class GetAdminAuditTrailInput:
     action_value: str | None = None
     limit: int = DEFAULT_AUDIT_LIMIT
     tg_chat_id: int | None = None
+    source: AdminAuditSource = AdminAuditSource.BOT
+    ip: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +143,8 @@ class GetAdminAuditTrail:
             ),
             tg_chat_id=inp.tg_chat_id,
             occurred_at=now,
+            source=inp.source,
+            ip=inp.ip,
         )
 
         async with self._uow:
@@ -183,9 +187,9 @@ class GetAdminAuditTrail:
                         limit=limit,
                     ),
                     idempotency_key=None,
-                    source=AdminAuditSource.BOT,
+                    source=inp.source,
                     tg_chat_id=inp.tg_chat_id,
-                    ip=None,
+                    ip=inp.ip,
                     occurred_at=now,
                 ),
             )

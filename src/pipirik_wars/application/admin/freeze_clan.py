@@ -53,6 +53,8 @@ class FreezeClanAdminInput:
     query: int
     reason: str | None = None
     tg_chat_id: int | None = None
+    source: AdminAuditSource = AdminAuditSource.BOT
+    ip: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +115,8 @@ class FreezeClanAdmin:
             target_id=str(inp.query),
             tg_chat_id=inp.tg_chat_id,
             occurred_at=now,
+            source=inp.source,
+            ip=inp.ip,
         )
         async with self._uow:
             clan = await self._clans.get_by_id(inp.query)
@@ -146,9 +150,9 @@ class FreezeClanAdmin:
                     after={"status": ClanStatus.FROZEN.value},
                     reason=inp.reason or f"freeze_clan:{saved.id}",
                     idempotency_key=None,
-                    source=AdminAuditSource.BOT,
+                    source=inp.source,
                     tg_chat_id=inp.tg_chat_id,
-                    ip=None,
+                    ip=inp.ip,
                     occurred_at=now,
                 ),
             )

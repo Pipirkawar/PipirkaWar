@@ -63,6 +63,8 @@ class RequestAdminConfirmInput:
     target_id: str
     payload: Mapping[str, object] = field(default_factory=lambda: MappingProxyType({}))
     tg_chat_id: int | None = None
+    source: AdminAuditSource = AdminAuditSource.BOT
+    ip: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,6 +140,8 @@ class RequestAdminConfirm:
             tg_chat_id=inp.tg_chat_id,
             occurred_at=now,
             reason_suffix=inp.command_kind,
+            source=inp.source,
+            ip=inp.ip,
         )
         entry = AdminConfirmEntry(
             request=AdminConfirmRequest(
@@ -162,9 +166,9 @@ class RequestAdminConfirm:
                     after=None,
                     reason=f"confirm_requested:{inp.command_kind}",
                     idempotency_key=token,
-                    source=AdminAuditSource.BOT,
+                    source=inp.source,
                     tg_chat_id=inp.tg_chat_id,
-                    ip=None,
+                    ip=inp.ip,
                     occurred_at=now,
                 ),
             )

@@ -46,6 +46,8 @@ class GetBalanceValueInput:
     actor_tg_id: int
     key: str
     tg_chat_id: int | None = None
+    source: AdminAuditSource = AdminAuditSource.BOT
+    ip: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +106,8 @@ class GetBalanceValue:
             target_id=inp.key,
             tg_chat_id=inp.tg_chat_id,
             occurred_at=now,
+            source=inp.source,
+            ip=inp.ip,
         )
         async with self._uow:
             await self._audit.record(
@@ -116,9 +120,9 @@ class GetBalanceValue:
                     after=None,
                     reason=f"balance_get:{inp.key}",
                     idempotency_key=None,
-                    source=AdminAuditSource.BOT,
+                    source=inp.source,
                     tg_chat_id=inp.tg_chat_id,
-                    ip=None,
+                    ip=inp.ip,
                     occurred_at=now,
                 ),
             )

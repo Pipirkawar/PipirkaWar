@@ -61,6 +61,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/players")
 
+
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
+
+
 _SEARCH_LIMIT = 50
 _ACTIVITY_LIMIT = 30
 
@@ -98,6 +103,8 @@ async def players_list(request: Request) -> HTMLResponse:
                     FindPlayersInput(
                         actor_tg_id=session.admin_id,
                         query=query,
+                        source=AdminAuditSource.WEB,
+                        ip=_client_ip(request),
                     ),
                 )
                 results = list(output.results)
@@ -140,6 +147,8 @@ async def players_search(request: Request) -> HTMLResponse:
                     FindPlayersInput(
                         actor_tg_id=session.admin_id,
                         query=query,
+                        source=AdminAuditSource.WEB,
+                        ip=_client_ip(request),
                     ),
                 )
                 results = list(output.results)
@@ -186,6 +195,8 @@ async def player_card(request: Request, player_tg_id: int) -> HTMLResponse:
                 GetPlayerCardInput(
                     actor_tg_id=session.admin_id,
                     target_tg_id=player_tg_id,
+                    source=AdminAuditSource.WEB,
+                    ip=_client_ip(request),
                 ),
             )
         except AuthorizationError:
@@ -287,6 +298,8 @@ async def ban_player_action(request: Request, player_tg_id: int) -> HTMLResponse
                     actor_tg_id=session.admin_id,
                     target_tg_id=player_tg_id,
                     reason=reason,
+                    source=AdminAuditSource.WEB,
+                    ip=_client_ip(request),
                 ),
             )
         except AuthorizationError:
@@ -325,6 +338,8 @@ async def freeze_player_action(request: Request, player_tg_id: int) -> HTMLRespo
                     actor_tg_id=session.admin_id,
                     target_tg_id=player_tg_id,
                     reason=reason,
+                    source=AdminAuditSource.WEB,
+                    ip=_client_ip(request),
                 ),
             )
         except AuthorizationError:
@@ -360,6 +375,8 @@ async def unfreeze_player_action(request: Request, player_tg_id: int) -> HTMLRes
                 UnfreezePlayerInput(
                     actor_tg_id=session.admin_id,
                     target_tg_id=player_tg_id,
+                    source=AdminAuditSource.WEB,
+                    ip=_client_ip(request),
                 ),
             )
         except AuthorizationError:
