@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Log — Pipirik Wars Admin{% endblock %}
+
+{% block content %}
+<div class="audit-page">
+    <h1>Audit Log</h1>
+
+    <form id="audit-filters" class="audit-filters"
+          hx-get="/audit/table"
+          hx-target="#audit-table-container"
+          hx-trigger="submit"
+          hx-push-url="/audit"
+          hx-include="[name]">
+        <div class="filter-row">
+            <label>
+                Date from
+                <input type="datetime-local" name="date_from"
+                       value="{{ filters.date_from.strftime('%Y-%m-%dT%H:%M') if filters.date_from else '' }}">
+            </label>
+            <label>
+                Date to
+                <input type="datetime-local" name="date_to"
+                       value="{{ filters.date_to.strftime('%Y-%m-%dT%H:%M') if filters.date_to else '' }}">
+            </label>
+            <label>
+                Actor ID
+                <input type="text" name="actor_id" placeholder="tg_id or admin_id"
+                       value="{{ filters.actor_id or '' }}">
+            </label>
+        </div>
+        <div class="filter-row">
+            <label>
+                Action
+                <input type="text" name="action" placeholder="e.g. length_grant"
+                       value="{{ filters.action or '' }}">
+            </label>
+            <label>
+                Source
+                <select name="source">
+                    <option value="">All sources</option>
+                    <option value="bot" {{ 'selected' if filters.source == 'bot' else '' }}>bot</option>
+                    <option value="web" {{ 'selected' if filters.source == 'web' else '' }}>web</option>
+                </select>
+            </label>
+            <label>
+                Log type
+                <select name="log_type">
+                    <option value="all" {{ 'selected' if filters.log_type == 'all' else '' }}>All logs</option>
+                    <option value="bot" {{ 'selected' if filters.log_type == 'bot' else '' }}>Game audit_log</option>
+                    <option value="admin" {{ 'selected' if filters.log_type == 'admin' else '' }}>Admin audit_log</option>
+                </select>
+            </label>
+            <input type="hidden" name="page" value="1">
+            <button type="submit" class="btn-primary">Filter</button>
+        </div>
+    </form>
+
+    <div id="audit-table-container">
+        {% include "partials/audit_table.html" %}
+    </div>
+</div>
+{% endblock %}

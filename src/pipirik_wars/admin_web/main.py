@@ -21,7 +21,7 @@ from pipirik_wars.admin_web.auth.ip_allowlist import IpAllowlistMiddleware
 from pipirik_wars.admin_web.auth.rate_limit import RateLimitMiddleware
 from pipirik_wars.admin_web.auth.session import AdminSession
 from pipirik_wars.admin_web.composition import AdminWebContainer, build_admin_web_container
-from pipirik_wars.admin_web.routes import auth, dashboard, health, players, totp
+from pipirik_wars.admin_web.routes import audit, auth, dashboard, health, players, totp
 from pipirik_wars.admin_web.settings import AdminWebSettings
 
 logger = logging.getLogger(__name__)
@@ -132,6 +132,7 @@ def create_app(settings: AdminWebSettings | None = None) -> FastAPI:
     app.include_router(auth.router)
     app.include_router(totp.router)
     app.include_router(dashboard.router)
+    app.include_router(audit.router)
     app.include_router(players.router)
 
     return app
