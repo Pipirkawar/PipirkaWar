@@ -23,6 +23,7 @@
 
 ---
 
+
 ## 2026-05-13 — Расширение display_names до 1154 записей
 
 **Автор:** Devin (агентская цепочка)
@@ -43,6 +44,62 @@
 Заметки / решения:
 - Заглушка из ГДД §2.3 v8 (7 записей) полностью заменена
 - Валидатор `BalanceConfig._validate_display_names_cover_axis()` проходит
+
+---
+
+
+## 2026-05-13 — Спринт 4.9: Канал-анонсы (Announcement Channel)
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** Спринт 4.9 (ГДД §1.2, development_plan.md §11). Ветка: `devin/1778711591-sprint-4-9-announcements`.
+
+Что сделано:
+- Новый domain-пакет `domain/announcements/`: порт `IAnnouncementPublisher`, сущности `WeeklyDigest`, `LeaderboardSnapshot`, `PlayerWeeklyEntry`, `ClanWeeklyEntry`
+- Application use-cases: `PublishWeeklyDigest` (топ-10 игроков, топ-5 кланов, игрок/племя недели, статистика), `PublishLeaderboard`
+- Infrastructure: `AiogramAnnouncementPublisher` (через `Bot.send_message`), `SqlAlchemyAnnouncementStatsQuery` (SQL-агрегация за период)
+- Настройки в `BotSettings`: `announcement_channel_id`, `announcement_weekly_enabled`, `announcement_weekly_cron`
+- Фоновый scheduler `_announcement_scheduler()` с custom cron-matching в `bot/main.py`
+- Admin-команды `/announce_weekly`, `/announce_leaderboard` (двухфазный TOTP-flow)
+- Web-панель: POST-эндпоинты для публикации дайджеста и лидерборда
+- Локализация: 3 новых ключа в 8 locale-файлах (ru, en, es, fa, id, pt, tr, uk)
+- 45 unit-тестов (domain, application, infrastructure, bot/cron)
+
+Результат / артефакты:
+- `src/pipirik_wars/domain/announcements/` — порт и сущности
+- `src/pipirik_wars/application/announcements/` — use-cases и stats query
+- `src/pipirik_wars/infrastructure/announcements/` — publisher и SQL stats
+- `src/pipirik_wars/bot/handlers/admin_announcements.py` — admin handlers
+- `src/pipirik_wars/admin_web/routes/announcements.py` — web panel routes
+- `tests/unit/*/announcements/` — 45 тестов
+
+Заметки / решения:
+- Cron-matching реализован custom-парсером (без APScheduler), поддерживает *, точные значения, ranges, steps, comma-separated
+- Tracking «уже опубликовано на этой неделе» через `isocalendar()` (год, номер недели) in-memory set
+
+---
+
+## 2026-05-13 — Спринт 4.5 (локализация) — Добавлена поддержка арабского (ar)
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** Спринт 4.5 (локализация), задача «Добавить арабский (ar)».
+
+Что сделано:
+- `ar` добавлен в `SUPPORTED_LOCALES` (`locale.py`).
+- `_KEY_SET_AR` + маппинг в `_KEY_SET_BY_LOCALE` (`lang.py`).
+- Все 8 существующих `.ftl` файлов обновлены: `lang-usage`, `lang-unsupported`, `lang-not-registered` теперь включают `ar`; добавлен ключ `lang-set-ar`.
+- Создан полный `locales/ar.ftl` — перевод всех 658 ключей из `en.ftl` на арабский.
+
+Результат / артефакты:
+- `src/pipirik_wars/application/i18n/locale.py` — `ar` в `SUPPORTED_LOCALES`
+- `src/pipirik_wars/bot/presenters/lang.py` — `_KEY_SET_AR`
+- `locales/{ru,en,es,pt,tr,id,fa,uk}.ftl` — обновлены lang-ключи
+- `locales/ar.ftl` — полный арабский перевод
+
+Заметки / решения:
+- Арабский — RTL, но Telegram сам обрабатывает BiDi; RTL-маркеры не добавлялись.
+- Все плейсхолдеры `{ $var }`, HTML-теги, эмодзи, команды бота и `NUMBER(...)` сохранены без изменений.
 
 ---
 
@@ -68,7 +125,6 @@
 - `lang-set-*` ключи оставлены на языках-оригиналах (каждый рендерится на своём языке)
 
 ---
-
 ## 2026-05-13 — Спринт 4.5-I «Паритет use-cases bot/web + audit source»
 
 **Автор:** Devin (агентская цепочка)

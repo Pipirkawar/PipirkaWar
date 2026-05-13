@@ -15,6 +15,9 @@ InvokeOracle) и `top` (Спринт 1.4.C: /top → GetTopPlayers с TTL-кэш
 from aiogram import Dispatcher
 
 from pipirik_wars.bot.handlers.admin import router as admin_router
+from pipirik_wars.bot.handlers.admin_announcements import (
+    router as admin_announcements_router,
+)
 from pipirik_wars.bot.handlers.admin_audit import router as admin_audit_router
 from pipirik_wars.bot.handlers.admin_clan import router as admin_clan_router
 from pipirik_wars.bot.handlers.admin_communication import (
@@ -154,6 +157,11 @@ def register_routers(dispatcher: Dispatcher) -> None:
     # workflow-data `freeze_payouts` / `unfreeze_payouts`). Роутер подключается
     # рядом с admin_refund_lot из тех же соображений (admin-RBAC chain).
     dispatcher.include_router(admin_freeze_payouts_router)
+    # Спринт 4.9: admin-команды канала анонсов (`/announce_weekly`,
+    # `/announce_leaderboard`). Фильтр `is_admin` — на самом router-е.
+    # Импорт модуля зарегистрировал dispatch-функции в
+    # `CONFIRM_DISPATCHERS` (фаза 2 через TOTP).
+    dispatcher.include_router(admin_announcements_router)
     dispatcher.include_router(registration_router)
 
 

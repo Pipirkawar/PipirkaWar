@@ -37,6 +37,7 @@ from pipirik_wars.application.admin import (
     VerifyAdminConfirm,
     VerifyAdminConfirmInput,
 )
+from pipirik_wars.application.announcements import PublishLeaderboard, PublishWeeklyDigest
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale
 from pipirik_wars.application.monetization import FreezePayouts, RefundLot, UnfreezePayouts
@@ -388,6 +389,8 @@ async def handle_confirm(  # noqa: PLR0911 — каждая ветка-возв�
     refund_lot: RefundLot,
     freeze_payouts: FreezePayouts,
     unfreeze_payouts: UnfreezePayouts,
+    publish_weekly_digest: PublishWeeklyDigest,
+    publish_leaderboard: PublishLeaderboard,
     bundle: IMessageBundle,
     locale: Locale | None = None,
 ) -> None:
@@ -457,6 +460,8 @@ async def handle_confirm(  # noqa: PLR0911 — каждая ветка-возв�
             refund_lot=refund_lot,
             freeze_payouts=freeze_payouts,
             unfreeze_payouts=unfreeze_payouts,
+            publish_weekly_digest=publish_weekly_digest,
+            publish_leaderboard=publish_leaderboard,
         )
         await dispatcher(result, message, tg_identity, effective_locale, bundle, deps)
         return

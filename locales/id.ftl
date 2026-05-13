@@ -100,10 +100,18 @@ lang-group = Perintah `/lang` hanya untuk obrolan pribadi. Buka DM.
 
 lang-other = Perintah `/lang` hanya untuk pengguna biasa.
 
-lang-not-registered = Tekan /start dulu, lalu jalankan /lang ru|en|pt|es|tr|id|fa|uk.
+lang-not-registered = Tekan /start dulu, lalu jalankan /lang ru|en|pt|es|tr|id|fa|uk|ar.
 
-lang-usage = Penggunaan: /lang ru|en|pt|es|tr|id|fa|uk.
+lang-usage = Penggunaan: /lang ru|en|pt|es|tr|id|fa|uk|ar.
 
-lang-unsupported = Bahasa `{ $code }` tidak didukung. Tersedia: ru, en, pt, es, tr, id, fa, uk.
+lang-unsupported = Bahasa `{ $code }` tidak didukung. Tersedia: ru, en, pt, es, tr, id, fa, uk, ar.
 
 lang-set-id = Bahasa antarmuka diubah ke Bahasa Indonesia. Semua balasan dan pesan latar belakang sekarang akan dalam Bahasa Indonesia.
+lang-set-ar = تم تغيير لغة الواجهة إلى العربية. جميع الردود والرسائل في الخلفية ستكون الآن باللغة العربية.
+
+# ───────────────────────────────────────────────────────────────────────────
+# Announcement Channel (Sprint 4.9)
+# ───────────────────────────────────────────────────────────────────────────
+announce-channel-disabled = ❌ Announcement channel not configured. Set <code>BOT_ANNOUNCEMENT_CHANNEL_ID</code>.
+announce-weekly-confirm = 🛡️ Confirm publishing weekly digest. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.
+announce-leaderboard-confirm = 🛡️ Confirm publishing leaderboard. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.

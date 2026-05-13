@@ -48,6 +48,7 @@ from pipirik_wars.application.admin import (
     ThicknessLevelInvalidError,
     VerifyAdminConfirmOutput,
 )
+from pipirik_wars.application.announcements import PublishLeaderboard, PublishWeeklyDigest
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import DEFAULT_LOCALE, IMessageBundle, Locale, MessageKey
 from pipirik_wars.application.monetization import FreezePayouts, RefundLot, UnfreezePayouts
@@ -428,6 +429,8 @@ class ConfirmDispatchDeps:
     refund_lot: RefundLot
     freeze_payouts: FreezePayouts
     unfreeze_payouts: UnfreezePayouts
+    publish_weekly_digest: PublishWeeklyDigest
+    publish_leaderboard: PublishLeaderboard
 
 
 ConfirmDispatcher = Callable[

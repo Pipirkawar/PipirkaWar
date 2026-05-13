@@ -40,6 +40,7 @@ from pipirik_wars.application.admin import (
     ThicknessLevelInvalidError,
     VerifyAdminConfirmOutput,
 )
+from pipirik_wars.application.announcements import PublishLeaderboard, PublishWeeklyDigest
 from pipirik_wars.application.auth.decorators import AuthorizationError
 from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
 from pipirik_wars.application.monetization import FreezePayouts, RefundLot, UnfreezePayouts
@@ -610,6 +611,18 @@ def _stub_unfreeze_payouts() -> UnfreezePayouts:
     return cast(UnfreezePayouts, fake)
 
 
+def _stub_publish_weekly_digest() -> PublishWeeklyDigest:
+    fake = MagicMock(spec=PublishWeeklyDigest)
+    fake.execute = AsyncMock()
+    return cast(PublishWeeklyDigest, fake)
+
+
+def _stub_publish_leaderboard() -> PublishLeaderboard:
+    fake = MagicMock(spec=PublishLeaderboard)
+    fake.execute = AsyncMock()
+    return cast(PublishLeaderboard, fake)
+
+
 def _deps(
     *,
     grant_length: GrantLength | None = None,
@@ -628,6 +641,8 @@ def _deps(
         refund_lot=_stub_refund_lot(),
         freeze_payouts=_stub_freeze_payouts(),
         unfreeze_payouts=_stub_unfreeze_payouts(),
+        publish_weekly_digest=_stub_publish_weekly_digest(),
+        publish_leaderboard=_stub_publish_leaderboard(),
     )
 
 

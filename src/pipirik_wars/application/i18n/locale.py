@@ -65,6 +65,7 @@ SUPPORTED_LOCALES: Final[frozenset[str]] = frozenset(
         "id",  # Indonesian (`id`)
         "fa",  # Persian / Farsi (`fa`, `fa-IR`) — RTL
         "uk",  # Ukrainian (`uk`, `uk-UA`)
+        "ar",  # Arabic (`ar`) — RTL — Спринт 4.5 (локализация)
     },
 )
 DEFAULT_LOCALE: Final[Locale] = Locale("en")
