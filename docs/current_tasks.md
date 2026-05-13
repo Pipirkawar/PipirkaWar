@@ -19,7 +19,9 @@
 
 **Активный PR — 4.5-B «RBAC из таблицы `admins` для admin_web»** — второй PR Спринта 4.5 «Веб-админ-панель» (Фаза 4). Покрывает задачу 4.5.2 (RBAC). Ветка: `devin/1778705780-sprint-4-5-B-rbac`. Новый файл `admin_web/auth/rbac.py` — dependency-factory `require_permission(AdminCommandKind)`, audit-лог отказов. Route `/dashboard` защищён ADMIN_STATS. 62 новых теста (48 unit + 14 integration), ruff 0, mypy 0, 6 import contracts kept.
 
-**На `main` (АРХИВ, PR #148):** Sprint 4.5-D — Players section: search, card, activity, actions (задача 4.5.5). 18 тестов (11 unit + 7 integration).
+**На `main` (АРХИВ):** Sprint 4.5-C — Dashboard: real data widgets (задача 4.5.4). 18 тестов (11 unit + 7 integration).
+
+**На `main` (АРХИВ):** Sprint 4.5-D — Players section: search, card, activity, actions (задача 4.5.5). 18 тестов (11 unit + 7 integration).
 
 **На `main` (АРХИВ, PR #144):** Sprint 4.5-A — FastAPI scaffold + Telegram Login Widget + TOTP 2FA gate. Покрывает задачи 4.5.1 и 4.5.3.
 

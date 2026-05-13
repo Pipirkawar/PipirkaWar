@@ -3,12 +3,19 @@
 {% block title %}Dashboard — Pipirik Wars Admin{% endblock %}
 
 {% block content %}
-<div class="center-card">
+<div class="dashboard-container">
     <h1>Dashboard</h1>
-    <p>Hello, <strong>{{ session.tg_username or "admin" }}</strong>!</p>
+    <p>Hello, <strong>{{ session.tg_username or "admin" }}</strong>!
     {% if admin %}
-    <p>Role: <code>{{ admin.role.value }}</code></p>
+    Role: <code>{{ admin.role.value }}</code>
     {% endif %}
-    <p><em>Dashboard widgets will be added in Sprint 4.5-D.</em></p>
+    </p>
+
+    <div id="dashboard-widgets"
+         hx-get="/dashboard/stats"
+         hx-trigger="every 30s"
+         hx-swap="innerHTML">
+        {% include "partials/dashboard_widgets.html" %}
+    </div>
 </div>
 {% endblock %}
