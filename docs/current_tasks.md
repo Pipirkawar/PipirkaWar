@@ -17,7 +17,9 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**Активный PR — 4.5-I «Паритет use-cases bot/web + audit source»** — Спринт 4.5-I (Фаза 4, задача 4.5.10). Ветка: `devin/1778709046-sprint-4-5-I-parity`. Добавлен `source: AdminAuditSource` и `ip: str | None` во все 17 admin use-case Input dataclass-ов; web-маршруты передают `source=WEB` и `ip=client_ip`; новые маршруты `POST /players/{id}/grant-length` и `/grant-thickness`; 20 unit-тестов на паритет bot/web. CI: lint 0, typecheck 0, 6 import contracts kept. **Закрывает Sprint 4.5.**
+**Активный PR — Полная испанская локализация (locales/es.ftl)** — Ветка: `devin/1778711092-complete-es-locale`. Расширен `locales/es.ftl` с ~109 ключей (стаб) до полной версии со всеми ~670 ключами из `en.ftl`. Латиноамериканский испанский (es-MX стиль).
+
+**На `main` (АРХИВ):** 4.5-I «Паритет use-cases bot/web + audit source» смержен.
 
 **На `main` (АРХИВ):** 4.5-A через 4.5-H смержены (auth, RBAC, дашборд, игроки, племена, аудит-лог, баланс, rate-limiting/CORS).
 
