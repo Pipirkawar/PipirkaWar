@@ -1,0 +1,1655 @@
+{
+  "version": 2,
+  "templates": [
+    {
+      "id": "pvp.ar.both_hit.0001",
+      "kind": "both_hit",
+      "text": "🥊 {p1} و {p2} تبادلا الضربات — كلاهما أكل لكمة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0002",
+      "kind": "both_hit",
+      "text": "💥 {p1} و {p2} تجاهلا الدفاع — كلاهما تلقّى الضرر!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0003",
+      "kind": "both_hit",
+      "text": "⚔️ {p1} و {p2} تلاحما وضربا بعضهما بقوة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0004",
+      "kind": "both_hit",
+      "text": "🌀 {p1} و {p2} انشغلا بالهجوم ونسيا الحماية!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0005",
+      "kind": "both_hit",
+      "text": "🔥 {p1} و {p2} تبادلا ضربات نظيفة — الحكم يحصي الخسائر!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0006",
+      "kind": "both_hit",
+      "text": "🪓 {p1} و {p2} ضربا بنفس الإيقاع — تطايرت الشرارات!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0007",
+      "kind": "both_hit",
+      "text": "💣 {p1} و {p2} تبادلا لكمات قوية — بلا زينة، فقط أثر!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0008",
+      "kind": "both_hit",
+      "text": "⚡ {p1} و {p2} كانا صورة مرآة — تعادلا بالأناقة وتأذّيا!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0009",
+      "kind": "both_hit",
+      "text": "🥋 {p1} و {p2} رأيا ثغرات — ضربة مزدوجة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0010",
+      "kind": "both_hit",
+      "text": "🎯 {p1} و {p2} وصلا في نفس اللحظة بالضبط!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0011",
+      "kind": "both_hit",
+      "text": "🪙 {p1} و {p2} تبادلا الطول كالفكّة في البقالة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0012",
+      "kind": "both_hit",
+      "text": "🌪 {p1} و {p2} دارا كالإعصار ببعضهما — كلاهما أُصيب!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0013",
+      "kind": "both_hit",
+      "text": "🤺 {p1} و {p2} طعنا معًا — السيوف ترتجف!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0014",
+      "kind": "both_hit",
+      "text": "🧨 {p1} و {p2} فجّرا هجماتهما وجهًا لوجه — غبار في كل مكان!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0015",
+      "kind": "both_hit",
+      "text": "🦴 {p1} و {p2} سمعا الطقطقة — لم يحجب أيّ منهما في الوقت!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0016",
+      "kind": "both_hit",
+      "text": "🏟 {p1} و {p2} قدّما عرضًا: ضربة مزدوجة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0017",
+      "kind": "both_hit",
+      "text": "🎺 {p1} و {p2} ضربا نغمات أوبرالية — كلاهما تلقّاها!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0018",
+      "kind": "both_hit",
+      "text": "🪤 {p1} و {p2} أمسكا ببعضهما في فخاخ متبادلة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0019",
+      "kind": "both_hit",
+      "text": "🤜 {p1} و {p2} ضربا بقبضتيهما بنفس الوقت — سقوط مزدوج!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0020",
+      "kind": "both_hit",
+      "text": "🗡 {p1} و {p2} تقاطعت سيوفهما وأكل كلاهما الضربة المرتدة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0021",
+      "kind": "both_hit",
+      "text": "💫 {p1} و {p2} رأيا النجوم — تأثير متبادل!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0022",
+      "kind": "both_hit",
+      "text": "🤛 {p1} و {p2} اصطدما كقطارين!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0023",
+      "kind": "both_hit",
+      "text": "⚔️ {p1} و {p2} تقاتلا بالأيدي — تركا الحماية في البيت!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0024",
+      "kind": "both_hit",
+      "text": "🔥 {p1} و {p2} حرقا نقاط صحة بعضهما بلا ندم!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0025",
+      "kind": "both_hit",
+      "text": "💥 {p1} و {p2} تناطحا — كلاهما حصل على كدمة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0026",
+      "kind": "both_hit",
+      "text": "🥊 {p1} و {p2} خاضا معركة بلا قواعد — كلاهما تأذّى!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0027",
+      "kind": "both_hit",
+      "text": "⚡ {p1} و {p2} أطلقا البيكاتشو — صاعقة في الاتجاهين!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0028",
+      "kind": "both_hit",
+      "text": "🪓 {p1} و {p2} حطبا بالفؤوس — شظايا من كليهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0029",
+      "kind": "both_hit",
+      "text": "🌀 {p1} و {p2} أدارا ركلاتهما وكلاهما تلقّى واحدة في الوجه!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0030",
+      "kind": "both_hit",
+      "text": "🎯 {p1} و {p2} أصابا مركز الهدف — للأسف كان بعضهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0031",
+      "kind": "both_hit",
+      "text": "💣 {p1} و {p2} رميا قنابل بنفس الوقت — انفجار مشترك!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0032",
+      "kind": "both_hit",
+      "text": "🥋 {p1} و {p2} نفّذا رمية جودو مزدوجة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0033",
+      "kind": "both_hit",
+      "text": "🤺 {p1} و {p2} سجّلا توشيه معًا — الحكم مذهول!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0034",
+      "kind": "both_hit",
+      "text": "🧨 {p1} و {p2} أشعلا ألعابًا نارية من اللكمات — كلاهما في الدخان!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0035",
+      "kind": "both_hit",
+      "text": "🦴 {p1} و {p2} تصادما كخروفين على جسر!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0036",
+      "kind": "both_hit",
+      "text": "🏟 {p1} و {p2} أشعلا الجمهور — طقّة مزدوجة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0037",
+      "kind": "both_hit",
+      "text": "🪤 {p1} و {p2} اندفعا للأمام — وكلاهما أكل صفعة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0038",
+      "kind": "both_hit",
+      "text": "🔥 {p1} و {p2} تبادلا الضربات كهدايا رأس السنة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0039",
+      "kind": "both_hit",
+      "text": "💫 {p1} و {p2} رقصا التانغو بالأيدي — كلا الشريكين أزرق!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0040",
+      "kind": "both_hit",
+      "text": "🥊 {p1} و {p2} انقضّا كنسرين — ريش في كل مكان!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0041",
+      "kind": "both_hit",
+      "text": "💥 {p1} و {p2} أطلقا مدافعهما بنفس الثانية — دوي مزدوج!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0042",
+      "kind": "both_hit",
+      "text": "⚔️ {p1} و {p2} تقاتلا بلا هوادة — خسائر من الطرفين!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0043",
+      "kind": "both_hit",
+      "text": "🌀 {p1} و {p2} كانا كإعصارين متقابلين — دمار مشترك!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0044",
+      "kind": "both_hit",
+      "text": "🔥 {p1} و {p2} لعبا بالنار — واحترقا سوية!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0045",
+      "kind": "both_hit",
+      "text": "🪓 {p1} و {p2} قطعا السكون بضرباتهما — والسكون انتقم!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0046",
+      "kind": "both_hit",
+      "text": "💣 {p1} و {p2} ضغطا الزر الأحمر معًا — بوم مزدوج!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0047",
+      "kind": "both_hit",
+      "text": "⚡ {p1} و {p2} أرسلا صواعق في نفس اللحظة — تذبذب كهربائي!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0048",
+      "kind": "both_hit",
+      "text": "🥋 {p1} و {p2} كسرا كل قواعد الفنون القتالية — والنتيجة تعادل مؤلم!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0049",
+      "kind": "both_hit",
+      "text": "🎯 {p1} و {p2} صوّبا بدقة — لكن على بعضهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0050",
+      "kind": "both_hit",
+      "text": "🤺 {p1} و {p2} لمعت سيوفهما وسمع الصدى — ضربتان في آن!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0051",
+      "kind": "both_hit",
+      "text": "🧨 {p1} و {p2} فتحا صناديق المفرقعات — والمفرقعات فتحتهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0052",
+      "kind": "both_hit",
+      "text": "🦴 {p1} و {p2} نطحا كالثيران — والحلبة ارتجّت!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0053",
+      "kind": "both_hit",
+      "text": "🏟 {p1} و {p2} لعبا مباراة ودية — لكن بلا ودّ!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0054",
+      "kind": "both_hit",
+      "text": "🪤 {p1} و {p2} وقعا في فخ بعضهما — مصيدة مزدوجة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0055",
+      "kind": "both_hit",
+      "text": "💫 {p1} و {p2} أطلقا شهبًا — وأصابت كل واحدة صاحبها!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0056",
+      "kind": "both_hit",
+      "text": "🤛 {p1} و {p2} ضربا مثل المطارق — والسندان هو الاثنان!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0057",
+      "kind": "both_hit",
+      "text": "🗡 {p1} و {p2} شهرا سيفيهما — وكسرا كل درع!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0058",
+      "kind": "both_hit",
+      "text": "🥊 {p1} و {p2} خاضا جولة ماراثونية — كلاهما على الأرض!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0059",
+      "kind": "both_hit",
+      "text": "💥 {p1} و {p2} انفجرا كبركان — حمم من الطرفين!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0060",
+      "kind": "both_hit",
+      "text": "⚔️ {p1} و {p2} رقصا رقصة الحرب — وداسا على أقدام بعضهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0061",
+      "kind": "both_hit",
+      "text": "🔥 {p1} و {p2} أشعلا فتيل المعركة — واشتعلا معًا!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0062",
+      "kind": "both_hit",
+      "text": "🌀 {p1} و {p2} دوّما كالدراويش — وتصادما في المنتصف!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0063",
+      "kind": "both_hit",
+      "text": "🪓 {p1} و {p2} طرقا كالحدّادين — والمعدن هو كلاهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0064",
+      "kind": "both_hit",
+      "text": "💣 {p1} و {p2} لعبا الروليت — وخسرا الاثنان!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0065",
+      "kind": "both_hit",
+      "text": "⚡ {p1} و {p2} سحبا الكهرباء من بعضهما — ماس كهربائي مزدوج!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0066",
+      "kind": "both_hit",
+      "text": "🥋 {p1} و {p2} أطلقا الكاميهاميها بنفس اللحظة — تعادل!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0067",
+      "kind": "both_hit",
+      "text": "🎯 {p1} و {p2} رميا السهام — وكل سهم أصاب الرامي الآخر!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0068",
+      "kind": "both_hit",
+      "text": "🤺 {p1} و {p2} تبارزا كالفرسان — سقط كلاهما عن الحصان!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0069",
+      "kind": "both_hit",
+      "text": "🧨 {p1} و {p2} لعبا بالبارود — والنتيجة: سواد في الوجهين!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0070",
+      "kind": "both_hit",
+      "text": "🦴 {p1} و {p2} تقابلا كالصخور — وتفتتت كلتاهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0071",
+      "kind": "both_hit",
+      "text": "🏟 {p1} و {p2} سجّلا أهدافًا في مرمى بعضهما — تعادل!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0072",
+      "kind": "both_hit",
+      "text": "🪤 {p1} و {p2} نصبا كمينًا — ووقعا فيه معًا!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0073",
+      "kind": "both_hit",
+      "text": "💫 {p1} و {p2} لمعا كالبرق — وصعقا بعضهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0074",
+      "kind": "both_hit",
+      "text": "🤛 {p1} و {p2} صفعا بنفس القوة — صدى مزدوج!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0075",
+      "kind": "both_hit",
+      "text": "🗡 {p1} و {p2} قطعا الهواء — والهواء قطعهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0076",
+      "kind": "both_hit",
+      "text": "🥊 {p1} و {p2} تبادلا اللكمات كرسائل بريدية — وصلت كلها!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0077",
+      "kind": "both_hit",
+      "text": "💥 {p1} و {p2} تحطّما كالأمواج — رذاذ في كل مكان!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0078",
+      "kind": "both_hit",
+      "text": "⚔️ {p1} و {p2} عزفا سيمفونية من الضربات — نشاز مؤلم!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0079",
+      "kind": "both_hit",
+      "text": "🔥 {p1} و {p2} أضرما النار — واحترق المكان وصاحباه!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0080",
+      "kind": "both_hit",
+      "text": "🌀 {p1} و {p2} تدحرجا كالعجلات — وتصادما عند المنحدر!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0081",
+      "kind": "both_hit",
+      "text": "🪓 {p1} و {p2} شقّا الهواء — وشقّ الهواء أعصابهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0082",
+      "kind": "both_hit",
+      "text": "💣 {p1} و {p2} أطلقا العيار — والارتداد أصابهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0083",
+      "kind": "both_hit",
+      "text": "⚡ {p1} و {p2} كانا كسحابتي رعد — برق مزدوج!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0084",
+      "kind": "both_hit",
+      "text": "🥋 {p1} و {p2} قفزا قفزة الكاراتيه — وطارا ببعضهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0085",
+      "kind": "both_hit",
+      "text": "🎯 {p1} و {p2} لعبا السهام — وكسرا اللوحة سوية!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0086",
+      "kind": "both_hit",
+      "text": "🤺 {p1} و {p2} بارزا حتى الجولة الأخيرة — ولم ينجُ أحد!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0087",
+      "kind": "both_hit",
+      "text": "🧨 {p1} و {p2} ألقيا القفاز — وكلاهما التقطه بوجهه!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0088",
+      "kind": "both_hit",
+      "text": "🦴 {p1} و {p2} تصارعا كدبّين — فرو في كل مكان!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0089",
+      "kind": "both_hit",
+      "text": "🏟 {p1} و {p2} تبارزا أمام الجمهور — تصفيق مع وجع!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0090",
+      "kind": "both_hit",
+      "text": "🪤 {p1} و {p2} ركضا نحو بعضهما — والنتيجة: بام!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0091",
+      "kind": "both_hit",
+      "text": "💫 {p1} و {p2} طبّقا نظرية الانفجار العظيم — على بعضهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0092",
+      "kind": "both_hit",
+      "text": "🤛 {p1} و {p2} لكما بقبضتين حديديتين — والحديد لان!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0093",
+      "kind": "both_hit",
+      "text": "🗡 {p1} و {p2} أطلقا العنان لغضبهما — ولم يسلم أحد!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0094",
+      "kind": "both_hit",
+      "text": "🥊 {p1} و {p2} دخلا الحلبة — وخرجا محمولين!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0095",
+      "kind": "both_hit",
+      "text": "💥 {p1} و {p2} صنعا حفرة في الأرض — من قوة تصادمهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0096",
+      "kind": "both_hit",
+      "text": "⚔️ {p1} و {p2} حاربا كالأبطال — وسقطا كالأبطال!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0097",
+      "kind": "both_hit",
+      "text": "🔥 {p1} و {p2} سخّنا الجو — حتى ذاب الاثنان!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0098",
+      "kind": "both_hit",
+      "text": "🌀 {p1} و {p2} أطلقا هجمة دوّارة — وعادت عليهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0099",
+      "kind": "both_hit",
+      "text": "🪓 {p1} و {p2} حملا الفؤوس — وكسرا المقابض على بعضهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0100",
+      "kind": "both_hit",
+      "text": "💣 {p1} و {p2} دقّا طبول الحرب — ورنّت في آذان الاثنين!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0101",
+      "kind": "both_hit",
+      "text": "⚡ {p1} و {p2} شحنا طاقتهما — وتفرّغت في بعضهما!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0102",
+      "kind": "both_hit",
+      "text": "🥋 {p1} و {p2} قالا «هيا!» بنفس الوقت — وتلقّيا الضربة بنفس الوقت!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0103",
+      "kind": "both_hit",
+      "text": "🎯 {p1} و {p2} أطلقا النار بنفس اللحظة — إصابة مزدوجة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0104",
+      "kind": "both_hit",
+      "text": "🤺 {p1} و {p2} رفعا الراية — لكن كلاهما بيضاء من الألم!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0105",
+      "kind": "both_hit",
+      "text": "🧨 {p1} و {p2} لعبا لعبة خطيرة — وكلاهما خسر حياة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0106",
+      "kind": "both_hit",
+      "text": "🦴 {p1} و {p2} احتكّا كالصوّان — وتطايرت شرارات من الاثنين!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0107",
+      "kind": "both_hit",
+      "text": "🏟 {p1} و {p2} كسرا رقمًا قياسيًا — في تبادل الضربات!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0108",
+      "kind": "both_hit",
+      "text": "🥊 {p1} و {p2} تبادلا الضربات — كلاهما أكل لكمة!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0109",
+      "kind": "both_hit",
+      "text": "💥 {p1} و {p2} تجاهلا الدفاع — كلاهما تلقّى الضرر!"
+    },
+    {
+      "id": "pvp.ar.both_hit.0110",
+      "kind": "both_hit",
+      "text": "⚔️ {p1} و {p2} تلاحما وضربا بعضهما بقوة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0001",
+      "kind": "single_hit",
+      "text": "🎯 {attacker} وجد ثغرة في حراسة {defender} واخترقها!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0002",
+      "kind": "single_hit",
+      "text": "💢 {attacker} رمى خدعة، و{defender} بقي واقفًا ويداه مرفوعتان!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0003",
+      "kind": "single_hit",
+      "text": "🥊 {attacker} أمسك {defender} في العراء — ليست ضربة قاضية، لكنها تلسع!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0004",
+      "kind": "single_hit",
+      "text": "🪶 {attacker} تلوّى حول حماية {defender} ووصل!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0005",
+      "kind": "single_hit",
+      "text": "🌀 {attacker} أدار الهجوم — {defender} ما قدر يعيد الحماية!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0006",
+      "kind": "single_hit",
+      "text": "🔥 {attacker} اخترق دفاع {defender} كالسهم!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0007",
+      "kind": "single_hit",
+      "text": "💥 {attacker} ضرب بقوة — {defender} ما شاف الضربة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0008",
+      "kind": "single_hit",
+      "text": "⚡ {attacker} تحرّك بسرعة البرق — {defender} تجمّد!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0009",
+      "kind": "single_hit",
+      "text": "🗡 {attacker} شهر سيفه — {defender} نسي درعه!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0010",
+      "kind": "single_hit",
+      "text": "🥋 {attacker} نفّذ حركة نينجا — {defender} صفّق قبل أن يتألم!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0011",
+      "kind": "single_hit",
+      "text": "🎯 {attacker} صوّب بدقة — {defender} ما قدر يتفادى!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0012",
+      "kind": "single_hit",
+      "text": "💢 {attacker} هجم كالثور — {defender} طار كالريشة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0013",
+      "kind": "single_hit",
+      "text": "🥊 {attacker} لكم بيمينه — {defender} رأى النجوم!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0014",
+      "kind": "single_hit",
+      "text": "🪶 {attacker} لمس {defender} بخفة — لكن الألم ثقيل!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0015",
+      "kind": "single_hit",
+      "text": "🌀 {attacker} دار ولكم — {defender} ما عرف من أين جاءت!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0016",
+      "kind": "single_hit",
+      "text": "🔥 {attacker} أشعل الهجوم — {defender} احترق!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0017",
+      "kind": "single_hit",
+      "text": "💥 {attacker} انقضّ كالنسر — {defender} كان الفريسة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0018",
+      "kind": "single_hit",
+      "text": "⚡ {attacker} صعق {defender} — شحنة كهربائية مباشرة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0019",
+      "kind": "single_hit",
+      "text": "🗡 {attacker} قطع الهواء — و{defender} قطع الأمل!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0020",
+      "kind": "single_hit",
+      "text": "🥋 {attacker} رمى {defender} أرضًا — رمية أولمبية!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0021",
+      "kind": "single_hit",
+      "text": "🎯 {attacker} أصاب الهدف — {defender} كان الهدف!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0022",
+      "kind": "single_hit",
+      "text": "💢 {attacker} ضرب ضربة معلّم — {defender} تلقّاها كالتلميذ!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0023",
+      "kind": "single_hit",
+      "text": "🥊 {attacker} أرسل أبركات — {defender} استلمها بالوجه!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0024",
+      "kind": "single_hit",
+      "text": "🪶 {attacker} مرّر ضربة ناعمة — {defender} ما حسّ إلا متأخرًا!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0025",
+      "kind": "single_hit",
+      "text": "🌀 {attacker} أطلق إعصارًا — {defender} طار معه!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0026",
+      "kind": "single_hit",
+      "text": "🔥 {attacker} سكب الحمم — {defender} ذاب!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0027",
+      "kind": "single_hit",
+      "text": "💥 {attacker} فجّر هجومه — {defender} كان في مركز الانفجار!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0028",
+      "kind": "single_hit",
+      "text": "⚡ {attacker} كان أسرع — {defender} كان أبطأ بثانية!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0029",
+      "kind": "single_hit",
+      "text": "🗡 {attacker} اخترق الحماية — {defender} وقف يتفرّج!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0030",
+      "kind": "single_hit",
+      "text": "🥋 {attacker} طبّق الفنون القتالية — {defender} طبّق الأرض!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0031",
+      "kind": "single_hit",
+      "text": "🎯 {attacker} لم يُخطئ — {defender} تمنّى لو أخطأ!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0032",
+      "kind": "single_hit",
+      "text": "💢 {attacker} ضرب بكل قوته — {defender} ارتجّ!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0033",
+      "kind": "single_hit",
+      "text": "🥊 {attacker} وزّع لكمات — {defender} جمعها كلها!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0034",
+      "kind": "single_hit",
+      "text": "🪶 {attacker} لمسة واحدة كفت — {defender} سقط!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0035",
+      "kind": "single_hit",
+      "text": "🌀 {attacker} تدحرج وضرب — {defender} ما فهم شو صار!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0036",
+      "kind": "single_hit",
+      "text": "🔥 {attacker} كان كالبركان — {defender} كان القرية!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0037",
+      "kind": "single_hit",
+      "text": "💥 {attacker} أطلق قذيفة — {defender} كان في المرمى!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0038",
+      "kind": "single_hit",
+      "text": "⚡ {attacker} كالصاعقة — {defender} كالشجرة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0039",
+      "kind": "single_hit",
+      "text": "🗡 {attacker} سحب سيفه — {defender} سحب نفسه للخلف (متأخرًا)!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0040",
+      "kind": "single_hit",
+      "text": "🥋 {attacker} قام بالحركة السرية — {defender} لم يقرأ الدليل!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0041",
+      "kind": "single_hit",
+      "text": "🎯 {attacker} رمى ولم يتردد — {defender} تردد ودفع الثمن!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0042",
+      "kind": "single_hit",
+      "text": "💢 {attacker} هجم من الظل — {defender} ما شاف ظله!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0043",
+      "kind": "single_hit",
+      "text": "🥊 {attacker} خطف الفوز — {defender} خطف الأرض بوجهه!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0044",
+      "kind": "single_hit",
+      "text": "🪶 {attacker} زلّق ضربة — {defender} ما سمع حتى الهواء!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0045",
+      "kind": "single_hit",
+      "text": "🌀 {attacker} غيّر الاتجاه فجأة — {defender} غيّر لون وجهه!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0046",
+      "kind": "single_hit",
+      "text": "🔥 {attacker} أضرم نارًا — {defender} ما لحق يطفئ!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0047",
+      "kind": "single_hit",
+      "text": "💥 {attacker} فاجأ الجميع — لكن بالأخص {defender}!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0048",
+      "kind": "single_hit",
+      "text": "⚡ {attacker} أطلق شرارة — {defender} كان المحطة الأرضية!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0049",
+      "kind": "single_hit",
+      "text": "🗡 {attacker} مرّ كالسيف — {defender} مرّ كالزبدة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0050",
+      "kind": "single_hit",
+      "text": "🥋 {attacker} دخل بالقدم اليمنى — {defender} خرج بالقدم اليسرى!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0051",
+      "kind": "single_hit",
+      "text": "🎯 {attacker} كان كالقنّاص — {defender} كان الهدف المتحرك (البطيء)!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0052",
+      "kind": "single_hit",
+      "text": "💢 {attacker} ضرب كالمطرقة — {defender} كان المسمار!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0053",
+      "kind": "single_hit",
+      "text": "🥊 {attacker} أدّى عرضًا — {defender} كان الدمية!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0054",
+      "kind": "single_hit",
+      "text": "🪶 {attacker} نقر كالعصفور — {defender} تألم كالفيل!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0055",
+      "kind": "single_hit",
+      "text": "🌀 {attacker} لفّ ودار — {defender} ضاع في الدوّامة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0056",
+      "kind": "single_hit",
+      "text": "🔥 {attacker} حمّل هجومه — {defender} تحمّل النتيجة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0057",
+      "kind": "single_hit",
+      "text": "💥 {attacker} ضغط الزر — {defender} كان القنبلة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0058",
+      "kind": "single_hit",
+      "text": "⚡ {attacker} وصل أولًا — {defender} وصل للأرض!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0059",
+      "kind": "single_hit",
+      "text": "🗡 {attacker} رسم خطًا — {defender} كان الخط!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0060",
+      "kind": "single_hit",
+      "text": "🥋 {attacker} استخدم التقنية — {defender} استخدم وجهه!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0061",
+      "kind": "single_hit",
+      "text": "🎯 {attacker} كان الصياد — {defender} كان الغزال!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0062",
+      "kind": "single_hit",
+      "text": "💢 {attacker} قال «باااام!» — {defender} قال «آآآه!»!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0063",
+      "kind": "single_hit",
+      "text": "🥊 {attacker} رمى كل ما عنده — {defender} تلقّى كل ما عنده!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0064",
+      "kind": "single_hit",
+      "text": "🪶 {attacker} مسح الأرض بـ{defender} — تنظيف عميق!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0065",
+      "kind": "single_hit",
+      "text": "🌀 {attacker} فتح بوابة الهجوم — {defender} كان خلف البوابة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0066",
+      "kind": "single_hit",
+      "text": "🔥 {attacker} كان جاهزًا — {defender} كان نائمًا!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0067",
+      "kind": "single_hit",
+      "text": "💥 {attacker} ضرب بلا رحمة — {defender} طلب الرحمة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0068",
+      "kind": "single_hit",
+      "text": "⚡ {attacker} أطلق البرق — {defender} كان موصل ممتاز!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0069",
+      "kind": "single_hit",
+      "text": "🗡 {attacker} كان كالسيف الدمشقي — {defender} كان كالورق!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0070",
+      "kind": "single_hit",
+      "text": "🥋 {attacker} قفز قفزة النمر — {defender} كان العشب!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0071",
+      "kind": "single_hit",
+      "text": "🎯 {attacker} لعب بالأعصاب — {defender} فقد أعصابه!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0072",
+      "kind": "single_hit",
+      "text": "💢 {attacker} أطلق العنان — {defender} أطلق صرخة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0073",
+      "kind": "single_hit",
+      "text": "🥊 {attacker} قدّم عرض الموسم — {defender} كان الجمهور والضحية!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0074",
+      "kind": "single_hit",
+      "text": "🪶 {attacker} ضرب بخفة الريشة — {defender} سقط بثقل الجبل!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0075",
+      "kind": "single_hit",
+      "text": "🌀 {attacker} دار حول {defender} — وضربه من الخلف!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0076",
+      "kind": "single_hit",
+      "text": "🔥 {attacker} شوى {defender} — مشوي على الفحم!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0077",
+      "kind": "single_hit",
+      "text": "💥 {attacker} أسقط الستار — على رأس {defender}!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0078",
+      "kind": "single_hit",
+      "text": "⚡ {attacker} كهرب المعركة — {defender} تكهرب!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0079",
+      "kind": "single_hit",
+      "text": "🗡 {attacker} وجّه ضربة نظيفة — {defender} ما كانت نظيفة بالنسبة له!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0080",
+      "kind": "single_hit",
+      "text": "🥋 {attacker} طبّق الكتاب — {defender} كان الصفحة المطوية!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0081",
+      "kind": "single_hit",
+      "text": "🎯 {attacker} سدّد بإتقان — {defender} تلقّى بتألم!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0082",
+      "kind": "single_hit",
+      "text": "💢 {attacker} حطّم الدفاع — {defender} حطّم أحلامه!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0083",
+      "kind": "single_hit",
+      "text": "🥊 {attacker} كان كالإعصار — {defender} كان البيت الورقي!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0084",
+      "kind": "single_hit",
+      "text": "🪶 {attacker} مرّ كالهواء — {defender} شعر بالضربة كالصخرة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0085",
+      "kind": "single_hit",
+      "text": "🌀 {attacker} نفّذ الخطة — {defender} كان جزءًا منها بالغصب!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0086",
+      "kind": "single_hit",
+      "text": "🔥 {attacker} صبّ الحديد المنصهر — {defender} كان القالب!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0087",
+      "kind": "single_hit",
+      "text": "💥 {attacker} ضرب ضربة الحظ — {defender} ضربة النحس!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0088",
+      "kind": "single_hit",
+      "text": "⚡ {attacker} كان كالتيار — {defender} كان السلك المكشوف!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0089",
+      "kind": "single_hit",
+      "text": "🗡 {attacker} اخترق مثل الرمح — {defender} كان الهدف الثابت!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0090",
+      "kind": "single_hit",
+      "text": "🥋 {attacker} ضرب بالكوع — {defender} كان قريبًا جدًا!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0091",
+      "kind": "single_hit",
+      "text": "🎯 {attacker} ما أخطأ أبدًا — {defender} تمنّى لو كان أسرع!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0092",
+      "kind": "single_hit",
+      "text": "💢 {attacker} أطلق قبضة الغضب — {defender} أكل قبضة الغضب!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0093",
+      "kind": "single_hit",
+      "text": "🥊 {attacker} كان المنتصر — {defender} كان الدرس!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0094",
+      "kind": "single_hit",
+      "text": "🪶 {attacker} ضرب ضربة الفراشة — {defender} شعر بها كضربة الفيل!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0095",
+      "kind": "single_hit",
+      "text": "🌀 {attacker} غيّر قواعد اللعبة — {defender} كان لا يزال يقرأ القواعد القديمة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0096",
+      "kind": "single_hit",
+      "text": "🔥 {attacker} أحرق المسرح — {defender} كان الممثل الرئيسي!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0097",
+      "kind": "single_hit",
+      "text": "💥 {attacker} أسقط القنبلة النووية — {defender} في مركز الانفجار!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0098",
+      "kind": "single_hit",
+      "text": "⚡ {attacker} أرسل صاعقة جوية — {defender} بلا مظلة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0099",
+      "kind": "single_hit",
+      "text": "🗡 {attacker} قلب الطاولة — على رأس {defender}!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0100",
+      "kind": "single_hit",
+      "text": "🥋 {attacker} استخدم القوة الخفية — {defender} ما كان يعلم بوجودها!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0101",
+      "kind": "single_hit",
+      "text": "🎯 {attacker} أغمض عينيه وضرب — {defender} كان يتمنى لو أغمض عينيه هو أيضًا!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0102",
+      "kind": "single_hit",
+      "text": "💢 {attacker} قال كلمته الأخيرة — بقبضته في وجه {defender}!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0103",
+      "kind": "single_hit",
+      "text": "🥊 {attacker} كتب الفصل الأخير — {defender} كان الحبر!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0104",
+      "kind": "single_hit",
+      "text": "🪶 {attacker} ضرب ضربة خفيفة ودقيقة — {defender} ما حجب ريشة!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0105",
+      "kind": "single_hit",
+      "text": "🎯 {attacker} وجد ثغرة في حراسة {defender} واخترقها!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0106",
+      "kind": "single_hit",
+      "text": "💢 {attacker} رمى خدعة، و{defender} بقي واقفًا ويداه مرفوعتان!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0107",
+      "kind": "single_hit",
+      "text": "🥊 {attacker} أمسك {defender} في العراء — ليست ضربة قاضية، لكنها تلسع!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0108",
+      "kind": "single_hit",
+      "text": "🪶 {attacker} تلوّى حول حماية {defender} ووصل!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0109",
+      "kind": "single_hit",
+      "text": "🌀 {attacker} أدار الهجوم — {defender} ما قدر يعيد الحماية!"
+    },
+    {
+      "id": "pvp.ar.single_hit.0110",
+      "kind": "single_hit",
+      "text": "🔥 {attacker} اخترق دفاع {defender} كالسهم!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0001",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} تصادم الدرعان — لا أحد تأذّى!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0002",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} تبادلا طقطقات — كلاهما سالم!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0003",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} رفعا جدرانًا — علقت الضربات في البناء!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0004",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} أقفلا كل شيء — لا ضربة مرّت!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0005",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} احتميا في قلاعهما — الحصار فاشل!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0006",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} و {p2} دخلا القوقعة — لا شيء يخترق!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0007",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} و {p2} جمّدا كل هجوم — درجة الحرارة تحت الصفر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0008",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} و {p2} عكسا كل ضربة — كالمرآة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0009",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} صدّا كل شيء — حتى النسيم!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0010",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} تحصّنا كالقلاع — لا كسر ممكن!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0011",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} رفعا دروعهما — ولم يسقط شيء!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0012",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} بنيا حائطًا — والضربات ارتدّت!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0013",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} و {p2} انكمشا كالسلاحف — لا خدش!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0014",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} لبسا خوذًا مضاعفة — والضربات بلا أثر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0015",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} و {p2} تجمّدا في وضع الدفاع — لا شيء يمرّ!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0016",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} و {p2} حوّلا وضع الانعكاس — كل شيء يرتدّ!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0017",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} رفعا التروس — والسيوف ارتدت!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0018",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} تحصّنا خلف الأسوار — الهجمات بلا جدوى!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0019",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} أحكما الإغلاق — الهجمات بلا مفتاح!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0020",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} صارا جدارًا — لا ضربة تعبر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0021",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} و {p2} غاصا في الدروع — والضربات تنزلق!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0022",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} غطّيا كل زاوية — مناعة مطلقة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0023",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} و {p2} جمّدا المعركة — لا حركة ولا ضرر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0024",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} و {p2} عكسا الهجمات — مباراة مرآة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0025",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} رفعا الحماية للحدّ الأقصى — صفر ضرر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0026",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} بنيا خندقًا — ولا أحد عبر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0027",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} أقفلا الباب على الهجمات — مغلق حتى إشعار آخر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0028",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} تحوّلا إلى حصن — لا اختراق!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0029",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} و {p2} استخدما تكتيك السلحفاة — بطيء لكن آمن!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0030",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} ارتدا دروعًا ثلاثية — والهجمات تتكسّر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0031",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} و {p2} أصبحا جبلي جليد — لا شيء يذيبهما!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0032",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} و {p2} كانا كمرآتين متقابلتين — الضربات تتأرجح للأبد!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0033",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} رفعا حقل الحماية — كأنهما في فقاعة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0034",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} تراجعا خلف الحصون — ولا ثغرة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0035",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} شفّرا دفاعهما — والمهاجم بلا كلمة سر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0036",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} وضعا حجر على حجر — والضربات تتوقف!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0037",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} و {p2} طبّقا الدفاع المثالي — لا خدش واحد!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0038",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} لبسا زرد الحماية — والسيوف ترتدّ!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0039",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} و {p2} جمّدا الموقف — لا ضرر ولا ضرار!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0040",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} و {p2} حوّلا أنفسهما لمرآة — كل هجوم يرجع لصاحبه!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0041",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} تبادلا الصدّ — والهجمات في إجازة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0042",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} تمترسا — والرصاص لا يصل!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0043",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} قفلا على بعضهما — مأزق حديدي!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0044",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} كانا كجدارين — والضربات كالريح بينهما!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0045",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} و {p2} تدرّعا بالصبر — ولم ينجح أي هجوم!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0046",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} رفعا الأسلحة — لكن فقط للدفاع!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0047",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} و {p2} صنعا درعًا من الجليد — والضربات تتكسّر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0048",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} و {p2} لعبا لعبة المرآة — والنتيجة: لا شيء!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0049",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} كانا كفارسين بدروع كاملة — لا رصاصة تمرّ!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0050",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} بنيا سورًا — والهجمات تتسلق وتقع!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0051",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} أحبطا كل محاولة — دفاع حديدي!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0052",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} تحوّلا لصخرتين — لا أحد يتزحزح!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0053",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} و {p2} اختبآ في الدروع — والعالم ينتظر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0054",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} كانا في وضع الاستعداد — لكن لا أحد هاجم بنجاح!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0055",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} و {p2} بقيا باردين — والهجمات تبرد معهما!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0056",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} و {p2} عكسا الطاقة — ورجعت للمرسل!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0057",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} تناوبا على الصدّ — كلّ ضربة ترتدّ!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0058",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} أحاطا نفسيهما بالأسوار — حصار بلا فائدة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0059",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} أغلقا المنافذ — والهجمات ضائعة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0060",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} رصّا الطوب — ولا ضربة عبرت!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0061",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} و {p2} تقوقعا في دفاعهما — لا فائدة من الهجوم!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0062",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} كانا محصّنين — والسهام ترتدّ!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0063",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} و {p2} كانا كالثلج — الضربات تنزلق!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0064",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} و {p2} ارتدا درع المرآة — كل شيء يعود!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0065",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} تصادما بالدروع — صوت معدني وبس!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0066",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} كانا كحصنين — لا أحد يقتحم!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0067",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} أبقيا الأبواب مغلقة — والضربات تطرق بلا جواب!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0068",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} كانا كالصخر — الضربات تتحطم!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0069",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} و {p2} مارسا فن الاختباء — والضربات تمرّ فوقهما!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0070",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} ارتدا خوذتين — والرأس سالم!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0071",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} و {p2} بردا الحماس — والمعركة تجمّدت!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0072",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} و {p2} كانا كزجاج مضاد للرصاص — لا شيء ينفذ!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0073",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} حجبا كل زاوية — حماية ٣٦٠ درجة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0074",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} كانا في حصن داخل حصن — مستحيل الوصول!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0075",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} كانا كالقفل والمفتاح — لكن المفتاح ضائع!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0076",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} تبادلا الحجب كالتحية — صباح الخير بلا ضرر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0077",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} و {p2} تراجعا للخلف — ولا أحد تقدّم!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0078",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} لبسا كل الحماية الممكنة — والضربات يائسة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0079",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} و {p2} جعلا المعركة باردة — كالثلاجة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0080",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} و {p2} كانا كجدار زجاجي — الضربات ترتدّ!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0081",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} أحكما القبضة على الدروع — لا مجال للخطأ!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0082",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} رفعا جسر القلعة — لا عبور!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0083",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} وضعا قفلًا على كل ضربة — والمفاتيح في البحر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0084",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} كانا أقوى من الخرسانة — لا شقوق!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0085",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} و {p2} نجوا بفضل الصدفة — حرفيًا!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0086",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} كانا في وضع السبات الدفاعي — لا طاقة تُهدر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0087",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} و {p2} صنعا حاجزًا جليديًا — ولا ضربة ذابت!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0088",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} و {p2} قلبا المعادلة — الدفاع أقوى من الهجوم!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0089",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} كانا كالسور العظيم — لا غزاة يمرّون!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0090",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} أحاطا نفسيهما بخندق مائي — والضربات غرقت!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0091",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} كانا بأمان — خلف جدار حديدي!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0092",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} بنيا سدًا — والهجمات كالماء ترتدّ!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0093",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} و {p2} تحرّكا ببطء — لكن بحماية كاملة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0094",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} كانا محصّنين حتى الأسنان — لا فتحة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0095",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} و {p2} كانا كجبلين جليديين — الضربات تنزلق!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0096",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} و {p2} استخدما حقل القوة — والضربات ترتدّ!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0097",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} كانا في فقاعة حماية — لا خدش واحد!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0098",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} كانا كبرجين حصينين — والهجمات عاجزة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0099",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} أقاما حاجزًا — والضربات تتحطم!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0100",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} كانا كمدرّعتين — لا سلاح ينفع!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0101",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} و {p2} تقمّصا روح السلحفاة — بطء مع حماية!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0102",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} صنعا حصنًا من الهواء — والضربات تتبخر!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0103",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} و {p2} كانا باردين كالثلج — والهجمات تتجمّد!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0104",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} و {p2} لعبا تنس الطاولة بالضربات — ولم يسجّل أحد!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0105",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} كانا كالدبابة — لا شيء يخترقهما!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0106",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} و {p2} أغلقا بوابات المدينة — والغزاة يائسون!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0107",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} و {p2} كانا في وضع الأمان — والضربات تعود فارغة!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0108",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} و {p2} صدّا كل هجوم — كأنهما يلعبان الاسكواش!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0109",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} و {p2} تصادم الدرعان — لا أحد تأذّى!"
+    },
+    {
+      "id": "pvp.ar.both_blocked.0110",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} و {p2} تبادلا طقطقات — كلاهما سالم!"
+    }
+  ]
+}
