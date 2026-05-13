@@ -112,6 +112,24 @@ class FakeClanRepository(IClanRepository):
         active.sort(key=lambda c: c.id or 0)
         return tuple(active)
 
+    async def list_all(
+        self,
+        *,
+        status_filter: ClanStatus | None = None,
+        limit: int,
+        offset: int = 0,
+    ) -> Sequence[Clan]:
+        filtered = self.rows
+        if status_filter is not None:
+            filtered = [c for c in filtered if c.status is status_filter]
+        filtered.sort(key=lambda c: c.id or 0)
+        return tuple(filtered[offset : offset + limit])
+
+    async def count_all(self, *, status_filter: ClanStatus | None = None) -> int:
+        if status_filter is None:
+            return len(self.rows)
+        return sum(1 for c in self.rows if c.status is status_filter)
+
     async def count_active_for_player(
         self,
         *,

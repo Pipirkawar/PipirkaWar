@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Clan {{ clan_id }} — Pipirik Wars Admin{% endblock %}
+
+{% block content %}
+<div class="center-card" style="max-width:900px;">
+    {% if card %}
+    <h1>{{ card.title }}</h1>
+
+    <table style="border-collapse:collapse; margin-bottom:1em;">
+        <tr><td style="padding:4px 12px 4px 0;"><strong>ID:</strong></td><td>{{ card.clan_id }}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;"><strong>Chat ID:</strong></td><td>{{ card.chat_id }}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;"><strong>Chat kind:</strong></td><td>{{ card.chat_kind }}</td></tr>
+        <tr>
+            <td style="padding:4px 12px 4px 0;"><strong>Status:</strong></td>
+            <td>
+                {% if card.status.value == 'frozen' %}
+                <span style="color:#c00;">frozen</span>
+                {% else %}
+                <span style="color:#090;">active</span>
+                {% endif %}
+            </td>
+        </tr>
+        <tr><td style="padding:4px 12px 4px 0;"><strong>Members:</strong></td><td>{{ card.member_count }} (active: {{ card.active_member_count }})</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;"><strong>Total length:</strong></td><td>{{ card.total_length_cm }} cm</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;"><strong>Created:</strong></td><td>{{ card.created_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;"><strong>Updated:</strong></td><td>{{ card.updated_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>
+        {% if card.leader %}
+        <tr>
+            <td style="padding:4px 12px 4px 0;"><strong>Leader:</strong></td>
+            <td>{{ card.leader.summary.username or card.leader.summary.name or card.leader.summary.tg_id }} (tg_id={{ card.leader.summary.tg_id }})</td>
+        </tr>
+        {% endif %}
+    </table>
+
+    <div style="margin-bottom:1.5em;">
+        {% if card.status.value == 'active' %}
+        <form method="POST" action="/clans/{{ card.clan_id }}/freeze" style="display:inline;">
+            {% if session.csrf_token %}
+            <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+            {% endif %}
+            <input type="text" name="reason" placeholder="Reason (optional)" style="width:200px;">
+            <button type="submit" style="color:#c00;">Freeze</button>
+        </form>
+        {% else %}
+        <form method="POST" action="/clans/{{ card.clan_id }}/unfreeze" style="display:inline;">
+            {% if session.csrf_token %}
+            <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+            {% endif %}
+            <button type="submit" style="color:#090;">Unfreeze</button>
+        </form>
+        {% endif %}
+    </div>
+
+    {% if card.members %}
+    <h2>Members</h2>
+    <table style="width:100%; border-collapse:collapse; margin-bottom:1em;">
+        <thead>
+            <tr>
+                <th style="text-align:left; padding:6px; border-bottom:2px solid #ccc;">Player</th>
+                <th style="text-align:left; padding:6px; border-bottom:2px solid #ccc;">TG ID</th>
+                <th style="text-align:left; padding:6px; border-bottom:2px solid #ccc;">Role</th>
+                <th style="text-align:left; padding:6px; border-bottom:2px solid #ccc;">Joined</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in card.members %}
+            <tr>
+                <td style="padding:6px; border-bottom:1px solid #eee;">{{ m.summary.username or m.summary.name or m.summary.tg_id }}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">{{ m.summary.tg_id }}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">{{ m.role.value }}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">{{ m.joined_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if head_history %}
+    <h2>Daily Head History</h2>
+    <table style="width:100%; border-collapse:collapse; margin-bottom:1em;">
+        <thead>
+            <tr>
+                <th style="text-align:left; padding:6px; border-bottom:2px solid #ccc;">Date</th>
+                <th style="text-align:left; padding:6px; border-bottom:2px solid #ccc;">Player</th>
+                <th style="text-align:left; padding:6px; border-bottom:2px solid #ccc;">Bonus</th>
+                <th style="text-align:left; padding:6px; border-bottom:2px solid #ccc;">Source</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for h in head_history %}
+            <tr>
+                <td style="padding:6px; border-bottom:1px solid #eee;">{{ h.moscow_date }}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">
+                    {% if h.player %}{{ h.player.username or h.player.name or h.player.tg_id }}{% else %}<em>orphan</em>{% endif %}
+                </td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">+{{ h.bonus_cm }} cm</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">{{ h.source.value }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% else %}
+    <h1>Clan not found</h1>
+    <p>Clan with ID <strong>{{ clan_id }}</strong> was not found.</p>
+    {% endif %}
+
+    <p style="margin-top:1em;"><a href="/clans">&larr; Back to Clans</a></p>
+</div>
+{% endblock %}

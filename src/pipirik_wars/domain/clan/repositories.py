@@ -7,6 +7,7 @@ from collections.abc import Sequence
 
 from pipirik_wars.domain.clan.entities import Clan, ClanMember
 from pipirik_wars.domain.clan.top_entry import ClanTopEntry
+from pipirik_wars.domain.clan.value_objects import ClanStatus
 
 
 class IClanRepository(abc.ABC):
@@ -66,6 +67,29 @@ class IClanRepository(abc.ABC):
           per-clan offset-а в логах / тестах);
         - frozen-кланы исключаются (см. выше).
         """
+
+    @abc.abstractmethod
+    async def list_all(
+        self,
+        *,
+        status_filter: ClanStatus | None = None,
+        limit: int,
+        offset: int = 0,
+    ) -> Sequence[Clan]:
+        """Paginated list of clans with optional status filter (Sprint 4.5-E).
+
+        Used by admin web panel for the "Clans" section.
+
+        Contract:
+        - if ``status_filter`` is ``None``, returns all clans;
+        - otherwise returns only clans with matching ``status``;
+        - ordered by ``id ASC`` (stable);
+        - ``offset`` / ``limit`` for pagination.
+        """
+
+    @abc.abstractmethod
+    async def count_all(self, *, status_filter: ClanStatus | None = None) -> int:
+        """Total count of clans matching optional status filter (Sprint 4.5-E)."""
 
     @abc.abstractmethod
     async def count_active_for_player(

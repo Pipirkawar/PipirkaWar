@@ -20,7 +20,7 @@ from pipirik_wars.admin_web.auth.csrf import CsrfMiddleware
 from pipirik_wars.admin_web.auth.ip_allowlist import IpAllowlistMiddleware
 from pipirik_wars.admin_web.auth.session import AdminSession
 from pipirik_wars.admin_web.composition import AdminWebContainer, build_admin_web_container
-from pipirik_wars.admin_web.routes import auth, dashboard, health, totp
+from pipirik_wars.admin_web.routes import auth, clans, dashboard, health, totp
 from pipirik_wars.admin_web.settings import AdminWebSettings
 
 logger = logging.getLogger(__name__)
@@ -104,6 +104,7 @@ def create_app(settings: AdminWebSettings | None = None) -> FastAPI:
     app.include_router(auth.router)
     app.include_router(totp.router)
     app.include_router(dashboard.router)
+    app.include_router(clans.router)
 
     return app
 

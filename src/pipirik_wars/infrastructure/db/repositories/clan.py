@@ -157,6 +157,27 @@ class SqlAlchemyClanRepository(IClanRepository):
         result = await self._uow.session.execute(stmt)
         return tuple(_row_to_clan(row) for row in result.scalars().all())
 
+    async def list_all(
+        self,
+        *,
+        status_filter: ClanStatus | None = None,
+        limit: int,
+        offset: int = 0,
+    ) -> Sequence[Clan]:
+        stmt = select(ClanORM).order_by(ClanORM.id.asc())
+        if status_filter is not None:
+            stmt = stmt.where(ClanORM.status == status_filter.value)
+        stmt = stmt.offset(offset).limit(limit)
+        result = await self._uow.session.execute(stmt)
+        return tuple(_row_to_clan(row) for row in result.scalars().all())
+
+    async def count_all(self, *, status_filter: ClanStatus | None = None) -> int:
+        stmt = select(func.count(ClanORM.id))
+        if status_filter is not None:
+            stmt = stmt.where(ClanORM.status == status_filter.value)
+        result = await self._uow.session.execute(stmt)
+        return int(result.scalar_one())
+
     async def count_active_for_player(
         self,
         *,
