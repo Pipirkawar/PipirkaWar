@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/totp", response_class=HTMLResponse)
+@router.get("/totp", response_class=HTMLResponse, response_model=None)
 async def totp_page(request: Request) -> HTMLResponse | RedirectResponse:
     session = require_session(request)
     container = get_container(request)
@@ -59,7 +59,7 @@ async def totp_page(request: Request) -> HTMLResponse | RedirectResponse:
     return HTMLResponse(content=content)
 
 
-@router.post("/totp/setup")
+@router.post("/totp/setup", response_model=None)
 async def totp_setup(request: Request) -> HTMLResponse | RedirectResponse:
     session = require_session(request)
     container = get_container(request)
@@ -144,7 +144,7 @@ async def totp_setup(request: Request) -> HTMLResponse | RedirectResponse:
     return HTMLResponse(content=content)
 
 
-@router.post("/totp/verify")
+@router.post("/totp/verify", response_model=None)
 async def totp_verify(request: Request) -> HTMLResponse | RedirectResponse:
     session = require_session(request)
     container = get_container(request)

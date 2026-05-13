@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse, response_model=None)
 async def login_page(request: Request) -> HTMLResponse | RedirectResponse:
     container = get_container(request)
     session = get_session(request)
@@ -48,7 +48,7 @@ async def login_page(request: Request) -> HTMLResponse | RedirectResponse:
     return HTMLResponse(content=content)
 
 
-@router.post("/auth/telegram/callback")
+@router.post("/auth/telegram/callback", response_model=None)
 async def telegram_callback(request: Request) -> JSONResponse | RedirectResponse:
     container = get_container(request)
     body = await request.json()
