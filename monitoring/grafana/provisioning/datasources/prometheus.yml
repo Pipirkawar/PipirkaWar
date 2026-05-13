@@ -1,0 +1,21 @@
+#
+# Grafana datasource auto-provisioning (Спринт 4.1-L).
+#
+# Регистрирует Prometheus datasource по адресу http://prometheus:9090
+# (DNS-имя prometheus резолвится через встроенную docker-compose-сеть).
+# UID `prometheus` — на него ссылается `redis-metrics.json` через
+# плейсхолдер `${DS_PROMETHEUS}` в templating-секции.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: 15s
+      httpMethod: POST

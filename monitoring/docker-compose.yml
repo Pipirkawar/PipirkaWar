@@ -1,0 +1,77 @@
+#
+# Pipirik Wars — local observability stack (Спринт 4.1-L).
+#
+# Стек поднимает Prometheus + Grafana локально для разработки и демо.
+# Дашборд `redis-metrics.json` импортируется автоматически через
+# Grafana provisioning. Prometheus скрейпит `/metrics`-эндпоинт бота
+# по адресу host.docker.internal:9100 (`BOT_METRICS_PORT`).
+#
+# Использование:
+#
+#   $ docker compose -f monitoring/docker-compose.yml up -d
+#
+# Затем открыть http://localhost:3000 (admin / admin) — дашборд
+# «Pipirik Redis Operations» уже загружен. Prometheus UI доступен на
+# http://localhost:9090.
+#
+# Для остановки:
+#
+#   $ docker compose -f monitoring/docker-compose.yml down
+#
+# Для полного сброса (включая Grafana-БД с настройками):
+#
+#   $ docker compose -f monitoring/docker-compose.yml down -v
+#
+# Important: production-deployment вне scope-а этого стека. Здесь
+# admin/admin — defaults для локальной разработки. AlertManager,
+# long-term storage (Thanos/Cortex), TLS — за рамками 4.1-L.
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: pipirik-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    extra_hosts:
+      # Linux: позволяет prometheus-контейнеру резолвить
+      # host.docker.internal в IP хоста (на macOS/Windows работает
+      # из коробки). Целевой бот живёт на хосте, не в docker-сети.
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana-oss:11.4.0
+    container_name: pipirik-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      # Для локалки выключаем регистрацию новых пользователей и
+      # анонимный доступ; в production-инстансе разверни OAuth/SSO.
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Отключаем сбор телеметрии Grafana.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  prometheus-data: {}
+  grafana-data: {}

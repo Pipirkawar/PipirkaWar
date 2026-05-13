@@ -151,6 +151,21 @@ bot/            ← тонкий aiogram-слой (handlers + presenters + middl
 
 Команды бота (`/start`, `/profile`, `/forest`, `/oracle`, `/upgrade`, `/top`, `/lang`) полностью локализованы.
 
+## 📊 Observability (Prometheus + Grafana)
+
+Бот экспортирует Prometheus-метрики Redis-операций на `/metrics` (порт `BOT_METRICS_PORT`, default `9100`):
+
+- `pipirik_redis_op_total{backend, op, outcome}` — counter завершённых операций (`outcome` ∈ `ok`/`error`).
+- `pipirik_redis_op_duration_seconds{backend, op}` — histogram длительности (11 buckets от 1 мс до 5 с).
+
+Локальный стек Prometheus + Grafana для разработки/демо лежит в [`monitoring/`](monitoring/README.md). Поднимается одной командой:
+
+```bash
+docker compose -f monitoring/docker-compose.yml up -d
+```
+
+Дашборд «Pipirik Redis Operations» (4 ряда × 7 панелей: overview / latency / throughput / errors) автопровиженится в Grafana на http://localhost:3000 (admin / admin). Подробности — в [`monitoring/README.md`](monitoring/README.md).
+
 ## 🔐 Политика разработки (кратко)
 
 - **SOLID/ООП** — обязательно. Каждый PR проходит чек-лист в [`CONTRIBUTING.md`](CONTRIBUTING.md).

@@ -1,0 +1,36 @@
+#
+# Prometheus scrape-конфигурация для локального observability-стека
+# Pipirik Wars (Спринт 4.1-L).
+#
+# Скрейпит `/metrics`-эндпоинт бота на host.docker.internal:9100
+# (env-var `BOT_METRICS_PORT`, default 9100). На macOS/Windows
+# host.docker.internal резолвится автоматически; на Linux —
+# благодаря `extra_hosts: host.docker.internal:host-gateway`
+# в docker-compose.yml.
+#
+# Для production-окружения замени target на DNS-имя или IP бота
+# (например, `pipirik-bot:9100` в Kubernetes / Docker Swarm).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: pipirik-local
+
+scrape_configs:
+  - job_name: pipirik-bot
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - "host.docker.internal:9100"
+        labels:
+          service: pipirik-bot
+          env: local
+
+  # Self-monitoring: Prometheus собирает свои собственные метрики.
+  # Полезно для траблшутинга самого скрейпинга (`up{job="prometheus"}`).
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - "localhost:9090"
