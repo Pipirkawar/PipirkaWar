@@ -1286,6 +1286,9 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         metrics_registry=None,
         oracle_templates=oracle_templates,
         duel_log_templates=duel_log_templates,
+        ai_oracle_provider=None,
+        ai_forest_provider=None,
+        ai_duel_provider=None,
         clan_quote_provider=clan_quote_provider,
         invoke_oracle=InvokeOracle(
             uow=uow,
