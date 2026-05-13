@@ -88,6 +88,8 @@ class RunBroadcastAnnouncementInput:
     locale_filter: BroadcastLocaleFilter
     message: str
     tg_chat_id: int | None = None
+    source: AdminAuditSource = AdminAuditSource.BOT
+    ip: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,6 +191,8 @@ class RunBroadcastAnnouncement:
             target_id=inp.locale_filter.value,
             tg_chat_id=inp.tg_chat_id,
             occurred_at=now,
+            source=inp.source,
+            ip=inp.ip,
         )
 
         recipients = await self._players.list_active_for_broadcast(
@@ -266,9 +270,9 @@ class RunBroadcastAnnouncement:
                         f"failed={failed_count} blocked={blocked_count}"
                     ),
                     idempotency_key=None,
-                    source=AdminAuditSource.BOT,
+                    source=input_.source,
                     tg_chat_id=input_.tg_chat_id,
-                    ip=None,
+                    ip=input_.ip,
                     occurred_at=now,
                 ),
             )

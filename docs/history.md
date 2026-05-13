@@ -23,6 +23,35 @@
 
 ---
 
+## 2026-05-13 — Спринт 4.5-I «Паритет use-cases bot/web + audit source»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 «Фаза 4 — Монетизация и масштаб», задача 4.5.10 (Паритет use-cases, audit source). Спринт 4.5-I. **Закрывает Спринт 4.5 целиком.**
+
+Что сделано:
+- Добавлен `source: AdminAuditSource = AdminAuditSource.BOT` и `ip: str | None = None` во все 17 admin use-case Input dataclass-ов
+- Обновлён `ensure_admin_authorized()` — принимает `source` и `ip` вместо хардкода `AdminAuditSource.BOT`
+- Все use-case-ы передают `inp.source` / `inp.ip` в `AdminAuditEntry` вместо хардкодированных значений
+- Web-маршруты `players.py` и `clans.py` передают `source=AdminAuditSource.WEB` и `ip=client_ip`
+- Новые web-маршруты: `POST /players/{id}/grant-length`, `POST /players/{id}/grant-thickness`
+- `verify_confirm.py` — приватный `_record_failure()` также принимает `source` и `ip`
+- 20 unit-тестов в `test_source_parity.py`: 8 use-case-ов × BOT/WEB + backward-compat
+
+Результат / артефакты:
+- `src/pipirik_wars/application/admin/` — все 17 файлов обновлены
+- `src/pipirik_wars/application/admin/_authorization.py` — source/ip параметры
+- `src/pipirik_wars/admin_web/routes/players.py` — grant-length/thickness маршруты
+- `src/pipirik_wars/admin_web/routes/clans.py` — source=WEB
+- `tests/unit/application/admin/test_source_parity.py` — 20 тестов
+
+Заметки / решения:
+- Дефолт `source=BOT` обеспечивает backward compatibility — бот-хэндлеры работают без изменений
+- Web-маршруты используют хелпер `_client_ip(request)` для извлечения IP клиента
+- Архитектура Clean Architecture сохранена: все import-linter контракты проходят
+
+---
+
 ## 2026-05-13 — Спринт 4.5-G «Редактор balance.yaml»
 
 **Автор:** Devin (агентская цепочка)

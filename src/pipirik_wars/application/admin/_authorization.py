@@ -65,6 +65,8 @@ async def ensure_admin_authorized(
     tg_chat_id: int | None,
     occurred_at: datetime,
     reason_suffix: str | None = None,
+    source: AdminAuditSource = AdminAuditSource.BOT,
+    ip: str | None = None,
 ) -> None:
     """Проверить RBAC; при отказе — записать `ADMIN_AUTHORIZATION_DENIED`
     в **отдельной** транзакции и бросить `AdminAuthorizationDeniedError`.
@@ -116,9 +118,9 @@ async def ensure_admin_authorized(
                 },
                 reason=reason,
                 idempotency_key=None,
-                source=AdminAuditSource.BOT,
+                source=source,
                 tg_chat_id=tg_chat_id,
-                ip=None,
+                ip=ip,
                 occurred_at=occurred_at,
             ),
         )

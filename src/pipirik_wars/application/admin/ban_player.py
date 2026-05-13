@@ -41,6 +41,8 @@ class BanPlayerInput:
     target_tg_id: int
     reason: str
     tg_chat_id: int | None = None
+    source: AdminAuditSource = AdminAuditSource.BOT
+    ip: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +102,8 @@ class BanPlayer:
             target_id=str(inp.target_tg_id),
             tg_chat_id=inp.tg_chat_id,
             occurred_at=now,
+            source=inp.source,
+            ip=inp.ip,
         )
         async with self._uow:
             player = await self._players.get_by_tg_id(inp.target_tg_id)
@@ -127,9 +131,9 @@ class BanPlayer:
                     after={"status": banned.status.value},
                     reason=reason,
                     idempotency_key=None,
-                    source=AdminAuditSource.BOT,
+                    source=inp.source,
                     tg_chat_id=inp.tg_chat_id,
-                    ip=None,
+                    ip=inp.ip,
                     occurred_at=now,
                 ),
             )

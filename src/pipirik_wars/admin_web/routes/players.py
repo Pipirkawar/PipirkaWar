@@ -33,19 +33,27 @@ from pipirik_wars.application.admin.get_player_card import (
     GetPlayerCard,
     GetPlayerCardInput,
 )
+from pipirik_wars.application.admin.grant_length import GrantLength, GrantLengthInput
+from pipirik_wars.application.admin.grant_thickness import (
+    GrantThickness,
+    GrantThicknessInput,
+)
 from pipirik_wars.application.admin.unfreeze_player import (
     UnfreezePlayer,
     UnfreezePlayerInput,
 )
 from pipirik_wars.application.auth.decorators import AuthorizationError
+from pipirik_wars.application.progression.add_length import AddLength
 from pipirik_wars.domain.admin import (
     AdminAuditAction,
     AdminAuditEntry,
     AdminAuditSource,
 )
 from pipirik_wars.domain.player.errors import PlayerNotFoundError
+from pipirik_wars.infrastructure.anticheat.admin_alerter import StructlogAnticheatAdminAlerter
 from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyAdminRepository,
+    SqlAlchemyAnticheatRepository,
     SqlAlchemyClanMembershipRepository,
     SqlAlchemyClanRepository,
     SqlAlchemyForestRunRepository,
@@ -55,11 +63,18 @@ from pipirik_wars.infrastructure.db.services.admin_audit import (
     SqlAlchemyAdminAuditLogger,
     SqlAlchemyAdminAuditQuery,
 )
+from pipirik_wars.infrastructure.db.services.audit import SqlAlchemyAuditLogger
+from pipirik_wars.infrastructure.db.services.idempotency import SqlAlchemyIdempotencyService
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/players")
+
+
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
+
 
 _SEARCH_LIMIT = 50
 _ACTIVITY_LIMIT = 30
@@ -98,6 +113,8 @@ async def players_list(request: Request) -> HTMLResponse:
                     FindPlayersInput(
                         actor_tg_id=session.admin_id,
                         query=query,
+                        source=AdminAuditSource.WEB,
+                        ip=_client_ip(request),
                     ),
                 )
                 results = list(output.results)
@@ -140,6 +157,8 @@ async def players_search(request: Request) -> HTMLResponse:
                     FindPlayersInput(
                         actor_tg_id=session.admin_id,
                         query=query,
+                        source=AdminAuditSource.WEB,
+                        ip=_client_ip(request),
                     ),
                 )
                 results = list(output.results)
@@ -186,6 +205,8 @@ async def player_card(request: Request, player_tg_id: int) -> HTMLResponse:
                 GetPlayerCardInput(
                     actor_tg_id=session.admin_id,
                     target_tg_id=player_tg_id,
+                    source=AdminAuditSource.WEB,
+                    ip=_client_ip(request),
                 ),
             )
         except AuthorizationError:
@@ -287,6 +308,8 @@ async def ban_player_action(request: Request, player_tg_id: int) -> HTMLResponse
                     actor_tg_id=session.admin_id,
                     target_tg_id=player_tg_id,
                     reason=reason,
+                    source=AdminAuditSource.WEB,
+                    ip=_client_ip(request),
                 ),
             )
         except AuthorizationError:
@@ -325,6 +348,8 @@ async def freeze_player_action(request: Request, player_tg_id: int) -> HTMLRespo
                     actor_tg_id=session.admin_id,
                     target_tg_id=player_tg_id,
                     reason=reason,
+                    source=AdminAuditSource.WEB,
+                    ip=_client_ip(request),
                 ),
             )
         except AuthorizationError:
@@ -360,6 +385,8 @@ async def unfreeze_player_action(request: Request, player_tg_id: int) -> HTMLRes
                 UnfreezePlayerInput(
                     actor_tg_id=session.admin_id,
                     target_tg_id=player_tg_id,
+                    source=AdminAuditSource.WEB,
+                    ip=_client_ip(request),
                 ),
             )
         except AuthorizationError:
@@ -369,6 +396,115 @@ async def unfreeze_player_action(request: Request, player_tg_id: int) -> HTMLRes
 
     flash = "already_active" if output.was_already_active else "unfrozen"
     return _redirect_to_card(player_tg_id, flash)
+
+
+@router.post("/{player_tg_id}/grant-length", response_class=HTMLResponse)
+async def grant_length_action(request: Request, player_tg_id: int) -> HTMLResponse:
+    """Grant length to a player."""
+    session = require_totp_verified(request)
+    container = get_container(request)
+    form = await request.form()
+    delta_cm = int(str(form.get("delta_cm", "0")))
+    reason = str(form.get("reason", "")).strip()
+    idempotency_key = str(form.get("idempotency_key", ""))
+
+    if not reason:
+        raise HTTPException(status_code=400, detail="Reason is required")
+
+    async with SqlAlchemyUnitOfWork(container.session_factory) as uow:
+        admins = SqlAlchemyAdminRepository(uow=uow)
+        players = SqlAlchemyPlayerRepository(uow=uow)
+        anticheat = SqlAlchemyAnticheatRepository(uow=uow)
+        player_audit = SqlAlchemyAuditLogger(uow=uow)
+        admin_audit = SqlAlchemyAdminAuditLogger(uow=uow)
+        idempotency = SqlAlchemyIdempotencyService(uow=uow)
+
+        length_granter = AddLength(
+            uow=uow,
+            players=players,
+            anticheat=anticheat,
+            audit=player_audit,
+            balance=container.balance_config,
+            clock=container.clock,
+            idempotency=idempotency,
+            admin_alerter=StructlogAnticheatAdminAlerter(),
+        )
+        uc = GrantLength(
+            uow=uow,
+            admins=admins,
+            players=players,
+            length_granter=length_granter,
+            audit=admin_audit,
+            clock=container.clock,
+            authz=container.authorization_policy,
+        )
+        try:
+            await uc.execute(
+                GrantLengthInput(
+                    actor_tg_id=session.admin_id,
+                    target_tg_id=player_tg_id,
+                    delta_cm=delta_cm,
+                    reason=reason,
+                    idempotency_key=idempotency_key,
+                    source=AdminAuditSource.WEB,
+                    ip=_client_ip(request),
+                ),
+            )
+        except AuthorizationError:
+            raise HTTPException(status_code=403, detail="Forbidden") from None
+        except PlayerNotFoundError:
+            raise HTTPException(status_code=404, detail="Player not found") from None
+
+    return _redirect_to_card(player_tg_id, "length_granted")
+
+
+@router.post("/{player_tg_id}/grant-thickness", response_class=HTMLResponse)
+async def grant_thickness_action(request: Request, player_tg_id: int) -> HTMLResponse:
+    """Grant thickness to a player."""
+    session = require_totp_verified(request)
+    container = get_container(request)
+    form = await request.form()
+    new_level = int(str(form.get("new_level", "0")))
+    reason = str(form.get("reason", "")).strip()
+    idempotency_key = str(form.get("idempotency_key", ""))
+
+    if not reason:
+        raise HTTPException(status_code=400, detail="Reason is required")
+
+    async with SqlAlchemyUnitOfWork(container.session_factory) as uow:
+        admins = SqlAlchemyAdminRepository(uow=uow)
+        players = SqlAlchemyPlayerRepository(uow=uow)
+        admin_audit = SqlAlchemyAdminAuditLogger(uow=uow)
+        idempotency = SqlAlchemyIdempotencyService(uow=uow)
+
+        uc = GrantThickness(
+            uow=uow,
+            admins=admins,
+            players=players,
+            balance=container.balance_config,
+            idempotency=idempotency,
+            audit=admin_audit,
+            clock=container.clock,
+            authz=container.authorization_policy,
+        )
+        try:
+            await uc.execute(
+                GrantThicknessInput(
+                    actor_tg_id=session.admin_id,
+                    target_tg_id=player_tg_id,
+                    new_level=new_level,
+                    reason=reason,
+                    idempotency_key=idempotency_key,
+                    source=AdminAuditSource.WEB,
+                    ip=_client_ip(request),
+                ),
+            )
+        except AuthorizationError:
+            raise HTTPException(status_code=403, detail="Forbidden") from None
+        except PlayerNotFoundError:
+            raise HTTPException(status_code=404, detail="Player not found") from None
+
+    return _redirect_to_card(player_tg_id, "thickness_granted")
 
 
 def _redirect_to_card(player_tg_id: int, flash: str) -> HTMLResponse:

@@ -113,6 +113,8 @@ class SetupAdminTotpInput:
     actor_tg_id: int
     password: str
     tg_chat_id: int | None = None
+    source: AdminAuditSource = AdminAuditSource.BOT
+    ip: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +186,8 @@ class SetupAdminTotp:
             target_id=str(admin_id),
             tg_chat_id=inp.tg_chat_id,
             occurred_at=now,
+            source=inp.source,
+            ip=inp.ip,
         )
 
         if self._bootstrap_password is None:
@@ -216,9 +220,9 @@ class SetupAdminTotp:
                     after=None,
                     reason="self setup via /admin_setup_totp",
                     idempotency_key=None,
-                    source=AdminAuditSource.BOT,
+                    source=inp.source,
                     tg_chat_id=inp.tg_chat_id,
-                    ip=None,
+                    ip=inp.ip,
                     occurred_at=now,
                 ),
             )

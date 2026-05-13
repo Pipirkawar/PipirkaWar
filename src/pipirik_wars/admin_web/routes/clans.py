@@ -29,6 +29,7 @@ from pipirik_wars.application.admin.unfreeze_clan import (
     UnfreezeClanAdmin,
     UnfreezeClanAdminInput,
 )
+from pipirik_wars.domain.admin import AdminAuditSource
 from pipirik_wars.domain.clan import ClanStatus
 from pipirik_wars.infrastructure.db.repositories import (
     SqlAlchemyAdminRepository,
@@ -41,6 +42,10 @@ from pipirik_wars.infrastructure.db.services import SqlAlchemyAdminAuditLogger
 from pipirik_wars.infrastructure.db.uow import SqlAlchemyUnitOfWork
 
 router = APIRouter()
+
+
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
 
 
 def _parse_status_filter(raw: str | None) -> ClanStatus | None:
@@ -128,7 +133,12 @@ async def clan_card(
     )
 
     result = await use_case.execute(
-        GetClanCardInput(actor_tg_id=session.admin_id, query=clan_id),
+        GetClanCardInput(
+            actor_tg_id=session.admin_id,
+            query=clan_id,
+            source=AdminAuditSource.WEB,
+            ip=_client_ip(request),
+        ),
     )
 
     head_history = None
@@ -149,6 +159,8 @@ async def clan_card(
                 actor_tg_id=session.admin_id,
                 query=clan_id,
                 limit=10,
+                source=AdminAuditSource.WEB,
+                ip=_client_ip(request),
             ),
         )
         head_history = head_result.entries
@@ -192,6 +204,8 @@ async def freeze_clan(
             actor_tg_id=session.admin_id,
             query=clan_id,
             reason=reason or None,
+            source=AdminAuditSource.WEB,
+            ip=_client_ip(request),
         ),
     )
 
@@ -224,6 +238,8 @@ async def unfreeze_clan(
         UnfreezeClanAdminInput(
             actor_tg_id=session.admin_id,
             query=clan_id,
+            source=AdminAuditSource.WEB,
+            ip=_client_ip(request),
         ),
     )
 

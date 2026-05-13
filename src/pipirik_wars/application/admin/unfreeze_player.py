@@ -38,6 +38,8 @@ class UnfreezePlayerInput:
     target_tg_id: int
     reason: str | None = None
     tg_chat_id: int | None = None
+    source: AdminAuditSource = AdminAuditSource.BOT
+    ip: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +92,8 @@ class UnfreezePlayer:
             target_id=str(inp.target_tg_id),
             tg_chat_id=inp.tg_chat_id,
             occurred_at=now,
+            source=inp.source,
+            ip=inp.ip,
         )
         async with self._uow:
             player = await self._players.get_by_tg_id(inp.target_tg_id)
@@ -115,9 +119,9 @@ class UnfreezePlayer:
                     after={"status": unfrozen.status.value},
                     reason=inp.reason or f"unfreeze:{inp.target_tg_id}",
                     idempotency_key=None,
-                    source=AdminAuditSource.BOT,
+                    source=inp.source,
                     tg_chat_id=inp.tg_chat_id,
-                    ip=None,
+                    ip=inp.ip,
                     occurred_at=now,
                 ),
             )
