@@ -148,6 +148,30 @@ class BotSettings(BaseSettings):
             "`BOT_METRICS_PORT`."
         ),
     )
+    # ── Спринт 4.9: Канал-анонсы ──
+    announcement_channel_id: int | None = Field(
+        default=None,
+        description=(
+            "ID Telegram-канала для публикации анонсов (Спринт 4.9). "
+            "`None` = фича выключена. Задаётся env-флагом "
+            "`BOT_ANNOUNCEMENT_CHANNEL_ID`."
+        ),
+    )
+    announcement_weekly_enabled: bool = Field(
+        default=True,
+        description=(
+            "Вкл/выкл еженедельных итогов в канале анонсов (Спринт 4.9). "
+            "Переключается env-флагом `BOT_ANNOUNCEMENT_WEEKLY_ENABLED`."
+        ),
+    )
+    announcement_weekly_cron: str = Field(
+        default="0 12 * * 1",
+        description=(
+            "Расписание еженедельного дайджеста в формате cron (Спринт 4.9). "
+            "По умолчанию — каждый понедельник в 12:00 UTC. "
+            "Переключается env-флагом `BOT_ANNOUNCEMENT_WEEKLY_CRON`."
+        ),
+    )
 
 
 class BootstrapSettings(BaseSettings):

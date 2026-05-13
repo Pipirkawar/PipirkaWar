@@ -1449,6 +1449,10 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         freeze_payouts=freeze_payouts_uc,
         unfreeze_payouts=unfreeze_payouts_uc,
         expire_reserved_prize_lots=expire_reserved_prize_lots_uc,
+        announcement_publisher=None,
+        announcement_stats_query=None,
+        publish_weekly_digest=None,
+        publish_leaderboard=None,
     )
 
 

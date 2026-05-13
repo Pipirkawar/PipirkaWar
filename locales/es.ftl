@@ -1607,3 +1607,10 @@ admin-unfreeze-payouts-totp-not-configured = ❌ Tu TOTP no está configurado. <
 admin-unfreeze-payouts-confirm-issued = 🛡️ Confirma el descongelamiento de pagos. Responde: <code>/confirm { $token } &lt;código de 6 dígitos&gt;</code>. El token expira en { $ttl_seconds } segundos.
 admin-unfreeze-payouts-success = ✅ Los pagos cripto están permitidos de nuevo.
 admin-unfreeze-payouts-already-unfrozen = ℹ️ Los pagos cripto no estaban congelados — no hay nada que descongelar.
+
+# ───────────────────────────────────────────────────────────────────────────
+# Announcement Channel (Sprint 4.9)
+# ───────────────────────────────────────────────────────────────────────────
+announce-channel-disabled = ❌ Announcement channel not configured. Set <code>BOT_ANNOUNCEMENT_CHANNEL_ID</code>.
+announce-weekly-confirm = 🛡️ Confirm publishing weekly digest. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.
+announce-leaderboard-confirm = 🛡️ Confirm publishing leaderboard. Reply: <code>/confirm { $token } &lt;6-digit code&gt;</code>.

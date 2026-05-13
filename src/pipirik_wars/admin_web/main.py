@@ -22,6 +22,7 @@ from pipirik_wars.admin_web.auth.rate_limit import RateLimitMiddleware
 from pipirik_wars.admin_web.auth.session import AdminSession
 from pipirik_wars.admin_web.composition import AdminWebContainer, build_admin_web_container
 from pipirik_wars.admin_web.routes import (
+    announcements,
     audit,
     auth,
     balance,
@@ -145,6 +146,8 @@ def create_app(settings: AdminWebSettings | None = None) -> FastAPI:
     app.include_router(balance.router)
     app.include_router(audit.router)
     app.include_router(players.router)
+    # Спринт 4.9: канал-анонсы (публикация дайджеста/лидерборда).
+    app.include_router(announcements.router)
 
     return app
 

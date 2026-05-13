@@ -1610,3 +1610,11 @@ admin-unfreeze-payouts-totp-not-configured = ❌ У тебя не настрое
 admin-unfreeze-payouts-confirm-issued = 🛡️ Подтверди разморозку выплат. Отправь: <code>/confirm { $token } &lt;6-значный код&gt;</code>. Токен живёт { $ttl_seconds } секунд.
 admin-unfreeze-payouts-success = ✅ Крипто-выплаты снова разрешены.
 admin-unfreeze-payouts-already-unfrozen = ℹ️ Крипто-выплаты не были заморожены — снимать нечего.
+
+# ───────────────────────────────────────────────────────────────────────────
+# Канал-анонсы (Спринт 4.9) — `/announce_weekly`, `/announce_leaderboard`
+# Публикация еженедельного дайджеста и лидерборда в публичный канал.
+# ───────────────────────────────────────────────────────────────────────────
+announce-channel-disabled = ❌ Канал-анонсы не настроен. Задай <code>BOT_ANNOUNCEMENT_CHANNEL_ID</code>.
+announce-weekly-confirm = 🛡️ Подтверди публикацию еженедельного дайджеста. Отправь: <code>/confirm { $token } &lt;6-значный код&gt;</code>.
+announce-leaderboard-confirm = 🛡️ Подтверди публикацию лидерборда. Отправь: <code>/confirm { $token } &lt;6-значный код&gt;</code>.

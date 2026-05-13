@@ -17,7 +17,7 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**Активный PR — Спринт 4.5 (локализация): добавлена поддержка арабского (ar)** — Ветка: `devin/1778711095-add-ar-locale`. Добавлен `ar` в `SUPPORTED_LOCALES` (`locale.py`), `_KEY_SET_AR` + маппинг в `lang.py`; обновлены все 9 `.ftl` файлов (`lang-usage`, `lang-unsupported`, `lang-not-registered`, `lang-set-ar`); создан полный `locales/ar.ftl` — перевод всех 658 ключей из `en.ftl` на арабский.
+**Активный PR — Спринт 4.9: Канал-анонсы** — Ветка: `devin/1778711591-sprint-4-9-announcements`. Полная реализация автоматической публикации контента в Telegram-канал бота: domain (порт + сущности), application (PublishWeeklyDigest, PublishLeaderboard), infrastructure (AiogramAnnouncementPublisher, SqlAlchemyAnnouncementStatsQuery), настройки (announcement_channel_id, weekly_enabled, weekly_cron), фоновый scheduler с cron-matching, admin-команды (/announce_weekly, /announce_leaderboard) с TOTP-flow, web-панель, локализация (8 файлов), 45 unit-тестов.
 
 **На `main` (АРХИВ):** Полная испанская локализация (locales/es.ftl) смержена. 4.5-A через 4.5-I смержены (auth, RBAC, дашборд, игроки, племена, аудит-лог, баланс, rate-limiting/CORS, паритет use-cases).
 
