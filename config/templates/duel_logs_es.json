@@ -1,0 +1,1655 @@
+{
+  "version": 2,
+  "templates": [
+    {
+      "id": "pvp.es.both_hit.0001",
+      "kind": "both_hit",
+      "text": "🥊 {p1} y {p2} intercambiaron golpes — ¡ambos se comieron el puñetazo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0002",
+      "kind": "both_hit",
+      "text": "💥 {p1} y {p2} ignoraron la defensa — ¡ambos recibieron daño!"
+    },
+    {
+      "id": "pvp.es.both_hit.0003",
+      "kind": "both_hit",
+      "text": "⚔️ {p1} y {p2} se agarraron y se golpearon a contacto completo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0004",
+      "kind": "both_hit",
+      "text": "🌀 {p1} y {p2} se dejaron llevar por el ataque y olvidaron el bloqueo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0005",
+      "kind": "both_hit",
+      "text": "🔥 {p1} y {p2} hicieron un intercambio limpio — ¡el árbitro cuenta los daños!"
+    },
+    {
+      "id": "pvp.es.both_hit.0006",
+      "kind": "both_hit",
+      "text": "🪓 {p1} y {p2} atacaron al mismo compás — ¡saltaron chispas!"
+    },
+    {
+      "id": "pvp.es.both_hit.0007",
+      "kind": "both_hit",
+      "text": "💣 {p1} y {p2} intercambiaron tiros limpios — sin adornos, solo impacto!"
+    },
+    {
+      "id": "pvp.es.both_hit.0008",
+      "kind": "both_hit",
+      "text": "⚡ {p1} y {p2} se reflejaron — empatados en estilo, ambos golpeados!"
+    },
+    {
+      "id": "pvp.es.both_hit.0009",
+      "kind": "both_hit",
+      "text": "🥋 {p1} y {p2} ambos vieron huecos — ¡doble conexión!"
+    },
+    {
+      "id": "pvp.es.both_hit.0010",
+      "kind": "both_hit",
+      "text": "🎯 {p1} y {p2} golpearon exactamente al mismo tiempo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0011",
+      "kind": "both_hit",
+      "text": "🪙 {p1} y {p2} intercambiaron longitud como cambio en la tienda!"
+    },
+    {
+      "id": "pvp.es.both_hit.0012",
+      "kind": "both_hit",
+      "text": "🌪 {p1} y {p2} giraron como tornado uno contra el otro — ¡ambos recibieron!"
+    },
+    {
+      "id": "pvp.es.both_hit.0013",
+      "kind": "both_hit",
+      "text": "🤺 {p1} y {p2} atacaron juntos — ¡los floretes tiemblan!"
+    },
+    {
+      "id": "pvp.es.both_hit.0014",
+      "kind": "both_hit",
+      "text": "🧨 {p1} y {p2} detonaron sus ataques de frente — ¡polvo por todos lados!"
+    },
+    {
+      "id": "pvp.es.both_hit.0015",
+      "kind": "both_hit",
+      "text": "🦴 {p1} y {p2} ambos escucharon el crujido — ¡ninguno bloqueó a tiempo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0016",
+      "kind": "both_hit",
+      "text": "🏟 {p1} y {p2} dieron un espectáculo: ¡doble conexión!"
+    },
+    {
+      "id": "pvp.es.both_hit.0017",
+      "kind": "both_hit",
+      "text": "🎺 {p1} y {p2} cantaron notas de ópera — ¡ambos la recibieron!"
+    },
+    {
+      "id": "pvp.es.both_hit.0018",
+      "kind": "both_hit",
+      "text": "🪤 {p1} y {p2} se atraparon mutuamente!"
+    },
+    {
+      "id": "pvp.es.both_hit.0019",
+      "kind": "both_hit",
+      "text": "🤜 {p1} y {p2} golpearon los puños al mismo tiempo — ¡doble caída!"
+    },
+    {
+      "id": "pvp.es.both_hit.0020",
+      "kind": "both_hit",
+      "text": "🗡 {p1} y {p2} cruzaron espadas y ambos se comieron el contra!"
+    },
+    {
+      "id": "pvp.es.both_hit.0021",
+      "kind": "both_hit",
+      "text": "💫 {p1} y {p2} vieron estrellas — ¡impacto mutuo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0022",
+      "kind": "both_hit",
+      "text": "🤛 {p1} y {p2} chocaron como dos trenes!"
+    },
+    {
+      "id": "pvp.es.both_hit.0023",
+      "kind": "both_hit",
+      "text": "⚔️ {p1} y {p2} fueron a puño limpio — ¡bloqueos en casa!"
+    },
+    {
+      "id": "pvp.es.both_hit.0024",
+      "kind": "both_hit",
+      "text": "🔥 {p1} y {p2} quemaron los HP del otro sin remordimiento!"
+    },
+    {
+      "id": "pvp.es.both_hit.0025",
+      "kind": "both_hit",
+      "text": "💥 {p1} y {p2} se dieron cabezazos — ¡ambos con chichones!"
+    },
+    {
+      "id": "pvp.es.both_hit.0026",
+      "kind": "both_hit",
+      "text": "🥊 {p1} y {p2} armaron una pelea sin reglas — ¡ambos salieron heridos!"
+    },
+    {
+      "id": "pvp.es.both_hit.0027",
+      "kind": "both_hit",
+      "text": "⚡ {p1} y {p2} se pusieron modo Pikachu — ¡rayo para ambos!"
+    },
+    {
+      "id": "pvp.es.both_hit.0028",
+      "kind": "both_hit",
+      "text": "🪓 {p1} y {p2} se dieron hachazos — ¡astillas de los dos!"
+    },
+    {
+      "id": "pvp.es.both_hit.0029",
+      "kind": "both_hit",
+      "text": "🌀 {p1} y {p2} giraron sus patadas y ambos recibieron una en la cara!"
+    },
+    {
+      "id": "pvp.es.both_hit.0030",
+      "kind": "both_hit",
+      "text": "🎯 {p1} y {p2} dieron en el blanco — lástima que era el otro!"
+    },
+    {
+      "id": "pvp.es.both_hit.0031",
+      "kind": "both_hit",
+      "text": "💣 {p1} y {p2} lanzaron granadas al mismo tiempo — ¡explosión compartida!"
+    },
+    {
+      "id": "pvp.es.both_hit.0032",
+      "kind": "both_hit",
+      "text": "🥋 {p1} y {p2} hicieron un doble lanzamiento de judo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0033",
+      "kind": "both_hit",
+      "text": "🤺 {p1} y {p2} anotaron touché al mismo tiempo — ¡el juez sin habla!"
+    },
+    {
+      "id": "pvp.es.both_hit.0034",
+      "kind": "both_hit",
+      "text": "🧨 {p1} y {p2} lanzaron fuegos artificiales de puñetazos — ¡ambos en humo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0035",
+      "kind": "both_hit",
+      "text": "🦴 {p1} y {p2} chocaron como dos carneros en un puente!"
+    },
+    {
+      "id": "pvp.es.both_hit.0036",
+      "kind": "both_hit",
+      "text": "🏟 {p1} y {p2} encendieron al público — ¡doble golpazo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0037",
+      "kind": "both_hit",
+      "text": "🪤 {p1} y {p2} ambos cargaron hacia adelante — ¡y ambos recibieron!"
+    },
+    {
+      "id": "pvp.es.both_hit.0038",
+      "kind": "both_hit",
+      "text": "🔥 {p1} y {p2} intercambiaron golpes como regalos de Año Nuevo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0039",
+      "kind": "both_hit",
+      "text": "💫 {p1} y {p2} bailaron tango entre puñetazos — ¡ambos parejas golpeados!"
+    },
+    {
+      "id": "pvp.es.both_hit.0040",
+      "kind": "both_hit",
+      "text": "🤜 {p1} y {p2} se golpearon la cara al mismo tiempo — ¡simetría!"
+    },
+    {
+      "id": "pvp.es.both_hit.0041",
+      "kind": "both_hit",
+      "text": "🗡 {p1} y {p2} esgrimieron y ambos se lanzaron a fondo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0042",
+      "kind": "both_hit",
+      "text": "⚔️ {p1} y {p2} se volvieron picadora de carne — ¡molidos por ambos lados!"
+    },
+    {
+      "id": "pvp.es.both_hit.0043",
+      "kind": "both_hit",
+      "text": "🥊 {p1} y {p2} intercambiaron combos — ¡los HP se derriten para ambos!"
+    },
+    {
+      "id": "pvp.es.both_hit.0044",
+      "kind": "both_hit",
+      "text": "💥 {p1} y {p2} chocaron como dos meteoritos — ¡cráter para dos!"
+    },
+    {
+      "id": "pvp.es.both_hit.0045",
+      "kind": "both_hit",
+      "text": "⚡ {p1} y {p2} intercambiaron relámpagos — ¡ambos al suelo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0046",
+      "kind": "both_hit",
+      "text": "🪓 {p1} y {p2} se picaron como leña de invierno!"
+    },
+    {
+      "id": "pvp.es.both_hit.0047",
+      "kind": "both_hit",
+      "text": "🌀 {p1} y {p2} se metieron en un tornado de puñetazos — ¡nadie se salvó!"
+    },
+    {
+      "id": "pvp.es.both_hit.0048",
+      "kind": "both_hit",
+      "text": "🎯 {p1} y {p2} ambos sacaron diez — ¡uno al otro!"
+    },
+    {
+      "id": "pvp.es.both_hit.0049",
+      "kind": "both_hit",
+      "text": "💣 {p1} y {p2} destrozaron la guardia del otro — ¡metralla por todos lados!"
+    },
+    {
+      "id": "pvp.es.both_hit.0050",
+      "kind": "both_hit",
+      "text": "🥋 {p1} y {p2} ejecutaron kata de frente — ¡doble crítico!"
+    },
+    {
+      "id": "pvp.es.both_hit.0051",
+      "kind": "both_hit",
+      "text": "🤺 {p1} y {p2} pararon y contraatacaron — ¡y ambos se comieron el contra!"
+    },
+    {
+      "id": "pvp.es.both_hit.0052",
+      "kind": "both_hit",
+      "text": "🧨 {p1} y {p2} prendieron la mecha al mismo tiempo — ¡explosión para dos!"
+    },
+    {
+      "id": "pvp.es.both_hit.0053",
+      "kind": "both_hit",
+      "text": "🦴 {p1} y {p2} golpearon tan fuerte que la arena retumbó!"
+    },
+    {
+      "id": "pvp.es.both_hit.0054",
+      "kind": "both_hit",
+      "text": "🏟 {p1} y {p2} coleccionaron todas las estrellas — ¡de los ojos del otro!"
+    },
+    {
+      "id": "pvp.es.both_hit.0055",
+      "kind": "both_hit",
+      "text": "🪤 {p1} y {p2} ambos olvidaron la defensa — ¡intercambio clásico!"
+    },
+    {
+      "id": "pvp.es.both_hit.0056",
+      "kind": "both_hit",
+      "text": "🔥 {p1} y {p2} se asaron mutuamente como brochetas en una vara!"
+    },
+    {
+      "id": "pvp.es.both_hit.0057",
+      "kind": "both_hit",
+      "text": "💫 {p1} y {p2} armaron una disco de puñetazos — ¡a todos les tocó!"
+    },
+    {
+      "id": "pvp.es.both_hit.0058",
+      "kind": "both_hit",
+      "text": "🤜 {p1} y {p2} se abofetearon sincronizados — ¡aplausos!"
+    },
+    {
+      "id": "pvp.es.both_hit.0059",
+      "kind": "both_hit",
+      "text": "🗡 {p1} y {p2} clavaron espadas — ¡sangría mutua!"
+    },
+    {
+      "id": "pvp.es.both_hit.0060",
+      "kind": "both_hit",
+      "text": "⚔️ {p1} y {p2} pelearon estilo anime — ¡cuadro congelado de doble golpe!"
+    },
+    {
+      "id": "pvp.es.both_hit.0061",
+      "kind": "both_hit",
+      "text": "🥊 {p1} y {p2} se lanzaron uppercuts — ¡doble crujido!"
+    },
+    {
+      "id": "pvp.es.both_hit.0062",
+      "kind": "both_hit",
+      "text": "💥 {p1} y {p2} explotaron como dos fuegos artificiales — bonito pero doloroso!"
+    },
+    {
+      "id": "pvp.es.both_hit.0063",
+      "kind": "both_hit",
+      "text": "⚡ {p1} y {p2} atacan más rápido de lo que piensan — ¡ambos fueron rozados!"
+    },
+    {
+      "id": "pvp.es.both_hit.0064",
+      "kind": "both_hit",
+      "text": "🪓 {p1} y {p2} atacaron amplio y ambos conectaron — ¡pasando el bloqueo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0065",
+      "kind": "both_hit",
+      "text": "🌀 {p1} y {p2} giraron un doble remolino — ¡ambos en el ojo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0066",
+      "kind": "both_hit",
+      "text": "🎯 {p1} y {p2} nunca fallan — lástima que se apuntaron uno al otro!"
+    },
+    {
+      "id": "pvp.es.both_hit.0067",
+      "kind": "both_hit",
+      "text": "💣 {p1} y {p2} threw rocks and both caught the ricochet!"
+    },
+    {
+      "id": "pvp.es.both_hit.0068",
+      "kind": "both_hit",
+      "text": "🥋 {p1} y {p2} anotaron ippon simultáneamente — ¡empate de manual!"
+    },
+    {
+      "id": "pvp.es.both_hit.0069",
+      "kind": "both_hit",
+      "text": "🤺 {p1} y {p2} se apuñalaron con espadas — ¡doble impacto!"
+    },
+    {
+      "id": "pvp.es.both_hit.0070",
+      "kind": "both_hit",
+      "text": "🧨 {p1} y {p2} se lanzaron cuetes — ¡festivo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0071",
+      "kind": "both_hit",
+      "text": "🦴 {p1} y {p2} intercambiaron rompehuesos — ¡ambos crujieron!"
+    },
+    {
+      "id": "pvp.es.both_hit.0072",
+      "kind": "both_hit",
+      "text": "🏟 {p1} y {p2} pusieron al público de pie — ¡jugada destacada mutua!"
+    },
+    {
+      "id": "pvp.es.both_hit.0073",
+      "kind": "both_hit",
+      "text": "🪤 {p1} y {p2} cayeron en las trampas del otro — ¡trampa mutua!"
+    },
+    {
+      "id": "pvp.es.both_hit.0074",
+      "kind": "both_hit",
+      "text": "🔥 {p1} y {p2} abrieron fuego con todos los cañones — ¡fuego amigo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0075",
+      "kind": "both_hit",
+      "text": "💫 {p1} y {p2} volaron como kamikazes — ¡choque inevitable!"
+    },
+    {
+      "id": "pvp.es.both_hit.0076",
+      "kind": "both_hit",
+      "text": "🤜 {p1} y {p2} golpearon con ambas manos — cuatro puños, cero bloqueos!"
+    },
+    {
+      "id": "pvp.es.both_hit.0077",
+      "kind": "both_hit",
+      "text": "🗡 {p1} y {p2} cortaron salvajemente — las espadas suenan, ambos hacen muecas!"
+    },
+    {
+      "id": "pvp.es.both_hit.0078",
+      "kind": "both_hit",
+      "text": "⚔️ {p1} y {p2} se pusieron modo Mortal Kombat — ¡FINISH HIM para ambos!"
+    },
+    {
+      "id": "pvp.es.both_hit.0079",
+      "kind": "both_hit",
+      "text": "🥊 {p1} y {p2} se lanzaron — sin defensa, puro daño!"
+    },
+    {
+      "id": "pvp.es.both_hit.0080",
+      "kind": "both_hit",
+      "text": "💥 {p1} y {p2} explotaron como dos piñatas — ¡confeti de HP!"
+    },
+    {
+      "id": "pvp.es.both_hit.0081",
+      "kind": "both_hit",
+      "text": "⚡ {p1} y {p2} cerraron el circuito — ¡corriente para ambos!"
+    },
+    {
+      "id": "pvp.es.both_hit.0082",
+      "kind": "both_hit",
+      "text": "🪓 {p1} y {p2} cortaron leña — ¡del otro!"
+    },
+    {
+      "id": "pvp.es.both_hit.0083",
+      "kind": "both_hit",
+      "text": "🌀 {p1} y {p2} giraron Beyblades — ¡ambos destrozados!"
+    },
+    {
+      "id": "pvp.es.both_hit.0084",
+      "kind": "both_hit",
+      "text": "🎯 {p1} y {p2} jugaron dardos — ¡el otro era el tablero!"
+    },
+    {
+      "id": "pvp.es.both_hit.0085",
+      "kind": "both_hit",
+      "text": "💣 {p1} y {p2} pisaron las minas del otro — ¡explosión mutua!"
+    },
+    {
+      "id": "pvp.es.both_hit.0086",
+      "kind": "both_hit",
+      "text": "🥋 {p1} y {p2} ejecutaron kata 'Doble Daño' — ¡magistral!"
+    },
+    {
+      "id": "pvp.es.both_hit.0087",
+      "kind": "both_hit",
+      "text": "🤺 {p1} y {p2} decidieron no parar — ¡esgrima YOLO!"
+    },
+    {
+      "id": "pvp.es.both_hit.0088",
+      "kind": "both_hit",
+      "text": "🧨 {p1} y {p2} prendieron la mecha por ambos extremos!"
+    },
+    {
+      "id": "pvp.es.both_hit.0089",
+      "kind": "both_hit",
+      "text": "🦴 {p1} y {p2} probaron la durabilidad del cráneo del otro!"
+    },
+    {
+      "id": "pvp.es.both_hit.0090",
+      "kind": "both_hit",
+      "text": "🏟 {p1} y {p2} estilo lucha libre — ¿falso? no, ambos dolidos!"
+    },
+    {
+      "id": "pvp.es.both_hit.0091",
+      "kind": "both_hit",
+      "text": "🪤 {p1} y {p2} ambos se lanzaron — ¡y ambos recibieron el cambio!"
+    },
+    {
+      "id": "pvp.es.both_hit.0092",
+      "kind": "both_hit",
+      "text": "🔥 {p1} y {p2} se asaron a fuego lento!"
+    },
+    {
+      "id": "pvp.es.both_hit.0093",
+      "kind": "both_hit",
+      "text": "💫 {p1} y {p2} dieron la vuelta y se estrellaron de frente!"
+    },
+    {
+      "id": "pvp.es.both_hit.0094",
+      "kind": "both_hit",
+      "text": "🤜 {p1} y {p2} arreglándolo a puñetazos — ¡marcador 1:1!"
+    },
+    {
+      "id": "pvp.es.both_hit.0095",
+      "kind": "both_hit",
+      "text": "🗡 {p1} y {p2} se rozaron con sables — ¡romance de duelo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0096",
+      "kind": "both_hit",
+      "text": "⚔️ {p1} y {p2} se flanquearon — ¡y ambos fueron flanqueados!"
+    },
+    {
+      "id": "pvp.es.both_hit.0097",
+      "kind": "both_hit",
+      "text": "🥊 {p1} y {p2} lanzaron jabs al mismo tiempo — ¡pam-pam!"
+    },
+    {
+      "id": "pvp.es.both_hit.0098",
+      "kind": "both_hit",
+      "text": "💥 {p1} y {p2} como dos arietes — pared contra pared, ambos lo sintieron!"
+    },
+    {
+      "id": "pvp.es.both_hit.0099",
+      "kind": "both_hit",
+      "text": "⚡ {p1} y {p2} sacaron chispas uno del otro — ¡aire eléctrico!"
+    },
+    {
+      "id": "pvp.es.both_hit.0100",
+      "kind": "both_hit",
+      "text": "🪓 {p1} y {p2} pelearon como vikingos — ¡Valhalla espera a ambos!"
+    },
+    {
+      "id": "pvp.es.both_hit.0101",
+      "kind": "both_hit",
+      "text": "🌀 {p1} y {p2} lanzaron rasengans de frente — ¡explosión de chakra!"
+    },
+    {
+      "id": "pvp.es.both_hit.0102",
+      "kind": "both_hit",
+      "text": "🎯 {p1} y {p2} dieron justo en el blanco — ¡justo en el otro!"
+    },
+    {
+      "id": "pvp.es.both_hit.0103",
+      "kind": "both_hit",
+      "text": "💣 {p1} y {p2} como dos gladiadores — ¡la arena ensangrentada por ambos lados!"
+    },
+    {
+      "id": "pvp.es.both_hit.0104",
+      "kind": "both_hit",
+      "text": "🥋 {p1} y {p2} lanzaron hadoukens dobles — ¡ambos KO!"
+    },
+    {
+      "id": "pvp.es.both_hit.0105",
+      "kind": "both_hit",
+      "text": "🤺 {p1} y {p2} se empalaron con espadas — ¡empate justo!"
+    },
+    {
+      "id": "pvp.es.both_hit.0106",
+      "kind": "both_hit",
+      "text": "🧨 {p1} y {p2} lanzaron tomahawks — ¡ambos recibieron uno en la frente!"
+    },
+    {
+      "id": "pvp.es.both_hit.0107",
+      "kind": "both_hit",
+      "text": "🦴 {p1} y {p2} intercambiaron como boxeadores en round 12 — ¡piloto automático!"
+    },
+    {
+      "id": "pvp.es.both_hit.0108",
+      "kind": "both_hit",
+      "text": "🏟 {p1} y {p2} fueron a la UFC sin guantes — ¡el médico desaprueba!"
+    },
+    {
+      "id": "pvp.es.both_hit.0109",
+      "kind": "both_hit",
+      "text": "🔥 {p1} y {p2} breathe fire at each other — dragon trade!"
+    },
+    {
+      "id": "pvp.es.both_hit.0110",
+      "kind": "both_hit",
+      "text": "💫 {p1} y {p2} smashed like two asteroids — craters on both sides!"
+    },
+    {
+      "id": "pvp.es.single_hit.0001",
+      "kind": "single_hit",
+      "text": "🎯 {attacker} encontró un hueco en {defender}'s guardia y la rompió!"
+    },
+    {
+      "id": "pvp.es.single_hit.0002",
+      "kind": "single_hit",
+      "text": "💢 {attacker} lanzó una finta, y {defender} se quedó quieto con las manos arriba!"
+    },
+    {
+      "id": "pvp.es.single_hit.0003",
+      "kind": "single_hit",
+      "text": "🥊 {attacker} caught {defender} al descubierto — no es nocaut, pero duele!"
+    },
+    {
+      "id": "pvp.es.single_hit.0004",
+      "kind": "single_hit",
+      "text": "🪶 {attacker} esquivó el bloqueo de {defender}'s bloqueo y conectó!"
+    },
+    {
+      "id": "pvp.es.single_hit.0005",
+      "kind": "single_hit",
+      "text": "🌀 {attacker} giró el ataque — {defender} no pudo resetear el bloqueo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0006",
+      "kind": "single_hit",
+      "text": "🦅 {attacker} se lanzó desde arriba — {defender} solo parpadeó!"
+    },
+    {
+      "id": "pvp.es.single_hit.0007",
+      "kind": "single_hit",
+      "text": "🥋 {attacker} ejecutó una técnica limpia, {defender} falló la defensa!"
+    },
+    {
+      "id": "pvp.es.single_hit.0008",
+      "kind": "single_hit",
+      "text": "⚡ {attacker} golpeó más rápido que el sonido, {defender} lo escuchó después!"
+    },
+    {
+      "id": "pvp.es.single_hit.0009",
+      "kind": "single_hit",
+      "text": "🪓 {attacker} golpeó de lleno, {defender} no vio la advertencia!"
+    },
+    {
+      "id": "pvp.es.single_hit.0010",
+      "kind": "single_hit",
+      "text": "🎲 {attacker} adivinó dónde apuntar — {defender}'s bloqueo estaba en otro lado!"
+    },
+    {
+      "id": "pvp.es.single_hit.0011",
+      "kind": "single_hit",
+      "text": "🐍 {attacker} se escurrió por la defensa de {defender}'s ¡defensa!"
+    },
+    {
+      "id": "pvp.es.single_hit.0012",
+      "kind": "single_hit",
+      "text": "🪃 {attacker} lanzó un bumerán, {defender} se distrajo y falló el real!"
+    },
+    {
+      "id": "pvp.es.single_hit.0013",
+      "kind": "single_hit",
+      "text": "🥇 {attacker} conectó un golpe de medalla de oro, {defender} se quedó sin podio!"
+    },
+    {
+      "id": "pvp.es.single_hit.0014",
+      "kind": "single_hit",
+      "text": "🛠 {attacker} armó un golpe con cinta, {defender} no pudo rearmarse!"
+    },
+    {
+      "id": "pvp.es.single_hit.0015",
+      "kind": "single_hit",
+      "text": "🔮 {attacker} predijo el bloqueo de {defender}'s — lo rodeó!"
+    },
+    {
+      "id": "pvp.es.single_hit.0016",
+      "kind": "single_hit",
+      "text": "🌊 ¡{attacker} se estrelló como una ola, {defender} no alcanzó a bloquear!"
+    },
+    {
+      "id": "pvp.es.single_hit.0017",
+      "kind": "single_hit",
+      "text": "🛹 ¡{attacker} patinó bajo la defensa de {defender} y golpeó desde abajo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0018",
+      "kind": "single_hit",
+      "text": "🦊 ¡{attacker} finteó a {defender} de lado y dio en el blanco real!"
+    },
+    {
+      "id": "pvp.es.single_hit.0019",
+      "kind": "single_hit",
+      "text": "🗡 ¡{attacker} atacó con estocada — {defender} no pudo parar a tiempo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0020",
+      "kind": "single_hit",
+      "text": "💥 ¡{attacker} atravesó como un mazo, {defender} se desmoronó!"
+    },
+    {
+      "id": "pvp.es.single_hit.0021",
+      "kind": "single_hit",
+      "text": "🤜 ¡{attacker} lanzó un gancho derecho, {defender} bloqueó a la izquierda!"
+    },
+    {
+      "id": "pvp.es.single_hit.0022",
+      "kind": "single_hit",
+      "text": "⚔️ ¡{attacker} usó una técnica secreta, {defender} ni se dio cuenta de lo que pasó!"
+    },
+    {
+      "id": "pvp.es.single_hit.0023",
+      "kind": "single_hit",
+      "text": "🔥 ¡{attacker} chamuscó a {defender} con una bola de fuego — ¡los bloqueos no detienen la magia!"
+    },
+    {
+      "id": "pvp.es.single_hit.0024",
+      "kind": "single_hit",
+      "text": "🎯 ¡{attacker} dio en el blanco, {defender} se quedó ahí como diana!"
+    },
+    {
+      "id": "pvp.es.single_hit.0025",
+      "kind": "single_hit",
+      "text": "💫 ¡{attacker} se teletransportó detrás de {defender} — golpe en la nuca!"
+    },
+    {
+      "id": "pvp.es.single_hit.0026",
+      "kind": "single_hit",
+      "text": "🤺 ¡{attacker} hizo una estocada elegante, a {defender} se le cayó la mandíbula!"
+    },
+    {
+      "id": "pvp.es.single_hit.0027",
+      "kind": "single_hit",
+      "text": "🌪 ¡{attacker} llegó como huracán, {defender} voló junto con el bloqueo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0028",
+      "kind": "single_hit",
+      "text": "🐉 ¡{attacker} azotó con cola de dragón, {defender} voló más allá del horizonte!"
+    },
+    {
+      "id": "pvp.es.single_hit.0029",
+      "kind": "single_hit",
+      "text": "🥊 ¡{attacker} lanzó un combo uno-dos, {defender} recibió ambos!"
+    },
+    {
+      "id": "pvp.es.single_hit.0030",
+      "kind": "single_hit",
+      "text": "🧨 ¡{attacker} puso dinamita bajo el bloqueo de {defender} — ¡kaboom!"
+    },
+    {
+      "id": "pvp.es.single_hit.0031",
+      "kind": "single_hit",
+      "text": "🪓 ¡{attacker} cortó como leñador, {defender} fue el árbol de la temporada!"
+    },
+    {
+      "id": "pvp.es.single_hit.0032",
+      "kind": "single_hit",
+      "text": "⚡ ¡{attacker} golpeó como rayo — ¡ni la sombra de {defender} pudo esquivar!"
+    },
+    {
+      "id": "pvp.es.single_hit.0033",
+      "kind": "single_hit",
+      "text": "🦅 ¡{attacker} atacó desde el aire, {defender} estaba mirando el suelo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0034",
+      "kind": "single_hit",
+      "text": "🎲 ¡{attacker} sacó crítico, {defender} sacó uno en esquiva!"
+    },
+    {
+      "id": "pvp.es.single_hit.0035",
+      "kind": "single_hit",
+      "text": "🐍 ¡{attacker} golpeó como cobra, {defender} nunca lo vio venir!"
+    },
+    {
+      "id": "pvp.es.single_hit.0036",
+      "kind": "single_hit",
+      "text": "💢 ¡{attacker} arrolló el muro de {defender}!"
+    },
+    {
+      "id": "pvp.es.single_hit.0037",
+      "kind": "single_hit",
+      "text": "🌊 ¡{attacker} desató un tsunami, {defender} fue arrastrado de su posición!"
+    },
+    {
+      "id": "pvp.es.single_hit.0038",
+      "kind": "single_hit",
+      "text": "🪶 ¡{attacker} tocó a {defender} como pluma — pero golpeó como ladrillo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0039",
+      "kind": "single_hit",
+      "text": "🥋 ¡{attacker} barrió las piernas, {defender} se desplomó!"
+    },
+    {
+      "id": "pvp.es.single_hit.0040",
+      "kind": "single_hit",
+      "text": "🔮 ¡{attacker} leyó la mente de {defender} y golpeó el punto vacío!"
+    },
+    {
+      "id": "pvp.es.single_hit.0041",
+      "kind": "single_hit",
+      "text": "🛹 ¡{attacker} llegó en patineta y le dio a {defender} — ¡sorpresa!"
+    },
+    {
+      "id": "pvp.es.single_hit.0042",
+      "kind": "single_hit",
+      "text": "🦊 ¡{attacker} se hizo el muerto y de repente golpeó a {defender}!"
+    },
+    {
+      "id": "pvp.es.single_hit.0043",
+      "kind": "single_hit",
+      "text": "🗡 ¡{attacker} desenvainó una katana — {defender} vio el destello y falló el bloqueo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0044",
+      "kind": "single_hit",
+      "text": "💥 ¡{attacker} disparó un cañón, {defender} recibió la bala en el pecho!"
+    },
+    {
+      "id": "pvp.es.single_hit.0045",
+      "kind": "single_hit",
+      "text": "🤛 ¡{attacker} lanzó un izquierdazo, {defender} esperaba el derecho!"
+    },
+    {
+      "id": "pvp.es.single_hit.0046",
+      "kind": "single_hit",
+      "text": "⚔️ ¡{attacker} flanqueó por el lado, {defender} cuidaba el centro!"
+    },
+    {
+      "id": "pvp.es.single_hit.0047",
+      "kind": "single_hit",
+      "text": "🔥 ¡{attacker} escupió fuego — {defender} quedó tostado!"
+    },
+    {
+      "id": "pvp.es.single_hit.0048",
+      "kind": "single_hit",
+      "text": "🎯 ¡{attacker} golpeó con los ojos cerrados, {defender} no esquivó con los ojos abiertos!"
+    },
+    {
+      "id": "pvp.es.single_hit.0049",
+      "kind": "single_hit",
+      "text": "💫 ¡{attacker} giró y golpeó de una pirueta, {defender} aplaudió de pie!"
+    },
+    {
+      "id": "pvp.es.single_hit.0050",
+      "kind": "single_hit",
+      "text": "🤺 ¡{attacker} hizo un remise — {defender} se confundió con las reglas!"
+    },
+    {
+      "id": "pvp.es.single_hit.0051",
+      "kind": "single_hit",
+      "text": "🌪 ¡{attacker} como ciclón — {defender} salió girando!"
+    },
+    {
+      "id": "pvp.es.single_hit.0052",
+      "kind": "single_hit",
+      "text": "🐉 ¡{attacker} usó Puño Dragón, {defender} no sabía el contra!"
+    },
+    {
+      "id": "pvp.es.single_hit.0053",
+      "kind": "single_hit",
+      "text": "🥊 ¡{attacker} conectó un cross demoledor, {defender} está contando pajaritos!"
+    },
+    {
+      "id": "pvp.es.single_hit.0054",
+      "kind": "single_hit",
+      "text": "🧨 ¡{attacker} abrió el bloqueo de {defender} como una caja fuerte!"
+    },
+    {
+      "id": "pvp.es.single_hit.0055",
+      "kind": "single_hit",
+      "text": "🪓 ¡{attacker} partió la defensa de {defender} como un tronco!"
+    },
+    {
+      "id": "pvp.es.single_hit.0056",
+      "kind": "single_hit",
+      "text": "⚡ ¡{attacker} cargó como desfibrilador — {defender} saltó!"
+    },
+    {
+      "id": "pvp.es.single_hit.0057",
+      "kind": "single_hit",
+      "text": "🦅 ¡{attacker} se lanzó como halcón, {defender} se escondió — pero en el lugar equivocado!"
+    },
+    {
+      "id": "pvp.es.single_hit.0058",
+      "kind": "single_hit",
+      "text": "🎲 ¡{attacker} lanzó los dados del destino — {defender} recibió daño!"
+    },
+    {
+      "id": "pvp.es.single_hit.0059",
+      "kind": "single_hit",
+      "text": "🐍 ¡{attacker} se enrolló alrededor de {defender} y apretó — bloqueo inútil!"
+    },
+    {
+      "id": "pvp.es.single_hit.0060",
+      "kind": "single_hit",
+      "text": "💢 ¡{attacker} destrozó el bloqueo de {defender} como cartón!"
+    },
+    {
+      "id": "pvp.es.single_hit.0061",
+      "kind": "single_hit",
+      "text": "🌊 ¡{attacker} tumbó a {defender} de un oleaje — ¡aquí no se nada!"
+    },
+    {
+      "id": "pvp.es.single_hit.0062",
+      "kind": "single_hit",
+      "text": "🪶 ¡{attacker} flota como mariposa, pica como abeja — {defender} picado!"
+    },
+    {
+      "id": "pvp.es.single_hit.0063",
+      "kind": "single_hit",
+      "text": "🥋 ¡{attacker} hizo un osoto-gari, {defender} se estampó de cara!"
+    },
+    {
+      "id": "pvp.es.single_hit.0064",
+      "kind": "single_hit",
+      "text": "🔮 ¡{attacker} conjuró un crítico, {defender} olvidó el amuleto!"
+    },
+    {
+      "id": "pvp.es.single_hit.0065",
+      "kind": "single_hit",
+      "text": "🛹 ¡{attacker} hizo grind en el riel y kickflip en la cara de {defender}!"
+    },
+    {
+      "id": "pvp.es.single_hit.0066",
+      "kind": "single_hit",
+      "text": "🦊 ¡{attacker} se hizo el amigable y le metió un golpe sucio a {defender}!"
+    },
+    {
+      "id": "pvp.es.single_hit.0067",
+      "kind": "single_hit",
+      "text": "🗡 ¡{attacker} hizo un molinete — {defender} quedó hipnotizado y golpeado!"
+    },
+    {
+      "id": "pvp.es.single_hit.0068",
+      "kind": "single_hit",
+      "text": "💥 ¡{attacker} lanzó un Kamehameha — {defender} no cargó el suyo a tiempo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0069",
+      "kind": "single_hit",
+      "text": "🤜 ¡{attacker} conectó una patada, {defender} bloqueó con las manos — ¡mala jugada!"
+    },
+    {
+      "id": "pvp.es.single_hit.0070",
+      "kind": "single_hit",
+      "text": "⚔️ ¡{attacker} finteó un golpe, {defender} mordió el anzuelo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0071",
+      "kind": "single_hit",
+      "text": "🔥 ¡{attacker} lanzó una bola de fuego, {defender} está apagando las llamas!"
+    },
+    {
+      "id": "pvp.es.single_hit.0072",
+      "kind": "single_hit",
+      "text": "🎯 ¡{attacker} disparó una flecha — {defender} ahora parece un erizo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0073",
+      "kind": "single_hit",
+      "text": "💫 ¡{attacker} rodeó a {defender} y golpeó desde el punto ciego!"
+    },
+    {
+      "id": "pvp.es.single_hit.0074",
+      "kind": "single_hit",
+      "text": "🤺 ¡{attacker} apartó la espada de {defender} junto con el bloqueo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0075",
+      "kind": "single_hit",
+      "text": "🌪 ¡{attacker} entró como tormenta — {defender} salió volando!"
+    },
+    {
+      "id": "pvp.es.single_hit.0076",
+      "kind": "single_hit",
+      "text": "🐉 ¡{attacker} invocó un dragón, {defender} olvidó invocar el suyo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0077",
+      "kind": "single_hit",
+      "text": "🥊 ¡{attacker} lanzó un combo — {defender} recibió el finisher!"
+    },
+    {
+      "id": "pvp.es.single_hit.0078",
+      "kind": "single_hit",
+      "text": "🧨 ¡{attacker} minó la entrada, {defender} pisó justo encima!"
+    },
+    {
+      "id": "pvp.es.single_hit.0079",
+      "kind": "single_hit",
+      "text": "🪓 ¡{attacker} lanzó un hacha al blanco — {defender} era el blanco!"
+    },
+    {
+      "id": "pvp.es.single_hit.0080",
+      "kind": "single_hit",
+      "text": "⚡ ¡{attacker} mandó corriente — {defender} empezó a temblar!"
+    },
+    {
+      "id": "pvp.es.single_hit.0081",
+      "kind": "single_hit",
+      "text": "🦅 ¡{attacker} arañó desde arriba, {defender} no miró hacia arriba!"
+    },
+    {
+      "id": "pvp.es.single_hit.0082",
+      "kind": "single_hit",
+      "text": "🎲 ¡{attacker} sacó un 20 natural, {defender} falló la tirada de salvación!"
+    },
+    {
+      "id": "pvp.es.single_hit.0083",
+      "kind": "single_hit",
+      "text": "🐍 ¡{attacker} saltó de la emboscada — {defender} se paralizó y fue marcado!"
+    },
+    {
+      "id": "pvp.es.single_hit.0084",
+      "kind": "single_hit",
+      "text": "💢 ¡{attacker} golpeó salvaje, {defender} bloqueó el aire!"
+    },
+    {
+      "id": "pvp.es.single_hit.0085",
+      "kind": "single_hit",
+      "text": "🌊 ¡{attacker} se estrelló como la novena ola sobre {defender} — ¡sin escape!"
+    },
+    {
+      "id": "pvp.es.single_hit.0086",
+      "kind": "single_hit",
+      "text": "🪶 ¡{attacker} parpadeó como sombra y perforó a {defender} por el costado!"
+    },
+    {
+      "id": "pvp.es.single_hit.0087",
+      "kind": "single_hit",
+      "text": "🥋 ¡{attacker} hizo un ude-garami, {defender} gira como trompo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0088",
+      "kind": "single_hit",
+      "text": "🔮 ¡{attacker} espió el futuro y golpeó a {defender} en el pasado!"
+    },
+    {
+      "id": "pvp.es.single_hit.0089",
+      "kind": "single_hit",
+      "text": "🛹 ¡{attacker} hizo un ollie sobre el bloqueo de {defender} — aterrizó en la cara!"
+    },
+    {
+      "id": "pvp.es.single_hit.0090",
+      "kind": "single_hit",
+      "text": "🦊 ¡{attacker} lanzó una ilusión y golpeó a {defender} de la nada!"
+    },
+    {
+      "id": "pvp.es.single_hit.0091",
+      "kind": "single_hit",
+      "text": "🗡 ¡{attacker} hizo un riposte — {defender} seguía atacando, ¡demasiado tarde!"
+    },
+    {
+      "id": "pvp.es.single_hit.0092",
+      "kind": "single_hit",
+      "text": "💥 ¡{attacker} lanzó un shoryuken — {defender} se fue a la estratósfera!"
+    },
+    {
+      "id": "pvp.es.single_hit.0093",
+      "kind": "single_hit",
+      "text": "🤛 ¡{attacker} conectó un uppercut, {defender} despegó!"
+    },
+    {
+      "id": "pvp.es.single_hit.0094",
+      "kind": "single_hit",
+      "text": "⚔️ ¡{attacker} encontró el eslabón débil en la armadura de {defender} — justo por la grieta!"
+    },
+    {
+      "id": "pvp.es.single_hit.0095",
+      "kind": "single_hit",
+      "text": "🔥 ¡{attacker} incineró a {defender} con la mirada — ¡y con los puños también!"
+    },
+    {
+      "id": "pvp.es.single_hit.0096",
+      "kind": "single_hit",
+      "text": "🎯 ¡{attacker} apuntó con láser — {defender} nunca vio el punto rojo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0097",
+      "kind": "single_hit",
+      "text": "💫 ¡{attacker} aceleró hasta la invisibilidad — {defender} sorprendido y derrotado!"
+    },
+    {
+      "id": "pvp.es.single_hit.0098",
+      "kind": "single_hit",
+      "text": "🤺 ¡{attacker} lanzó una flèche, {defender} solo sintió el dolor!"
+    },
+    {
+      "id": "pvp.es.single_hit.0099",
+      "kind": "single_hit",
+      "text": "🌪 ¡{attacker} giró una patada tornado, {defender} se llevó el remolino!"
+    },
+    {
+      "id": "pvp.es.single_hit.0100",
+      "kind": "single_hit",
+      "text": "🐉 ¡{attacker} golpeó como Goku, {defender} voló por tres pantallas!"
+    },
+    {
+      "id": "pvp.es.single_hit.0101",
+      "kind": "single_hit",
+      "text": "🥊 ¡{attacker} lanzó jab-cross-gancho, {defender} recibió los tres!"
+    },
+    {
+      "id": "pvp.es.single_hit.0102",
+      "kind": "single_hit",
+      "text": "🧨 ¡{attacker} convirtió el bloqueo de {defender} en confeti!"
+    },
+    {
+      "id": "pvp.es.single_hit.0103",
+      "kind": "single_hit",
+      "text": "🪓 ¡{attacker} partió la guardia de {defender} de un hachazo!"
+    },
+    {
+      "id": "pvp.es.single_hit.0104",
+      "kind": "single_hit",
+      "text": "⚡ ¡{attacker} canalizó a Thor — martillazo en la frente de {defender}!"
+    },
+    {
+      "id": "pvp.es.single_hit.0105",
+      "kind": "single_hit",
+      "text": "🦅 ¡{attacker} agarró a {defender} y lo soltó desde las alturas!"
+    },
+    {
+      "id": "pvp.es.single_hit.0106",
+      "kind": "single_hit",
+      "text": "🎲 ¡{attacker} apostó y ganó, {defender} apostó y perdió!"
+    },
+    {
+      "id": "pvp.es.single_hit.0107",
+      "kind": "single_hit",
+      "text": "🐍 ¡{attacker} se enrolló en el escudo de {defender} — ¡mordida venenosa!"
+    },
+    {
+      "id": "pvp.es.single_hit.0108",
+      "kind": "single_hit",
+      "text": "💢 ¡{attacker} metió toda la rabia en un puñetazo — {defender} lo sintió!"
+    },
+    {
+      "id": "pvp.es.single_hit.0109",
+      "kind": "single_hit",
+      "text": "🌊 ¡{attacker} ahogó el bloqueo de {defender} en una lluvia de golpes!"
+    },
+    {
+      "id": "pvp.es.single_hit.0110",
+      "kind": "single_hit",
+      "text": "🪶 ¡{attacker} golpeó ligero pero preciso — {defender} no bloqueó ni una pluma!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0001",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} y {p2} chocaron bloqueo contra bloqueo — ¡nadie salió herido!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0002",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} y {p2} intercambiaron «clang» sonoros — ¡ambos quedaron enteros!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0003",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} y {p2} levantaron muros — ¡los golpes se quedaron en la mampostería!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0004",
+      "kind": "both_blocked",
+      "text": "🪨 {p1} y {p2} se convirtieron en piedra — ¡cero daño!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0005",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} y {p2} se metieron en sus caparazones — ¡los golpes rebotaron!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0006",
+      "kind": "both_blocked",
+      "text": "🛂 {p1} y {p2} pidieron pasaporte — ¡ninguno pasó!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0007",
+      "kind": "both_blocked",
+      "text": "🎭 {p1} y {p2} montaron un ballet de bloqueos — ¡los golpes no alcanzaron!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0008",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} y {p2} se retiraron a sus fortalezas — ¡los arietes rebotaron!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0009",
+      "kind": "both_blocked",
+      "text": "🚧 {p1} y {p2} sacaron barreras de obras — ¡ataques cancelados!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0010",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} y {p2} se congelaron como icebergs — ¡los golpes solo rasparon!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0011",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} y {p2} se reflejaron — ¡los ataques se disolvieron!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0012",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} y {p2} se volvieron fortalezas de un día — ¡nadie pasó!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0013",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} y {p2} se cerraron con llave — ¡los ataques no encontraron cerradura!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0014",
+      "kind": "both_blocked",
+      "text": "🪟 {p1} y {p2} se pegaron al cristal — ¡los golpes se quebraron!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0015",
+      "kind": "both_blocked",
+      "text": "🥁 {p1} y {p2} tamborilearon todos los golpes entrantes!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0016",
+      "kind": "both_blocked",
+      "text": "🏖 {p1} y {p2} popped umbrellas — sun and strikes both passed!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0017",
+      "kind": "both_blocked",
+      "text": "🪙 {p1} y {p2} saw each other's coats of arms and chickened out!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0018",
+      "kind": "both_blocked",
+      "text": "💤 {p1} y {p2} hunkered down so deep they nearly napped!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0019",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} y {p2} crashed shields — sparks but no damage!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0020",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} y {p2} dove into trenches — bullets whizzed past!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0021",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} y {p2} poured concrete walls — jackhammers won't help!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0022",
+      "kind": "both_blocked",
+      "text": "🪨 {p1} y {p2} like two boulders — kick them and stub your toe!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0023",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} y {p2} activated turtle mode — invulnerability!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0024",
+      "kind": "both_blocked",
+      "text": "🛂 {p1} y {p2} closed borders — attacks deported!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0025",
+      "kind": "both_blocked",
+      "text": "🎭 {p1} y {p2} playing freeze tag — nobody moved!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0026",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} y {p2} raised the drawbridge — siege failed!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0027",
+      "kind": "both_blocked",
+      "text": "🚧 {p1} y {p2} set up barricades — traffic blocked!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0028",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} y {p2} froze attacks mid-flight — ice age!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0029",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} y {p2} deflected strikes with mirrors — boomerang failed!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0030",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} y {p2} enabled the firewall — all attacks blocked!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0031",
+      "kind": "both_blocked",
+      "text": "🪟 {p1} y {p2} hid behind bulletproof glass — knock all you want!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0032",
+      "kind": "both_blocked",
+      "text": "🥁 {p1} y {p2} drummed the defense march — enemy shall not pass!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0033",
+      "kind": "both_blocked",
+      "text": "🏖 {p1} y {p2} buried themselves in sand — nobody found anyone!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0034",
+      "kind": "both_blocked",
+      "text": "💤 {p1} y {p2} pretended to sleep — attacks didn't want to wake them!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0035",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} y {p2} deployed energy shields — pew-pew useless!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0036",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} y {p2} dug tanks in — frontal armor impenetrable!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0037",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} y {p2} built a Rubik's cube of blocks — puzzle for attackers!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0038",
+      "kind": "both_blocked",
+      "text": "🪨 {p1} y {p2} like cliffs — attack waves crash and retreat!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0039",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} y {p2} curled up like hedgehogs — no approach!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0040",
+      "kind": "both_blocked",
+      "text": "🛂 {p1} y {p2} required visas from attacks — denied!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0041",
+      "kind": "both_blocked",
+      "text": "🎭 {p1} y {p2} staged a mime show — waving but not hitting!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0042",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} y {p2} sitting behind walls — siege drags on!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0043",
+      "kind": "both_blocked",
+      "text": "🚧 {p1} y {p2} called a timeout — attacks on pause!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0044",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} y {p2} froze the fight — icy truce!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0045",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} y {p2} dodged in sync — attacks sailed into the void!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0046",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} y {p2} enabled two-factor defense — no getting through!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0047",
+      "kind": "both_blocked",
+      "text": "🪟 {p1} y {p2} behind armor like behind a stone wall!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0048",
+      "kind": "both_blocked",
+      "text": "🥁 {p1} y {p2} drummed all attacks right back!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0049",
+      "kind": "both_blocked",
+      "text": "🏖 {p1} y {p2} put on body armor at the beach — style and safety!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0050",
+      "kind": "both_blocked",
+      "text": "💤 {p1} y {p2} yawn from boredom — attacks yawned too!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0051",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} y {p2} like two knights — tournament without wounds!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0052",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} y {p2} dug in chin-deep — not a bullet got through!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0053",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} y {p2} like the Great Wall — attacks take a detour!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0054",
+      "kind": "both_blocked",
+      "text": "🪨 {p1} y {p2} petrified like statues — not a scratch!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0055",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} y {p2} pressed flat — shells sailed overhead!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0056",
+      "kind": "both_blocked",
+      "text": "🛂 {p1} y {p2} under quarantine — attacks not admitted!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0057",
+      "kind": "both_blocked",
+      "text": "🎭 {p1} y {p2} performed 'The Impenetrables' — critics love it!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0058",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} y {p2} like Fort Knox — not a single hit got through!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0059",
+      "kind": "both_blocked",
+      "text": "🚧 {p1} y {p2} hung 'No Entry' signs — attacks turned around!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0060",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} y {p2} iced over — attacks slide across the surface!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0061",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} y {p2} switched to reflection mode — everything bounces!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0062",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} y {p2} encrypted their defense — no password, no entry!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0063",
+      "kind": "both_blocked",
+      "text": "🪟 {p1} y {p2} deployed force fields — sci-fi ¡defensa!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0064",
+      "kind": "both_blocked",
+      "text": "🥁 {p1} y {p2} drummed the rhythm of defense — attacks dance past!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0065",
+      "kind": "both_blocked",
+      "text": "🏖 {p1} y {p2} applied anti-hit sunscreen — SPF 100!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0066",
+      "kind": "both_blocked",
+      "text": "💤 {p1} y {p2} are meditating — attacks don't disturb the enlightened!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0067",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} y {p2} offered their armor — blacksmith happy, enemy not!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0068",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} y {p2} hid in a bunker — nuke can't reach!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0069",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} y {p2} like Tetris — every gap filled!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0070",
+      "kind": "both_blocked",
+      "text": "🪨 {p1} y {p2} like granite — everything bounces off!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0071",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} y {p2} suited up — two tanks on parade!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0072",
+      "kind": "both_blocked",
+      "text": "🛂 {p1} y {p2} hired bouncers — attacks blacklisted!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0073",
+      "kind": "both_blocked",
+      "text": "🎭 {p1} y {p2} playing poker — bluffing but not hitting!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0074",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} y {p2} filled the moat — attacks drowned!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0075",
+      "kind": "both_blocked",
+      "text": "🚧 {p1} y {p2} went snail mode — slow but impenetrable!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0076",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} y {p2} like two icebergs — attacks sank like the Titanic!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0077",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} y {p2} built a mirror maze — attacks got lost!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0078",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} y {p2} like two safes — code uncrackable!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0079",
+      "kind": "both_blocked",
+      "text": "🪟 {p1} y {p2} activated a magic barrier — mana holds!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0080",
+      "kind": "both_blocked",
+      "text": "🥁 {p1} y {p2} tapped Morse code for 'NO' — attacks understood!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0081",
+      "kind": "both_blocked",
+      "text": "🏖 {p1} y {p2} buried in sand up to the ears — try reaching that!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0082",
+      "kind": "both_blocked",
+      "text": "💤 {p1} y {p2} enabled auto-block — nap time!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0083",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} y {p2} rolled out phalanxes — Spartans, both of them!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0084",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} y {p2} put on helmets — attacks ricochet!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0085",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} y {p2} cast Protego — Hogwarts applauds!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0086",
+      "kind": "both_blocked",
+      "text": "🪨 {p1} y {p2} like two bunkers — bombing is futile!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0087",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} y {p2} puffed up round — attacks slide right off!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0088",
+      "kind": "both_blocked",
+      "text": "🛂 {p1} y {p2} installed antivirus — attacks quarantined!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0089",
+      "kind": "both_blocked",
+      "text": "🎭 {p1} y {p2} put on masks — unidentified and unbreakable!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0090",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} y {p2} barricaded with furniture — can't break through!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0091",
+      "kind": "both_blocked",
+      "text": "🚧 {p1} y {p2} sealed every entrance — attacks are looking for parking!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0092",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} y {p2} built an igloo — cold outside but safe!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0093",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} y {p2} like holograms — strikes go through but miss!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0094",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} y {p2} sealed the hatches — submarine diving!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0095",
+      "kind": "both_blocked",
+      "text": "🪟 {p1} y {p2} wrapped in fog — attacks hit nothing!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0096",
+      "kind": "both_blocked",
+      "text": "🥁 {p1} y {p2} set the defense rhythm — not a single miss!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0097",
+      "kind": "both_blocked",
+      "text": "🏖 {p1} y {p2} both in lotus pose — zen ¡defensa!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0098",
+      "kind": "both_blocked",
+      "text": "💤 {p1} y {p2} stood like monuments — attacks respectfully passed by!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0099",
+      "kind": "both_blocked",
+      "text": "🛡 {p1} y {p2} caught all hits with pillows — pillow fight!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0100",
+      "kind": "both_blocked",
+      "text": "🪖 {p1} y {p2} deflected attacks with pot lids — improvisation!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0101",
+      "kind": "both_blocked",
+      "text": "🧱 {p1} y {p2} grew block like a coral reef — beautiful and strong!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0102",
+      "kind": "both_blocked",
+      "text": "🪨 {p1} y {p2} petrified — didn't flinch, didn't let through!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0103",
+      "kind": "both_blocked",
+      "text": "🐢 {p1} y {p2} activated shell-plus — upgraded version!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0104",
+      "kind": "both_blocked",
+      "text": "🛂 {p1} y {p2} called security — attacks escorted off premises!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0105",
+      "kind": "both_blocked",
+      "text": "🎭 {p1} y {p2} performed Pink Floyd's 'The Wall' — attacks shall not pass!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0106",
+      "kind": "both_blocked",
+      "text": "🏰 {p1} y {p2} prepared boiling oil — no point storming!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0107",
+      "kind": "both_blocked",
+      "text": "🚧 {p1} y {p2} enabled CAPTCHA — attacks couldn't prove they're not bots!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0108",
+      "kind": "both_blocked",
+      "text": "🧊 {p1} y {p2} se congelaron — ¡los ataques se helaron en pleno vuelo!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0109",
+      "kind": "both_blocked",
+      "text": "🪞 {p1} y {p2} se volvieron invisibles — ¡pegue o falle, todo fallo!"
+    },
+    {
+      "id": "pvp.es.both_blocked.0110",
+      "kind": "both_blocked",
+      "text": "🔒 {p1} y {p2} cerraron todas las cerraduras — ¡los ataques no tienen ganzúa!"
+    }
+  ]
+}

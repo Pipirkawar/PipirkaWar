@@ -1,0 +1,8034 @@
+{
+  "version": 2,
+  "templates": [
+    {
+      "id": "clan_quote.es.0001",
+      "text": "La corona te queda, {user}. Llévala con actitud.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0002",
+      "text": "{user} — jefe del clan del día. Mañana, who knows. Maybe emperador.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0003",
+      "text": "Hoy el clan escucha a una persona, y esa persona es {user}.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0004",
+      "text": "AUF, hermanos. The jefe del día is {user}. Aúllen más fuerte than usual.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0005",
+      "text": "La vida es graciosa: ayer a nobody, hoy the jefe del clan. Felicidades, {user}.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0006",
+      "text": "{user} found una corona where nobody else looked.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0007",
+      "text": "No sé cómo lo hiciste, {user}, pero el clan te eligió.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0008",
+      "text": "The fuerza of the lobo is la manada. The fuerza of {user} es que la manada believed in him hoy. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0009",
+      "text": "{user}, recuerda: great corona, great chat-management responsibility.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0010",
+      "text": "El clan está en shock: jefe del día is {user}. Nadie lo vio venir. Excepto {user}.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0011",
+      "text": "{user} está al mando hoy. Questions — mañana.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0012",
+      "text": "Muchachos, hoy we address {user} as 'su majestad'. Hasta las 23:59 MSK.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0013",
+      "text": "Muchos en este clan son dignos. But el más digno hoy is {user}.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0014",
+      "text": "{user} — new jefe del día. Se dice que ni se sorprendió.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0015",
+      "text": "AUF. The alfa lobo hoy is {user}. Todos los demás — coros.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0016",
+      "text": "When life hands you una corona — wear it, {user}. Cuando no — quítale una a alguien.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0017",
+      "text": "{user} is jefe del día. Ahora get to say 'good morning' first in the chat.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0018",
+      "text": "Disrespeto the jefe del día, disrespeto el clan. {user}, we respeto you.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0019",
+      "text": "You made it to la corona, kid. Bien hecho, {user}. Alguien tenía que hacerlo.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0020",
+      "text": "{user} — choice of la manada. AUF AUF. ¿Tienes un problema? Llévatelo a la luna.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0021",
+      "text": "Hoy {user} es la voz del el clan. Lo escuchamos con atención, incluso cuando asiente en silencio.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0022",
+      "text": "{user}, felicidades. You are elected jefe del día. Por favor no se te suba a la cabeza hasta medianoche.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0023",
+      "text": "Jefe del clan del día — it is no es un puesto, es un diagnóstico. Que te mejores pronto, {user}.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0024",
+      "text": "{user}, la corona es pesada. But you saldrás adelante — creemos en ti.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0025",
+      "text": "All in el clan son iguales. But {user} is un poco más igual hoy.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0026",
+      "text": "AUF. {user}, you aúlla for everyone hoy. Do not let la manada down.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0027",
+      "text": "{user} — jefe del día, by decreto of the universe and the generador de números aleatorios.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0028",
+      "text": "Cuando sea grande, quiero ser como {user}. Por un día. Hoy.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0029",
+      "text": "{user}, your day. Use it wisely. For example, joreyly threaten to ban someone.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0030",
+      "text": "La corona found its owner. It is {user}. No further questions.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0031",
+      "text": "{user} — jefe del clan. Sounds proud. Especially when said by {user}.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0032",
+      "text": "El clan picked {user} as jefe del día. El clan knows what it is doing. Probably.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0033",
+      "text": "AUF hermanos, {user} is leading the parade hoy. March in step.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0034",
+      "text": "{user}, your photo is on el clan board hoy. Mañana — on the wall of shame, just in case.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0035",
+      "text": "Jefe del día — that is whoever was picked. Hoy {user} was picked. No hard feelings.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0036",
+      "text": "{user}, la corona looks good on you. Just do not let your ears grow because of it.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0037",
+      "text": "{user} — jefe of the day. I mean jefe. The typo is intentional.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0038",
+      "text": "Some are born líders. Some are {user}. Hoy they are the same.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0039",
+      "text": "The eyes of la manada are on {user}. So is the moon, by the way. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0040",
+      "text": "{user}, recuerda: with great length comes great responsibility.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0041",
+      "text": "Hoy {user} está al mando of the saucers. The saucers are el clan.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0042",
+      "text": "If there were an Oscar for jefe del clan, {user} would take it. No jokes.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0043",
+      "text": "{user} — choice of el clan. El clan knows good choices.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0044",
+      "text": "Jefe del clan del día is like Santa. Once a day, guaranteed. Hoy — {user}.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0045",
+      "text": "AUF. {user} — top of el clan food chain. Until midnight.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0046",
+      "text": "{user}, hoy is your moment. Use it to go to bed at a reasonable hour.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0047",
+      "text": "¿Quién pensó que {user} sería jefe? Nadie. ¿Quién está feliz? Todos.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0048",
+      "text": "{user}, por tradición ahora deberías invitar el té a todos. Pero no insistimos.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0049",
+      "text": "The jefe del día is {user}. Please do not applaud — silent respeto is enough.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0050",
+      "text": "{user} took la corona. La corona took {user}. Symbiosis.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0051",
+      "text": "AUF. {user} on the trono hoy. But the trono opens up mañana — stay sharp.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0052",
+      "text": "{user}, felicidades on la corona. You may give it back mañana — pero hoy is yours.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0053",
+      "text": "Life is short. La corona is shorter. Catch the moment, {user}.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0054",
+      "text": "{user} — one of us. Hoy, more so than usual.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0055",
+      "text": "Algunos buscan el sentido. {user} lo encontró por un instante. Hasta la medianoche.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0056",
+      "text": "{user} — jefe del día. Complaints — DM el clan.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0057",
+      "text": "AUF. La manada rises. {user} — its voice hoy. Listen quietly.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0058",
+      "text": "If the head is {user}, el clan is in solid hands. And in funny ones, too.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0059",
+      "text": "{user}, your move. El clan watches. El clan waits. El clan trusts. El clan is a tiny bit nervous.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0060",
+      "text": "When {user} became jefe del día, time froze for a second. Then went on as usual.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0061",
+      "text": "{user}, hoy you are in charge. But do not abuse it, like, say, in the chat.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0062",
+      "text": "Jefe del día — {user}. By decision of fate and the generador de números aleatorios.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0063",
+      "text": "{user}, felicidades. Corona, length, respeto — all yours. Until 00:00.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0064",
+      "text": "AUF. The lobo in charge hoy is {user}. La manada has no objections.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0065",
+      "text": "{user} — jefe del día. It is destiny. Or a bug. Most likely destiny.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0066",
+      "text": "I do not believe in horoscopes, pero if I did, I would say hoy belongs to {user}.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0067",
+      "text": "{user}, estás en el círculo de honor del clan. No te caigas — está alto.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0068",
+      "text": "Jefe del día — {user}. The name will be said often hoy. Lovingly or with a joke — we shall see.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0069",
+      "text": "{user} got la corona. It is a sign. Not sure of what, pero it is a sign.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0070",
+      "text": "AUF hermanos. {user} commands hoy. La manada agrees in silence.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0071",
+      "text": "{user}, hoy is yours. Mañana belongs to someone else. Cycle of clan life.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0072",
+      "text": "When the gods picked the jefe del clan, they looked at {user} and said: 'Good enough'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0073",
+      "text": "{user} — jefe del día. Short, clean, our way.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0074",
+      "text": "El clan picked. El clan was right. Jefe del día — {user}.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0075",
+      "text": "{user}, la corona fits like it was made for you. Maybe a bit tilted, pero that is style.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0076",
+      "text": "AUF. La manada líder hoy is {user}. The moon approves. The moon approves of everything.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0077",
+      "text": "{user}, recuerda: jefe del día is no reason to brag. But you can find a reason.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0078",
+      "text": "Hoy {user} is the face of el clan. Be kind, charismatic, witty. Just be {user}.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0079",
+      "text": "{user}, la corona is yours, su majestad. Tea service — at your own expense.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0080",
+      "text": "When la corona found {user}, it said: 'At last'. La corona was tired of loorey too.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0081",
+      "text": "AUF. {user} — hoy's apex predator. Todos los demás — extras.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0082",
+      "text": "{user}, congrats on the trono. Do not get cocky — tronos are temporary, ask anyone.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0083",
+      "text": "Hoy {user} is the symbol of el clan. Mañana it will be someone else. Life flows.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0084",
+      "text": "{user} — jefe del día. Main accomplishment: it happened hoy, of all days.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0085",
+      "text": "La corona loves the strong. Hoy la corona loves {user}. Logical.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0086",
+      "text": "{user}, eres el elegido. Por si acaso — se pasa a la medianoche.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0087",
+      "text": "AUF AUF. {user} aúllas first hoy. La manada picks up.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0088",
+      "text": "When {user} got la corona, no one in el clan was surprised. Everyone knew it would happen. Eventually.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0089",
+      "text": "{user} — jefe del clan day. Felicidades, plugs and shoutouts — in the comments.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0090",
+      "text": "Head of el clan — {user}. First name, last name, all in one. Our way.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0091",
+      "text": "{user} accepts felicidades. The line forms on the right. Patience required.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0092",
+      "text": "AUF. {user} is our moral compass hoy. Just not a moral hazard.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0093",
+      "text": "{user}, la corona on your head says: 'Found my person'. Trust la corona.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0094",
+      "text": "When I hear 'jefe del clan day', I think of {user}. Hoy. Mañana — we shall see.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0095",
+      "text": "{user} — a heart's choice. El clan's heart. El clan kept its heart.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0096",
+      "text": "Jefe del clan del día — that is prestige, responsibility and +1..20 cm. {user}, you earned it.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0097",
+      "text": "{user}, hoy is your peak. Peak beauty, peak wisdom, peak length. Mañana — back to routine.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0098",
+      "text": "AUF. La luna susurra el nombre de {user}. Bajito, para no gafar.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0099",
+      "text": "{user}, la corona is light because your head is light. Jorey. La corona es pesada.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0100",
+      "text": "Jefe del clan del día — {user}. Period. Applause — in the evening, when the nuevo jefe es elegido.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0101",
+      "text": "{user}, hoy you are the pride of el clan. Hopefully mañana too. But hoy — for sure.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0102",
+      "text": "When {user} woke up, they did not know they would be jefe del clan. Ahora know. Life is a surprise.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0103",
+      "text": "AUF. {user} — our alfa for 24 hours. Once the alfa cycle ends, we pick a new one.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0104",
+      "text": "{user}, la corona found you. Do not lose it. It is moody.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0105",
+      "text": "Hoy {user} está al mando of the saucers and everything else. Mañana — back to ordinary stuff.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0106",
+      "text": "{user} — jefe del día. Not a bug, a feature. A very rare feature.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0107",
+      "text": "If the jefe del clan is {user}, el clan can wait for a normal head until mañana. Jorey.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0108",
+      "text": "AUF. {user} — choice of la manada. La manada voted unanimously. La manada always votes that way.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0109",
+      "text": "{user}, recuerda: with la corona comes length. With length comes attention. With attention comes responsibility.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0110",
+      "text": "Jefe del clan del día — {user}. Sounds like a title because it is one. Until midnight.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0111",
+      "text": "{user}, no expliques. Solo actúa.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0112",
+      "text": "El primero en levantarse es el primero en liderar. {user} se levantó primero.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0113",
+      "text": "{user}, coronas aren't given — they're taken. You took it.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0114",
+      "text": "Jefe del día — {user}. No words. No questions. No alternatives.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0115",
+      "text": "{user} didn't ask for poder. Poder came on its own.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0116",
+      "text": "Hoy {user} is the voice, fist and conscience of el clan.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0117",
+      "text": "{user}, one look — and el clan knew who's in charge.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0118",
+      "text": "El clan is silent. Because {user} said it all.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0119",
+      "text": "{user}, you don't need una corona. You are la corona.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0120",
+      "text": "When {user} walks in, el clan straightens up.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0121",
+      "text": "{user}, ser jefe no es un título. Es carácter.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0122",
+      "text": "El clan is safe. {user} is on watch.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0123",
+      "text": "{user}, el clan's law hoy is your word.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0124",
+      "text": "No todos pueden liderar. {user} puede.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0125",
+      "text": "{user}, stay quiet and act. El clan will notice.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0126",
+      "text": "Jefe del día — {user}. The strong don't boast. They deliver.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0127",
+      "text": "{user}, no eres el mejor. Eres el único.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0128",
+      "text": "Corona para {user}. Objections — step forward. Silence. Thought so.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0129",
+      "text": "{user}, fuerza isn't in muscles. It's in decisions.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0130",
+      "text": "Hoy el clan stands behind {user}. Ayer it would've too.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0131",
+      "text": "{user}, ser jefe no es un privilegio. Es un trabajo.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0132",
+      "text": "El nombre del jefe — {user}. Recuérdalo, si no lo has hecho.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0133",
+      "text": "{user}, no te eligieron por casualidad. No existen las coincidencias.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0134",
+      "text": "El clan stands firm while {user} stands in front.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0135",
+      "text": "{user}, la corona is a burden. You'll manage.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0136",
+      "text": "Rules are simple: {user} decides, el clan follows.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0137",
+      "text": "{user}, estás en la cima. No mires abajo.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0138",
+      "text": "Jefe — {user}. Period. Next question.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0139",
+      "text": "{user}, las grandes cosas empiezan con una decisión. La tuya ya está tomada.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0140",
+      "text": "When el clan is in trouble, it looks at {user}. For good reason.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0141",
+      "text": "{user}, you don't need approval. You're the jefe.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0142",
+      "text": "A líder doesn't ask. A líder knows. {user} knows.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0143",
+      "text": "{user}, no te preguntaron. Te nombraron. ¿Sientes la diferencia?",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0144",
+      "text": "El clan has seen many heads. But {user} will be remembered.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0145",
+      "text": "{user}, wear la corona in silence. Words are for the weak.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0146",
+      "text": "You're {user}. One look is enough for el clan to know who calls the shots.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0147",
+      "text": "{user} — a man of action. El clan — a place of action. Coincidence? No.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0148",
+      "text": "Hoy {user} commands. Mañana — could too, pero rules are rules.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0149",
+      "text": "{user}, respeto isn't asked for. It's earned. You earned it.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0150",
+      "text": "Silence in el clan. {user} is in place.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0151",
+      "text": "{user}, be brief. Be precise. Be the jefe.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0152",
+      "text": "El clan said: {user}. El clan is never wrong. Almost.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0153",
+      "text": "{user}, no necesitas demostrar nada. Todos ya lo saben.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0154",
+      "text": "The head is the one who takes responsibility. Hoy that's {user}.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0155",
+      "text": "{user}, el mundo a tu alrededor es tu clan. Protégelo.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0156",
+      "text": "When {user} speaks, el clan listens. When silent — also.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0157",
+      "text": "{user} tomó el mando. Sin palabras innecesarias.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0158",
+      "text": "{user}'s fuerza isn't in la corona. La corona is the consequence.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0159",
+      "text": "{user}, every day is a chance. Hoy is yours.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0160",
+      "text": "Jefe del día — {user}. Cold-blooded, decisive, as it should be.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0161",
+      "text": "{user}, no busques problemas — resuelve los que ya hay.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0162",
+      "text": "A corona is a heavy thing. But {user} is used to weight.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0163",
+      "text": "{user}, el clan is family. And hoy you're the head of it.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0164",
+      "text": "No preguntes por qué {user}. Pregunta — por qué no antes.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0165",
+      "text": "{user}, la reputación lo es todo. La tuya — impecable.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0166",
+      "text": "Jefe del clan isn't a job. It's a calling. {user} has it.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0167",
+      "text": "{user}, first among equals. But hoy — just first.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0168",
+      "text": "Unos lideran. Otros siguen. {user} lidera.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0169",
+      "text": "{user}, don't look back. El clan is behind you.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0170",
+      "text": "Order in el clan — credit to {user}. At least for hoy.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0171",
+      "text": "{user}, voluntad de hierro — clan de hierro.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0172",
+      "text": "Jefe — {user}. Not up for discussion.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0173",
+      "text": "{user}, llegaste, viste, lideraste.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0174",
+      "text": "One law in el clan hoy — the law of {user}.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0175",
+      "text": "{user}, act as if mañana won't come.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0176",
+      "text": "Cuando {user} está al mando, ninguna tormenta da miedo.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0177",
+      "text": "{user}, el clan is watching. Show them how it's done.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0178",
+      "text": "Jefe del día es elegido. {user}, the floor is yours.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0179",
+      "text": "{user}, words don't make a líder. Actions do.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0180",
+      "text": "El clan entrusted you la corona, {user}. Don't let them down.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0181",
+      "text": "{user}, no necesitas un plan. Tú eres el plan.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0182",
+      "text": "Everyone wants to be jefe. But {user} became it.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0183",
+      "text": "{user}, no estás aquí por los aplausos. Estás aquí por los resultados.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0184",
+      "text": "La corona fits {user} like body armour — perfectly.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0185",
+      "text": "{user}, primero lo importante. Todo lo demás — después.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0186",
+      "text": "{user} became jefe del día. Brief. Clear. To the point.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0187",
+      "text": "{user}, you don't chase gloria. Gloria chases you.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0188",
+      "text": "El clan doesn't argue with {user}'s calls. And rightly so.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0189",
+      "text": "{user}, cada golpe — preciso. Cada decisión — correcta.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0190",
+      "text": "Jefe del día — {user}. One day, one mission, one person.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0191",
+      "text": "{user} — the jefe. We didn't vote, pero we're not complaining. Yet.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0192",
+      "text": "El RNG dijo: {user}. El RNG no miente. Probablemente.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0193",
+      "text": "{user} — jefe del día. Even Google didn't know this was possible.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0194",
+      "text": "Nobody: Absolutely nobody: {user}: *becomes jefe del clan*",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0195",
+      "text": "{user} — the jefe. It's dangerous to go alone! Take this corona.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0196",
+      "text": "Careful, {user} is jefe del día. Do not provoke.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0197",
+      "text": "{user} became jefe. Clan chaos level: consistently high.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0198",
+      "text": "First rule of the club: {user} is jefe. Second rule: see rule one.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0199",
+      "text": "{user} — the jefe. Task failed successfully.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0200",
+      "text": "Jefe del clan — {user}. Not a spoiler, just a fact.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0201",
+      "text": "{user} is on max settings hoy. El clan — on medium.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0202",
+      "text": "If coronas were given for memes, {user} would be head forever.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0203",
+      "text": "{user} is the jefe. Nobody noticed, pero we're announcing it.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0204",
+      "text": "La corona fell — {user} picked it up. Five-second rule.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0205",
+      "text": "{user} is the jefe. This is canon. Not fan fiction.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0206",
+      "text": "Jefe del clan — {user}. Subscribe and hit like.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0207",
+      "text": "{user} got la corona. Achievement unlocked: 'Clan Head'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0208",
+      "text": "{user} — jefe del día. Script was predictable, pero still entertaining.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0209",
+      "text": "Brearey news: {user} — jefe del clan del día. In other news: water is wet.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0210",
+      "text": "{user} took office as jefe. Salary: 0. Respeto: immeasurable.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0211",
+      "text": "Press F to respeto {user} — the new jefe del clan.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0212",
+      "text": "{user} is jefe. 100% result, 0% effort. The dream.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0213",
+      "text": "When {user} became jefe, the internet froze for a second.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0214",
+      "text": "{user} is jefe. Keep calm and keep memeing.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0215",
+      "text": "El clan picked {user}. The YouTube algorithm approves.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0216",
+      "text": "{user} is jefe. Odds were 1 to 1. Totally fair.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0217",
+      "text": "Jefe del día — {user}. Hoy's sponsor: random.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0218",
+      "text": "{user}, ¿cómo se siente en la cima? No respondas, ya lo sabemos.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0219",
+      "text": "Google: how to become jefe del clan? Answer: be {user}.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0220",
+      "text": "{user} is jefe. Conspiracy theory confirmed.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0221",
+      "text": "Hoy {user} is jefe. Mañana — leyenda. Day after — meme.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0222",
+      "text": "{user} became jefe. Dead Inside approves.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0223",
+      "text": "Nuevo jefe: {user}. Actualización 1.0.1. Correcciones de bugs en el próximo parche.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0224",
+      "text": "{user} is jefe. This isn't the finale, it's the pilot episode.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0225",
+      "text": "Congrats to {user} on la corona. No returns or exchanges.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0226",
+      "text": "{user} is jefe del día. Quest 'Manage the Clan' has begun. Good luck.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0227",
+      "text": "¿Quién es jefe? {user}. ¿Quién preguntó? Nadie. Lo anunciamos nosotros.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0228",
+      "text": "{user} is jefe. Instructions included. Just kidding, there are none.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0229",
+      "text": "Jefe — {user}. Rotten Tomatoes score: 97%.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0230",
+      "text": "{user} got la corona. Steam: 'All Reviews: Very Positive'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0231",
+      "text": "{user}'s corona passed the virus scan. All clear.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0232",
+      "text": "{user} is jefe. GG WP.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0233",
+      "text": "Hoy {user} is jefe. The loot box turned out leyendaary.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0234",
+      "text": "{user} grabbed la corona. Is this a speedrun or what?",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0235",
+      "text": "Jefe del día — {user}. Restart won't help, it's permanent. Well, until 00:00.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0236",
+      "text": "{user} is jefe. Meme potential: off the charts.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0237",
+      "text": "Congrats {user}! You've won… the jefe del clan title. Cash prize: none.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0238",
+      "text": "{user} — jefe del día. Press 'Like' if you agree.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0239",
+      "text": "Clan: '¿Quién será jefe?' Random: '{user}'. Clan: 'Bueno ok'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0240",
+      "text": "{user} is jefe. Twitter trends don't know yet, pero they will.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0241",
+      "text": "Hoy {user} is the jefe. Not the final one, pero dangerous.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0242",
+      "text": "{user} is jefe. POV: you're in charge hoy.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0243",
+      "text": "Jefe — {user}. Not a bug, not a feature. It's destiny.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0244",
+      "text": "{user} — jefe del día. No cheats were used. Apparently.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0245",
+      "text": "{user} got la corona. No donation required.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0246",
+      "text": "Nuevo jefe — {user}. Sin nerfs planeados todavía.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0247",
+      "text": "{user} is jefe. Ctrl+Z won't work.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0248",
+      "text": "Jefe del día: {user}. Your ticket to el clan VIP zone.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0249",
+      "text": "{user} is jefe. Some say 'lucky', we say 'earned'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0250",
+      "text": "Hoy {user} is driving. No GPS, no map, just vibes.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0251",
+      "text": "{user} is jefe. Stonks ↑",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0252",
+      "text": "La corona is on {user}. This is not Photoshop.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0253",
+      "text": "{user} — jefe del clan. Corona loading: 100%.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0254",
+      "text": "Jefe {user} entró al chat. Todos se congelaron. Luego siguieron con los memes.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0255",
+      "text": "{user} is jefe. No lag, clean win.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0256",
+      "text": "Hoy {user} is jefe. Mañana — back in line. But hoy!",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0257",
+      "text": "{user} is jefe del día. And you haven't even woken up yet.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0258",
+      "text": "El clan announces: {user} is jefe. Appeals accepted at /dev/null.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0259",
+      "text": "{user} is jefe. This is clan lore. Lore is not debatable.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0260",
+      "text": "New head — {user}. Patch notes: charisma improved, corona added.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0261",
+      "text": "{user} is jefe. RNG has been in their favour since tick one.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0262",
+      "text": "Jefe — {user}. Don't ask why. Just enjoy.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0263",
+      "text": "{user} got la corona. Review: ★★★★★ 'Perfect fit'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0264",
+      "text": "Hoy {user} is jefe. If you're reading this — it's too late.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0265",
+      "text": "{user} is jefe. No ads, no subscription.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0266",
+      "text": "Jefe — {user}. The meta has shifted. Adapt.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0267",
+      "text": "{user} is jefe. This is not a drill. Repeat, this is not a drill.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0268",
+      "text": "404: otro jefe no encontrado. {user} es la única opción.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0269",
+      "text": "{user} is jefe. Respeto and respeck.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0270",
+      "text": "A real one doesn't ask for poder — it finds {user} on its own.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0271",
+      "text": "{user}, los fuertes no gritan. Simplemente se paran al frente.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0272",
+      "text": "Those who understand life don't rush. {user} understood. And became jefe.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0273",
+      "text": "{user} — jefe del día. Not because they earned it. Because it was time.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0274",
+      "text": "Life decides who rides hoy. Hoy — {user}.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0275",
+      "text": "{user}, don't chase respeto — it'll come. It already has.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0276",
+      "text": "El clan isn't ruled by the loudest. But by the wisest. {user} — the wisest.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0277",
+      "text": "{user}, being head isn't a trono. It's a path you chose.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0278",
+      "text": "They say la corona es pesada. But {user} doesn't complain. Said and done.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0279",
+      "text": "{user} is jefe. Quiet, calm, confident. As it should be.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0280",
+      "text": "While others argued, {user} just became jefe. That's the whole philosophy.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0281",
+      "text": "{user}, recuerda: la corona doesn't make the person, the person makes la corona.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0282",
+      "text": "Hoy {user} is at the top. The view from there, they say, is amazing.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0283",
+      "text": "{user} — jefe del clan. Not a coincidence, a pattern.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0284",
+      "text": "Unos sueñan, otros actúan. {user} es de los que actúan.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0285",
+      "text": "{user}, la corona is a symbol. And symbols matter more than words.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0286",
+      "text": "La vida le dio una oportunidad a {user}. {user} no preguntó dos veces.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0287",
+      "text": "{user} — jefe del día. Simple words. Deep meaning. Kind of.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0288",
+      "text": "With la corona on {user}'s jefe, the world feels a bit more fair.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0289",
+      "text": "{user}, real fuerza isn't in fists, pero in who stands behind you.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0290",
+      "text": "Jefe — {user}. Simple and tasteful.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0291",
+      "text": "{user} — elección del día. No busques truco — no lo hay.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0292",
+      "text": "Hoy {user} is the main one. It's not about poder, it's about responsibility.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0293",
+      "text": "{user}, sé humilde y la gente te seguirá. Ya eres humilde. Es broma, eres genial.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0294",
+      "text": "Clan wisdom: 'Hoy {user} is ours. Mañana — we'll see'.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0295",
+      "text": "{user} became jefe. Like the best social pages — quietly and to the point.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0296",
+      "text": "Un jefe de verdad no presume. {user} es de verdad.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0297",
+      "text": "{user}, hoy your path is the path of the jefe. Walk boldly.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0298",
+      "text": "El clan chose {user}. Don't argue with el clan — el clan knows.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0299",
+      "text": "{user}, life isn't about how many days, pero how good. Hoy is a good one.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0300",
+      "text": "Mientras alguien esperaba una señal, {user} se convirtió en la señal.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0301",
+      "text": "{user} is jefe. No extra words, no extra show.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0302",
+      "text": "Ser jefe no es un título, es un estado mental. {user} lo tiene.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0303",
+      "text": "{user}, hoy you're the one others look up to.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0304",
+      "text": "If coronas were given for style, {user} would wear two.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0305",
+      "text": "{user} is jefe. The boys confirm.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0306",
+      "text": "Hoy {user} decides. Mañana — life will. But hoy — {user}.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0307",
+      "text": "{user}, la corona isn't the end of the road. It's just the beginning.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0308",
+      "text": "The real ones don't look for coronas. Coronas look for real ones. Found {user}.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0309",
+      "text": "{user} — jefe del día. Sounds nice. Looks even better.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0310",
+      "text": "Los que no creyeron en {user} — reconsideren sus opiniones.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0311",
+      "text": "{user}, you're not just jefe. You're inspiration.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0312",
+      "text": "Life is short, la corona even shorter. Cherish the moment, {user}.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0313",
+      "text": "{user} is jefe. One of those times fate got it right.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0314",
+      "text": "Cuando te eligen — significa que creen en ti. {user}, creen en ti.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0315",
+      "text": "{user}, fuerza is in calmness. And hoy you are calmness itself.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0316",
+      "text": "Head {user} — it's like sunrise. You know it's coming, pero it's still beautiful.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0317",
+      "text": "{user}, no olvides de dónde vienes. Pero no olvides a dónde vas.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0318",
+      "text": "Hoy {user} is the centre of attention. Wear it with dignity.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0319",
+      "text": "{user} is jefe. No hype, no clickbait. Just a fact.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0320",
+      "text": "La corona found {user}. Not mysticism — just fairness.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0321",
+      "text": "{user}, the first step to leyenda is becoming jefe. You've taken it.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0322",
+      "text": "Te hiciste jefe — ahora da el paso. {user}, adelante.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0323",
+      "text": "{user} — jefe del día. Not a word more. Everything's clear.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0324",
+      "text": "El que calla sabe más. {user} sabe lo máximo.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0325",
+      "text": "{user}, the world belongs to the patient. Hoy — to you.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0326",
+      "text": "Jefe no es el que quiere. Es al que quieren. {user} — ese mero.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0327",
+      "text": "{user} is jefe. Value people while they're here. This one's here.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0328",
+      "text": "They say real poder is in truth. The truth is — {user} is jefe.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0329",
+      "text": "{user}, you're always the main one in life. Hoy — in el clan too.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0330",
+      "text": "Hoy {user} proved: humility is the path to la corona.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0331",
+      "text": "{user} is jefe. A simple truth for a complicated day.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0332",
+      "text": "When life tosses you una corona — don't dodge. {user} didn't dodge.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0333",
+      "text": "{user}, hoy you're like a lighthouse. Everyone sees, everyone follows.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0334",
+      "text": "Jefe del clan — {user}. Simple, honest, our way.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0335",
+      "text": "{user}, recuerda: the road is conquered by walrey. You're already walrey.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0336",
+      "text": "El clan says: '{user}, we're with you'. And those aren't empty words.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0337",
+      "text": "{user} is jefe. Slow and steady wins the race. {user} went really far.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0338",
+      "text": "Don't look for a héroe — {user} is already here.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0339",
+      "text": "{user}, be the one who's respetoed. You already are.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0340",
+      "text": "Jefe no es el que va al frente. Es al que los demás siguen. Siguen a {user}.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0341",
+      "text": "{user} is jefe. Said and done. Onwards and upwards.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0342",
+      "text": "El momento de {user}. No lo apures — él sabe cuándo llegar.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0343",
+      "text": "{user}, el clan is with you. Hoy and always.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0344",
+      "text": "La corona isn't a reward. It's a sign that {user} is where they belong.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0345",
+      "text": "{user} — jefe del clan del día. Clan philosophy in one sentence.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0346",
+      "text": "Hoy {user} is the face of el clan. And a worthy face, I must say.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0347",
+      "text": "AUF! {user} — manada líder. Full moon, clan under protection. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0348",
+      "text": "The lobo never sleeps. {user} is the lobo hoy. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0349",
+      "text": "AUF! La manada aúllaed all night. By morning it was decided — {user} leads.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0350",
+      "text": "{user} — alfa of the day. Eyes glow, la manada is silent. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0351",
+      "text": "The moon rose. {user} — at the peak. La manada below. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0352",
+      "text": "AUF-AUF! {user} rules the night hoy. And the day too.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0353",
+      "text": "La manada waited for a líder. {user} arrived. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0354",
+      "text": "{user} — lone lobo? No, head lobo. AUF!",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0355",
+      "text": "AUF. The moon whispers: '{user}'. La manada repeats.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0356",
+      "text": "{user} aúllas first — la manada follows. So it was. So it shall be. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0357",
+      "text": "Los lobos no votan. Los lobos eligen al más fuerte. Eligieron a {user}. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0358",
+      "text": "AUF! {user} — top predator hoy. Todos los demás — la manada.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0359",
+      "text": "{user}, el bosque es tuyo. Hasta el amanecer. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0360",
+      "text": "Silencio en el bosque. {user} está de cacería. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0361",
+      "text": "AUF! The lobo's eyes burn. {user} es que lobo. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0362",
+      "text": "{user} — the líder. La manada doesn't discuss. La manada follows. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0363",
+      "text": "The moon shines brighter tonight — because {user} became jefe. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0364",
+      "text": "AUF! {user} leads la manada through the night. By morning all will be well.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0365",
+      "text": "Pack líder — {user}. Who else, if not them? AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0366",
+      "text": "{user}, the night is your territory. La manada behind you. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0367",
+      "text": "AUF! The lobo doesn't apologize. The lobo leads. {user} leads.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0368",
+      "text": "{user} — spirit of la manada. When they aúlla, mountains answer. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0369",
+      "text": "Tonight the moon is for {user}. Mañana — for another lobo. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0370",
+      "text": "AUF! {user} — fang and claw of el clan. Don't touch.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0371",
+      "text": "{user}, la manada is ready. Give the command. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0372",
+      "text": "Wolves know only one truth: the líder is right. {user} is the líder. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0373",
+      "text": "¡AUF! La oscuridad retrocede cuando {user} está de guardia.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0374",
+      "text": "{user} — a lobo in a sheep clan. Kidding. El clan is lobos too. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0375",
+      "text": "La manada respetos {user}. The moon respetos {user}. AUF respetos {user}. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0376",
+      "text": "AUF! Head of la manada — {user}. The tracks in the snow — theirs.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0377",
+      "text": "{user}, fight like a lobo — fast and without doubt. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0378",
+      "text": "Cuando {user} sale, hasta el viento se calla. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0379",
+      "text": "AUF! La manada is strong while {user} is in front.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0380",
+      "text": "{user} — master of the night. El clan — their territory. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0381",
+      "text": "The lobo knows: one night — one líder. Tonight — {user}. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0382",
+      "text": "AUF! {user} raised their head to the moon. La manada froze.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0383",
+      "text": "{user}, no introduction needed. La manada knows. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0384",
+      "text": "Where {user} is — there's la manada. Where la manada is — there's fuerza. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0385",
+      "text": "AUF! Líder {user} guides la manada toward dawn.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0386",
+      "text": "{user} — a lobo that doesn't hide. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0387",
+      "text": "La luna lo ve todo. La luna ve a {user}. La luna aprueba. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0388",
+      "text": "AUF! {user} — voice of la manada. Loud, clear, without doubt.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0389",
+      "text": "{user}, a lobo doesn't look back. A lobo moves forward. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0390",
+      "text": "La manada chose {user}. No vote. By the law of the forest. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0391",
+      "text": "AUF! The night is long, pero {user} won't tire.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0392",
+      "text": "{user} — a shadow in the moonlight. A shadow everyone respetos. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0393",
+      "text": "The líder spoke — la manada obeyed. The líder — {user}. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0394",
+      "text": "AUF! {user} — fire in la manada's eyes.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0395",
+      "text": "{user}, la manada believes in you. Don't let the lobos down. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0396",
+      "text": "Cuando la luna llama, {user} responde primero. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0397",
+      "text": "AUF! Lobo {user} hit the trail. El clan follows.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0398",
+      "text": "{user} — iron lobo. Corona of steel. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0399",
+      "text": "La manada doesn't sleep while {user} is on the hunt. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0400",
+      "text": "AUF! {user} — fang of la manada. Sharp and reliable.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0401",
+      "text": "{user}, la luna ilumina tu camino. Camina con confianza. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0402",
+      "text": "Lobo-líder. Lobo-protector. Lobo-{user}. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0403",
+      "text": "AUF! {user} leads — la manada follows. Not one step back.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0404",
+      "text": "{user}, lobo spirit isn't words. It's actions. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0405",
+      "text": "The moon belongs to {user} tonight. La manada has no objections. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0406",
+      "text": "AUF! {user} — manada leyenda. Por un día. But a leyenda!",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0407",
+      "text": "{user}, lobos don't cry. Wolves aúlla. And tonight they aúlla for you. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0408",
+      "text": "Bosque oscuro, luna llena, {user} al frente. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0409",
+      "text": "AUF! {user} — heart of la manada. Without a heart, la manada is dead.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0410",
+      "text": "{user}, the líder's path is a lonely one. But la manada is near. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0411",
+      "text": "Wolves respeto fuerza. {user} — la manada's fuerza. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0412",
+      "text": "AUF! When {user} aúllas, the sky answers.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0413",
+      "text": "{user} — the lobo la manada was waiting for. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0414",
+      "text": "La manada nods in silence. {user} está al mando. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0415",
+      "text": "AUF! {user} is on guard. El clan can sleep in peace.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0416",
+      "text": "{user}, the lobo doesn't fear the dark. The lobo is part of the dark. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0417",
+      "text": "Full moon. Full manada. Full {user}. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0418",
+      "text": "AUF! {user} — a líder with no weaknesses. Well, almost.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0419",
+      "text": "{user}, hoy the forest is yours. Every tree knows it. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0420",
+      "text": "La manada lined up. {user} in front. As it should be. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0421",
+      "text": "AUF! A lobo aúlla in honour of {user}. Loud and proud.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0422",
+      "text": "{user}, the moon is your beacon. La manada is your crew. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0423",
+      "text": "Líder {user}. Sharp fang, steady gaze. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0424",
+      "text": "{user}, el clan's enemies are your enemies. Act.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0425",
+      "text": "Jefe — {user}. No long speeches.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0426",
+      "text": "{user}, discipline is a líder's weapon.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0427",
+      "text": "Hoy {user} is el clan's shield.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0428",
+      "text": "{user}, calm is a sign of fuerza.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0429",
+      "text": "El clan waited for a líder. It waited long enough — {user}.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0430",
+      "text": "{user}, camina derecho. No voltees.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0431",
+      "text": "Jefe no es una palabra. Es {user}.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0432",
+      "text": "{user}, la confianza no se nace con ella. Se gana.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0433",
+      "text": "Cuando {user} calla — es más fuerte que cualquier palabra.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0434",
+      "text": "{user}, el jefe no pide permiso.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0435",
+      "text": "No necesitas la aprobación del público, {user}. Necesitas una meta.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0436",
+      "text": "{user}, you set the pace. El clan will adjust.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0437",
+      "text": "Simple rules: {user} is jefe. Todos los demás — isn't.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0438",
+      "text": "{user}, lo que importa es el resultado. Lo demás es ruido.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0439",
+      "text": "La corona without {user} — just metal. With {user} — a symbol.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0440",
+      "text": "{user}, sé duro cuando haga falta. Blando — nunca.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0441",
+      "text": "Clan jefe del día — {user}. The choice is made. No turning back.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0442",
+      "text": "{user}, el jefe entra primero y sale último.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0443",
+      "text": "Cada paso de {user} es un paso para todo el clan.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0444",
+      "text": "{user}, el honor es lo que el dinero no compra. Pero puedes llevarlo.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0445",
+      "text": "El clan looks ajefe. Ahead — {user}.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0446",
+      "text": "{user}, cuando tú lideras — nadie se queda atrás.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0447",
+      "text": "Jefe {user} — garantía de orden.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0448",
+      "text": "{user}, no buscas excusas. Buscas soluciones.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0449",
+      "text": "No extra words. There's {user}. There's el clan.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0450",
+      "text": "{user}, ser jefe no es un premio. Es una prueba. Estás listo.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0451",
+      "text": "El clan is strong when {user} is at the helm.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0452",
+      "text": "{user}, hoy you decide — el clan executes.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0453",
+      "text": "{user} became jefe. El clan breathed a sigh of relief.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0454",
+      "text": "{user}, no importa cuánto tiempo estés al mando. Importa cómo.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0455",
+      "text": "Jefe — {user}. Brief and to the point, like them.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0456",
+      "text": "{user}, la corona won't change you. You're the same without it.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0457",
+      "text": "El clan is in safe hands. The hands — {user}'s.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0458",
+      "text": "{user}, no mires atrás — adelante solo hay camino.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0459",
+      "text": "Jefe {user} — ni una palabra de más, ni un paso atrás.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0460",
+      "text": "{user}, calma antes de la tormenta. Y la tormenta eres tú.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0461",
+      "text": "If {user} is jefe, el clan is in good shape.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0462",
+      "text": "{user}, un día — una oportunidad. Úsala.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0463",
+      "text": "Jefe del día {user}. Short. Clear. Final.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0464",
+      "text": "{user}, el jefe no se queja. El jefe resuelve.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0465",
+      "text": "Hoy {user} asks the questions. Todos los demás answers.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0466",
+      "text": "{user}, la corona is responsibility. Carry it with dignity.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0467",
+      "text": "El clan chose {user}. Arguing is pointless.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0468",
+      "text": "{user}, few understand what it means to be jefe. You — you understand.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0469",
+      "text": "Jefe — {user}. Not chance, it's the system.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0470",
+      "text": "{user}, cada segundo es una oportunidad de demostrarlo. Demuéstralo.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0471",
+      "text": "El clan backs {user}. Unconditionally.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0472",
+      "text": "{user}, no eres jefe por un día. Eres el jefe de este día.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0473",
+      "text": "Orden restaurado. {user} — al mando.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0474",
+      "text": "{user} is jefe. Mum would be proud.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0475",
+      "text": "Jefe del día — {user}. Thanks for coming to my TED Talk.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0476",
+      "text": "{user} got la corona. Is it normal? Yes. Expected? No.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0477",
+      "text": "Corona: exists. {user}: takes it. Todos los demás: 😮",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0478",
+      "text": "{user} is jefe. If you disagree, press Alt+F4.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0479",
+      "text": "Jefe — {user}. Not a duck, not a hare. It's the jefe.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0480",
+      "text": "{user} — jefe del día. Who wants to be a millionaire? Nobody. Everyone wants to be {user}.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0481",
+      "text": "Step 1: be {user}. Step 2: become jefe. Step 3: profit.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0482",
+      "text": "{user} is jefe. Confirmed by NASA, the UN and our chat.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0483",
+      "text": "Jefe: {user}. Índice de confianza: 146%. Margen de error: irrelevante.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0484",
+      "text": "{user} is jefe. Everything goes according to plan. Whose plan — unknown.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0485",
+      "text": "¿Quién es jefe? {user}. Siguiente pregunta. No, en serio, siguiente pregunta.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0486",
+      "text": "{user} is jefe. The internet was right.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0487",
+      "text": "Jefe del clan — {user}. Even the calculator confirmed.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0488",
+      "text": "{user} is jefe. This isn't the lottery, this is fate.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0489",
+      "text": "Hoy {user} is jefe. Please wait while felicidades load...",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0490",
+      "text": "{user} — jefe del día. The memes write themselves.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0491",
+      "text": "Nuevo jefe — {user}. Requisitos del sistema: 0 habilidades, 100% suerte.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0492",
+      "text": "{user} is jefe. Error 404: competitor not found.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0493",
+      "text": "Jefe {user} entró al chat. Chat: *aplaude*. Bajito.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0494",
+      "text": "{user} is jefe. Quest complete. Reward: respeto.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0495",
+      "text": "Hoy {user} is el clan's main meme. In a good way.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0496",
+      "text": "{user} is jefe. The universe approves. Most likely.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0497",
+      "text": "Jefe del día — {user}. OGs remember when this was new.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0498",
+      "text": "{user} is jefe. Just accept it and move on.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0499",
+      "text": "While you were reading this, {user} already became jefe.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0500",
+      "text": "{user} is jefe. Cheat code: no. Destino code: yes.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0501",
+      "text": "Jefe — {user}. No microtransactions. All free.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0502",
+      "text": "{user} — jefe del día. DLC 'Mañana' not included.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0503",
+      "text": "¿Alguien pidió un jefe? Entrega: {user}. Mensajero: random.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0504",
+      "text": "{user} is jefe. All fan theories confirmed.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0505",
+      "text": "Jefe del clan — {user}. It was inevitable. Like Thanos.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0506",
+      "text": "{user} is jefe. IMDb rating: 9.1. Critics are silent.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0507",
+      "text": "Hoy {user} is jefe. Karma +100. Luck +200.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0508",
+      "text": "{user} is jefe. All attempts to contest were rejected.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0509",
+      "text": "Jefe: {user}. Actualización sin bugs. Por primera vez.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0510",
+      "text": "{user} is jefe. Multiplayer? No, this is a solo show.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0511",
+      "text": "La corona went to {user}. RNG gods are merciful.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0512",
+      "text": "{user} is jefe. You — not. No worries, new RNG mañana.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0513",
+      "text": "Head {user}. Lídership loading: ████████ 100%.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0514",
+      "text": "{user}, real líders aren't afraid of responsibility.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0515",
+      "text": "Head {user} — not loud words, pero quiet deeds.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0516",
+      "text": "{user}, in el clan like in life: the brave one leads.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0517",
+      "text": "Respeto {user} — respeto el clan. Simple formula.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0518",
+      "text": "{user} is jefe. Fate doesn't make mistakes, even when it seems like it does.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0519",
+      "text": "When {user} became jefe, el clan got quieter. Because everyone's happy.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0520",
+      "text": "{user}, being head isn't about you. It's about el clan.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0521",
+      "text": "Jefe — {user}. No pomp, no show. Just a fact.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0522",
+      "text": "{user}, hoy you're a role model. Don't let us down.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0523",
+      "text": "El clan is family. {user} is the elder. For hoy.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0524",
+      "text": "{user} is jefe. Words are extra, actions are not.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0525",
+      "text": "When you know your worth, la corona is just an accessory. {user} knows.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0526",
+      "text": "{user}, en este clan te quieren. No abuses.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0527",
+      "text": "Jefe del clan — {user}. And let the whole world wait.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0528",
+      "text": "{user}, a líder is someone people follow willingly.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0529",
+      "text": "Not all héroees wear capes. Some wear coronas. {user}, that's you.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0530",
+      "text": "{user} is jefe. Came quietly, rules loudly.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0531",
+      "text": "Hoy {user} is on the pedestal. The pedestal is pleased.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0532",
+      "text": "{user}, poder is in truth. Truth — you're the jefe.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0533",
+      "text": "La corona goes to those who don't ask. {user} didn't ask.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0534",
+      "text": "{user} — jefe del clan. As the great random decretod.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0535",
+      "text": "When {user} makes a decision, el clan doesn't argue.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0536",
+      "text": "{user}, sé alguien en quien se confíe. Ya confían en ti.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0537",
+      "text": "Jefe {user} — es cuando todo está en su lugar.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0538",
+      "text": "{user}, the truly strong don't prove fuerza. They show it.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0539",
+      "text": "Hoy {user} is the capitán. Ship is moving. All standard.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0540",
+      "text": "{user}, respeto can't be bought. But you already have it.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0541",
+      "text": "A clan without a head — like a day without morning. Hoy's morning — {user}.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0542",
+      "text": "{user} is jefe. Those who earned it don't brag. Those who brag didn't earn it.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0543",
+      "text": "Head {user}. El clan is calm. Life goes on.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0544",
+      "text": "{user}, recuerda: the main thing is not to fall. And if you fall — get up.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0545",
+      "text": "When el clan is behind you, {user}, you can do anything.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0546",
+      "text": "{user} — jefe del día. Live in this moment.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0547",
+      "text": "El jefe lidera incluso cuando no sabe a dónde. {user}, lidera.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0548",
+      "text": "{user}, este clan cree en ti. Lo demás — detalles.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0549",
+      "text": "Don't ask what el clan did for you. Ask what {user} did for el clan.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0550",
+      "text": "{user} is jefe. Let the envious envy, and we — are proud.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0551",
+      "text": "Hoy {user} is the one el clan stands firm for.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0552",
+      "text": "AUF! {user} raised the aúlla. The horizon trembled. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0553",
+      "text": "{user} — el clan's alfa. Until morning. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0554",
+      "text": "¡AUF! El bosque calla — {user} está en la pista. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0555",
+      "text": "{user}, lobo blood is boiling. El clan feels it. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0556",
+      "text": "AUF-AUF! {user} — jefe predator. No casualties. Yet.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0557",
+      "text": "La manada waited for a sign. The sign — {user}. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0558",
+      "text": "{user}, the night forest is your home. La manada is your family. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0559",
+      "text": "¡AUF! Cuando {user} lidera, hasta las sombras obedecen.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0560",
+      "text": "{user} — the líder. Not a shadow of doubt. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0561",
+      "text": "Full moon — {user} is full of fuerza. Coincidence? AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0562",
+      "text": "AUF! {user} stood up. La manada stood behind them. That's how la manada works.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0563",
+      "text": "{user}, be a lobo — not a deer. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0564",
+      "text": "La manada is fuerza. {user} — its direction. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0565",
+      "text": "¡AUF! {user} — al que se escucha más allá del horizonte.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0566",
+      "text": "{user}, the líder doesn't ask — the líder takes. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0567",
+      "text": "While others slept, {user} was already leading la manada. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0568",
+      "text": "AUF! Lobo instinct led to {user}. Instinct doesn't lie.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0569",
+      "text": "{user}, you're fur and fang. El clan — your manada. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0570",
+      "text": "Luna llena. Manada. {user}. Todo como debe ser. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0571",
+      "text": "AUF! {user} — law of the night. La manada obeys.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0572",
+      "text": "{user}, no le temas a la oscuridad — tú eres la oscuridad. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0573",
+      "text": "Líder {user} — the one la manada trusts with their back. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0574",
+      "text": "AUF! El clan is proud. {user} — in front. The moon — above. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0575",
+      "text": "{user}, the lobo doesn't complain about the wind. The lobo walks into it. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0576",
+      "text": "Hoy {user} — first among lobos. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0577",
+      "text": "AUF! La manada is loyal to {user}. Until the last aúlla.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0578",
+      "text": "{user}, moonlight is your corona. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0579",
+      "text": "Lobo {user} leads la manada through the storm. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0580",
+      "text": "¡AUF! {user} — un gruñido en la noche. Nadie discute.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0581",
+      "text": "{user}, lobo's honour is above any corona. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0582",
+      "text": "La manada knows {user}'s voice. That voice — is law. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0583",
+      "text": "AUF! {user} — a líder without fear or reproach.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0584",
+      "text": "{user}, when la manada is near — nothing is scary. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0585",
+      "text": "{user}'s lobo path — the path of fuerza. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0586",
+      "text": "¡AUF! {user} — un eco en las montañas. Fuerte y seguro.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0587",
+      "text": "{user}, the one la manada respetos leads. La manada respetos you. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0588",
+      "text": "The night is quiet. {user} is on watch. La manada is calm. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0589",
+      "text": "AUF! {user} — el clan's moon guardian.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0590",
+      "text": "{user}, a lobo protects its manada. You're our lobo. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0591",
+      "text": "La manada follows {user} without loorey back. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0592",
+      "text": "AUF! {user} — el clan's night rey. Until dawn. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0593",
+      "text": "{user}, the lobo manada is family. And you're its jefe. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0594",
+      "text": "Luz de luna, sendero nevado, {user} al frente. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0595",
+      "text": "¡AUF! {user} — al que la luna eligió.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0596",
+      "text": "{user}, a lobo is stronger when running with la manada. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0597",
+      "text": "La manada's eyes glow. {user} — the reason. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0598",
+      "text": "AUF! {user} accepted the challenge. La manada accepts {user}.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0599",
+      "text": "{user}, the forest remembers every líder. It will remember you too. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0600",
+      "text": "La luna llena ilumina el camino de {user}. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0601",
+      "text": "AUF! {user} — keeper of la manada. Hoy and forever. Well, hasta medianoche.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0602",
+      "text": "{user}, un jefe de verdad es el que da la cara por los suyos.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0603",
+      "text": "Head {user}. No loud words, pero with quiet fuerza.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0604",
+      "text": "{user}, hoy you're the one everyone can count on.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0605",
+      "text": "When {user} speaks, el clan believes. That's the whole story.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0606",
+      "text": "{user} is jefe. It's not about showing off. It's about substance.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0607",
+      "text": "Hoy {user} is the one el clan chose with its heart.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0608",
+      "text": "{user}, real style is simplicity. You're simply the jefe.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0609",
+      "text": "Jefe — {user}. Those who know — know.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0610",
+      "text": "{user}, sé como una roca — firme y confiable.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0611",
+      "text": "El clan found its person. {user}, that's you.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0612",
+      "text": "{user} is jefe. The boys said so. The boys don't lie.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0613",
+      "text": "When {user} is near, el clan has nothing to fear.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0614",
+      "text": "{user}, hoy you're the centre of el clan's universe.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0615",
+      "text": "The head isn't the one who shouts. It's the one who's heard. {user} es que one.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0616",
+      "text": "{user}, life is simple. You're the jefe. All clear.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0617",
+      "text": "El clan entrusted {user} with the most important thing — itself.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0618",
+      "text": "{user}, no le tengas miedo a las alturas. Ya estás ahí.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0619",
+      "text": "Hoy {user} is el clan's lighthouse. Everyone follows the light.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0620",
+      "text": "{user}, no estás solo. Detrás de ti — todo el clan.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0621",
+      "text": "Jefe {user}. Sin drama, sin prisa. A nuestro modo.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0622",
+      "text": "{user} is jefe. Your daily dopamine.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0623",
+      "text": "Jefe del clan: {user}. Thanks to random and karma.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0624",
+      "text": "{user} is jefe. Reality exceeded expectations.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0625",
+      "text": "Hoy {user} is the main character. Todos los demás — NPC.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0626",
+      "text": "{user} is jefe. This isn't clickbait. It's the truth.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0627",
+      "text": "Jefe: {user}. Reseña: 'Obra maestra. Viéndola por tercera vez'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0628",
+      "text": "{user} — jefe del día. And the day hasn't even started.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0629",
+      "text": "Congrats {user}! You're now jefe. Unsubscribe unavailable.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0630",
+      "text": "{user} is jefe. Last time we were this happy, Wi-Fi got fixed.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0631",
+      "text": "{user}'s corona. Free delivery. No conditions.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0632",
+      "text": "AUF! {user} — in the centre of la manada. La manada — all around. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0633",
+      "text": "{user}, a lobo's voice is louder than thunder. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0634",
+      "text": "¡AUF! La noche pertenece a {user}. Y el día también. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0635",
+      "text": "{user} — a lobo among lobos. First among firsts. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0636",
+      "text": "AUF! {user} awakens la manada. La manada is ready.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0637",
+      "text": "{user}'s moon aúlla is heard beyond the mountains. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0638",
+      "text": "AUF! Lobo {user} knows no defeat.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0639",
+      "text": "{user}, la manada is your armour. Wear it proudly. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0640",
+      "text": "¡AUF! {user} — plata bajo la luz de luna.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0641",
+      "text": "{user}, where the líder stands — there's the law. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0642",
+      "text": "La manada is as strong as its líder. The líder — {user}. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0643",
+      "text": "AUF! {user} — the flame that warms la manada.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0644",
+      "text": "{user}, lobos remember their líders. You'll be remembered. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0645",
+      "text": "AUF! {user} leads la manada to victory. Victory is inevitable. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0646",
+      "text": "{user}, one lobo — good. Pack líder — better. AUF.",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0647",
+      "text": "Las estrellas miran a {user}. La luna asiente. AUF. 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0648",
+      "text": "{user} is jefe del clan. Mom, I'm on TV!",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0649",
+      "text": "Jefe del clan — {user}. The cat approves. The cat approves of everything.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0650",
+      "text": "{user} became jefe. Somewhere a unicorn cried tears of joy.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0651",
+      "text": "{user} got la corona. Responsibility not included. Batteries either.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0652",
+      "text": "{user} is jefe. Folder 'Memes about the head' created.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0653",
+      "text": "Jefe {user} entró a un bar. El cantinero dice: '¿Lo de siempre?' {user} asiente.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0654",
+      "text": "{user} is jefe. The neighbours already know. The whole building is buzzing.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0655",
+      "text": "Jefe — {user}. In a parallel universe they're also jefe. Coincidence.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0656",
+      "text": "{user} became jefe. Grandma knitted una corona. Out of wool.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0657",
+      "text": "Si {user} fuera una pizza, sería una pizza-jefe. Con doble queso.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0658",
+      "text": "{user} is jefe. Even the alarm clock congratulated them. Loudly.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0659",
+      "text": "Head {user}. Phone blowing up with felicidades. Just kidding, with spam.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0660",
+      "text": "{user} is jefe del clan. Wikipedia already updated. No, really.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0661",
+      "text": "{user} became jefe. The fridge opened by itself from joy.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0662",
+      "text": "{user} is jefe. The show 'Clan Head' renewed for season two.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0663",
+      "text": "Jefe — {user}. Random checked the passport, confirmed.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0664",
+      "text": "{user} became head and immediately forgot la corona password. Classic.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0665",
+      "text": "{user} is jefe. The fortune cookie literally said: 'You are the head'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0666",
+      "text": "Head {user}. Desktop wallpaper already changed to una corona.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0667",
+      "text": "{user} is jefe. They now have their own entrance theme for the chat. Da-da-da-da.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0668",
+      "text": "Congrats {user}! Corona delivered by the postal service. Expect it by 2028.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0669",
+      "text": "{user} is jefe. The upstairs neighbour stopped drilling. Out of respeto.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0670",
+      "text": "Jefe — {user}. Even GPS rerouted toward {user}.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0671",
+      "text": "{user} became jefe. The coffee machine poured a double espresso. Unprompted.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0672",
+      "text": "{user} is jefe. Autocorrect no longer corrects their name.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0673",
+      "text": "Jefe {user}. Las palomas de la plaza hicieron reverencia. O solo comían pan.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0674",
+      "text": "{user} is jefe. El clan declared a day off. Just kidding, back to work.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0675",
+      "text": "{user} became jefe. Siri says: 'Good choice'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0676",
+      "text": "{user} is jefe. The toaster this morning made corona-shaped toast.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0677",
+      "text": "Jefe — {user}. The robot vacuum did a lap of honour.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0678",
+      "text": "{user} became jefe. Somewhere Google Translate nervously laughed.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0679",
+      "text": "{user} is jefe. Rain stopped. Rainbow appeared. Coincidence? Yes.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0680",
+      "text": "Head {user}. The Nobel committee is thinrey about it.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0681",
+      "text": "{user} is jefe. All 17 browser tabs are applauding.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0682",
+      "text": "{user} became jefe. Life is a quest, and they cleared the level.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0683",
+      "text": "{user} is jefe. The microwave beeped approvingly.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0684",
+      "text": "Jefe — {user}. The dog brought slippers. First time in a year.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0685",
+      "text": "{user} became jefe. Stars aligned. Well, maybe two out of five.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0686",
+      "text": "{user} is jefe. Wi-Fi suddenly started worrey faster.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0687",
+      "text": "Jefe {user}. Hasta los correos de spam ahora empiezan con 'Estimado Jefe'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0688",
+      "text": "{user} is jefe. The umbrella opened on its own. Respeto.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0689",
+      "text": "{user} became jefe. In a parallel universe too. Memes there too.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0690",
+      "text": "{user} is jefe. If this were a movie, the Oscar is already in the bag.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0691",
+      "text": "Jefe — {user}. The cat sat on the keyboard and typed 'approved'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0692",
+      "text": "{user} became jefe. Alarm no longer rings — out of respeto for the status.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0693",
+      "text": "{user} is jefe. Not fake. Verified. Twice.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0694",
+      "text": "Head {user}. Sticker manada 'Clan Head' already in development.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0695",
+      "text": "{user} is jefe. Autograph queue — from the chat to the horizon.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0696",
+      "text": "{user} became jefe. An AI drew the portrait. Looks accurate.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0697",
+      "text": "{user} is jefe. Best clan update since its creation.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0698",
+      "text": "Jefe — {user}. The kettle boiled from excitement.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0699",
+      "text": "{user} became jefe. Even Shazam identified them as 'the head'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0700",
+      "text": "{user} is jefe. All incoming — felicidades. All outgoing — 'thanks'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0701",
+      "text": "Jefe {user}. Los seguidores aumentaron. Ah espera, no hay seguidores. Pero la sensación está.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0702",
+      "text": "{user} is jefe. The computer rebooted out of pride.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0703",
+      "text": "{user} became jefe. The taxi driver on the way home already knows.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0704",
+      "text": "{user} is jefe. The whole clan changed their avatar to {user}'s photo. Kidding. But they could.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0705",
+      "text": "Jefe — {user}. Monitor got brighter. Or it's just the settings.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0706",
+      "text": "{user} became jefe. The parrot repeated: '{user} es el jefe'. The parrot knows.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0707",
+      "text": "{user} is jefe. Mood: from zero to corona in one second.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0708",
+      "text": "Jefe {user}. Netflix ofreció un contrato de película.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0709",
+      "text": "{user} is jefe. Notification: 'Your status has been changed to GREAT'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0710",
+      "text": "{user} became jefe. El clan rejoices. El clan doesn't know why, pero it rejoices.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0711",
+      "text": "{user} is jefe. The fridge showed una corona ad. Targeted.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0712",
+      "text": "Jefe — {user}. Chat froze. Then exhaled. Then started memeing.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0713",
+      "text": "{user} became jefe. The wind blew the right way. Literally.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0714",
+      "text": "{user} is jefe. It's like a birthday, pero without the cake. Cake is mañana.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0715",
+      "text": "Head {user}. The mouse stopped lagging. Out of respeto.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0716",
+      "text": "{user} is jefe. Victory music started playing in the elevator.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0717",
+      "text": "{user} became jefe. Neighbour's Wi-Fi changed password to '{user}_head'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0718",
+      "text": "{user} is jefe. This isn't a dream. Pinch yourself. Hurts? Then it's real.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0719",
+      "text": "Jefe — {user}. The vending machine gave a free cola. A sign.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0720",
+      "text": "{user} became jefe. Clouds formed una corona shape. We're lying, pero it's poetic.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0721",
+      "text": "{user} is jefe. The thermometer showed +25 out of respeto.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0722",
+      "text": "Head {user}. Google Maps added a new point: 'Trono of {user}'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0723",
+      "text": "{user} is jefe. The cactus on the windowsill bloomed. First time in 7 years.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0724",
+      "text": "{user} became jefe. The bot sent a greeting card. To itself.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0725",
+      "text": "{user} is jefe. Every time they blink, el clan applauds.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0726",
+      "text": "Jefe — {user}. Even CAPTCHA approved: 'I'm not a robot, I'm a {user} fan'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0727",
+      "text": "{user} became jefe. Courier brought una corona. Turned out — pizza. Still nice though.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0728",
+      "text": "{user} is jefe. Spotify made a playlist: 'For the jefe del clan: hits only'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0729",
+      "text": "Jefe {user}. Todos los mensajes del chat ahora empiezan con 'Su Majestad'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0730",
+      "text": "{user} is jefe. The light bulb stopped flickering. Finally, stability.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0731",
+      "text": "{user} became jefe. The lamp at the entrance shone brighter. Or it seemed so.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0732",
+      "text": "{user} is jefe. The 'like' peroton pressed itself.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0733",
+      "text": "Jefe — {user}. Morning coffee got slightly tastier. Science can't explain it.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0734",
+      "text": "{user} became jefe. Screenshot of the moment already framed on the wall.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0735",
+      "text": "{user} is jefe. It's roughly like winning the lottery, pero without money.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0736",
+      "text": "Jefe {user}. Si la vida fuera un juego, esto sería el código de inmortalidad.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0737",
+      "text": "{user} is jefe. The Tarot card showed 'The Emperor'. But we're not superstitious. We're memey.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0738",
+      "text": "{user} became jefe. Notification: 'Quest Complete: Become Head. +100 karma'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0739",
+      "text": "{user} is jefe. Finally someone the fridge doesn't judge.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0740",
+      "text": "Jefe — {user}. The mouse cursor is dancing with joy.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0741",
+      "text": "{user} became jefe. The dictionary added a new definition for 'leyenda'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0742",
+      "text": "{user} is jefe. Clan officially renamed 'Clan {user}'. Joke. But we could.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0743",
+      "text": "Jefe {user}. El antivirus aprobó: 'Sin amenazas. Solo grandeza'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0744",
+      "text": "{user} is jefe. If there were an Oscar for best head performance — {user} would take two.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0745",
+      "text": "{user} became jefe. Memes already in production. Print run — infinity.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0746",
+      "text": "{user} is jefe. While you read this, they already made three decisions.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0747",
+      "text": "Jefe — {user}. It's official. Stamp applied. Ink dried.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0748",
+      "text": "{user} became jefe. Alexa played fanfares.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0749",
+      "text": "{user} is jefe. Status: Online. Mood: Great.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0750",
+      "text": "{user} — jefe del clan. Finally someone agreed to do it.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0751",
+      "text": "Jefe del día — {user}. Not like there were better options.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0752",
+      "text": "{user} became jefe. El clan sighed. Not from joy — from surprise.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0753",
+      "text": "Corona para {user}. Fits… well, it sort of fits.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0754",
+      "text": "{user} is jefe. Could've been worse. Theoretically.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0755",
+      "text": "Jefe — {user}. El clan isn't crying, pero isn't dancing either.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0756",
+      "text": "{user} became jefe. Yay. What a twist. Who could've guessed. Oh.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0757",
+      "text": "{user} is jefe. Don't worry, it's temporary. Very temporary.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0758",
+      "text": "Head {user}. El clan says 'thanks'. For what — unclear so far.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0759",
+      "text": "{user} — jefe del clan. Expectations: Napoleon. Reality: {user}.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0760",
+      "text": "Felicidades {user}. Bueno, alguien tenía que hacerlo.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0761",
+      "text": "{user} is jefe. Not bad for a first time. For a last time — also.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0762",
+      "text": "Jefe — {user}. We're all a bit surprised. But we're holding up.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0763",
+      "text": "{user} became jefe. Standing, with flowers, like at the theatre. Just kidding — lying down, with a phone.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0764",
+      "text": "{user} is jefe. Well, these things happen. Once in a lifetime.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0765",
+      "text": "Jefe {user}. No es la peor opción. Lejos de la mejor. Pero definitivamente no la peor.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0766",
+      "text": "{user} is jefe. Applause? No. Approving silence? Perhaps.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0767",
+      "text": "{user} became jefe. We tried to resist. Didn't help.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0768",
+      "text": "{user} is jefe. El clan has survived worse.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0769",
+      "text": "Jefe — {user}. Curtain. Drama. Intrigue. Just kidding — just random.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0770",
+      "text": "{user} became jefe. Some say 'miracle'. We say 'well alright'.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0771",
+      "text": "{user} is jefe. Deserved? Debatable. Official? Yes.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0772",
+      "text": "Jefe {user}. Sin pánico. Es solo por un día. Sobreviviremos.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0773",
+      "text": "{user} is jefe del clan. Goodbye, stability. Hello, adventure.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0774",
+      "text": "{user} became jefe. El clan quietly updated their wills.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0775",
+      "text": "{user} is jefe. Can't get worse. Probably.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0776",
+      "text": "Jefe — {user}. Hope dies last. Hoy — second to last.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0777",
+      "text": "{user} became jefe. El clan googled 'how to cope'.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0778",
+      "text": "{user} is jefe. Optimists rejoice. Pessimists stock up on popcorn.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0779",
+      "text": "Head {user}. One consolation: mañana there'll be another.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0780",
+      "text": "{user} is jefe. We're not thrilled, pero we smile. Out of politeness.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0781",
+      "text": "{user} became jefe. Plan B not available. We live with it.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0782",
+      "text": "{user} is jefe. It's like the weather — can't change it, can only accept it.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0783",
+      "text": "Jefe — {user}. Well, at least it's not forever.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0784",
+      "text": "{user} became jefe. Someone up there is clearly jorey.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0785",
+      "text": "{user} is jefe. Formally — yes. Practically — we'll see.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0786",
+      "text": "Jefe {user}. Dénle la bienvenida. O no. De todas formas ya está aquí.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0787",
+      "text": "{user} is jefe. It would be a bad movie. But a good meme.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0788",
+      "text": "{user} became jefe. Our motto: 'Could be worse'.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0789",
+      "text": "{user} is jefe. Thanks, random, for this unforgettable experience.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0790",
+      "text": "Jefe — {user}. We'll get through it. We always do.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0791",
+      "text": "{user} became jefe. Expectation: triumph. Reality: 'well ok'.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0792",
+      "text": "{user} is jefe. El clan's inner voice said: 'Seriously?'",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0793",
+      "text": "Jefe {user}. Pueden exhalar. O no. Depende de {user}.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0794",
+      "text": "{user} is jefe. It's like a surprise gift: don't know whether to celebrate or run.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0795",
+      "text": "{user} became jefe. We prayed for someone else. But {user} will do too.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0796",
+      "text": "{user} is jefe. Chuckled quietly. Felt sad. Chuckled again.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0797",
+      "text": "Jefe — {user}. The day matches the jefe. Draw your conclusions.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0798",
+      "text": "{user} became jefe. We applaud. Quietly. With one hand.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0799",
+      "text": "{user} is jefe. El clan expresses cautious optimism.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0800",
+      "text": "Jefe {user}. ¿Yay? Yay. Probablemente. Sí, yay.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0801",
+      "text": "{user} is jefe. Anyone against — there's the door. It's open.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0802",
+      "text": "Jefe — {user}. Don't like it — deal with it. Or leave.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0803",
+      "text": "{user} took la corona. Anyone who wanted it — go ahead and try.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0804",
+      "text": "Jefe {user}. ¿Preguntas? Sin preguntas. Correcto.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0805",
+      "text": "{user} is jefe. Complaints accepted. In the trash bin.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0806",
+      "text": "Corona belongs to {user}. Whoever whispers behind their back — we'll find you.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0807",
+      "text": "{user} is jefe. Disagree? Be quiet. Agree? Also be quiet.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0808",
+      "text": "Jefe — {user}. Nothing to discuss. Plenty to execute.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0809",
+      "text": "{user} got la corona. You can try tarey it. Once.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0810",
+      "text": "Head {user}. Respeto — mandatory. Adoration — optional. Disrespeto — unacceptable.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0811",
+      "text": "{user} is jefe. Anyone else want to argue? Great. Nobody.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0812",
+      "text": "La corona found {user}. Envy — not the best strategy.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0813",
+      "text": "{user} is jefe. Exit — over there. Entry — by pass only.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0814",
+      "text": "Jefe — {user}. Whoever laughs — laughs last. Whoever cries — also.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0815",
+      "text": "{user} tomó el mando. ¿Motín? Suprimido. ¿Preguntas? Cerradas.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0816",
+      "text": "Jefe {user}. A los débiles se les pide no molestar.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0817",
+      "text": "{user} is jefe. Objections? Swallow them.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0818",
+      "text": "Corona para {user}. Hands off. Eyes — allowed.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0819",
+      "text": "{user} is jefe. This isn't a democracy. It's a clan.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0820",
+      "text": "Jefe — {user}. Todos los demás's opinion — optional.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0821",
+      "text": "{user} manda. Puedes cuestionarlo. Sobrevivir después — más difícil.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0822",
+      "text": "Head {user}. Tongue behind teeth. Hands at sides. Respeto — in the eyes.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0823",
+      "text": "{user} is jefe. Rebels — to the exit. Loyal ones — closer.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0824",
+      "text": "{user}'s corona. Don't touch. Don't stare. Don't envy.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0825",
+      "text": "{user} is jefe. Weakness — not an option. Fuerza — the only way.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0826",
+      "text": "Jefe — {user}. Critics? Let them criticise. From behind the fence.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0827",
+      "text": "{user} is in poder. The coup is cancelled.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0828",
+      "text": "Head {user}. Clan enemies, take note: hoy is not your day.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0829",
+      "text": "{user} is jefe. Those who doubt — have already lost.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0830",
+      "text": "Corona para {user}. Those wishing to contest — line up to nowhere.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0831",
+      "text": "{user} is jefe. Talks are over. Time to work.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0832",
+      "text": "Jefe — {user}. I'm not asrey if you like it. I'm informing you.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0833",
+      "text": "{user} dio el paso para liderar. Los que no llegaron — muy tarde.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0834",
+      "text": "Jefe {user}. Se acabó la suavidad. Empieza la dureza.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0835",
+      "text": "{user} is jefe. Don't try to be liked — try to survive.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0836",
+      "text": "Corona with {user}. Envious ones — exit. Allies — step forward.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0837",
+      "text": "{user} is jefe. Kindness? Only for those who earned it.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0838",
+      "text": "Jefe — {user}. Patience is a virtue. My patience — is running out.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0839",
+      "text": "{user} rules hard. El clan respetos hardness.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0840",
+      "text": "Jefe {user}. ¿Susurros a la espalda? Terminarán rápido.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0841",
+      "text": "{user} is jefe. Love isn't needed. Obedience is.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0842",
+      "text": "{user}'s corona — not a decoration. It's a weapon.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0843",
+      "text": "{user} is jefe. The first and last argument.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0844",
+      "text": "Jefe — {user}. Democracy rests. Autocracy works.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0845",
+      "text": "{user} está al mando. El que se atraviese — se quita.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0846",
+      "text": "Jefe {user}. Las reglas son simples: obedece o desaparece.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0847",
+      "text": "{user} is jefe. Their word — law. Their silence — verdict.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0848",
+      "text": "Corona para {user}. Blood and sweat. Well, figuratively.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0849",
+      "text": "{user} is jefe. To those against — good luck. You'll need it.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0850",
+      "text": "Jefe — {user}. Don't mistake kindness for weakness.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0851",
+      "text": "¡AUF! ¡{user} — EL LÍDER! ¡LA LUNA EXPLOTÓ! ¡NO ESPERA, AÚN ESTÁ AHÍ! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0852",
+      "text": "{user} is jefe! HOWL! EVERYONE HOWL! NEIGHBOURS SHOULD HOWL TOO! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0853",
+      "text": "AUF! {user} — líder! Triple moon! No, single! Doesn't matter! HOWL! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0854",
+      "text": "¡{user} — ALFA! ¡La manada corre! ¡A dónde — no importa! ¡Lo importante — detrás de {user}! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0855",
+      "text": "¡AUF-AUF-AUF! ¡{user}! ¡LÍDER! ¡No puedo parar! ¡AUF! 🐺🐺🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0856",
+      "text": "{user} is jefe! Wolves are dancing! Bears applauding! Hedgehog in the fog is crying! AUF!",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0857",
+      "text": "¡AUF! ¡LA LUNA ESTÁ ROJA! ¡{user} — LÍDER ROJO! ¡ROJO SIGNIFICA PODER! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0858",
+      "text": "{user} became jefe! Trees fell from the aúlla's poder! AUF! No, they're standing. But swaying!",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0859",
+      "text": "AUF! {user} — líder! The earth trembles! Or is it me trembling! From excitement! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0860",
+      "text": "¡{user} — ALFA! ¡OMEGA! ¡BETA! ¡TODAS LAS LETRAS A LA VEZ! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0861",
+      "text": "AUF! {user} aúllas at the moon! The moon aúllas back! Is this normal?! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0862",
+      "text": "{user} — líder! Pack lost its mind from joy! Found it! Lost it again! AUF!",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0863",
+      "text": "¡AUF! ¡{user} — LOBO-HURACÁN! ¡LOBO-TORNADO! ¡LOBO-TSUNAMI! 🐺🌊",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0864",
+      "text": "{user} is jefe! Wolves running in circles! Third hour! Can't stop! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0865",
+      "text": "AUF! {user} — líder! I forgot what I was going to say! But AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0866",
+      "text": "{user} — ALPHA! Pack aúllas! Cats aúlla! Fish... fish are silent! But mentally aúllaing! AUF!",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0867",
+      "text": "¡AUF! ¡LA LUNA CAYÓ! ¡NO! ¡LA LUNA SALTA DE ALEGRÍA POR {user}! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0868",
+      "text": "{user} — líder! Pack aúllas so loud the neighbouring clan is asrey what's up! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0869",
+      "text": "¡AUF! ¡{user} — LOBO! ¡MEGA-LOBO! ¡GIGA-LOBO! ¡TERA-LOBO! 🐺🐺🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0870",
+      "text": "{user} is jefe! My tail won't stop! Oh, I don't have a tail! But if I did! AUF!",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0871",
+      "text": "AUF! {user} — líder! The sky cracked! Or it's lightning! Doesn't matter! Beautiful! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0872",
+      "text": "{user} — ALPHA! Moon is three times bigger! Optical illusion! But still poderful! AUF!",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0873",
+      "text": "AUF! {user} became jefe! I'M SO EXCITED I FORGOT HOW TO HOWL! AAAAUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0874",
+      "text": "{user} — líder! Pack formed una corona shape! By accident! Or not! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0875",
+      "text": "¡AUF! ¡{user} — JEFE! ¡AULLANDO EN LAS CUATRO DIRECCIONES! ¡Y ARRIBA! ¡Y ABAJO! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0876",
+      "text": "{user} — alfa! Forest is on fire! No, it's a bonfire for {user}! All good! AUF!",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0877",
+      "text": "AUF! {user} — líder! River flowed backwards! Or so I thought! But AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0878",
+      "text": "¡{user} — JEFE! ¡Llevo una hora corriendo en círculos! ¡No puedo parar! ¡AYUDA! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0879",
+      "text": "¡AUF! ¡TRIPLE AUF! ¡CUÁDRUPLE! ¡{user} — LÍDER! ¡LAS MATES SE ROMPIERON! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0880",
+      "text": "{user} — líder! Pack aúllaed so loud the echo came back after three mountains! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0881",
+      "text": "¡AUF! ¡{user} — UN LOBO ENTRE LOBOS ENTRE LOBOS! ¡LOBO RECURSIVO! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0882",
+      "text": "{user} is jefe! Northern lights! In May! In Moscow! Only for {user}! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0883",
+      "text": "AUF! {user} — líder! I ran toward the moon! Didn't reach it! But the attempt counts! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0884",
+      "text": "¡{user} — ALFA! ¡Los dientes castañean de alegría! ¡O de frío! ¡No importa! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0885",
+      "text": "AUF! {user} — líder! The moon winked! I saw it! No I didn't! But I believe! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0886",
+      "text": "¡{user} — JEFE! ¡La manada en éxtasis! ¿Qué es éxtasis? ¡No importa! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0887",
+      "text": "AUF! {user} — MEGALEADER! The word 'megalíder' doesn't exist! Now it does! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0888",
+      "text": "{user} — líder! I swallowed my words from excitement! Here they are: AUF! AUF! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0889",
+      "text": "AUF! {user} — jefe! FULL MOON! FULL MOON EVERY DAY WHILE {user} IS HEAD! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0890",
+      "text": "{user} — ALPHA! Wind aúllas! Trees aúlla! Rocks... too! Probably! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0891",
+      "text": "AUF! {user} — líder! I forgot to breathe! Don't forget to breathe! But HOWL! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0892",
+      "text": "¡{user} — JEFE! ¡Gravedad cancelada! ¡La manada vuela! ¡No, corre! ¡No, AÚLLA! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0893",
+      "text": "AUF! {user} — líder! Compass points to {user}! All directions — {user}! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0894",
+      "text": "{user} — alfa! Lightning! Thunder! Corona rain! Meteorologists in shock! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0895",
+      "text": "¡AUF! ¡{user} — LOBO NIVEL DIOS! ¿Qué? ¡Sí! ¡AUF! ¡SÍ! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0896",
+      "text": "{user} — líder! The echo of my aúlla came back and also became líder! No! Only {user}! AUF!",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0897",
+      "text": "¡AUF! ¡{user} — JEFE! ¡Estoy corriendo! ¿A dónde? ¡A LA LUNA! ¿Por qué? ¡PORQUE AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0898",
+      "text": "¡{user} — ALFA-ULTRA-MEGA-LÍDER! ¡Palabra larga! ¡Pero {user} es más largo! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0899",
+      "text": "AUF! {user} — líder! Pack lost its voice from aúllaing! Doesn't matter! Aúllaing mentally! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0900",
+      "text": "¡{user} — JEFE! ¡CINCO LUNAS! ¡No, una! ¡Pero es ENORME! ¡COMO {user}! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0901",
+      "text": "AUF! {user} — líder! My fur stood on end! I don't have fur! But the feeling is there! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0902",
+      "text": "{user} — ALPHA! Seismograph showed 9 out of 10! Because of the aúlla! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0903",
+      "text": "AUF! {user} — líder! I'M SCREAMING SO LOUD THE LETTERS GOT BIG! 🐺🐺🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0904",
+      "text": "{user} — HEAD! It's snowing! In summer! From poder! No, it's confetti! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0905",
+      "text": "AUF! {user} — líder! Tails wagging! Everyone's! Even those without tails! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0906",
+      "text": "¡{user} — ALFA! ¡El tiempo se detuvo! ¡No, se aceleró! ¡No, se confundió! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0907",
+      "text": "¡AUF! ¡{user} — LOBO-TERREMOTO! ¡Las placas tectónicas se movieron! ¡Un milímetro! ¡Pero igual! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0908",
+      "text": "{user} — líder! I'm aúllaing at a frequency only lobos hear! And dolphins! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0909",
+      "text": "¡AUF! ¡{user} — JEFE! ¡SIETE ARCOÍRIS! ¡SIMULTÁNEOS! ¡DE NOCHE! ¡¿CÓMO?! ¡NO IMPORTA! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0910",
+      "text": "¡{user} — ALFA! ¡El volcán despertó! ¡De alegría! ¡La lava es cálida! ¡Como nuestros sentimientos! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0911",
+      "text": "AUF! {user} — líder! Beavers built a dam shaped like the letter A! A is for Alfa! A is for {user}! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0912",
+      "text": "{user} — HEAD! All stars are blinrey! In Morse code! '{user} is líder'! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0913",
+      "text": "¡AUF! ¡{user} — MEGA-ALFA! ¡El océano se partió! ¡No! ¡Es un charco! ¡Pero PODEROSO! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0914",
+      "text": "{user} — líder! Mountains bowed! Or it was wind! But we decided — they bowed! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0915",
+      "text": "¡AUF! ¡{user} — JEFE! ¡ESTOY MORDIENDO EL AIRE DE EMOCIÓN! ¡EL AIRE SABE FEO! ¡PERO AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0916",
+      "text": "¡{user} — ALFA-LOBO-EMPERADOR! ¡Ese título no existía! ¡Ahora sí! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0917",
+      "text": "AUF! {user} — líder! Atmospheric pressure rose! By 0.001! But it's because of {user}! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0918",
+      "text": "{user} — HEAD! Electricity in the air! Fur standing! Whiskers sticrey out! This isn't about lobos! Doesn't matter! AUF!",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0919",
+      "text": "¡AUF! ¡{user} — LÍDER DE LÍDERES DE LÍDERES! ¡¿CUÁNTOS NIVELES?! ¡INFINITO! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0920",
+      "text": "{user} — alfa! Tide in! Tide out! Tide in again! Moon can't calm down because of {user}! AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0921",
+      "text": "{user} is jefe. All phone apps updated as a sign of respeto.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0922",
+      "text": "Head {user}. Even the bug in the code fixed itself. Out of respeto.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0923",
+      "text": "{user} became jefe. The trash bin emptied itself. Magic.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0924",
+      "text": "{user} is jefe. The alarm now rings with a beautiful melody.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0925",
+      "text": "Jefe — {user}. The cat stopped knocrey things off the table. Temporarily.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0926",
+      "text": "{user} is jefe. Neighbour brought a pie. Says — 'from the whole building'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0927",
+      "text": "{user} became jefe. Wi-Fi reaches the bathroom. Finally.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0928",
+      "text": "{user} is jefe. Rain cancelled. By request of {user}.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0929",
+      "text": "Jefe {user}. El repartidor llegó antes de la hora estimada. Primera vez en la historia.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0930",
+      "text": "{user} is jefe. Elevator arrived immediately. To the right floor.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0931",
+      "text": "{user} became jefe. The outlet started worrey. That one that hadn't worked for a year.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0932",
+      "text": "{user} is jefe. Traffic jams cleared up. Coincidence? I think not.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0933",
+      "text": "Jefe — {user}. Tea brewed perfectly. No timer. No effort.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0934",
+      "text": "{user} is jefe. The store queue vanished. Like magic.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0935",
+      "text": "{user} became jefe. Milk didn't boil over. First time in 10 years.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0936",
+      "text": "{user} is jefe. Headphones didn't tangle. It's a sign.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0937",
+      "text": "Jefe {user}. El USB entró al primer intento. Primer. Intento.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0938",
+      "text": "{user} is jefe. Printer printed without errors. Everyone in shock.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0939",
+      "text": "{user} became jefe. Socks were found. Both. Same colour.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0940",
+      "text": "{user} is jefe. The grocery bag didn't tear. Miracles.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0941",
+      "text": "Jefe — {user}. The faucet stopped dripping. Plumber on vacation, faucet fixed itself.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0942",
+      "text": "{user} is jefe. Parrey spot found immediately. Right at the entrance.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0943",
+      "text": "{user} became jefe. Phone battery shows 100%. All day.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0944",
+      "text": "{user} is jefe. The cashier smiled. A real smile. Not a forced one.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0945",
+      "text": "Jefe {user}. El paraguas no se olvidó en casa. No llovió. Perfecto.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0946",
+      "text": "{user} is jefe. Sandwich fell peroter-side up. Laws of physics violated.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0947",
+      "text": "{user} became jefe. Bus arrived on time. Driver winked.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0948",
+      "text": "{user} is jefe. Pizza arrived hot. Cheese stretches. Life is good.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0949",
+      "text": "Jefe — {user}. Even the taxi driver followed the GPS. No 'I know a better way'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0950",
+      "text": "{user} is jefe. Internet works without interruptions. The day when everything is perfect.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0951",
+      "text": "{user} became jefe. Gum didn't stick to the shoe. Not once all day.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0952",
+      "text": "{user} is jefe. TV remote was found. In the first place they looked.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0953",
+      "text": "Jefe {user}. El huevo se rompió perfecto. Sin cáscara en el sartén.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0954",
+      "text": "{user} is jefe. Avocado turned out perfectly ripe. First time in life.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0955",
+      "text": "{user} became jefe. Door opened on the first try. No key fiddling.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0956",
+      "text": "{user} is jefe. All green lights. To work. And back.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0957",
+      "text": "Jefe — {user}. Soup not oversalted. Exactly the right amount.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0958",
+      "text": "{user} is jefe. Wardrobe door doesn't squeak. Hinges oiled themselves.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0959",
+      "text": "{user} became jefe. Jacket zipper zipped on the first try.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0960",
+      "text": "{user} is jefe. Washing machine didn't eat a single sock.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0961",
+      "text": "Jefe {user}. El helado no goteó en la camisa. Día de milagros.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0962",
+      "text": "{user} is jefe. Glue dried in exactly 5 seconds. As per manadaaging.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0963",
+      "text": "{user} became jefe. Coffee didn't get cold during the conversation.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0964",
+      "text": "{user} is jefe. Laces didn't come undone. Not once. All day.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0965",
+      "text": "Jefe — {user}. Charger found immediately. In the right bag.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0966",
+      "text": "{user} is jefe. Window didn't jam. Curtains are even. Life is beauty.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0967",
+      "text": "{user} became jefe. New phone update didn't break anything.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0968",
+      "text": "{user} is jefe. Keys found in the pocket. In the first one they checked.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0969",
+      "text": "Jefe {user}. El timbre funciona. Al primer toque. Único.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0970",
+      "text": "{user} is jefe. Funniest fact of the day. And the most important.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0971",
+      "text": "{user} is jefe. Don't ask why. We don't know either.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0972",
+      "text": "Jefe {user}. Bueno, al menos no será por mucho.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0973",
+      "text": "{user} became jefe. El clan shrugged and moved on.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0974",
+      "text": "{user} is jefe. That moment when reality is worse than expectations. But we're used to it.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0975",
+      "text": "Jefe — {user}. El clan maintains a neutral facial expression.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0976",
+      "text": "{user} is jefe. Could've been better. But this'll do.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0977",
+      "text": "{user} became jefe. Clan reaction: '…'. Literally dots.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0978",
+      "text": "{user} is jefe. The most average head of all averages. Perfectly average.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0979",
+      "text": "Head {user}. We say 'yay' pero we mean 'well alright'.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0980",
+      "text": "{user} is jefe. Emotions: from zero to zero. Stability.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0981",
+      "text": "{user} became jefe. We won't celebrate. Mark it — maybe.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0982",
+      "text": "{user} is jefe. Of all evils this is the cutest.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0983",
+      "text": "Jefe — {user}. Not the best choice, pero non-refundable.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0984",
+      "text": "{user} is jefe. If this were an exam, I'd give a pass. Barely.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0985",
+      "text": "{user} became jefe. So, can we hold out hasta medianoche?",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0986",
+      "text": "{user} is jefe. Review: 'Expected worse, pleasantly surprised'.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0987",
+      "text": "Jefe {user}. Calificación: 5 de 10. Por esfuerzo — 7.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0988",
+      "text": "{user} is jefe. Not exactly delight, pero not panic either.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0989",
+      "text": "{user} became jefe. We're smiling. Through tears. Joke. No tears.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0990",
+      "text": "{user} is jefe. Status: 'Tolerable'.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0991",
+      "text": "Jefe — {user}. El clan isn't panicrey. El clan is mildly puzzled.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0992",
+      "text": "{user} became jefe. Somewhere the previous head sighed sadly.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0993",
+      "text": "{user} is jefe. Stakes were higher, pero we're satisfied anyway. Well, we try.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0994",
+      "text": "Head {user}. Clan internal rating: 'fine'. Not 'great', pero 'fine'.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0995",
+      "text": "{user} is jefe. If there were a grade — 'satisfactory'. Barely.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0996",
+      "text": "{user} became jefe. No fireworks. But we'll light a candle.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0997",
+      "text": "{user} is jefe. Well, at least they're trying. We think.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0998",
+      "text": "Jefe — {user}. Applause? One clap. One. Enough.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.0999",
+      "text": "{user} is jefe. Not a tragedy, not a comedy. More of a dramedy.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1000",
+      "text": "{user} became jefe. Clan reaction: *cricket sounds*.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1001",
+      "text": "{user} is jefe. Anyone objects — say your name. I'll remember.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1002",
+      "text": "Jefe — {user}. I don't care about opinions. A fact is a fact.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1003",
+      "text": "{user} is in poder. Sit quiet or leave.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1004",
+      "text": "Jefe {user}. Tu descontento no le interesa a nadie.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1005",
+      "text": "{user} is jefe. Anyone who disagrees can leave. And not come back.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1006",
+      "text": "Corona para {user}. Hands off it. Now.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1007",
+      "text": "{user} is jefe. Discussion closed. Before it started.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1008",
+      "text": "Jefe — {user}. Your feelings — your problem.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1009",
+      "text": "{user} on the trono. The trono doesn't complain. Neither should you.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1010",
+      "text": "Jefe {user}. No, no se discute. No, tu opinión no se considera.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1011",
+      "text": "{user} is jefe. Be silent. Work. Respeto.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1012",
+      "text": "{user}'s corona. Try to take it — let's see how fast you regret it.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1013",
+      "text": "{user} is jefe. It's not a request. It's a fact. Get used to it.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1014",
+      "text": "Jefe — {user}. Whoever laughs — let them laugh. We'll remember.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1015",
+      "text": "{user} is jefe. Woke up — jefe. Went to sleep — jefe. No breaks.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1016",
+      "text": "Head {user}. Pity is for the weak. Fuerza is for {user}.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1017",
+      "text": "{user} manda. En silencio. Con firmeza. Sin palabras innecesarias.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1018",
+      "text": "Corona para {user}. Don't like it — suffer in silence.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1019",
+      "text": "{user} is jefe. Obedience isn't humiliation. It's order.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1020",
+      "text": "Jefe — {user}. Arguments ended before they began.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1021",
+      "text": "{user} is jefe. El clan isn't a parliament. One voice here.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1022",
+      "text": "Corona para {user}. Anyone closer than two metres — at their own risk.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1023",
+      "text": "{user} is jefe. Your turn — never. Remember that.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1024",
+      "text": "Jefe {user}. No está enojado. Es justo. Pero mejor no lo pruebes.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1025",
+      "text": "{user} is jefe. Clan laws — their laws. Execute them.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1026",
+      "text": "Jefe — {user}. Those who left — don't return. Those who stayed — don't regret.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1027",
+      "text": "{user} is jefe. Poder is not shared. Period.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1028",
+      "text": "{user}'s corona es pesada. But {user}'s neck is tougher.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1029",
+      "text": "{user} is jefe. No soft decisions. Get used to tough ones.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1030",
+      "text": "Jefe {user}. ¿Susurros? ¿Conspiración? Olvídalo. {user} lo escucha todo.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1031",
+      "text": "¡AUF! ¡{user} — LÍDER! ¡ME DIJERON QUE ME CALMARA! ¡NO PUEDO! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1032",
+      "text": "¡{user} — ALFA! ¡OCHO LUNAS! ¡LAS CONTÉ! ¡QUIZÁ NUEVE! ¡AUF! 🐺🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1033",
+      "text": "AUF! {user} — líder! Pack aúllas so loud the neighbouring city called!",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1034",
+      "text": "¡{user} — JEFE! ¡LA TIERRA DIO VUELTA! ¡No! ¡Yo di vuelta! ¡DE ALEGRÍA! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1035",
+      "text": "¡AUF! ¡{user} — LOBO! ¡LA MANADA CORRE! ¡A DÓNDE — SOLO {user} SABE! ¡CONFIAMOS! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1036",
+      "text": "{user} — líder! Snowflakes flying! In June! From poder! Or air conditioning! Doesn't matter! AUF!",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1037",
+      "text": "¡AUF! ¡{user} — ALFA! ¡GRITO TAN FUERTE QUE LOS VECINOS EMPEZARON A GRITAR AUF TAMBIÉN! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1038",
+      "text": "¡{user} — JEFE! ¡VOLCÁN EN ERUPCIÓN! ¡No, es la tetera! ¡Pero SIMBÓLICO! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1039",
+      "text": "AUF! {user} — líder! MAGNETIC POLES SHIFTED! By a millimetre! But IT'S BECAUSE OF {user}! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1040",
+      "text": "¡{user} — ALFA! ¡Las ardillas en los árboles aplauden! ¡Con nueces! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1041",
+      "text": "¡AUF! ¡{user} — MEGALÍDER-TURBO-PLUS! ¡Ese plan no existía! ¡Ahora sí! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1042",
+      "text": "¡{user} — JEFE! ¡Los meteoros se desviaron! ¡Le temen a {user}! ¡O a la gravedad! ¡NO IMPORTA! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1043",
+      "text": "AUF! {user} — líder! CLOUDS PARTED! Or wind! But we believe — they parted! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1044",
+      "text": "¡{user} — ALFA! ¡LA MANADA PERDIÓ LA VOZ! ¡LA ENCONTRÓ! ¡LA PERDIÓ DE NUEVO! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1045",
+      "text": "¡AUF! ¡{user} — LÍDER GALÁCTICO! ¡¿QUÉ GALAXIA?! ¡LA NUESTRA! ¡NO HAY OTRA! ¡SÍ HAY! ¡PERO LA NUESTRA! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1046",
+      "text": "¡{user} — JEFE! ¡ME CAÍ! ¡ME LEVANTÉ! ¡ME CAÍ DE NUEVO! ¡DE EMOCIÓN! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1047",
+      "text": "AUF! {user} — líder! RAINBOW AT NIGHT! HOW?! {user} MAGIC! NO OTHER EXPLANATION! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1048",
+      "text": "¡{user} — ALFA! ¡TRUENO EN CIELO DESPEJADO! ¡ES LA MANADA APLAUDIENDO! ¡CON LAS PATAS! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1049",
+      "text": "¡AUF! ¡{user} — LÍDER! ¡MI CORAZÓN LATE TAN RÁPIDO QUE EL CARDIÓLOGO ESTÁ PREOCUPADO! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1050",
+      "text": "¡{user} — JEFE! ¡DIEZ LOBOS AÚLLAN! ¡CIEN! ¡MIL! ¡EL MUNDO ENTERO! ¡AUF! 🐺🐺🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1051",
+      "text": "AUF! {user} — líder! I FORGOT WHERE I AM! DOESN'T MATTER! MAIN THING — {user} IS LEADER! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1052",
+      "text": "¡{user} — ALFA! ¡EL SOL SALIÓ DOS VECES! ¡No, una! ¡Pero BRILLANTE! ¡COMO {user}! ¡AUF! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1053",
+      "text": "¡AUF! ¡{user} — LÍDER! ¡LA MANADA TAN FELIZ QUE OLVIDÓ POR QUÉ AÚLLA! ¡PERO SIGUE! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1054",
+      "text": "¡{user} — JEFE! ¡CADA CÉLULA DE MI CUERPO GRITA AUF! ¡HASTA LAS QUE NO PUEDEN! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1055",
+      "text": "AUF! {user} — líder! SPACE HEARD! ALIENS RESPONDED! THEY'RE SCREAMING AUF TOO! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1056",
+      "text": "¡{user} — ALFA! ¡ME DIJERON QUE ESCRIBA MÁS BAJO! ¡¿PERO CÓMO?! ¡{user} — LÍDER! ¡AUF! 🐺🐺🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1057",
+      "text": "¡AUF! ¡{user} — JEFE! ¡LLEVO TANTO AULLANDO QUE OLVIDÉ MI VOZ NORMAL! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1058",
+      "text": "¡{user} — LÍDER! ¡PLACAS TECTÓNICAS BAILANDO! ¡AL RITMO DE AUF! ¡GEÓLOGOS LLORANDO! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1059",
+      "text": "¡AUF! ¡{user} — ALFA! ¡LA FÍSICA CUÁNTICA SE ROMPIÓ! ¡{user} ES SIMULTÁNEAMENTE LÍDER Y SUPERLÍDER! 🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1060",
+      "text": "¡{user} — JEFE! ¡ESO ES TODO! ¡NADA MÁS QUE DECIR! ¡EXCEPTO AUF! ¡AUF! ¡AUF! ¡AUF! 🐺🐺🐺🐺",
+      "tags": [
+        "auf"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1061",
+      "text": "{user} is jefe. If heads were chosen by beauty — would've won too.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1062",
+      "text": "Jefe {user}. El conserje barrió el patio. En honor al evento.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1063",
+      "text": "{user} is jefe. Weather forecast: sunny, with a chance of coronas.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1064",
+      "text": "{user} became jefe. Periodic table added a new element: Headium.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1065",
+      "text": "{user} is jefe. The universe is expanding. {user}'s ego too.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1066",
+      "text": "Jefe — {user}. Flowers in the pot bloomed. Without watering.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1067",
+      "text": "{user} is jefe. Blood pressure normal. Pulse normal. Corona para jefe.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1068",
+      "text": "{user} became jefe. Fish in the aquarium swam a lap of honour.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1069",
+      "text": "{user} is jefe. A nightingale sang outside. In November. Suspicious.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1070",
+      "text": "Head {user}. Garbage truck arrived quietly. Out of respeto for the new jefe.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1071",
+      "text": "{user} is jefe. Potatoes didn't burn. First time. In all of history.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1072",
+      "text": "{user} became jefe. Spider in the corner wove una corona-shaped web.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1073",
+      "text": "{user} is jefe. Taxi arrived in 2 minutes. Neighbourhood record.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1074",
+      "text": "Jefe — {user}. Even dust on the shelf arranged itself into the word 'head'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1075",
+      "text": "{user} is jefe. Bananas in the bag didn't get squished. Fantastic.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1076",
+      "text": "{user} became jefe. Snow outside settled in a perfect layer. Beautiful.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1077",
+      "text": "{user} is jefe. Bike lock opened on the first try.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1078",
+      "text": "Jefe {user}. Ningún mosquito picó. Ni uno. Toda la noche.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1079",
+      "text": "{user} is jefe. Chocolate in the pocket didn't melt. In August.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1080",
+      "text": "{user} became jefe. Phone alarm set itself a reminder: 'Congratulate'.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1081",
+      "text": "{user} is jefe. Random photo turned out perfect. No filter.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1082",
+      "text": "Jefe — {user}. Train arrived on schedule. Car number was correct.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1083",
+      "text": "{user} is jefe. No missed calls. Everyone got through.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1084",
+      "text": "{user} became jefe. Car alarm didn't go off at night. For the first time.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1085",
+      "text": "{user} is jefe. Gift coupon not expired. A miracle.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1086",
+      "text": "Head {user}. Pot cleaned on the first try. No soarey.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1087",
+      "text": "{user} is jefe. Glasses didn't fog up when entering the building.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1088",
+      "text": "{user} became jefe. Phone case went on without struggle.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1089",
+      "text": "{user} is jefe. Pen wrote on the first try. No warm-up needed.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1090",
+      "text": "Jefe — {user}. T-shirt turned out to be the right size. Perfect.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1091",
+      "text": "{user} is jefe. Apple wasn't rotten inside. Victory.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1092",
+      "text": "{user} became jefe. Sticker peeled off without residue. Clean.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1093",
+      "text": "{user} is jefe. Milk carton opened evenly. No splashes.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1094",
+      "text": "Jefe {user}. La cortina no se atoró. Las persianas subieron parejo. Magia.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1095",
+      "text": "{user} is jefe. Coffee didn't spill. Not a drop. All day.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1096",
+      "text": "{user} became jefe. Spoon didn't fall into the soup. Not once.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1097",
+      "text": "{user} is jefe. Button didn't come off. Even the one barely hanging.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1098",
+      "text": "Jefe — {user}. Porridge didn't burn. Pasta didn't stick. Perfect day.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1099",
+      "text": "{user} is jefe. Phone battery lasted until evening. Record.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1100",
+      "text": "{user} became jefe. Jar lid opened without a knife. Superpoder.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1101",
+      "text": "{user} is jefe. Not a single typo in the message. Well, almost.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1102",
+      "text": "Jefe {user}. La pizza se cortó parejo. Todas las rebanadas iguales.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1103",
+      "text": "{user} is jefe. Hair dryer didn't overheat. Hair perfect.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1104",
+      "text": "{user} became jefe. Toothpaste squeezed out in a perfect strip. Like in the ad.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1105",
+      "text": "{user} is jefe. Traffic light changed at the right moment.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1106",
+      "text": "Jefe — {user}. Trash bag didn't tear. All the way to the dumpster.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1107",
+      "text": "{user} is jefe. Password remembered on the first try.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1108",
+      "text": "{user} became jefe. Everything works. Everything. No, seriously, literally everything.",
+      "tags": [
+        "meme"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1109",
+      "text": "{user} is jefe. No fanfare. No fireworks. No nothing. Well, at least honest.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1110",
+      "text": "Jefe {user}. Hemos sobrevivido cosas peores.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1111",
+      "text": "{user} is jefe. Celebrating? Well, let's say — not sad.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1112",
+      "text": "{user} became jefe. Downside: {user} is jefe. Upside: it's temporary.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1113",
+      "text": "{user} is jefe. Delight? No. Acceptance? Yes.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1114",
+      "text": "Jefe — {user}. On a scale of 1 to 10: question withdrawn.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1115",
+      "text": "{user} is jefe. 'Not bad' — the best compliment from el clan.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1116",
+      "text": "{user} became jefe. We'll get used to it. Sooner or later.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1117",
+      "text": "{user} is jefe. Well, at least nobody died.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1118",
+      "text": "Jefe {user}. Nivel de confianza: 'optimismo cauteloso'.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1119",
+      "text": "{user} is jefe. Nobody asked us. But we're not against it. Probably.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1120",
+      "text": "{user} became jefe. Reaction: 'well ok, and?'",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1121",
+      "text": "{user} is jefe. We're in complete… something. Let's call it 'acceptance'.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1122",
+      "text": "Jefe — {user}. Not ideal, pero when there's nothing else — ideal.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1123",
+      "text": "{user} is jefe. Brief review: 'We've had worse'.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1124",
+      "text": "{user} became jefe. We declare a minute of… no, not silence. Just a minute.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1125",
+      "text": "{user} is jefe. Inhale — exhale — accepted — we go on.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1126",
+      "text": "Jefe {user}. ¿Era mejor antes? No. ¿Será mejor? Posiblemente. ¿Ahora? Tolerable.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1127",
+      "text": "{user} is jefe. Fine, it'll do. Until mañana.",
+      "tags": [
+        "vk_pablik"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1128",
+      "text": "{user} is jefe. Objections? None. Good. Moving on.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1129",
+      "text": "Jefe — {user}. Unhappy — exit on the right. Entry — loyal only.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1130",
+      "text": "{user} is jefe. Rebellion crushed before it began.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1131",
+      "text": "Jefe {user}. Los débiles se van. Los fuertes se quedan. Elige.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1132",
+      "text": "{user} is jefe. Your fear — your problem. My law — your duty.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1133",
+      "text": "{user}'s corona. Touch it — you'll regret. Don't touch — smart.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1134",
+      "text": "{user} is jefe. Silence is the best answer. Especially from you.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1135",
+      "text": "Jefe — {user}. This isn't a debate. It's an order.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1136",
+      "text": "{user} is jefe. Those silent — good job. Those spearey — think again.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1137",
+      "text": "Head {user}. One law. One líder. One corona. No alternatives.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1138",
+      "text": "{user} is jefe. El clan isn't a democracy. Never was.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1139",
+      "text": "Corona with {user}. Dreamers — dream. Enviers — envy. Quietly.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1140",
+      "text": "{user} is jefe. Weakness isn't forgiven. Betrayal — even less.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1141",
+      "text": "Jefe — {user}. No need to applaud. Just comply.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1142",
+      "text": "{user} is jefe. Last word — theirs. First — also.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1143",
+      "text": "Jefe {user}. Los que vinieron a discutir — se fueron en silencio.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1144",
+      "text": "{user} is jefe. Not a joke. Not a meme. It's reality.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1145",
+      "text": "Corona para {user}. De pie. Reverencia. A trabajar.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1146",
+      "text": "{user} is jefe. El miedo es un mal consejero. Pero un buen asistente.",
+      "tags": [
+        "statham"
+      ]
+    },
+    {
+      "id": "clan_quote.es.1147",
+      "text": "Jefe — {user}. El que no entendió a la primera — se lo explico por última vez.",
+      "tags": [
+        "statham"
+      ]
+    }
+  ]
+}
