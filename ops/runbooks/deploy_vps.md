@@ -261,3 +261,146 @@ docker compose -f ops/docker/docker-compose.yml -f ops/docker/docker-compose.pro
 - [ ] `audit_log` пишется (есть записи `PLAYER_REGISTERED`, `FOREST_RUN_STARTED`, `FOREST_RUN_FINISHED`).
 
 После прохождения чек-листа — MVP считается задеплоенным. Открываем альфа-тест по приглашениям.
+
+---
+
+## Деплой admin web panel (Sprint 4.5-H)
+
+> Веб-админка (`pipirik-admin-web`) деплоится **отдельно** от бота.
+> Она привязывается к `127.0.0.1` (или internal-only сети) и доступна
+> только через SSH-tunnel, VPN или reverse-proxy с IP-allowlist.
+
+### Вариант 1: SSH-tunnel (минимальный, рекомендуется для ≤ 3 админов)
+
+```bash
+# На VPS — запуск как systemd-сервис (описание ниже).
+# На рабочей машине — SSH-туннель:
+ssh -L 8080:127.0.0.1:8080 user@vps-host
+# Админка доступна в браузере по http://localhost:8080
+```
+
+### Вариант 2: VPN (WireGuard / OpenVPN)
+
+Бот и админка находятся в одной VPN-сети. `ADMIN_WEB_ALLOWED_IPS`
+настраивается на CIDR диапазон VPN (например `10.8.0.0/24` для
+WireGuard). Пример `.env`:
+
+```env
+ADMIN_WEB_HOST=0.0.0.0
+ADMIN_WEB_ALLOWED_IPS=10.8.0.0/24
+ADMIN_WEB_TRUST_PROXY=false
+```
+
+### Вариант 3: Reverse-proxy (nginx) с отдельным поддоменом
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name admin.pipirik.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/admin.pipirik.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/admin.pipirik.example.com/privkey.pem;
+
+    # Allow only VPN / office IPs
+    allow 10.8.0.0/24;   # WireGuard VPN
+    allow 203.0.113.0/24; # Office
+    deny all;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Если используется reverse-proxy, включите:
+```env
+ADMIN_WEB_TRUST_PROXY=true
+ADMIN_WEB_TRUSTED_PROXY_CIDRS=127.0.0.1/32
+ADMIN_WEB_SUBDOMAIN=admin.pipirik.example.com
+ADMIN_WEB_CORS_ALLOWED_ORIGINS=https://admin.pipirik.example.com
+```
+
+### docker-compose (admin-web)
+
+```yaml
+# ops/docker/docker-compose.admin.yml
+# Запуск: docker compose -f ops/docker/docker-compose.admin.yml up -d
+services:
+  admin-web:
+    build:
+      context: ../..
+      dockerfile: ops/docker/Dockerfile
+    image: pipirik-wars:dev
+    container_name: pipirik-admin-web
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pipirik}:${POSTGRES_PASSWORD:-pipirik_dev_password}@postgres:5432/${POSTGRES_DB:-pipirik}
+      ADMIN_WEB_SECRET_KEY: ${ADMIN_WEB_SECRET_KEY:?must be set}
+      ADMIN_WEB_BOT_USERNAME: ${ADMIN_WEB_BOT_USERNAME:?must be set}
+      ADMIN_WEB_BOT_TOKEN: ${BOT_TOKEN:?must be set}
+      ADMIN_WEB_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-pipirik}:${POSTGRES_PASSWORD:-pipirik_dev_password}@postgres:5432/${POSTGRES_DB:-pipirik}
+      ADMIN_WEB_ALLOWED_IPS: ${ADMIN_WEB_ALLOWED_IPS:-127.0.0.0/8}
+      ADMIN_WEB_TRUST_PROXY: ${ADMIN_WEB_TRUST_PROXY:-false}
+      ADMIN_WEB_HOST: "0.0.0.0"
+      ADMIN_WEB_PORT: "8080"
+    ports:
+      - "127.0.0.1:8080:8080"  # bind to localhost only!
+    entrypoint: ["tini", "--"]
+    command: ["pipirik-admin-web"]
+    restart: unless-stopped
+```
+
+### systemd unit (без Docker)
+
+```ini
+# /etc/systemd/system/pipirik-admin-web.service
+[Unit]
+Description=Pipirik Wars Admin Web Panel
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=pipirik
+WorkingDirectory=/opt/pipirik-wars
+EnvironmentFile=/opt/pipirik-wars/.env.admin
+ExecStart=/opt/pipirik-wars/.venv/bin/pipirik-admin-web
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Переменные окружения (`.env.admin`)
+
+| Переменная | Описание | По умолчанию |
+|---|---|---|
+| `ADMIN_WEB_SECRET_KEY` | Ключ signed-cookie (≥32 символов) | **обязательно** |
+| `ADMIN_WEB_BOT_USERNAME` | Username бота для Telegram Login Widget | **обязательно** |
+| `ADMIN_WEB_BOT_TOKEN` | Токен бота для HMAC-верификации | **обязательно** |
+| `ADMIN_WEB_DATABASE_URL` | Async SQLAlchemy URL | `postgresql+asyncpg://...` |
+| `ADMIN_WEB_HOST` | Bind address | `127.0.0.1` |
+| `ADMIN_WEB_PORT` | Bind port | `8080` |
+| `ADMIN_WEB_ALLOWED_IPS` | CIDR allowlist (CSV); `*` = allow-all; пустой = deny-all | `""` (deny-all) |
+| `ADMIN_WEB_TRUST_PROXY` | Доверять X-Forwarded-For | `false` |
+| `ADMIN_WEB_TRUSTED_PROXY_CIDRS` | CIDR trusted-прокси для XFF-chain | `""` |
+| `ADMIN_WEB_RATE_LIMIT_MAX_REQUESTS` | Лимит auth-запросов/окно/IP | `10` |
+| `ADMIN_WEB_RATE_LIMIT_WINDOW_SECONDS` | Окно rate-limit (сек) | `60` |
+| `ADMIN_WEB_SUBDOMAIN` | Поддомен для деплоя | `admin.pipirik.example.com` |
+| `ADMIN_WEB_CORS_ALLOWED_ORIGINS` | CORS origins (CSV) | `""` (same-origin) |
+
+### Чек-лист после деплоя admin-web
+
+- [ ] `curl -s http://127.0.0.1:8080/healthz` — 200 OK.
+- [ ] С разрешённого IP — логин-страница отдаётся (200).
+- [ ] С неразрешённого IP — 403 Forbidden.
+- [ ] Rate-limiting: 11+ POST на `/auth/telegram/callback` за минуту — 429.
+- [ ] SSH-tunnel: `ssh -L 8080:127.0.0.1:8080 user@vps` → браузер → `http://localhost:8080`.
+- [ ] TOTP-авторизация работает через браузер.
+- [ ] audit_log содержит записи с `source='web'`.
