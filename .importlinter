@@ -31,7 +31,7 @@ include_external_packages = True
 name = layered_architecture
 type = layers
 layers =
-    pipirik_wars.bot | pipirik_wars.admin
+    pipirik_wars.bot | pipirik_wars.admin | pipirik_wars.admin_web
     pipirik_wars.infrastructure
     pipirik_wars.application
     pipirik_wars.domain
@@ -46,6 +46,7 @@ forbidden_modules =
     pipirik_wars.infrastructure
     pipirik_wars.bot
     pipirik_wars.admin
+    pipirik_wars.admin_web
     aiogram
     sqlalchemy
     asyncpg
@@ -61,6 +62,7 @@ forbidden_modules =
     pipirik_wars.infrastructure
     pipirik_wars.bot
     pipirik_wars.admin
+    pipirik_wars.admin_web
     aiogram
     sqlalchemy
     asyncpg
@@ -90,4 +92,26 @@ source_modules =
     pipirik_wars.domain.balance
 forbidden_modules =
     pipirik_wars.domain.inventory
+ignore_imports =
+
+# -----------------------------------------------------------------------------
+# Sprint 4.5-A: bot and admin_web are isolated entry points.
+# -----------------------------------------------------------------------------
+
+[importlinter:contract:bot-not-importing-admin-web]
+name = bot_must_not_import_admin_web
+type = forbidden
+source_modules =
+    pipirik_wars.bot
+forbidden_modules =
+    pipirik_wars.admin_web
+ignore_imports =
+
+[importlinter:contract:admin-web-not-importing-bot]
+name = admin_web_must_not_import_bot
+type = forbidden
+source_modules =
+    pipirik_wars.admin_web
+forbidden_modules =
+    pipirik_wars.bot
 ignore_imports =

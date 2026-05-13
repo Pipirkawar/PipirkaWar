@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}TOTP Setup — Pipirik Wars Admin{% endblock %}
+
+{% block content %}
+<div class="center-card">
+    <h1>TOTP Setup</h1>
+
+    {% if bootstrap_not_configured %}
+    <p class="error">Bootstrap password is not configured. Contact super-admin via bot
+       (<code>/admin_setup_totp</code>) to set up 2FA.</p>
+    {% elif setup_complete is defined and setup_complete %}
+    <h2>Scan this QR code</h2>
+    <img src="{{ qr_data_uri }}" alt="TOTP QR Code" width="200" height="200">
+    <p>Or enter manually: <code>{{ secret }}</code></p>
+    <p>After scanning, <a href="/totp">verify your code</a>.</p>
+    {% else %}
+    {% if error is defined and error %}
+    <p class="error">{{ error }}</p>
+    {% endif %}
+    <form method="POST" action="/totp/setup">
+        <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+        <label for="bootstrap_password">Bootstrap Password:</label>
+        <input type="password" id="bootstrap_password" name="bootstrap_password" required>
+        <button type="submit">Setup TOTP</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}
