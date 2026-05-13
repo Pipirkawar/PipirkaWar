@@ -23,6 +23,68 @@
 
 ---
 
+## 2026-05-13 — Спринт 4.1-L «Grafana-дашборд для Prometheus-метрик Redis-операций»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** infra + observability
+**Связано:** ПД §7 «Фаза 4 — Монетизация и масштаб», задача 4.1.15 «Метрики и дашборд (Prometheus + Grafana)» — закрывает **визуализационную** часть (Grafana-дашборд + локальный Prometheus-стек) поверх метрик, инструментированных в 4.1-J. `current_tasks.md` чек-лист 4.1-L (L.0–L.6). Базируется на `main = 1b8f0be` (merge PR #139 «Спринт 4.1-K i18n»). **Двенадцатый PR Спринта 4.1.**
+
+Что сделано:
+
+- **L.0 — Snapshot pivot + sticky `AGENT_HANDOFF.md`.** Зафиксирован baseline `make ci` на `main = 1b8f0be`: **7055 passed + 2 skipped + 95.45 % cov, 529.77 с**. Декомпозиция L.0–L.6 расписана в HANDOFF (контекст передачи, скоуп, артефакты-зависимости, ключевые решения, команды).
+- **L.1 — Grafana dashboard JSON** (`monitoring/grafana/dashboards/redis-metrics.json`). 4 ряда × 7 data-панелей (11 всего с row-разделителями), `schemaVersion: 39`, `uid: pipirik-redis-ops`, `title: Pipirik Redis Operations`, `refresh: 30s`, `time: now-30m`:
+  - **Row 1 Overview** — `stat` «Redis RPS by backend» (`sum by (backend) (rate(pipirik_redis_op_total[1m]))`) + `stat` «Error rate % (5m)» (`100 * error-rate / clamp_min(total-rate, 0.001)`).
+  - **Row 2 Latency** — `timeseries` «p50/p95/p99 by backend» (3 query через `histogram_quantile()` поверх `_bucket` за окно 5 мин) + `heatmap` «Latency distribution» (тепловая карта `_bucket`-метрики, format=heatmap).
+  - **Row 3 Throughput** — `timeseries` «RPS by backend × op (stacked)» — 10 backend×op-серий стек-плотом, окно 1 мин.
+  - **Row 4 Errors** — `timeseries` «Error rate % by backend (5m)» с порогами 0.5/1 % + `table` «Top error ops (last 5m)» через `topk(5, sum by (backend, op) (increase(...{outcome="error"}[5m])))`.
+  - **Templating:** `${DS_PROMETHEUS}` (datasource-picker) + `$backend` (multi-select `label_values(...)`).
+- **L.2 — Docker-compose stack** (`monitoring/docker-compose.yml` + `monitoring/prometheus/prometheus.yml` + `monitoring/grafana/provisioning/{datasources,dashboards}/*.yml`):
+  - `prom/prometheus:v2.55.0` — порт 9090, scrape-interval 15s, TSDB-retention 15d, target `host.docker.internal:9100` (Linux — через `extra_hosts: host-gateway`).
+  - `grafana/grafana-oss:11.4.0` — порт 3000, defaults admin/admin для локалки, signup/anonymous отключены, телеметрия выключена, mounts `provisioning/` + `dashboards/`.
+  - Auto-provisioning: datasource `Prometheus` (UID `prometheus`, URL `http://prometheus:9090`, isDefault) + dashboards-provider (folder «Pipirik Wars», hot-reload каждые 10с).
+  - Self-monitoring job в Prometheus (target `localhost:9090` для траблшутинга самого скрейпинга).
+- **L.3 — Документация** (`monitoring/README.md` + observability-секция в root `README.md`):
+  - Quick start (3 команды) + архитектурная диаграмма host → prometheus → grafana.
+  - Структура каталога `monitoring/`.
+  - Подробное описание каждой панели с PromQL-формулами и порогами.
+  - Метрик-референс: таблица с типом, лейблами, описанием; buckets histogram-а; допустимые значения labels (3 backend-а × ops + 2 outcome).
+  - 4 рекомендуемых alert rule (high error rate, high latency p99, bot unreachable, sudden RPS drop) текстом — для будущей AlertManager-интеграции.
+  - Траблшутинг: пустой дашборд, datasource not found, бот не экспортирует метрики.
+  - Из root README — новая секция «📊 Observability (Prometheus + Grafana)» между «Локализация» и «Политика разработки».
+- **L.4 — Smoke-тесты dashboard-валидности** (`tests/integration/monitoring/test_grafana_dashboard.py`, 9 тестов):
+  - `test_dashboard_path_exists` / `test_dashboard_json_parses_as_valid_json` / `test_dashboard_has_required_top_level_fields` (schemaVersion ≥ 30, version, title, uid, panels, templating, time, tags).
+  - `test_each_data_panel_has_promql_targets` — каждая не-row-панель имеет хотя бы один target с непустым `expr`.
+  - `test_referenced_metric_names_exist_in_source` — все `pipirik_*`-имена в PromQL-выражениях нормализуются (`_bucket`/`_count`/`_sum`-суффиксы снимаются) и сверяются с метриками в `redis_metrics.py`; проверяется и обратное (нет dead metrics).
+  - `test_metric_labels_match_source` — `labelnames=(...)`-кортежи в `Counter` и `Histogram` парсятся regex-ом, должны равняться `{backend, op, outcome}` и `{backend, op}` соответственно.
+  - `test_backend_values_match_repository_constants` — `_BACKEND`-константы в трёх Redis-репозиториях равны `{activity_lock, lobby, dau}`.
+  - `test_template_variables_declared` — `DS_PROMETHEUS` и `backend` присутствуют, тип `backend` — `query` с `label_values(...)`-формулой.
+  - `test_dashboard_uid_and_title` — `uid` и `title` стабильны (для импорта/линкования).
+- **L.5 — Doc-sync.** Эта запись в `docs/history.md` + чек-лист `[x]` в `docs/current_tasks.md` для L.0–L.5.
+- **L.6 — PR + CI.** Отдельный коммит `git rm AGENT_HANDOFF.md` + локальный `make ci` зелёный + PR на main + CI прошёл.
+
+Результат / артефакты:
+
+- `monitoring/docker-compose.yml` (75 строк) + `monitoring/prometheus/prometheus.yml` (35 строк).
+- `monitoring/grafana/dashboards/redis-metrics.json` (~450 строк JSON).
+- `monitoring/grafana/provisioning/datasources/prometheus.yml` (20 строк).
+- `monitoring/grafana/provisioning/dashboards/dashboards.yml` (22 строки).
+- `monitoring/README.md` (~180 строк).
+- `tests/integration/monitoring/test_grafana_dashboard.py` (305 строк, 9 тестов).
+- `tests/integration/monitoring/__init__.py` (пустой пакет-маркер).
+- Изменения в `README.md` (новая секция «Observability»), `docs/history.md` (эта запись), `docs/current_tasks.md` (L.0–L.5 чек-лист `[x]`).
+- Baseline CI после 4.1-L: **7064 passed + 2 skipped + ~95.4 % cov** (+9 новых тестов).
+
+Заметки / решения:
+
+- **Подход к dashboard JSON — ручной, не grafanalib-Python-DSL.** Дашборд один-на-всю-жизнь, Python-бутстрап неоправдан; `grafanalib` был бы лишней рантайм-зависимостью; ручной JSON проще в review для operator-а, который импортирует в свою Grafana без поднятия Python-стека.
+- **Datasource UID — placeholder `${DS_PROMETHEUS}`** в templating-секции (тип `datasource`). При импорте в чужую Grafana пользователь выберет свой Prometheus-datasource из дропдауна; в нашем docker-compose-стеке auto-provisioning подставит UID `prometheus` автоматически.
+- **Heatmap для latency-distribution.** Используем `sum by (le) (rate(..._bucket[5m]))` без разбивки по backend — суммарная картина «куда попадают операции». Если потребуется разбивка — поднимается на per-backend-уровень одним кликом изменения query.
+- **Production-deployment вне scope-а.** Этот стек — для локальной разработки и демо. AlertManager, long-term storage (Thanos/Cortex), TLS, OAuth/SSO — отдельная инфраструктурная задача (открыта в ПД, но не приоритет MVP).
+- **Бизнес-метрики DAU / караваны / рейды / крипто-пул per currency** — не входят в скоуп 4.1-L. Требуют **новых** инструментаций в `application/`-слое (use-cases). Отложено до отдельного спринта (после 4.1-M).
+- **Smoke-тесты в `tests/integration/`, не unit.** Читают файлы с диска (dashboard JSON + исходник метрик); по соглашению — это integration-уровень. Никаких внешних сервисов не поднимают.
+
+---
+
 ## 2026-05-13 — Спринт 4.1-K «i18n: расширение каталога локалей (PT, ES, TR, ID, FA, UK)»
 
 **Автор:** Devin (агентская цепочка)
