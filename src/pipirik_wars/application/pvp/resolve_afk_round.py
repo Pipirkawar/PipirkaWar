@@ -36,6 +36,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from pipirik_wars.application.dto.inputs import ResolveAfkRoundInput
+from pipirik_wars.application.observability import (
+    DuelResolvedOutcome,
+    IBusinessMetrics,
+    NullBusinessMetrics,
+)
 from pipirik_wars.application.pvp.apply_outcome import apply_duel_outcome
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.domain.balance.ports import IBalanceConfig
@@ -44,6 +49,7 @@ from pipirik_wars.domain.progression.length_granter import ILengthGranter
 from pipirik_wars.domain.pvp import (
     Duel,
     DuelNotFoundError,
+    DuelWinner,
     IDuelRepository,
     Position,
     RoundChoice,
@@ -79,6 +85,7 @@ class ResolveAfkRound:
     __slots__ = (
         "_audit",
         "_balance",
+        "_business_metrics",
         "_clock",
         "_duels",
         "_length_granter",
@@ -102,6 +109,7 @@ class ResolveAfkRound:
         clock: IClock,
         balance: IBalanceConfig | None = None,
         scheduler: IDelayedJobScheduler | None = None,
+        business_metrics: IBusinessMetrics | None = None,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -113,6 +121,7 @@ class ResolveAfkRound:
         self._clock = clock
         self._balance = balance
         self._scheduler = scheduler
+        self._business_metrics: IBusinessMetrics = business_metrics or NullBusinessMetrics()
 
     async def execute(self, input_dto: ResolveAfkRoundInput) -> AfkRoundResolved:
         """AFK-резолв раунда. Бросает:
@@ -175,6 +184,13 @@ class ResolveAfkRound:
                 await self._release_locks(saved)
                 await self._audit_completed(duel=saved, now=now)
                 duel_completed = True
+                self._business_metrics.inc_duel_resolved(
+                    _afk_outcome_label(
+                        saved,
+                        p1_was_afk=p1_fallback is not None,
+                        p2_was_afk=p2_fallback is not None,
+                    )
+                )
 
         # AFK-таймер следующего раунда (Спринт 2.1.G).
         # Только если дуэль осталась в IN_PROGRESS — schedule новый timer.
@@ -240,6 +256,46 @@ class ResolveAfkRound:
                 occurred_at=now,
             )
         )
+
+
+def _afk_outcome_label(  # noqa: PLR0911
+    duel: Duel,
+    *,
+    p1_was_afk: bool,
+    p2_was_afk: bool,
+) -> DuelResolvedOutcome:
+    """Маппинг исхода + AFK-флагов в `DuelResolvedOutcome`-label.
+
+    Семантика:
+    * Если AFK был только у одной стороны — помечаем дуэль как
+      `pN_afk` ("проигравший N был AFK"), даже если из-за случайного
+      fallback она формально выиграла или вышла в ничью. Для аналитики
+      важен сам факт AFK-фоллбэка, а не итоговый winner.
+    * Если AFK были оба — это редкий вырожденный случай (оба не
+      нажали кнопку до таймаута). Маркируем как сторону «более
+      затянутой» проигрышем; при ничьей — `draw`.
+    * AFK не было ни у одного (`force_complete_round` сработал, но
+      оба уже отправили ходы) — маршрут реалистично невозможен (выше
+      есть `pending.is_complete`-guard), но защищаемся.
+    """
+    outcome = duel.final_outcome
+    assert outcome is not None
+
+    if p1_was_afk and not p2_was_afk:
+        return "p1_afk"
+    if p2_was_afk and not p1_was_afk:
+        return "p2_afk"
+    if p1_was_afk and p2_was_afk:
+        if outcome.winner is DuelWinner.P1:
+            return "p2_afk"
+        if outcome.winner is DuelWinner.P2:
+            return "p1_afk"
+        return "draw"
+    if outcome.winner is DuelWinner.P1:
+        return "p1_win"
+    if outcome.winner is DuelWinner.P2:
+        return "p2_win"
+    return "draw"
 
 
 __all__ = [

@@ -1060,6 +1060,7 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         length_granter=add_length,
         audit=audit,
         clock=clock,
+        business_metrics=business_metrics,
     )
     forest_notifier: IForestFinishNotifier | None = None
     weekly_referral_summary_notifier: IWeeklyClanReferralSummaryNotifier | None = None
@@ -1216,6 +1217,7 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         audit=audit,
         clock=clock,
         scheduler=delayed_jobs,
+        business_metrics=business_metrics,
     )
     apply_forest_name_drop = ApplyForestNameDrop(
         uow=uow,
@@ -1780,6 +1782,7 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         clock=clock,
         balance=balance,
         scheduler=delayed_jobs,
+        business_metrics=business_metrics,
     )
     resolve_afk_round = ResolveAfkRound(
         uow=uow,
@@ -1792,6 +1795,7 @@ def build_container(  # noqa: PLR0912,PLR0915 — composition root, плоски
         clock=clock,
         balance=balance,
         scheduler=delayed_jobs,
+        business_metrics=business_metrics,
     )
     # PvP global lobby use-cases (Спринт 2.1.F.2, ГДД §7.1).
     enqueue_global_duel = EnqueueGlobalDuel(
