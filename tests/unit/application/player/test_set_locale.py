@@ -80,22 +80,27 @@ def _build_use_case() -> tuple[
 
 @pytest.mark.asyncio
 class TestSetPlayerLocale:
-    async def test_sets_override_for_registered_player(self) -> None:
+    @pytest.mark.parametrize(
+        "code",
+        ["ru", "en", "pt", "es", "tr", "id", "fa", "uk"],
+    )
+    async def test_sets_override_for_registered_player(self, code: str) -> None:
+        """4.1-K: все 8 поддерживаемых локалей пишутся в `users.locale_override`."""
         use_case, players, audit, uow, _ = _build_use_case()
         _seed_player(players, tg_id=42, locale_override=None)
 
-        result = await use_case.execute(tg_id=42, locale=Locale(code="ru"))
+        result = await use_case.execute(tg_id=42, locale=Locale(code=code))
 
-        assert result.locale_override == "ru"
+        assert result.locale_override == code
         assert result.previous_locale_override is None
-        assert players.rows[0].locale_override == "ru"
+        assert players.rows[0].locale_override == code
         assert uow.commits == 1
         assert uow.rollbacks == 0
         assert len(audit.entries) == 1
         entry = audit.entries[0]
         assert entry.action is AuditAction.PLAYER_LOCALE_SET
         assert entry.before == {"locale_override": None}
-        assert entry.after == {"locale_override": "ru"}
+        assert entry.after == {"locale_override": code}
         assert entry.target_kind == "player"
 
     async def test_switches_from_one_locale_to_another(self) -> None:

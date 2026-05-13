@@ -282,17 +282,23 @@ lang-group = Команда `/lang` доступна только в личке.
 lang-other = Команда `/lang` доступна только обычным пользователям.
 
 # Игрок не зарегистрирован.
-lang-not-registered = Сначала нажми /start, потом — /lang ru|en.
+lang-not-registered = Сначала нажми /start, потом — /lang ru|en|pt|es|tr|id|fa|uk.
 
 # Использование: показать справку, если аргументы не валидны.
-lang-usage = Использование: /lang ru или /lang en.
+lang-usage = Использование: /lang ru|en|pt|es|tr|id|fa|uk.
 
 # Поддерживаемые языки в строке (для подсказки в lang-usage).
-lang-unsupported = Язык `{ $code }` не поддерживается. Доступно: ru, en.
+lang-unsupported = Язык `{ $code }` не поддерживается. Доступно: ru, en, pt, es, tr, id, fa, uk.
 
 # Локаль установлена. `$code` — новый код локали.
 lang-set-ru = Язык интерфейса: русский. Все ответы и фоновые сообщения теперь на русском.
 lang-set-en = Interface language switched to English. All replies and background messages will be in English.
+lang-set-pt = Idioma da interface alterado para português. Todas as respostas e mensagens em segundo plano agora serão em português.
+lang-set-es = Idioma de la interfaz cambiado a español. Todas las respuestas y mensajes en segundo plano ahora estarán en español.
+lang-set-tr = Arayüz dili Türkçe olarak değiştirildi. Tüm yanıtlar ve arka plan mesajları artık Türkçe olacak.
+lang-set-id = Bahasa antarmuka diubah ke Bahasa Indonesia. Semua balasan dan pesan latar belakang sekarang akan dalam Bahasa Indonesia.
+lang-set-fa = زبان رابط به فارسی تغییر یافت. تمام پاسخ‌ها و پیام‌های پس‌زمینه اکنون به فارسی خواهد بود.
+lang-set-uk = Мову інтерфейсу змінено на українську. Усі відповіді та фонові повідомлення тепер будуть українською.
 
 
 # Anti-cheat hardcap (Спринт 1.6.D, ГДД §3.3).

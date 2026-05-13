@@ -35,8 +35,8 @@
 * [x] **K.0** — Snapshot pivot `docs/current_tasks.md` + sticky `AGENT_HANDOFF.md` (commit `76c2a91`). Baseline `make ci` зелён.
 * [x] **K.1** (commit `a7dc59d`) — Application/domain: `SUPPORTED_LOCALES = frozenset({"ru","en","pt","es","tr","id","fa","uk"})` + LocaleResolver-тесты для 16 BCP-47-вариантов 6 новых локалей. 54 tests passed.
 * [x] **K.2** (commit `465dd52`) — Infrastructure DB: Alembic-миграция `0039_users_locale_override_extended_languages` (revises `0038_ton_connect_nonces`, текущий HEAD), drop+recreate CHECK в `batch_alter_table("users")`. UserORM CheckConstraint обновлён для 8 локалей. Integration-тесты `tests/integration/db/test_migrations.py`: 3 новых теста (revision в list, descends-from, файл в dir-listing) + 2 новых INSERT-теста (все 8 локалей + NULL проходят, `fr` роняет IntegrityError; downgrade → 0038 роняет `pt`). 46 migration-tests passed.
-* [x] **K.3** (этот коммит) — 6 новых `.ftl`-файлов в `locales/{pt,es,tr,id,fa,uk}.ftl`. Каждый файл содержит ~34 онбординг-ключа (`start-*` ×6, `profile-*` ×6, `top-*` ×3, `clantop-*` ×3, `forest-*` ×10, `lang-*` ×6 включая `lang-set-<own>`). Остальные ~1550 ключей рендерятся через `FluentMessageBundle`-fallback на EN. Smoke-test через `FluentMessageBundle.format`: все 6 локалей загружаются, EN-fallback (`oracle-success-prediction`) работает.
-* [ ] **K.4** — `LangPresenter.confirmed()` + 6 `_KEY_SET_*` + `lang-set-{pt,es,tr,id,fa,uk}` в `en.ftl`+`ru.ftl` + `lang-usage`/`lang-unsupported` + handler/presenter-тесты.
+* [x] **K.3** (commit `dd7fa5e`) — 6 новых `.ftl`-файлов в `locales/{pt,es,tr,id,fa,uk}.ftl`. Каждый файл содержит ~34 онбординг-ключа (`start-*` ×6, `profile-*` ×6, `top-*` ×3, `clantop-*` ×3, `forest-*` ×10, `lang-*` ×6 включая `lang-set-<own>`). Остальные ~1550 ключей рендерятся через `FluentMessageBundle`-fallback на EN. Smoke-test через `FluentMessageBundle.format`: все 6 локалей загружаются, EN-fallback (`oracle-success-prediction`) работает.
+* [x] **K.4** (этот коммит) — `LangPresenter.confirmed()` переведён с `if/elif`-цепочки на словарь `_KEY_SET_BY_LOCALE: dict[str, MessageKey]` (8 вхождений, dispatch по `locale.code`, fallback на EN). 6 новых ключей `lang-set-{pt,es,tr,id,fa,uk}` добавлены в `en.ftl` и `ru.ftl`. `lang-usage`/`lang-unsupported`/`lang-not-registered` в обоих файлах перечисляют все 8 поддерживаемых кодов. Тесты: `test_lang.py` (презентер) параметризован на 8 локалей; `test_lang.py` (handler) +6 параметризованных кейсов для новых локалей; `test_set_locale.py` «sets override» параметризован на все 8. 43 lang-related tests passed.
 * [ ] **K.5** — Fallback-тесты `FluentMessageBundle` (параметризовано на 6 новых локалей).
 * [ ] **K.6** — Doc-sync (`docs/history.md` + `docs/current_tasks.md`).
 * [ ] **K.7** — Удалить этот `AGENT_HANDOFF.md` + `git_pr(create)` + `git(pr_checks, wait_mode="all")`.
@@ -61,4 +61,5 @@ pre-commit run --all-files
 - `76c2a91` — `docs(4.1-K): K.0 — snapshot pivot + sticky AGENT_HANDOFF`
 - `a7dc59d` — `feat(4.1-K): K.1 — expand SUPPORTED_LOCALES to 8 (+pt/es/tr/id/fa/uk)`
 - `465dd52` — `feat(4.1-K): K.2 — Alembic 0039 extends users.locale_override CHECK to 8 locales`
-- (этот коммит K.3) `feat(4.1-K): K.3 — 6 new .ftl bootstrap files (pt/es/tr/id/fa/uk)`
+- `dd7fa5e` — `feat(4.1-K): K.3 — 6 new .ftl bootstrap files (pt/es/tr/id/fa/uk)`
+- (этот коммит K.4) `feat(4.1-K): K.4 — LangPresenter handles 8 locales, lang-set-* keys in en.ftl/ru.ftl`
