@@ -17,7 +17,7 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**Активный PR — 4.5-G «Редактор balance.yaml»** — Спринт 4.5-G (Фаза 4, задача 4.5.8). Ветка: `devin/1778705790-sprint-4-5-G-balance-editor`. Редактор `balance.yaml` для админ-панели: маршруты `GET /balance` (обзор секций), `GET /balance/{section}` (YAML-редактор), `POST /balance/{section}` (сохранение + валидация + audit), `POST /balance/reload` (hot-reload). 2 шаблона, расширение DI-контейнера. 12 unit + 5 integration тестов. CI: lint 0, typecheck 0, 6 import contracts kept.
+**Активный PR — 4.5-G «Редактор balance.yaml»** (PR #147) — Спринт 4.5-G (Фаза 4, задача 4.5.8). Ветка: `devin/1778705790-sprint-4-5-G-balance-editor`. Редактор `balance.yaml` для админ-панели: маршруты `GET /balance` (обзор секций), `GET /balance/{section}` (YAML-редактор), `POST /balance/{section}` (сохранение + валидация + audit), `POST /balance/reload` (hot-reload). 2 шаблона, расширение DI-контейнера. 12 unit + 5 integration тестов. CI: lint 0, typecheck 0, 6 import contracts kept.
 
 **На `main` (АРХИВ):** 4.5-A, 4.5-B (RBAC), 4.5-C (Dashboard), 4.5-D (Players), 4.5-H (Rate-limiting/CORS) смержены.
 
