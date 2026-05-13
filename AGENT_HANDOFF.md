@@ -7,7 +7,7 @@
 - **PR в работе:** **4.1-K** — i18n: расширение каталога локалей (PT, ES, TR, ID, FA, UK).
 - **Базируется на:** `main = 8a3e729` (merge PR #138 4.1-J).
 - **Ветка:** `devin/1778662554-sprint-4-1-K-i18n-extra-languages`.
-- **Сессия (текущая):** https://app.devin.ai/sessions/f9b7820cdcef4ef59385b24f323c3dce.
+- **Сессия (текущая):** https://app.devin.ai/sessions/dc53351a3caf438ea211fc897a110dc0 (предыдущая: https://app.devin.ai/sessions/f9b7820cdcef4ef59385b24f323c3dce — K.0–K.2).
 - **Baseline `make ci` на `main = 8a3e729`:** **6994 passed + 2 skipped + 95 % cov, 548.52 с**.
 - **Задача из ПД §7:** **4.1.14** — «Доп. языки: PT, ES, TR, ID, FA, UK. Файлы переводов, тест fallback.»
 - **Соседние задачи (отложены в отдельные PR-ы):** 4.1.13 (ИИ-предсказания, опц.) → PR 4.1-M; 4.1.15 (Grafana-дашборд для метрик 4.1-J) → PR 4.1-L.
@@ -34,8 +34,8 @@
 
 * [x] **K.0** — Snapshot pivot `docs/current_tasks.md` + sticky `AGENT_HANDOFF.md` (commit `76c2a91`). Baseline `make ci` зелён.
 * [x] **K.1** (commit `a7dc59d`) — Application/domain: `SUPPORTED_LOCALES = frozenset({"ru","en","pt","es","tr","id","fa","uk"})` + LocaleResolver-тесты для 16 BCP-47-вариантов 6 новых локалей. 54 tests passed.
-* [x] **K.2** (этот коммит) — Infrastructure DB: Alembic-миграция `0039_users_locale_override_extended_languages` (revises `0038_ton_connect_nonces`, текущий HEAD), drop+recreate CHECK в `batch_alter_table("users")`. UserORM CheckConstraint обновлён для 8 локалей. Integration-тесты `tests/integration/db/test_migrations.py`: 3 новых теста (revision в list, descends-from, файл в dir-listing) + 2 новых INSERT-теста (все 8 локалей + NULL проходят, `fr` роняет IntegrityError; downgrade → 0038 роняет `pt`). 46 migration-tests passed.
-* [ ] **K.3** — 6 новых `.ftl`-файлов в `locales/{pt,es,tr,id,fa,uk}.ftl` с 30-50 ключевыми ключами на язык.
+* [x] **K.2** (commit `465dd52`) — Infrastructure DB: Alembic-миграция `0039_users_locale_override_extended_languages` (revises `0038_ton_connect_nonces`, текущий HEAD), drop+recreate CHECK в `batch_alter_table("users")`. UserORM CheckConstraint обновлён для 8 локалей. Integration-тесты `tests/integration/db/test_migrations.py`: 3 новых теста (revision в list, descends-from, файл в dir-listing) + 2 новых INSERT-теста (все 8 локалей + NULL проходят, `fr` роняет IntegrityError; downgrade → 0038 роняет `pt`). 46 migration-tests passed.
+* [x] **K.3** (этот коммит) — 6 новых `.ftl`-файлов в `locales/{pt,es,tr,id,fa,uk}.ftl`. Каждый файл содержит ~34 онбординг-ключа (`start-*` ×6, `profile-*` ×6, `top-*` ×3, `clantop-*` ×3, `forest-*` ×10, `lang-*` ×6 включая `lang-set-<own>`). Остальные ~1550 ключей рендерятся через `FluentMessageBundle`-fallback на EN. Smoke-test через `FluentMessageBundle.format`: все 6 локалей загружаются, EN-fallback (`oracle-success-prediction`) работает.
 * [ ] **K.4** — `LangPresenter.confirmed()` + 6 `_KEY_SET_*` + `lang-set-{pt,es,tr,id,fa,uk}` в `en.ftl`+`ru.ftl` + `lang-usage`/`lang-unsupported` + handler/presenter-тесты.
 * [ ] **K.5** — Fallback-тесты `FluentMessageBundle` (параметризовано на 6 новых локалей).
 * [ ] **K.6** — Doc-sync (`docs/history.md` + `docs/current_tasks.md`).
@@ -60,4 +60,5 @@ pre-commit run --all-files
 
 - `76c2a91` — `docs(4.1-K): K.0 — snapshot pivot + sticky AGENT_HANDOFF`
 - `a7dc59d` — `feat(4.1-K): K.1 — expand SUPPORTED_LOCALES to 8 (+pt/es/tr/id/fa/uk)`
-- (этот коммит K.2) `feat(4.1-K): K.2 — Alembic 0039 extends users.locale_override CHECK to 8 locales`
+- `465dd52` — `feat(4.1-K): K.2 — Alembic 0039 extends users.locale_override CHECK to 8 locales`
+- (этот коммит K.3) `feat(4.1-K): K.3 — 6 new .ftl bootstrap files (pt/es/tr/id/fa/uk)`
