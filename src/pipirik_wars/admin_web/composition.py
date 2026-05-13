@@ -1,8 +1,9 @@
-"""DI container for admin web panel (Sprint 4.5-A, §5)."""
+"""DI container for admin web panel (Sprint 4.5-A/D, §5)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -11,12 +12,18 @@ from pipirik_wars.admin_web.settings import AdminWebSettings
 from pipirik_wars.domain.admin.authorization import RoleBasedAdminAuthorizationPolicy
 from pipirik_wars.domain.admin.ports.admin_confirm import ITotpVerifier
 from pipirik_wars.domain.admin.ports.totp_secret_generator import ITotpSecretGenerator
+from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.shared.ports import IClock
 from pipirik_wars.infrastructure.admin.pyotp_totp_secret_generator import (
     PyOtpTotpSecretGenerator,
 )
 from pipirik_wars.infrastructure.admin.pyotp_totp_verifier import PyOtpTotpVerifier
+from pipirik_wars.infrastructure.balance import YamlBalanceLoader
 from pipirik_wars.infrastructure.clock.real_clock import RealClock
+
+_DEFAULT_BALANCE_YAML = (
+    Path(__file__).resolve().parent.parent.parent.parent / "config" / "balance.yaml"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +41,7 @@ class AdminWebContainer:
     totp_secret_generator: ITotpSecretGenerator
     clock: IClock
     authorization_policy: RoleBasedAdminAuthorizationPolicy
+    balance_config: IBalanceConfig
     bootstrap_admin_password: str | None
 
 
@@ -67,5 +75,6 @@ def build_admin_web_container(settings: AdminWebSettings) -> AdminWebContainer:
         totp_secret_generator=PyOtpTotpSecretGenerator(),
         clock=RealClock(),
         authorization_policy=RoleBasedAdminAuthorizationPolicy(),
+        balance_config=YamlBalanceLoader(_DEFAULT_BALANCE_YAML),
         bootstrap_admin_password=settings.bootstrap_admin_password,
     )
