@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Игрок {{ player_tg_id }} — Pipirik Wars Admin{% endblock %}
+
+{% block content %}
+<div class="center-card" style="max-width:800px;">
+    <p><a href="/players">&larr; К списку игроков</a></p>
+
+    {% if flash %}
+    <div class="flash flash-{{ flash }}">
+        {% if flash == "banned" %}Игрок забанен.
+        {% elif flash == "already_banned" %}Игрок уже был забанен.
+        {% elif flash == "frozen" %}Игрок заморожен.
+        {% elif flash == "already_frozen" %}Игрок уже был заморожен.
+        {% elif flash == "unfrozen" %}Игрок разморожен.
+        {% elif flash == "already_active" %}Игрок уже был активен.
+        {% elif flash == "length_granted" %}Длина выдана.
+        {% elif flash == "thickness_granted" %}Толщина выдана.
+        {% else %}{{ flash }}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <h1>Карточка игрока</h1>
+
+    <table class="detail-table">
+        <tr><th>tg_id</th><td>{{ card.summary.tg_id }}</td></tr>
+        <tr><th>@username</th><td>{{ ("@" ~ card.summary.username) if card.summary.username else "—" }}</td></tr>
+        <tr><th>Имя</th><td>{{ card.summary.name or "—" }}</td></tr>
+        <tr><th>Титул</th><td>{{ card.summary.title or "—" }}</td></tr>
+        <tr><th>📏 Длина</th><td>{{ card.summary.length_cm }} см</td></tr>
+        <tr><th>📐 Толщина</th><td>{{ card.summary.thickness_level }}</td></tr>
+        <tr>
+            <th>Статус</th>
+            <td>
+                {% if card.summary.status.value == "banned" %}
+                    <span class="badge badge-danger">banned</span>
+                {% elif card.summary.status.value == "frozen" %}
+                    <span class="badge badge-warning">frozen</span>
+                {% else %}
+                    <span class="badge badge-ok">active</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% if card.summary.anticheat_ban_until %}
+        <tr><th>Anticheat-бан до</th><td>{{ card.summary.anticheat_ban_until.strftime("%Y-%m-%d %H:%M UTC") }}</td></tr>
+        {% endif %}
+    </table>
+
+    {% if card.clan %}
+    <h2>Клан</h2>
+    <table class="detail-table">
+        <tr><th>ID</th><td>{{ card.clan.clan_id }}</td></tr>
+        <tr><th>Название</th><td>{{ card.clan.title }}</td></tr>
+        <tr><th>Роль</th><td>{{ card.clan.role.value }}</td></tr>
+        <tr><th>Статус клана</th><td>{{ card.clan.status.value }}</td></tr>
+        <tr><th>Вступил</th><td>{{ card.clan.joined_at.strftime("%Y-%m-%d %H:%M UTC") }}</td></tr>
+    </table>
+    {% endif %}
+
+    {% if card.forest_active_run %}
+    <h2>Активный поход в лес</h2>
+    <table class="detail-table">
+        <tr><th>ID</th><td>{{ card.forest_active_run.run_id }}</td></tr>
+        <tr><th>Начат</th><td>{{ card.forest_active_run.started_at.strftime("%Y-%m-%d %H:%M UTC") }}</td></tr>
+        <tr><th>Заканчивается</th><td>{{ card.forest_active_run.ends_at.strftime("%Y-%m-%d %H:%M UTC") }}</td></tr>
+        <tr><th>Статус</th><td>{{ card.forest_active_run.status.value }}</td></tr>
+    </table>
+    {% endif %}
+
+    <h2>Действия</h2>
+
+    <div class="actions-grid">
+        {% if card.summary.status.value != "banned" %}
+        <details class="action-block">
+            <summary>Заморозить / Разморозить</summary>
+            {% if card.summary.status.value == "frozen" %}
+            <form method="POST" action="/players/{{ player_tg_id }}/unfreeze">
+                {% if session.csrf_token %}
+                <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                {% endif %}
+                <button type="submit" class="btn btn-warning">Разморозить</button>
+            </form>
+            {% else %}
+            <form method="POST" action="/players/{{ player_tg_id }}/freeze">
+                {% if session.csrf_token %}
+                <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                {% endif %}
+                <label>Причина: <input type="text" name="reason" /></label>
+                <button type="submit" class="btn btn-warning">Заморозить</button>
+            </form>
+            {% endif %}
+        </details>
+
+        <details class="action-block">
+            <summary>Забанить</summary>
+            <form method="POST" action="/players/{{ player_tg_id }}/ban">
+                {% if session.csrf_token %}
+                <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                {% endif %}
+                <label>Причина (обязательно): <input type="text" name="reason" required /></label>
+                <button type="submit" class="btn btn-danger">Забанить навсегда</button>
+            </form>
+        </details>
+        {% endif %}
+    </div>
+
+    <h2>Журнал активности</h2>
+    <div
+        hx-get="/players/{{ player_tg_id }}/activity"
+        hx-trigger="load"
+        hx-indicator="#activity-spinner"
+    >
+        <span id="activity-spinner" class="htmx-indicator">Загрузка…</span>
+    </div>
+</div>
+{% endblock %}
