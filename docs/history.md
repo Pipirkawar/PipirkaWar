@@ -54,6 +54,25 @@
 
 ---
 
+## 2026-05-13 — Спринт 4.5-F «Раздел Аудит-лог: фильтрация по audit_log и admin_audit_log»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 задача 4.5.7 «Раздел Аудит-лог». Sprint 4.5-F.
+
+Что сделано:
+- Domain: `AuditRecord` (read-side DTO) + `IAuditLogQuery` порт в `domain/shared/ports/audit.py`
+- Domain: `IAdminAuditWebQuery` порт в `domain/admin/ports/admin_audit.py` (ISP: отдельный от bot-side `IAdminAuditQuery`)
+- Infrastructure: `SqlAlchemyAuditLogQuery` и `SqlAlchemyAdminAuditWebQuery` — SQL-адаптеры с фильтрами (date, actor, action, source) и offset-пагинацией
+- Application: `GetWebAuditLog` use-case — объединяет оба аудит-лога, поддерживает переключение log_type (all/bot/admin)
+- Admin Web: route `/audit` (полная страница) + `/audit/table` (HTMX partial), фильтры, пагинация
+- Templates: `audit_log.html` + `partials/audit_table.html` с HTMX-интеграцией
+- CSS: стили для таблицы аудит-лога, фильтров, пагинации, badge-ей source
+- Nav: ссылка «Audit Log» в base.html
+- Tests: 11 unit + 9 integration (фильтрация, пагинация, пустые данные, авторизация, TOTP guard)
+- CI: ruff 0, mypy 0, 6 import contracts kept, все тесты проходят
+
+---
 ## 2026-05-13 — Спринт 4.5-B «RBAC из таблицы `admins` для admin_web»
 
 **Автор:** Devin (агентская цепочка)
@@ -106,6 +125,7 @@
 - `max-width` CSS для `main` расширен с 600px до 960px для размещения grid-виджетов
 
 ---
+
 ## 2026-05-13 — Спринт 4.5-D «Players section: search, card, activity, actions» (задача 4.5.5)
 
 **Автор:** Devin (агентская цепочка)
@@ -136,6 +156,7 @@
 - ForestRunRepository требует IBalanceConfig — добавлен YamlBalanceLoader в контейнер
 
 ---
+
 ## 2026-05-13 — Спринт 4.5-A «Foundation: FastAPI scaffold + Telegram Login Widget + TOTP 2FA gate»
 
 **Автор:** Devin (агентская цепочка)

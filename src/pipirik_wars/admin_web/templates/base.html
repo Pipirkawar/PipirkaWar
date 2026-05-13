@@ -20,6 +20,8 @@
                 <a href="/players" class="nav-link">Игроки</a>
             </span>
             <span class="nav-right">
+                <a href="/dashboard" style="color:#ecf0f1;margin-right:1rem;">Dashboard</a>
+                <a href="/audit" style="color:#ecf0f1;margin-right:1rem;">Audit Log</a>
                 {{ session.tg_username or "admin" }}
                 <form method="POST" action="/logout" style="display:inline;">
                     {% if session.csrf_token %}

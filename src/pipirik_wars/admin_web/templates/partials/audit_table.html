@@ -1,0 +1,97 @@
+{% set total = result.total_audit + result.total_admin_audit %}
+{% set current_page = filters.page %}
+{% set total_pages_audit = ((result.total_audit + result.page_size - 1) // result.page_size) if result.total_audit > 0 else 0 %}
+{% set total_pages_admin = ((result.total_admin_audit + result.page_size - 1) // result.page_size) if result.total_admin_audit > 0 else 0 %}
+{% set total_pages = [total_pages_audit, total_pages_admin] | max %}
+
+<div class="audit-summary">
+    <span>Game audit: <strong>{{ result.total_audit }}</strong> records</span>
+    <span>Admin audit: <strong>{{ result.total_admin_audit }}</strong> records</span>
+    {% if total_pages > 0 %}
+    <span>Page {{ current_page }} / {{ total_pages }}</span>
+    {% endif %}
+</div>
+
+{% if filters.log_type in ('all', 'bot') and result.audit_records %}
+<h3>Game Audit Log (audit_log)</h3>
+<div class="table-wrapper">
+<table class="audit-table">
+    <thead>
+        <tr>
+            <th>Timestamp</th>
+            <th>Actor</th>
+            <th>Action</th>
+            <th>Target</th>
+            <th>Source</th>
+            <th>Reason</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in result.audit_records %}
+        <tr>
+            <td class="ts">{{ r.occurred_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>{{ r.actor_id if r.actor_id is not none else '—' }}</td>
+            <td><code>{{ r.action }}</code></td>
+            <td><code>{{ r.target_kind }}:{{ r.target_id }}</code></td>
+            <td><span class="badge badge-{{ r.source }}">{{ r.source }}</span></td>
+            <td class="reason">{{ r.reason[:80] }}{{ '…' if r.reason | length > 80 else '' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
+{% if filters.log_type in ('all', 'admin') and result.admin_audit_records %}
+<h3>Admin Audit Log (admin_audit_log)</h3>
+<div class="table-wrapper">
+<table class="audit-table">
+    <thead>
+        <tr>
+            <th>Timestamp</th>
+            <th>Admin (tg_id)</th>
+            <th>Action</th>
+            <th>Target</th>
+            <th>Source</th>
+            <th>Reason</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in result.admin_audit_records %}
+        <tr>
+            <td class="ts">{{ r.occurred_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>{{ r.actor_tg_id }}</td>
+            <td><code>{{ r.action.value }}</code></td>
+            <td><code>{{ r.target_kind }}:{{ r.target_id }}</code></td>
+            <td><span class="badge badge-{{ r.source.value }}">{{ r.source.value }}</span></td>
+            <td class="reason">{{ r.reason[:80] }}{{ '…' if r.reason | length > 80 else '' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
+{% if total == 0 %}
+<p class="empty-state">No audit records found matching the filters.</p>
+{% endif %}
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if current_page > 1 %}
+    <a href="#"
+       hx-get="/audit/table?page={{ current_page - 1 }}&date_from={{ filters.date_from.isoformat() if filters.date_from else '' }}&date_to={{ filters.date_to.isoformat() if filters.date_to else '' }}&actor_id={{ filters.actor_id or '' }}&action={{ filters.action or '' }}&source={{ filters.source or '' }}&log_type={{ filters.log_type }}"
+       hx-target="#audit-table-container"
+       class="btn-page">&laquo; Prev</a>
+    {% endif %}
+
+    <span class="page-info">{{ current_page }} / {{ total_pages }}</span>
+
+    {% if current_page < total_pages %}
+    <a href="#"
+       hx-get="/audit/table?page={{ current_page + 1 }}&date_from={{ filters.date_from.isoformat() if filters.date_from else '' }}&date_to={{ filters.date_to.isoformat() if filters.date_to else '' }}&actor_id={{ filters.actor_id or '' }}&action={{ filters.action or '' }}&source={{ filters.source or '' }}&log_type={{ filters.log_type }}"
+       hx-target="#audit-table-container"
+       class="btn-page">Next &raquo;</a>
+    {% endif %}
+</div>
+{% endif %}

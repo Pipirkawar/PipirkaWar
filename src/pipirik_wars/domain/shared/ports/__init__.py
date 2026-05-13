@@ -9,8 +9,10 @@
 from pipirik_wars.domain.shared.ports.audit import (
     AuditAction,
     AuditEntry,
+    AuditRecord,
     AuditSource,
     IAuditLogger,
+    IAuditLogQuery,
 )
 from pipirik_wars.domain.shared.ports.clock import IClock
 from pipirik_wars.domain.shared.ports.idempotency import IIdempotencyKey
@@ -22,7 +24,9 @@ from pipirik_wars.domain.shared.ports.uow import IUnitOfWork
 __all__ = [
     "AuditAction",
     "AuditEntry",
+    "AuditRecord",
     "AuditSource",
+    "IAuditLogQuery",
     "IAuditLogger",
     "IClock",
     "IDelayedJobScheduler",

@@ -311,6 +311,42 @@ class IAdminAuditQuery(abc.ABC):
         """
 
 
+class IAdminAuditWebQuery(abc.ABC):
+    """Extended read-side port for ``admin_audit_log`` (Sprint 4.5-F).
+
+    Adds date-range, offset-pagination, and count — used by the web
+    admin panel's audit-log section. Separated from ``IAdminAuditQuery``
+    (bot-side) by ISP: the bot only needs ``list_recent`` with simple
+    filters; the web panel needs full pagination and date filtering.
+    """
+
+    @abc.abstractmethod
+    async def list_records(
+        self,
+        *,
+        limit: int,
+        offset: int = 0,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        admin_id: int | None = None,
+        action: str | None = None,
+        source: str | None = None,
+    ) -> Sequence[AdminAuditRecord]:
+        """Records ordered by ``occurred_at DESC, id DESC``."""
+
+    @abc.abstractmethod
+    async def count(
+        self,
+        *,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        admin_id: int | None = None,
+        action: str | None = None,
+        source: str | None = None,
+    ) -> int:
+        """Total record count matching filters."""
+
+
 __all__ = [
     "AdminAuditAction",
     "AdminAuditEntry",
@@ -318,4 +354,5 @@ __all__ = [
     "AdminAuditSource",
     "IAdminAuditLogger",
     "IAdminAuditQuery",
+    "IAdminAuditWebQuery",
 ]
