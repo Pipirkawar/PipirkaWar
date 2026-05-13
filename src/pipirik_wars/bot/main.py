@@ -2588,11 +2588,15 @@ def build_dispatcher(container: Container) -> Dispatcher:  # noqa: PLR0915 — c
 # Какие апдейты слушать через long-polling.
 # `chat_member` нужен для acceptance 1.1.5 (auto-join). Без него
 # Telegram не доставляет события про не-бот-пользователей.
+# `pre_checkout_query` нужен для платной рулетки (Спринт 4.1-A):
+# без него Telegram не доставит запрос на подтверждение платежа,
+# и оплата автоматически отклонится через 10 секунд.
 _ALLOWED_UPDATES = (
     "message",
     "callback_query",
     "my_chat_member",
     "chat_member",
+    "pre_checkout_query",
 )
 
 
