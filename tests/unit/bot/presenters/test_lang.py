@@ -1,13 +1,15 @@
-"""Юнит-тесты `LangPresenter` (Спринт 1.5.F).
+"""Юнит-тесты `LangPresenter` (Спринт 1.5.F, расширен в 4.1-K).
 
 Простые проверки: каждый метод дёргает правильный ключ и не теряет
-параметры. `confirmed(locale=Locale("ru"))` → ключ `lang-set-ru`,
-`confirmed(locale=Locale("en"))` → ключ `lang-set-en`.
+параметры. `confirmed(locale=Locale("<code>"))` → ключ `lang-set-<code>`,
+для каждой из 8 поддерживаемых локалей (`SUPPORTED_LOCALES`).
 """
 
 from __future__ import annotations
 
 from typing import cast
+
+import pytest
 
 from pipirik_wars.application.i18n import IMessageBundle, Locale
 from pipirik_wars.bot.presenters.lang import LangPresenter
@@ -36,10 +38,11 @@ class TestLangPresenter:
         rendered = _presenter().unsupported(locale=Locale("en"), code="fr")
         assert rendered == "en:lang-unsupported[code=fr]"
 
-    def test_confirmed_ru_uses_lang_set_ru_key(self) -> None:
-        rendered = _presenter().confirmed(locale=Locale("ru"))
-        assert rendered == "ru:lang-set-ru"
-
-    def test_confirmed_en_uses_lang_set_en_key(self) -> None:
-        rendered = _presenter().confirmed(locale=Locale("en"))
-        assert rendered == "en:lang-set-en"
+    @pytest.mark.parametrize(
+        "code",
+        ["ru", "en", "pt", "es", "tr", "id", "fa", "uk"],
+    )
+    def test_confirmed_uses_lang_set_for_each_supported_locale(self, code: str) -> None:
+        """4.1-K: для каждой из 8 локалей confirmed() рендерит `lang-set-<code>`."""
+        rendered = _presenter().confirmed(locale=Locale(code))
+        assert rendered == f"{code}:lang-set-{code}"

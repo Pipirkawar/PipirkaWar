@@ -1,6 +1,6 @@
-"""Презентер ответов `/lang` (Спринт 1.5.F).
+"""Презентер ответов `/lang` (Спринт 1.5.F, расширен в 4.1-K).
 
-Тонкий слой между handler-ом `/lang ru|en` и `IMessageBundle`. Делает
+Тонкий слой между handler-ом `/lang <code>` и `IMessageBundle`. Делает
 ровно одно: формирует локализованную строку по ключу. Никакого I/O.
 
 Особенность 1.5.F: после переключения локали игрок ожидает увидеть
@@ -8,17 +8,27 @@
 английском, не на русском). Поэтому `confirmed(...)` принимает
 именно ту `Locale`, которую пользователь только что выбрал — handler
 читает её из `SetPlayerLocaleResult.locale_override` (или передаёт
-`Locale("ru"|"en")` напрямую) и НЕ использует старую `Locale` из
-middleware-а (которая в этот момент представляет ещё прошлый выбор).
+`Locale("ru"|"en"|"pt"|"es"|"tr"|"id"|"fa"|"uk")` напрямую) и НЕ
+использует старую `Locale` из middleware-а (которая в этот момент
+представляет ещё прошлый выбор).
 
-Все ключи живут в `locales/{ru,en}.ftl` (раздел `lang-*`).
+Все ключи живут в `locales/{code}.ftl` (раздел `lang-*`). Спринт 4.1-K
+расширил каталог поддерживаемых локалей с 2 (ru, en) до 8 (+pt, es,
+tr, id, fa, uk); `confirmed()` диспетчеризуется через словарь
+`_KEY_SET_BY_LOCALE`, чтобы добавление новых локалей не требовало
+правки `if/elif`-цепочки.
 """
 
 from __future__ import annotations
 
 from typing import Final
 
-from pipirik_wars.application.i18n import IMessageBundle, Locale, MessageKey
+from pipirik_wars.application.i18n import (
+    DEFAULT_LOCALE,
+    IMessageBundle,
+    Locale,
+    MessageKey,
+)
 
 _KEY_GROUP: Final[MessageKey] = MessageKey("lang-group")
 _KEY_OTHER: Final[MessageKey] = MessageKey("lang-other")
@@ -27,6 +37,27 @@ _KEY_USAGE: Final[MessageKey] = MessageKey("lang-usage")
 _KEY_UNSUPPORTED: Final[MessageKey] = MessageKey("lang-unsupported")
 _KEY_SET_RU: Final[MessageKey] = MessageKey("lang-set-ru")
 _KEY_SET_EN: Final[MessageKey] = MessageKey("lang-set-en")
+_KEY_SET_PT: Final[MessageKey] = MessageKey("lang-set-pt")
+_KEY_SET_ES: Final[MessageKey] = MessageKey("lang-set-es")
+_KEY_SET_TR: Final[MessageKey] = MessageKey("lang-set-tr")
+_KEY_SET_ID: Final[MessageKey] = MessageKey("lang-set-id")
+_KEY_SET_FA: Final[MessageKey] = MessageKey("lang-set-fa")
+_KEY_SET_UK: Final[MessageKey] = MessageKey("lang-set-uk")
+
+# `lang-set-<code>` ключ для каждой поддерживаемой локали. Ключи отсутствующие
+# в этом словаре фолбэкаются на `lang-set-en` (теоретически не должно
+# случаться, т.к. `Locale.__post_init__` уже валидирует `code` против
+# `SUPPORTED_LOCALES`).
+_KEY_SET_BY_LOCALE: Final[dict[str, MessageKey]] = {
+    "ru": _KEY_SET_RU,
+    "en": _KEY_SET_EN,
+    "pt": _KEY_SET_PT,
+    "es": _KEY_SET_ES,
+    "tr": _KEY_SET_TR,
+    "id": _KEY_SET_ID,
+    "fa": _KEY_SET_FA,
+    "uk": _KEY_SET_UK,
+}
 
 
 class LangPresenter:
@@ -52,9 +83,8 @@ class LangPresenter:
 
     def confirmed(self, *, locale: Locale) -> str:
         """Подтверждение выбора. Рендерится в **новой** локали."""
-        if locale.code == "ru":
-            return self._bundle.format(_KEY_SET_RU, locale=locale)
-        return self._bundle.format(_KEY_SET_EN, locale=locale)
+        key = _KEY_SET_BY_LOCALE.get(locale.code, _KEY_SET_BY_LOCALE[DEFAULT_LOCALE.code])
+        return self._bundle.format(key, locale=locale)
 
 
 __all__ = ["LangPresenter"]

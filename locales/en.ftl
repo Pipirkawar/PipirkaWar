@@ -280,17 +280,25 @@ lang-group = `/lang` is private-chat only. Switch to DM.
 lang-other = `/lang` is for regular users only.
 
 # Player is not registered yet.
-lang-not-registered = Tap /start first, then run /lang ru|en.
+lang-not-registered = Tap /start first, then run /lang ru|en|pt|es|tr|id|fa|uk.
 
 # Usage hint when args are missing/invalid.
-lang-usage = Usage: /lang ru or /lang en.
+lang-usage = Usage: /lang ru|en|pt|es|tr|id|fa|uk.
 
 # Unsupported language code passed.
-lang-unsupported = Language `{ $code }` is not supported. Available: ru, en.
+lang-unsupported = Language `{ $code }` is not supported. Available: ru, en, pt, es, tr, id, fa, uk.
 
-# Locale switched successfully.
+# Locale switched successfully. Each `lang-set-<code>` is rendered in its
+# own locale (the one the user just switched to), so the player sees the
+# confirmation in the new language. See `bot/presenters/lang.py`.
 lang-set-ru = Язык интерфейса: русский. Все ответы и фоновые сообщения теперь на русском.
 lang-set-en = Interface language switched to English. All replies and background messages will be in English.
+lang-set-pt = Idioma da interface alterado para português. Todas as respostas e mensagens em segundo plano agora serão em português.
+lang-set-es = Idioma de la interfaz cambiado a español. Todas las respuestas y mensajes en segundo plano ahora estarán en español.
+lang-set-tr = Arayüz dili Türkçe olarak değiştirildi. Tüm yanıtlar ve arka plan mesajları artık Türkçe olacak.
+lang-set-id = Bahasa antarmuka diubah ke Bahasa Indonesia. Semua balasan dan pesan latar belakang sekarang akan dalam Bahasa Indonesia.
+lang-set-fa = زبان رابط به فارسی تغییر یافت. تمام پاسخ‌ها و پیام‌های پس‌زمینه اکنون به فارسی خواهد بود.
+lang-set-uk = Мову інтерфейсу змінено на українську. Усі відповіді та фонові повідомлення тепер будуть українською.
 
 
 # Anti-cheat hardcap (Sprint 1.6.D, GDD §3.3).

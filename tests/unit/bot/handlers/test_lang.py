@@ -140,6 +140,35 @@ class TestHandleLang:
         )
         msg.answer.assert_awaited_once_with("en:lang-set-en")
 
+    @pytest.mark.parametrize(
+        "code",
+        ["pt", "es", "tr", "id", "fa", "uk"],
+    )
+    async def test_lang_extra_locale_in_private_sets_and_confirms_in_new_locale(
+        self,
+        code: str,
+    ) -> None:
+        """4.1-K: `/lang <code>` для каждой из 6 новых локалей вызывает
+        `SetPlayerLocale.execute(..., Locale(<code>))` и ответ — в новой локали."""
+        msg = _build_message_mock("private")
+        set_locale = _stub_set_locale()
+        bundle = cast(IMessageBundle, FakeMessageBundle())
+
+        await handle_lang(
+            cast(Message, msg),
+            _command(code),
+            _identity("private", tg_user_id=100),
+            cast(SetPlayerLocale, set_locale),
+            bundle,
+            Locale("en"),
+        )
+
+        set_locale.execute.assert_awaited_once_with(
+            tg_id=100,
+            locale=Locale(code),
+        )
+        msg.answer.assert_awaited_once_with(f"{code}:lang-set-{code}")
+
     async def test_lang_no_args_replies_usage(self) -> None:
         msg = _build_message_mock("private")
         set_locale = _stub_set_locale()
