@@ -17,17 +17,9 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**Активный PR — не открыт.** Последние смерженные PR-ы Спринта 4.5: **4.5-B** (RBAC), **4.5-C** (Dashboard), **4.5-D** (Players), **4.5-H** (PR #145, сетевой доступ). Следующая задача — по ПД §7 Sprint 4.5.
+**Активный PR — 4.5-G «Редактор balance.yaml»** (PR #147) — Спринт 4.5-G (Фаза 4, задача 4.5.8). Ветка: `devin/1778705790-sprint-4-5-G-balance-editor`. Редактор `balance.yaml` для админ-панели: маршруты `GET /balance` (обзор секций), `GET /balance/{section}` (YAML-редактор), `POST /balance/{section}` (сохранение + валидация + audit), `POST /balance/reload` (hot-reload). 2 шаблона, расширение DI-контейнера. 12 unit + 5 integration тестов. CI: lint 0, typecheck 0, 6 import contracts kept.
 
-**На `main` — 4.5-H** (PR #145) «Сетевой доступ к панели — proxy-chain, rate-limit, CORS, subdomain» (задача 4.5.9). XFF chain walk, RateLimitMiddleware, CORSMiddleware, subdomain config, deploy docs.
-
-**На `main` — 4.5-B** «RBAC из таблицы `admins` для admin_web» — задача 4.5.2. `require_permission(AdminCommandKind)`, audit-лог отказов.
-
-**На `main` (АРХИВ):** Sprint 4.5-C — Dashboard: real data widgets (задача 4.5.4). 18 тестов (11 unit + 7 integration).
-
-**На `main` (АРХИВ):** Sprint 4.5-D — Players section: search, card, activity, actions (задача 4.5.5). 18 тестов (11 unit + 7 integration).
-
-**На `main` (АРХИВ, PR #144):** Sprint 4.5-A — FastAPI scaffold + Telegram Login Widget + TOTP 2FA gate. Покрывает задачи 4.5.1 и 4.5.3.
+**На `main` (АРХИВ):** 4.5-A, 4.5-B (RBAC), 4.5-C (Dashboard), 4.5-D (Players), 4.5-H (Rate-limiting/CORS) смержены.
 
 **На `main` (АРХИВ, `9163b9f`):** **четырнадцатый и финальный PR Спринта 4.1** — **4.1-N** — Бизнес-метрики Prometheus + панели Grafana (закрывает остаток задачи 4.1.15 из ПД §7; **Спринт 4.1 закрыт целиком**). Новый порт `IBusinessMetrics` (`application/observability/business_metrics.py`) с 13 sync-методами + Literal-типы (`BusinessMetricsCurrency`/`CaravanOutcome`/`RaidOutcome`/`DuelResolvedOutcome`/`ForestRunOutcome`/`RouletteKind`) + null-object `NullBusinessMetrics`. Адаптер `PrometheusBusinessMetrics` (`infrastructure/observability/business_metrics.py`) с 10 метриками (4 Gauge + 6 Counter) на shared `CollectorRegistry` (общий `/metrics`-endpoint с Redis-метриками 4.1-J/L); все методы wrapped в try/except (no-throw guarantee). Инструментация 7 use-case-ов (CreateCaravan/CancelCaravan/FinishCaravanBattle/SummonBoss/CancelBossFight/FinishBossFight/RecordDonation) через kw-only `business_metrics: IBusinessMetrics | None = None` параметр. Wire-up в `bot/main.py`: `Container.business_metrics` (PrometheusBusinessMetrics при `needs_redis=True`, иначе NullBusinessMetrics); фоновый `_business_metrics_dau_poller(container, *, interval_seconds=60.0)` снимает DAU-snapshot через `IDauCounter.current()` (gauge, не counter — DAU как точка-во-времени); isinstance-guard на NullBusinessMetrics завершает таск сразу для тестов/sql-конфига. `monitoring/grafana/dashboards/business-metrics.json` (6 рядов × 12 data-панелей: DAU/Caravan active/Raid active/Prize pool stars-ton-usdt/Caravan outcomes/Raid outcomes/Forest started/Forest finished/Duel resolved/Roulette spins; `schemaVersion: 39`, `uid: pipirik-business-ops`). Тесты: 29 unit (PrometheusBusinessMetrics happy-path + NullBusinessMetrics no-op) + 10 smoke (JSON-валидность, schema, метрики, label-имена, datasource-uid). Финальное состояние: **7166 passed + 2 skipped + 95.26 % cov, 508.71 с**.
 

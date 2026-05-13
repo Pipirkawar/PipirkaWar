@@ -60,6 +60,11 @@ class AdminWebSettings(BaseSettings):
         description="Bootstrap password for TOTP self-service setup",
     )
 
+    balance_yaml_path: str = Field(
+        default="config/balance.yaml",
+        description="Path to balance.yaml (absolute or relative to CWD)",
+    )
+
     # --- Sprint 4.5-H: rate-limiting ---
     rate_limit_max_requests: int = Field(
         default=10,

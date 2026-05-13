@@ -23,6 +23,37 @@
 
 ---
 
+## 2026-05-13 — Спринт 4.5-G «Редактор balance.yaml»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 «Фаза 4 — Монетизация и масштаб», задача 4.5.8 (Редактор `display_names` и других секций `balance.yaml`). Спринт 4.5-G.
+
+Что сделано:
+- Route `GET /balance` — обзор всех секций `balance.yaml` (таблица с описаниями)
+- Route `GET /balance/{section}` — YAML-редактор для конкретной секции
+- Route `POST /balance/{section}` — сохранение с pydantic-валидацией, атомарной записью и audit-trail
+- Route `POST /balance/reload` — hot-reload баланса из файла
+- Шаблоны `balance_overview.html` и `balance_editor.html` (HTMX, extends base.html)
+- Расширение `AdminWebContainer` — добавлены `IBalanceConfig`, `IBalanceReloader`, `IBalanceWriter`
+- Настройка `ADMIN_WEB_BALANCE_YAML_PATH` в `AdminWebSettings`
+- Аудит через `AdminAuditEntry` с `source=WEB`, `action=ADMIN_BALANCE_SET`
+- Ссылка «Редактор баланса» в dashboard
+
+Результат / артефакты:
+- `src/pipirik_wars/admin_web/routes/balance.py`
+- `src/pipirik_wars/admin_web/templates/balance_overview.html`
+- `src/pipirik_wars/admin_web/templates/balance_editor.html`
+- 12 unit-тестов + 5 integration-тестов
+- CI: lint ✓, typecheck ✓, imports (6 contracts kept) ✓, tests ✓
+
+Заметки / решения:
+- Секционный YAML-редактор вместо построчного: проще UX, меньше ошибок
+- Атомарная запись (tmp + os.replace) — как в `YamlBalanceWriter`
+- Валидация полного файла через `BalanceConfig.model_validate` перед записью
+
+---
+
 ## 2026-05-13 — Спринт 4.5-F «Раздел Аудит-лог: фильтрация по audit_log и admin_audit_log»
 
 **Автор:** Devin (агентская цепочка)
@@ -42,7 +73,6 @@
 - CI: ruff 0, mypy 0, 6 import contracts kept, все тесты проходят
 
 ---
-
 ## 2026-05-13 — Спринт 4.5-B «RBAC из таблицы `admins` для admin_web»
 
 **Автор:** Devin (агентская цепочка)
@@ -70,7 +100,6 @@
 - Import-linter контракты сохранены: `bot ⇏ admin_web`, `admin_web ⇏ bot`
 
 ---
-
 ## 2026-05-13 — Спринт 4.5-C «Dashboard: real data widgets»
 
 **Автор:** Devin (агентская цепочка)
