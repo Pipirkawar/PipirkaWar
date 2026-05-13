@@ -1,0 +1,23 @@
+#
+# Grafana dashboard auto-provisioning (Спринт 4.1-L).
+#
+# Подгружает JSON-дашборды из /var/lib/grafana/dashboards (volume
+# мапится из ./grafana/dashboards/ через docker-compose.yml).
+#
+# `updateIntervalSeconds: 10` — перезагрузка JSON-файла каждые 10с,
+# полезно для итеративной разработки дашборда (отредактировал JSON
+# на хосте — Grafana подхватила автоматически).
+
+apiVersion: 1
+
+providers:
+  - name: pipirik-dashboards
+    orgId: 1
+    folder: Pipirik Wars
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
