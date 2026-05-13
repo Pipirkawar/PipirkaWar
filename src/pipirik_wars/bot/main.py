@@ -33,7 +33,9 @@ from pathlib import Path
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiohttp import web
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from prometheus_client import CollectorRegistry
 from pydantic import SecretStr
 
 from pipirik_wars.application.admin import (
@@ -318,6 +320,7 @@ from pipirik_wars.infrastructure.i18n import (
     FluentMessageBundle,
     PlayerLocaleResolverDB,
 )
+from pipirik_wars.infrastructure.observability import RedisMetrics, build_metrics_app
 from pipirik_wars.infrastructure.payments.tg_stars import HmacTgStarsPayloadVerifier
 from pipirik_wars.infrastructure.payments.tg_stars.settings import TgStarsSettings
 from pipirik_wars.infrastructure.payments.ton_connect import (
@@ -416,6 +419,13 @@ class Container:
     referrals: IReferralRepository
     anticheat: IAnticheatRepository
     anticheat_admin_alerter: IAnticheatAdminAlerter
+
+    # Обсервабельность (Спринт 4.1-J, шаг J.2): Prometheus-`CollectorRegistry`,
+    # в который RedisMetrics регистрирует свои counter/histogram-ы. Собирается
+    # в composition-root **только** при `needs_redis=True` — при default-sql-
+    # конфигурации Redis-операций нет и observability-endpoint не поднимается.
+    # `None` → web-runner в `run()` пропускается.
+    metrics_registry: CollectorRegistry | None
 
     # Шаблоны (Спринт 1.4.B / 1.5.G / 2.1.H)
     oracle_templates: IOracleTemplateProvider
@@ -700,6 +710,15 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         or settings.bot.dau_backend == "redis"
     )
     redis_client = build_redis_client(settings.redis) if needs_redis else None
+    # Спринт 4.1-J (шаг J.2): Prometheus-метрики Redis-операций. RedisMetrics
+    # инстанциируется ровно один раз и переиспользуется всеми тремя Redis-
+    # репозиториями (одна counter+histogram-пара на весь процесс). При
+    # default-sql-конфигурации (`needs_redis is False`) registry/metrics =
+    # None — репозитории, которые в этом случае не создаются, метрики тоже
+    # не получают; default-sql-репозитории Prometheus-инструментацией не
+    # покрыты (см. 4.1-J скоуп — метрики только на Redis-бэкенды).
+    metrics_registry: CollectorRegistry | None = CollectorRegistry() if needs_redis else None
+    redis_metrics = RedisMetrics(registry=metrics_registry) if needs_redis else None
     # Спринт 4.1-G (шаг G.4): config-flag-режим бэкенда `IActivityLockRepository`.
     # `sql` (default) — `SqlAlchemyActivityLockRepository` поверх таблицы
     # `activity_locks` (текущая, до 4.1-G, имплементация: INSERT ... ON CONFLICT
@@ -715,6 +734,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         activity_locks = RedisActivityLockRepository(
             client=redis_client,
             clock=clock,
+            metrics=redis_metrics,
         )
     else:
         activity_locks = SqlAlchemyActivityLockRepository(uow=uow)
@@ -756,7 +776,10 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     if settings.bot.lobby_backend == "redis":
         # `needs_redis` гарантирует not-None; ассерт сужает mypy-типы.
         assert redis_client is not None
-        global_lobby = RedisGlobalLobbyRepository(client=redis_client)
+        global_lobby = RedisGlobalLobbyRepository(
+            client=redis_client,
+            metrics=redis_metrics,
+        )
     else:
         global_lobby = SqlAlchemyGlobalLobbyRepository(uow=uow)
     referrals = SqlAlchemyReferralRepository(uow=uow)
@@ -806,7 +829,11 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
     if settings.bot.dau_backend == "redis":
         # `needs_redis` гарантирует not-None; ассерт сужает mypy-типы.
         assert redis_client is not None
-        dau_counter = RedisDauCounter(client=redis_client, clock=clock)
+        dau_counter = RedisDauCounter(
+            client=redis_client,
+            clock=clock,
+            metrics=redis_metrics,
+        )
     else:
         dau_counter = InMemoryDauCounter(clock=clock)
     dau_limit = InMemoryDauLimit(initial=settings.bot.max_dau)
@@ -2034,6 +2061,7 @@ def build_container(  # noqa: PLR0915 — composition root, плоский DI-с
         referrals=referrals,
         anticheat=anticheat,
         anticheat_admin_alerter=anticheat_admin_alerter,
+        metrics_registry=metrics_registry,
         oracle_templates=oracle_templates,
         duel_log_templates=duel_log_templates,
         bundle=bundle,
@@ -2434,6 +2462,19 @@ async def run(
         # 4.1-D / D.9.d: hourly cron `ExpireReservedPrizeLots` (1 инстанс,
         # обход валют внутри use-case-а).
         scheduler.schedule_expire_reserved_prize_lots_cron()
+
+    # Спринт 4.1-J (шаг J.2): Prometheus-`/metrics`-endpoint. Поднимаем
+    # отдельный aiohttp-web-runner на `BOT_METRICS_PORT` (default 9100)
+    # **только** если activity-lock/lobby/dau бэкенд выставлен в `redis`
+    # (`container.metrics_registry is not None`). Default-sql-конфигурация
+    # observability-сервер не поднимает.
+    metrics_runner: web.AppRunner | None = None
+    if container.metrics_registry is not None:
+        metrics_app = build_metrics_app(container.metrics_registry)
+        metrics_runner = web.AppRunner(metrics_app)
+        await metrics_runner.setup()
+        site = web.TCPSite(metrics_runner, host="0.0.0.0", port=settings.bot.metrics_port)
+        await site.start()
     try:
         await dispatcher.start_polling(
             bot,
@@ -2442,6 +2483,8 @@ async def run(
     finally:
         if isinstance(scheduler, APSchedulerDelayedJobScheduler):
             scheduler.shutdown(wait=False)
+        if metrics_runner is not None:
+            await metrics_runner.cleanup()
         await bot.session.close()
 
 

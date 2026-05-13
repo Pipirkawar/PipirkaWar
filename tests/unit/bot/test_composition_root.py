@@ -1283,6 +1283,7 @@ def _container_with_fakes() -> Container:  # noqa: PLR0915
         oracle_history=oracle_history,
         anticheat=anticheat,
         anticheat_admin_alerter=anticheat_admin_alerter,
+        metrics_registry=None,
         oracle_templates=oracle_templates,
         duel_log_templates=duel_log_templates,
         clan_quote_provider=clan_quote_provider,
@@ -1903,6 +1904,92 @@ class TestBuildContainer:
         assert isinstance(c.activity_locks, SqlAlchemyActivityLockRepository)
         assert isinstance(c.global_lobby, SqlAlchemyGlobalLobbyRepository)
         assert isinstance(c.dau_counter, RedisDauCounter)
+
+    def test_build_container_metrics_registry_is_none_for_default_sql(self) -> None:
+        """Default-sql-конфигурация не создаёт `metrics_registry`.
+
+        Спринт 4.1-J (J.2): observability включается строго вместе с
+        Redis-бэкендами. При default-sql `needs_redis is False` ⇒
+        `container.metrics_registry is None` ⇒ web-runner `/metrics`
+        в `run()` не поднимается.
+        """
+        c = build_container(settings=_test_settings())
+        assert c.metrics_registry is None
+
+    def test_build_container_metrics_registry_is_set_for_activity_lock_redis(self) -> None:
+        """`activity_lock_backend=redis` ⇒ `metrics_registry` ненулевой."""
+        settings = Settings(
+            environment="test",
+            db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+            bot=BotSettings(
+                token=SecretStr("test-token"),
+                activity_lock_backend="redis",
+            ),
+            bootstrap=BootstrapSettings(),
+        )
+        c = build_container(settings=settings)
+        assert c.metrics_registry is not None
+
+    def test_build_container_metrics_registry_is_set_for_lobby_redis(self) -> None:
+        """`lobby_backend=redis` ⇒ `metrics_registry` ненулевой."""
+        settings = Settings(
+            environment="test",
+            db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+            bot=BotSettings(
+                token=SecretStr("test-token"),
+                lobby_backend="redis",
+            ),
+            bootstrap=BootstrapSettings(),
+        )
+        c = build_container(settings=settings)
+        assert c.metrics_registry is not None
+
+    def test_build_container_metrics_registry_is_set_for_dau_redis(self) -> None:
+        """`dau_backend=redis` ⇒ `metrics_registry` ненулевой."""
+        settings = Settings(
+            environment="test",
+            db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+            bot=BotSettings(
+                token=SecretStr("test-token"),
+                dau_backend="redis",
+            ),
+            bootstrap=BootstrapSettings(),
+        )
+        c = build_container(settings=settings)
+        assert c.metrics_registry is not None
+
+    def test_build_container_redis_repos_share_metrics_registry(self) -> None:
+        """Все три redis-репозитория получают `metrics` из одного registry.
+
+        Спринт 4.1-J (J.2): `RedisMetrics(registry=metrics_registry)`
+        инстанциируется ровно один раз в composition-root и инжектится
+        через `metrics`-параметр конструктора во все три Redis-
+        репозитория. Sanity-инвариант через `repo._metrics is …` — все
+        указывают на тот же RedisMetrics-instance.
+        """
+        settings = Settings(
+            environment="test",
+            db=DatabaseSettings(url=SecretStr("sqlite+aiosqlite:///:memory:")),
+            bot=BotSettings(
+                token=SecretStr("test-token"),
+                activity_lock_backend="redis",
+                lobby_backend="redis",
+                dau_backend="redis",
+            ),
+            bootstrap=BootstrapSettings(),
+        )
+        c = build_container(settings=settings)
+        # Все три repo-я хранят ссылку на один и тот же `RedisMetrics`-
+        # инстанс. Обращение к protected-`_metrics`-у оправдано контрактом
+        # composition-root: один RedisMetrics инжектится во все три.
+        # `isinstance` сужает mypy-типы до конкретных Redis-репозиториев,
+        # у которых атрибут `_metrics` объявлен.
+        assert isinstance(c.activity_locks, RedisActivityLockRepository)
+        assert isinstance(c.global_lobby, RedisGlobalLobbyRepository)
+        assert isinstance(c.dau_counter, RedisDauCounter)
+        assert c.activity_locks._metrics is not None
+        assert c.activity_locks._metrics is c.global_lobby._metrics
+        assert c.global_lobby._metrics is c.dau_counter._metrics
 
 
 class TestBuildDispatcher:

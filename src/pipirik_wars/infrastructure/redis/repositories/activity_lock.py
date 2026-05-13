@@ -34,6 +34,8 @@ condition между двумя ``try_acquire`` на один key невозмо
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
 from redis.asyncio import Redis
@@ -44,16 +46,18 @@ from pipirik_wars.domain.security import (
     LockReason,
 )
 from pipirik_wars.domain.shared.ports.clock import IClock
+from pipirik_wars.infrastructure.observability.redis_metrics import RedisMetrics
 
 __all__ = ["RedisActivityLockRepository"]
 
 _KEY_PREFIX_DEFAULT = "lock"
+_BACKEND = "activity_lock"
 
 
 class RedisActivityLockRepository(IActivityLockRepository):
     """Redis-имплементация `IActivityLockRepository` (Спринт 4.1-G, G.3)."""
 
-    __slots__ = ("_client", "_clock", "_key_prefix")
+    __slots__ = ("_client", "_clock", "_key_prefix", "_metrics")
 
     def __init__(
         self,
@@ -61,10 +65,21 @@ class RedisActivityLockRepository(IActivityLockRepository):
         client: Redis,
         clock: IClock,
         key_prefix: str = _KEY_PREFIX_DEFAULT,
+        metrics: RedisMetrics | None = None,
     ) -> None:
         self._client = client
         self._clock = clock
         self._key_prefix = key_prefix
+        self._metrics = metrics
+
+    @asynccontextmanager
+    async def _track(self, op: str) -> AsyncIterator[None]:
+        """Обёртка для опциональной Prometheus-instrumentation."""
+        if self._metrics is None:
+            yield
+            return
+        async with self._metrics.track(backend=_BACKEND, op=op):
+            yield
 
     def _key(self, actor_kind: str, actor_id: int) -> str:
         return f"{self._key_prefix}:{actor_kind}:{actor_id}"
@@ -87,26 +102,28 @@ class RedisActivityLockRepository(IActivityLockRepository):
         `False` без обращения к Redis — fail-safe (Redis не принимает
         ``PX 0`` или отрицательные значения).
         """
-        ttl_ms = int((expires_at - now).total_seconds() * 1000)
-        if ttl_ms <= 0:
-            return False
-        key = self._key(actor_kind, actor_id)
-        payload = json.dumps(
-            {
-                "reason": reason.value,
-                "acquired_at": now.isoformat(),
-            },
-            separators=(",", ":"),
-        )
-        # redis-py возвращает True если ключ создан (NX-success), None
-        # если ключ уже существовал (NX-conflict). Bool-cast: True → True,
-        # None → False.
-        result = await self._client.set(key, payload, nx=True, px=ttl_ms)
-        return result is True
+        async with self._track("try_acquire"):
+            ttl_ms = int((expires_at - now).total_seconds() * 1000)
+            if ttl_ms <= 0:
+                return False
+            key = self._key(actor_kind, actor_id)
+            payload = json.dumps(
+                {
+                    "reason": reason.value,
+                    "acquired_at": now.isoformat(),
+                },
+                separators=(",", ":"),
+            )
+            # redis-py возвращает True если ключ создан (NX-success), None
+            # если ключ уже существовал (NX-conflict). Bool-cast: True → True,
+            # None → False.
+            result = await self._client.set(key, payload, nx=True, px=ttl_ms)
+            return result is True
 
     async def release(self, *, actor_kind: str, actor_id: int) -> None:
         """`DEL key`. NO-OP если ключа нет (Redis возвращает 0)."""
-        await self._client.delete(self._key(actor_kind, actor_id))
+        async with self._track("release"):
+            await self._client.delete(self._key(actor_kind, actor_id))
 
     async def get(
         self,
@@ -127,24 +144,25 @@ class RedisActivityLockRepository(IActivityLockRepository):
         * Иначе восстанавливает `ActivityLock` из JSON-payload-а;
           ``expires_at = clock.now() + PTTL``.
         """
-        key = self._key(actor_kind, actor_id)
-        async with self._client.pipeline(transaction=True) as pipe:
-            pipe.get(key)
-            pipe.pttl(key)
-            results = await pipe.execute()
-        raw_value, pttl_ms = results
-        if raw_value is None:
-            return None
-        if not isinstance(pttl_ms, int) or pttl_ms < 0:
-            return None
-        data = json.loads(raw_value)
-        reason = LockReason(data["reason"])
-        acquired_at = datetime.fromisoformat(data["acquired_at"])
-        expires_at = self._clock.now() + timedelta(milliseconds=pttl_ms)
-        return ActivityLock(
-            actor_kind=actor_kind,
-            actor_id=actor_id,
-            reason=reason,
-            acquired_at=acquired_at,
-            expires_at=expires_at,
-        )
+        async with self._track("get"):
+            key = self._key(actor_kind, actor_id)
+            async with self._client.pipeline(transaction=True) as pipe:
+                pipe.get(key)
+                pipe.pttl(key)
+                results = await pipe.execute()
+            raw_value, pttl_ms = results
+            if raw_value is None:
+                return None
+            if not isinstance(pttl_ms, int) or pttl_ms < 0:
+                return None
+            data = json.loads(raw_value)
+            reason = LockReason(data["reason"])
+            acquired_at = datetime.fromisoformat(data["acquired_at"])
+            expires_at = self._clock.now() + timedelta(milliseconds=pttl_ms)
+            return ActivityLock(
+                actor_kind=actor_kind,
+                actor_id=actor_id,
+                reason=reason,
+                acquired_at=acquired_at,
+                expires_at=expires_at,
+            )

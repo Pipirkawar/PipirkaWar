@@ -1,4 +1,4 @@
-.PHONY: help install install-dev lint format typecheck test cov audit imports ci pre-commit smoke clean
+.PHONY: help install install-dev lint format typecheck test cov audit imports ci pre-commit smoke load-test clean
 
 PY ?= python3
 
@@ -14,6 +14,7 @@ help:
 	@echo "  make cov           — отчёт coverage (term + html)"
 	@echo "  make audit         — pip-audit (CVE)"
 	@echo "  make pre-commit    — pre-commit run --all-files"
+	@echo "  make load-test     — load-тесты Прометея-FakeRedis (Спринт 4.1-J)"
 	@echo "  make ci            — полный набор (lint + types + imports + test + audit)"
 
 install:
@@ -49,6 +50,15 @@ audit:
 
 smoke:
 	pytest -m smoke tests/smoke/ --no-cov
+
+load-test:
+	# Спринт 4.1-J: запуск load-сценариев на FakeRedis. `-o addopts=` обнуляет
+	# дефолтные addopts из pyproject.toml (включая `-m "not load"` и xdist-
+	# параллелизм — load-тесты профилируют latency, gather-конкуренция уже
+	# внутри теста, xdist между файлами добавляет noise). --no-cov — на load-
+	# тестах интересны p99-латенси, не покрытие. Параметризация через env-
+	# vars `LOAD_OPS_COUNT` (default 2000) / `LOAD_P99_BUDGET_MS` (default 50).
+	pytest -o addopts= -m load --no-cov tests/load/
 
 pre-commit:
 	pre-commit run --all-files
