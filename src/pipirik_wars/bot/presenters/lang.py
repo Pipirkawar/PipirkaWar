@@ -8,7 +8,7 @@
 английском, не на русском). Поэтому `confirmed(...)` принимает
 именно ту `Locale`, которую пользователь только что выбрал — handler
 читает её из `SetPlayerLocaleResult.locale_override` (или передаёт
-`Locale("ru"|"en"|"pt"|"es"|"tr"|"id"|"fa"|"uk")` напрямую) и НЕ
+`Locale("ru"|"en"|"pt"|"es"|"tr"|"id"|"fa"|"uk"|"ar")` напрямую) и НЕ
 использует старую `Locale` из middleware-а (которая в этот момент
 представляет ещё прошлый выбор).
 
@@ -43,6 +43,7 @@ _KEY_SET_TR: Final[MessageKey] = MessageKey("lang-set-tr")
 _KEY_SET_ID: Final[MessageKey] = MessageKey("lang-set-id")
 _KEY_SET_FA: Final[MessageKey] = MessageKey("lang-set-fa")
 _KEY_SET_UK: Final[MessageKey] = MessageKey("lang-set-uk")
+_KEY_SET_AR: Final[MessageKey] = MessageKey("lang-set-ar")
 
 # `lang-set-<code>` ключ для каждой поддерживаемой локали. Ключи отсутствующие
 # в этом словаре фолбэкаются на `lang-set-en` (теоретически не должно
@@ -57,6 +58,7 @@ _KEY_SET_BY_LOCALE: Final[dict[str, MessageKey]] = {
     "id": _KEY_SET_ID,
     "fa": _KEY_SET_FA,
     "uk": _KEY_SET_UK,
+    "ar": _KEY_SET_AR,
 }
 
 
