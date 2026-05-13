@@ -1,0 +1,39 @@
+{% if results %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>tg_id</th>
+            <th>@username</th>
+            <th>Имя</th>
+            <th>📏 Длина</th>
+            <th>📐 Толщина</th>
+            <th>Статус</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for p in results %}
+        <tr>
+            <td><a href="/players/{{ p.tg_id }}">{{ p.tg_id }}</a></td>
+            <td>{{ ("@" ~ p.username) if p.username else "—" }}</td>
+            <td>{{ p.name or "—" }}</td>
+            <td>{{ p.length_cm }} см</td>
+            <td>{{ p.thickness_level }}</td>
+            <td>
+                {% if p.status.value == "banned" %}
+                    <span class="badge badge-danger">banned</span>
+                {% elif p.status.value == "frozen" %}
+                    <span class="badge badge-warning">frozen</span>
+                {% else %}
+                    <span class="badge badge-ok">active</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<p class="text-muted">Найдено: {{ results | length }}</p>
+{% elif query %}
+<p class="text-muted">Ничего не найдено по запросу «{{ query }}».</p>
+{% else %}
+<p class="text-muted">Введите запрос для поиска игроков.</p>
+{% endif %}

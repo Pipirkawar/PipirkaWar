@@ -54,6 +54,63 @@
 
 ---
 
+## 2026-05-13 — Спринт 4.5-C «Dashboard: real data widgets»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 «Фаза 4 — Монетизация и масштаб», задача 4.5.4 (Дашборд). Третий PR Спринта 4.5 «Веб-админ-панель». Ветка: `devin/1778705833-sprint-4-5-C-dashboard`.
+
+Что сделано:
+- `application/admin/get_dashboard_stats.py`: DTO `DashboardStats` (dau, mau, total_players, signup_queue_size, active_caravans, active_raids, recent_errors) + `ErrorEntry` + хелперы `today_msk()` / `thirty_days_ago_msk()`
+- `admin_web/routes/dashboard.py`: полная реализация маршрута `/dashboard` с 6 SQL-агрегациями (DAU из `daily_active`, MAU за 30 дней, total active players из `users`, signup queue size из `signup_queue`, active caravans из `caravans`, active raids из `boss_fights`) + маршрут `/dashboard/stats` (HTMX-partial)
+- `admin_web/templates/dashboard.html`: шаблон с HTMX auto-refresh (каждые 30с через `hx-get="/dashboard/stats"`)
+- `admin_web/templates/partials/dashboard_widgets.html`: grid-виджеты (DAU, MAU, Total Players, Signup Queue, Active Caravans, Active Raids) + таблица последних админ-действий из `admin_audit_log`
+- `admin_web/static/styles.css`: CSS-grid для виджетов дашборда, стили таблицы аудита
+- 11 unit-тестов: DTO frozen, поля, zero/large values, date helpers
+- 7 integration-тестов: auth guard (anon → 401), empty data, seeded data (players, clans, caravans, raids, signup queue, audit log), HTMX trigger, audit entries
+
+Результат / артефакты:
+- Все CI-гейты пройдены: ruff 0, mypy 0, 6 import contracts kept, 7271 passed + 2 skipped
+
+Заметки / решения:
+- DAU/MAU считаются из таблицы `daily_active` (реальные данные), а не из Prometheus — Prometheus-метрики отражают snapshot бота, а дашборд читает из PG напрямую
+- «Последние ошибки» реализованы как последние записи `admin_audit_log` (т.к. отдельного error-tracking в проекте нет; admin audit — единственный источник ошибок/действий)
+- Для HTMX-partial используется отдельный endpoint `/dashboard/stats`, чтобы обновлять только виджеты без перезагрузки всей страницы
+- `max-width` CSS для `main` расширен с 600px до 960px для размещения grid-виджетов
+
+---
+
+## 2026-05-13 — Спринт 4.5-D «Players section: search, card, activity, actions» (задача 4.5.5)
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 задача 4.5.5, Sprint 4.5-D
+
+Что сделано:
+- Раздел «Игроки» в admin_web: HTMX live-search, карточка игрока, журнал активности
+- Маршруты: `/players`, `/players/search`, `/players/{tg_id}`, `/players/{tg_id}/activity`
+- Действия: бан (`/players/{tg_id}/ban`), заморозка (`/freeze`), разморозка (`/unfreeze`) — через существующие use-case-ы
+- 4 HTML-шаблона (players_list.html, player_card.html, partials/players_rows.html, partials/player_activity.html)
+- DI: добавлен `balance_config` (`IBalanceConfig`) в `AdminWebContainer` для `ForestRunRepository`
+- Навигация: ссылка «Игроки» в base.html header
+- CSS: стили для таблиц, бейджей статусов, форм действий
+
+Результат / артефакты:
+- `src/pipirik_wars/admin_web/routes/players.py` — 7 эндпоинтов
+- `src/pipirik_wars/admin_web/templates/players_list.html`, `player_card.html`
+- `src/pipirik_wars/admin_web/templates/partials/players_rows.html`, `player_activity.html`
+- `src/pipirik_wars/admin_web/composition.py` — расширен AdminWebContainer
+- `tests/unit/admin_web/test_players_routes.py` — 11 unit-тестов
+- `tests/integration/admin_web/test_players.py` — 7 integration-тестов
+
+Заметки / решения:
+- Все действия делегируются существующим use-case-ам (FindPlayers, GetPlayerCard, BanPlayer, FreezePlayer, UnfreezePlayer) — логика не дублируется
+- HTMX live-search с debounce 300ms для отзывчивости
+- Audit trail в карточке фильтруется по target_kind=player + target_id=tg_id
+- ForestRunRepository требует IBalanceConfig — добавлен YamlBalanceLoader в контейнер
+
+---
+
 ## 2026-05-13 — Спринт 4.5-A «Foundation: FastAPI scaffold + Telegram Login Widget + TOTP 2FA gate»
 
 **Автор:** Devin (агентская цепочка)

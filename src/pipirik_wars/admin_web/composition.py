@@ -1,4 +1,4 @@
-"""DI container for admin web panel (Sprint 4.5-A, §5)."""
+"""DI container for admin web panel (Sprint 4.5-A/D, §5)."""
 
 from __future__ import annotations
 
@@ -21,6 +21,10 @@ from pipirik_wars.infrastructure.admin.pyotp_totp_verifier import PyOtpTotpVerif
 from pipirik_wars.infrastructure.balance.loader import YamlBalanceLoader
 from pipirik_wars.infrastructure.balance.writer import YamlBalanceWriter
 from pipirik_wars.infrastructure.clock.real_clock import RealClock
+
+_DEFAULT_BALANCE_YAML = (
+    Path(__file__).resolve().parent.parent.parent.parent / "config" / "balance.yaml"
+)
 
 
 @dataclass(frozen=True, slots=True)
