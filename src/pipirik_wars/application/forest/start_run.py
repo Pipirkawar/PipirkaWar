@@ -30,6 +30,10 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from pipirik_wars.application.dto.inputs import StartForestRunInput
+from pipirik_wars.application.observability import (
+    IBusinessMetrics,
+    NullBusinessMetrics,
+)
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.domain.balance.ports import IBalanceConfig
 from pipirik_wars.domain.forest import (
@@ -72,6 +76,7 @@ class StartForestRun:
     __slots__ = (
         "_audit",
         "_balance",
+        "_business_metrics",
         "_clock",
         "_locks",
         "_players",
@@ -93,6 +98,7 @@ class StartForestRun:
         audit: IAuditLogger,
         clock: IClock,
         scheduler: IDelayedJobScheduler,
+        business_metrics: IBusinessMetrics | None = None,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -103,6 +109,7 @@ class StartForestRun:
         self._audit = audit
         self._clock = clock
         self._scheduler = scheduler
+        self._business_metrics: IBusinessMetrics = business_metrics or NullBusinessMetrics()
 
     async def execute(self, input_dto: StartForestRunInput) -> ForestRunStarted:
         """Стартовать поход. Бросает `PlayerNotFoundError`, если игрока
@@ -155,6 +162,7 @@ class StartForestRun:
                     occurred_at=now,
                 )
             )
+        self._business_metrics.inc_forest_started()
         return ForestRunStarted(run=saved, cooldown_minutes=cooldown_minutes)
 
     async def _fetch_player(self, *, tg_id: int) -> Player:

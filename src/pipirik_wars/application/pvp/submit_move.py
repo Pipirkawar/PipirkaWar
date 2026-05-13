@@ -32,6 +32,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from pipirik_wars.application.dto.inputs import SubmitMoveInput
+from pipirik_wars.application.observability import (
+    DuelResolvedOutcome,
+    IBusinessMetrics,
+    NullBusinessMetrics,
+)
 from pipirik_wars.application.pvp.apply_outcome import apply_duel_outcome
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.domain.balance.ports import IBalanceConfig
@@ -41,6 +46,7 @@ from pipirik_wars.domain.progression.length_granter import ILengthGranter
 from pipirik_wars.domain.pvp import (
     Duel,
     DuelNotFoundError,
+    DuelWinner,
     IDuelRepository,
     Position,
     RoundChoice,
@@ -69,6 +75,7 @@ class SubmitMove:
     __slots__ = (
         "_audit",
         "_balance",
+        "_business_metrics",
         "_clock",
         "_duels",
         "_length_granter",
@@ -90,6 +97,7 @@ class SubmitMove:
         clock: IClock,
         balance: IBalanceConfig | None = None,
         scheduler: IDelayedJobScheduler | None = None,
+        business_metrics: IBusinessMetrics | None = None,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -100,6 +108,7 @@ class SubmitMove:
         self._clock = clock
         self._balance = balance
         self._scheduler = scheduler
+        self._business_metrics: IBusinessMetrics = business_metrics or NullBusinessMetrics()
 
     async def execute(self, input_dto: SubmitMoveInput) -> MoveSubmitted:
         """Отправить ход. Бросает:
@@ -150,6 +159,7 @@ class SubmitMove:
                 await self._release_locks(saved)
                 await self._audit_completed(duel=saved, now=now)
                 duel_completed = True
+                self._business_metrics.inc_duel_resolved(_duel_outcome_label(saved))
 
         # AFK-таймер раунда — снаружи UoW (идемпотентные операции
         # шедулера). Алгоритм (Спринт 2.1.G):
@@ -225,6 +235,22 @@ class SubmitMove:
                 f"Player tg_id={player.tg_id} loaded without id; repository contract violation",
             )
         return player.id
+
+
+def _duel_outcome_label(duel: Duel) -> DuelResolvedOutcome:
+    """Маппинг `DuelWinner` -> метрика-label для `SubmitMove`-резолва.
+
+    В этой ветке (не AFK) фактический победитель определяется суммой
+    нанесённого урона — поэтому метрика отражает чистый исход, без
+    маркировки AFK.
+    """
+    outcome = duel.final_outcome
+    assert outcome is not None
+    if outcome.winner is DuelWinner.P1:
+        return "p1_win"
+    if outcome.winner is DuelWinner.P2:
+        return "p2_win"
+    return "draw"
 
 
 __all__ = [

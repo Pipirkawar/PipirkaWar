@@ -33,6 +33,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pipirik_wars.application.dto.inputs import FinishForestRunInput
+from pipirik_wars.application.observability import (
+    ForestRunOutcome,
+    IBusinessMetrics,
+    NullBusinessMetrics,
+)
 from pipirik_wars.application.security import ActivityLockService
 from pipirik_wars.domain.forest import (
     ForestRun,
@@ -91,6 +96,7 @@ class FinishForestRun:
 
     __slots__ = (
         "_audit",
+        "_business_metrics",
         "_clock",
         "_length_granter",
         "_locks",
@@ -109,6 +115,7 @@ class FinishForestRun:
         length_granter: ILengthGranter,
         audit: IAuditLogger,
         clock: IClock,
+        business_metrics: IBusinessMetrics | None = None,
     ) -> None:
         self._uow = uow
         self._players = players
@@ -117,6 +124,7 @@ class FinishForestRun:
         self._length_granter = length_granter
         self._audit = audit
         self._clock = clock
+        self._business_metrics: IBusinessMetrics = business_metrics or NullBusinessMetrics()
 
     async def execute(self, input_dto: FinishForestRunInput) -> ForestRunFinished:
         """Финишировать поход. Бросает `ForestRunNotFoundError`, если
@@ -208,6 +216,7 @@ class FinishForestRun:
                         occurred_at=now,
                     )
                 )
+        self._business_metrics.inc_forest_finished(_forest_finished_outcome(finished_run))
         return ForestRunFinished(
             run=finished_run,
             player_before=player_before,
@@ -216,6 +225,20 @@ class FinishForestRun:
             granted_name=granted_name,
             was_already_finished=False,
         )
+
+
+def _forest_finished_outcome(run: ForestRun) -> ForestRunOutcome:
+    """Маппинг результата завершённого лесного забега в метрику-label.
+
+    Соответствие `ForestRunOutcome`-домену:
+    * `NameDrop` и `ItemDrop` → `drop` (игрок получил дроп).
+    * `NoDrop` → `success` (просто прибавка длины без предметов).
+    `idle_timeout` / `cancelled` — для будущих вариантов (пока все
+    забеги завершаются через шедулер без отмены).
+    """
+    if isinstance(run.drop, NoDrop):
+        return "success"
+    return "drop"
 
 
 def drop_kind_label(run: ForestRun) -> str:
