@@ -23,6 +23,50 @@
 
 ---
 
+## 2026-05-13 — Спринт 4.1-M «ИИ-генерация предсказаний / forest-логов / duel-логов»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature + infra
+**Связано:** ПД §7 «Фаза 4 — Монетизация и масштаб», задача 4.1.13 «Перевод предсказаний/логов на ИИ» (опц., Growth-stage по ГДД §14.1 «JSON + ИИ»). `current_tasks.md` чек-лист 4.1-M (M.0–M.8). Базируется на `main = 6c81a69` (merge PR #140 «Спринт 4.1-L Grafana-дашборд»). **Тринадцатый PR Спринта 4.1.**
+
+Что сделано:
+
+- M.0 — pivot `current_tasks.md` (архивирован чек-лист 4.1-L) + sticky `AGENT_HANDOFF.md` со снимком 4.1-L → 4.1-M.
+- M.1 — порт `IAiTextGenerator` (application/ai/ports.py) — 3 async-метода (`generate_oracle_predictions`, `generate_forest_logs`, `generate_duel_logs`) + `DuelLogKind` Literal-тип + `AiGenerationError` исключение. Docstring фиксирует ожидаемые плейсхолдеры и стилистику.
+- M.2 — `OpenAiTextGenerator` (infrastructure/ai/openai_generator.py): duck-typed `client: Any` для optional `openai` dep; safety-системный prompt (no NSFW/политика/оскорбления); retry на TimeoutError (1 повтор, sleep 500 мс); валидация плейсхолдеров; 3 kind-specific prompt-а для duel-логов. `AiSettings` (env-prefix `AI_*`): `enabled`, `api_key: SecretStr`, `model="gpt-4o-mini"`, `base_url`, `timeout_seconds`, `refresh_interval_hours`, `batch_size_oracle/forest/duel` с разумными границами. `Settings.ai: AiSettings` подключён в композите.
+- M.3 — in-memory кэш per-locale в каждом AI-провайдере (отдельного Redis-модуля не понадобилось: single-process bot, refresh раз в сутки).
+- M.4 — `AiOracleTemplateProvider(IOracleTemplateProvider)`: обёртка над JSON-fallback; `get_templates(locale)` отдаёт кэш или fallback; `async refresh(locale)` вызывает LLM, возвращает `True/False`; `OracleTemplate.id` формата `ai.<locale>.NNNN`.
+- M.5 — `AiForestLogTemplateProvider` + `AiDuelLogTemplateProvider` (3 LLM-вызова per locale, по одному на RoundOutcomeKind; per-kind isolation: сбой одной категории не блокирует остальные).
+- M.6 — wire-up в `bot/main.py`: lazy-импорт `openai.AsyncOpenAI` только при `AI_ENABLED=True` + валидном `API_KEY`; ImportError → warn + fallback; обёртка JSON-провайдеров в AI-обёртки; новые `Container.ai_*_provider` поля; `_ai_refresh_loop(container, interval_seconds)` фоновый async-таск с немедленным первым проходом + sleep; `run()` стартует/cancel-ит таск при наличии AI-провайдеров.
+- M.7 — unit-тесты (60 новых тестов):
+  - `tests/unit/infrastructure/settings/test_ai_settings.py` (13 тестов): defaults, валидация границ (timeout/refresh/batch), SecretStr-masking, env-loading через `AI_*`.
+  - `tests/unit/infrastructure/ai/test_openai_generator.py` (22 теста): happy path для 3 методов, duel-dispatch per kind, валидация плейсхолдеров, парсинг JSON (4 негативных пути), retry на TimeoutError + RuntimeError.
+  - `tests/unit/infrastructure/ai/test_oracle_provider.py` (10 тестов): empty cache → fallback, refresh success → IDs `ai.<locale>.NNNN`, `cached_locales` property, AiGenerationError → refresh()=False + старый кэш сохранён.
+  - `tests/unit/infrastructure/ai/test_forest_log_provider.py` (3 теста): аналогичный контракт.
+  - `tests/unit/infrastructure/ai/test_duel_log_provider.py` (4 теста): 3 LLM-вызова, per-kind cache filling, per-kind isolation на failure, all-failure → fallback.
+  - `tests/unit/bot/test_ai_refresh_loop.py` (3 теста): early-return при all-None, full-pass через 8 локалей × 3 провайдера, skip None-провайдеров.
+- M.8 — `docs/history.md` (эта запись) + `docs/current_tasks.md` чек-лист `[x]`; `git rm AGENT_HANDOFF.md` отдельным коммитом; PR на main; CI green.
+
+Результат / артефакты:
+
+- **PR:** см. финальный коммит-merge.
+- Тесты: **7124 passed + 2 skipped + 95.37 % cov, 528.12 с** (+60 новых тестов vs 4.1-L baseline 7064).
+- 3 новых модуля порта/адаптеров (`application/ai/`, `infrastructure/ai/`).
+- 1 новый модуль настроек (`infrastructure/settings/ai.py`).
+- `bot/main.py`: +146 строк (lazy-AI wire-up + background refresh task).
+
+Заметки / решения:
+
+- **AI-feature строго opt-in.** Default `AI_ENABLED=False` → byte-identical поведение pre-4.1-M: JSON-провайдеры напрямую, без `openai` SDK импорта, без фонового таска.
+- **Zero-downtime fallback.** Каждый AI-провайдер обёртывает (а не заменяет) JSON-провайдер. Пустой кэш / `AiGenerationError` / ImportError `openai` → use-case получает static-шаблон.
+- **`openai` — optional dependency.** Не добавлен в обязательные `pyproject.toml` deps. Lazy-импорт + duck-typed `client: Any` позволяют пройти mypy / тесты без пакета.
+- **Per-kind isolation для duel.** Сбой одной категории (`single_hit` не сгенерилось) не блокирует две другие — кэш частично заполняется, остальное берётся из fallback.
+- **Refresh-задача** запускается с немедленным первым проходом (без upfront sleep), чтобы AI-кэш заполнился сразу при старте бота, а не через 24 ч.
+- **Что НЕ входит** (по согласованию M.0): новые типы шаблонов (clan quotes), AlertManager, production-Grafana, тесты против живого OpenAI API.
+- Качество AI-генераций (стилистика, safety) проверяется только на уровне валидации плейсхолдеров. Полноценная content-safety — отдельная задача (отложена).
+
+---
+
 ## 2026-05-13 — Спринт 4.1-L «Grafana-дашборд для Prometheus-метрик Redis-операций»
 
 **Автор:** Devin (агентская цепочка)
