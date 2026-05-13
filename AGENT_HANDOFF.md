@@ -8,7 +8,7 @@
 - **Ветка:** `devin/1778692137-sprint-4-1-L-grafana-dashboard`
 - **База:** `main = 1b8f0be` (merge PR #139 «4.1-K i18n: расширение каталога локалей»)
 - **PR #139 (4.1-K):** влит в main. CI зелёный (7055 passed + 2 skipped + 95.45% cov, 530.40 с).
-- **Текущий шаг:** L.0 (snapshot pivot + sticky HANDOFF, baseline `make ci` запуск).
+- **Текущий шаг:** L.1 закрыт (Grafana dashboard JSON создан) → L.2 (docker-compose stack) следующий.
 - **Baseline CI на `main = 1b8f0be`:** **7055 passed + 2 skipped + 95.45 % cov, 529.77 с** (Python 3.12.8 + pre-commit hooks, без warnings).
 
 ## Скоуп 4.1-L (часть задачи 4.1.15)

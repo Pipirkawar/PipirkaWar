@@ -1,0 +1,485 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Дашборд Prometheus-метрик Redis-операций Pipirik Wars (Спринт 4.1-L). Визуализирует counter `pipirik_redis_op_total{backend, op, outcome}` и histogram `pipirik_redis_op_duration_seconds{backend, op}`, инструментированные в 4.1-J. Три backend-а: activity_lock, lobby, dau.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "panels": [],
+      "title": "Overview",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "Суммарный rate Redis-операций по backend-у (per second, окно 1m).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 100},
+              {"color": "red", "value": 1000}
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 1},
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "editorMode": "code",
+          "expr": "sum by (backend) (rate(pipirik_redis_op_total{backend=~\"$backend\"}[1m]))",
+          "legendFormat": "{{backend}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Redis RPS by backend",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "Доля операций с outcome=error за последние 5 минут (по всем backend-ам).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "decimals": 2,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.5},
+              {"color": "red", "value": 1}
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 1},
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "editorMode": "code",
+          "expr": "100 * (sum(rate(pipirik_redis_op_total{backend=~\"$backend\", outcome=\"error\"}[5m])) / clamp_min(sum(rate(pipirik_redis_op_total{backend=~\"$backend\"}[5m])), 0.001))",
+          "legendFormat": "error rate",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Error rate % (5m)",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 8},
+      "id": 101,
+      "panels": [],
+      "title": "Latency",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "Квантили задержки p50/p95/p99 по каждому backend-у (окно 5m). Считается через histogram_quantile() поверх _bucket-метрики.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false},
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {"type": "linear"},
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {"group": "A", "mode": "none"},
+            "thresholdsStyle": {"mode": "off"}
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green", "value": null}]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 9},
+      "id": 3,
+      "options": {
+        "legend": {"calcs": ["mean", "lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.50, sum by (le, backend) (rate(pipirik_redis_op_duration_seconds_bucket{backend=~\"$backend\"}[5m])))",
+          "legendFormat": "p50 {{backend}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (le, backend) (rate(pipirik_redis_op_duration_seconds_bucket{backend=~\"$backend\"}[5m])))",
+          "legendFormat": "p95 {{backend}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.99, sum by (le, backend) (rate(pipirik_redis_op_duration_seconds_bucket{backend=~\"$backend\"}[5m])))",
+          "legendFormat": "p99 {{backend}}",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Latency p50/p95/p99 by backend",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "Гистограмма распределения задержки по всем backend×op-парам (окно 5m). Тёмные ячейки — концентрация операций в данном bucket-е.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false},
+            "scaleDistribution": {"type": "linear"}
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 9},
+      "id": 4,
+      "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "Oranges",
+          "steps": 64
+        },
+        "exemplars": {"color": "rgba(255,0,255,0.7)"},
+        "filterValues": {"le": 1e-9},
+        "legend": {"show": true},
+        "rowsFrame": {"layout": "auto"},
+        "tooltip": {"mode": "single", "showColorScale": false, "yHistogram": false},
+        "yAxis": {"axisPlacement": "left", "reverse": false, "unit": "s"}
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "editorMode": "code",
+          "expr": "sum by (le) (rate(pipirik_redis_op_duration_seconds_bucket{backend=~\"$backend\"}[5m]))",
+          "format": "heatmap",
+          "legendFormat": "{{le}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Latency distribution heatmap (all backends)",
+      "type": "heatmap"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 18},
+      "id": 102,
+      "panels": [],
+      "title": "Throughput",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "RPS по комбинации backend × op (окно 1m), стек-плот. 10 серий: dau×{record_active,current} + activity_lock×{try_acquire,release,get} + lobby×{enqueue,pop_oldest,remove,is_in_lobby}.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 50,
+            "gradientMode": "none",
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false},
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {"type": "linear"},
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {"group": "A", "mode": "normal"},
+            "thresholdsStyle": {"mode": "off"}
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green", "value": null}]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 19},
+      "id": 5,
+      "options": {
+        "legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "right", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "editorMode": "code",
+          "expr": "sum by (backend, op) (rate(pipirik_redis_op_total{backend=~\"$backend\"}[1m]))",
+          "legendFormat": "{{backend}} / {{op}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "RPS by backend × op (stacked)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 29},
+      "id": 103,
+      "panels": [],
+      "title": "Errors",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "Доля ошибок (outcome=error) от всех операций per backend, окно 5m.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false},
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {"type": "linear"},
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {"group": "A", "mode": "none"},
+            "thresholdsStyle": {"mode": "line"}
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.5},
+              {"color": "red", "value": 1}
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30},
+      "id": 6,
+      "options": {
+        "legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "editorMode": "code",
+          "expr": "100 * (sum by (backend) (rate(pipirik_redis_op_total{backend=~\"$backend\", outcome=\"error\"}[5m])) / clamp_min(sum by (backend) (rate(pipirik_redis_op_total{backend=~\"$backend\"}[5m])), 0.001))",
+          "legendFormat": "{{backend}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Error rate % by backend (5m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "description": "Топ-5 backend×op-пар по количеству ошибок за последние 5 минут. Используй для триажа: какая конкретно операция ломается.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "custom": {
+            "align": "auto",
+            "cellOptions": {"type": "auto"},
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 10}
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Value"},
+            "properties": [{"id": "displayName", "value": "Errors (5m)"}]
+          }
+        ]
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 30},
+      "id": 7,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {"countRows": false, "fields": "", "reducer": ["sum"], "show": false},
+        "showHeader": true,
+        "sortBy": [{"desc": true, "displayName": "Errors (5m)"}]
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "editorMode": "code",
+          "expr": "topk(5, sum by (backend, op) (increase(pipirik_redis_op_total{backend=~\"$backend\", outcome=\"error\"}[5m])))",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Top error ops (last 5m)",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true},
+            "indexByName": {},
+            "renameByName": {}
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["pipirik", "redis", "4.1-J", "4.1-L"],
+  "templating": {
+    "list": [
+      {
+        "current": {"selected": false, "text": "Prometheus", "value": "prometheus"},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Datasource",
+        "multi": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {"selected": false, "text": "All", "value": "$__all"},
+        "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+        "definition": "label_values(pipirik_redis_op_total, backend)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Backend",
+        "multi": true,
+        "name": "backend",
+        "options": [],
+        "query": {"query": "label_values(pipirik_redis_op_total, backend)", "refId": "PrometheusVariableQueryEditor-VariableQuery"},
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {"from": "now-30m", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Pipirik Redis Operations",
+  "uid": "pipirik-redis-ops",
+  "version": 1,
+  "weekStart": ""
+}
