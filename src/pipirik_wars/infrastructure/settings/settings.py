@@ -16,6 +16,7 @@ from pipirik_wars.infrastructure.payments.tg_stars.settings import TgStarsSettin
 from pipirik_wars.infrastructure.payments.ton_connect.settings import TonConnectSettings
 from pipirik_wars.infrastructure.payments.ton_rpc.settings import TonRpcSettings
 from pipirik_wars.infrastructure.redis.settings import RedisSettings
+from pipirik_wars.infrastructure.settings.ai import AiSettings
 
 
 class DatabaseSettings(BaseSettings):
@@ -250,3 +251,9 @@ class Settings(BaseSettings):
     # следующих PR-ах; иначе settings собран, но client не
     # инстанцируется.
     redis: RedisSettings = Field(default_factory=RedisSettings)
+    # Спринт 4.1-M (задача 4.1.13): ИИ-генерация предсказаний и логов.
+    # Поле не ``Optional`` — ``AiSettings()`` без env всегда собирается
+    # (`enabled=False` по умолчанию — всё работает на статических
+    # JSON-каталогах; MVP/legacy-режим). Реальная генерация включается
+    # только при `AI_ENABLED=True` + валидный `AI_API_KEY`.
+    ai: AiSettings = Field(default_factory=AiSettings)
