@@ -49,6 +49,37 @@
 
 ---
 
+## 2026-05-13 — Спринт 4.5-D «Players section: search, card, activity, actions» (задача 4.5.5)
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 задача 4.5.5, Sprint 4.5-D
+
+Что сделано:
+- Раздел «Игроки» в admin_web: HTMX live-search, карточка игрока, журнал активности
+- Маршруты: `/players`, `/players/search`, `/players/{tg_id}`, `/players/{tg_id}/activity`
+- Действия: бан (`/players/{tg_id}/ban`), заморозка (`/freeze`), разморозка (`/unfreeze`) — через существующие use-case-ы
+- 4 HTML-шаблона (players_list.html, player_card.html, partials/players_rows.html, partials/player_activity.html)
+- DI: добавлен `balance_config` (`IBalanceConfig`) в `AdminWebContainer` для `ForestRunRepository`
+- Навигация: ссылка «Игроки» в base.html header
+- CSS: стили для таблиц, бейджей статусов, форм действий
+
+Результат / артефакты:
+- `src/pipirik_wars/admin_web/routes/players.py` — 7 эндпоинтов
+- `src/pipirik_wars/admin_web/templates/players_list.html`, `player_card.html`
+- `src/pipirik_wars/admin_web/templates/partials/players_rows.html`, `player_activity.html`
+- `src/pipirik_wars/admin_web/composition.py` — расширен AdminWebContainer
+- `tests/unit/admin_web/test_players_routes.py` — 11 unit-тестов
+- `tests/integration/admin_web/test_players.py` — 7 integration-тестов
+
+Заметки / решения:
+- Все действия делегируются существующим use-case-ам (FindPlayers, GetPlayerCard, BanPlayer, FreezePlayer, UnfreezePlayer) — логика не дублируется
+- HTMX live-search с debounce 300ms для отзывчивости
+- Audit trail в карточке фильтруется по target_kind=player + target_id=tg_id
+- ForestRunRepository требует IBalanceConfig — добавлен YamlBalanceLoader в контейнер
+
+---
+
 ## 2026-05-13 — Спринт 4.5-A «Foundation: FastAPI scaffold + Telegram Login Widget + TOTP 2FA gate»
 
 **Автор:** Devin (агентская цепочка)
