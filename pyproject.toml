@@ -36,7 +36,15 @@ dependencies = [
   "pynacl>=1.5,<2",              # Ed25519-подпись BOC-message-ей (libsodium-binding), 4.1-D / D.10.b
   "redis>=5,<7",                 # ActivityLocks/Lobby/DAU backend (alternative to SQL), Спринт 4.1-G
   "prometheus_client>=0.20,<1",  # Метрики Redis-операций (counter+histogram) + /metrics HTTP, Спринт 4.1-J
+  "fastapi>=0.115,<0.137",       # ADMIN-WEB: HTTP-фреймворк, Спринт 4.5-A
+  "uvicorn[standard]>=0.32,<0.40",  # ADMIN-WEB: ASGI-сервер, Спринт 4.5-A
+  "jinja2>=3.1,<4",              # ADMIN-WEB: server-side templates, Спринт 4.5-A
+  "itsdangerous>=2.2,<3",        # ADMIN-WEB: signed-cookie sessions, Спринт 4.5-A
+  "qrcode>=7.4,<9",              # ADMIN-WEB: TOTP-setup QR, Спринт 4.5-A
 ]
+
+[project.scripts]
+pipirik-admin-web = "pipirik_wars.admin_web.main:run"
 
 [project.optional-dependencies]
 dev = [
@@ -146,6 +154,18 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["pyotp", "pyotp.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["qrcode", "qrcode.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["itsdangerous", "itsdangerous.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["uvicorn", "uvicorn.*"]
 ignore_missing_imports = true
 
 # -----------------------------------------------------------------------------

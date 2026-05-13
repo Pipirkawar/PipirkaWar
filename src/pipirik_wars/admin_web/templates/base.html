@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Pipirik Wars Admin{% endblock %}</title>
+    {% if session and session.csrf_token %}
+    <meta name="csrf-token" content="{{ session.csrf_token }}">
+    {% endif %}
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+    <header>
+        <nav>
+            <strong>🍆 Pipirik Wars Admin</strong>
+            {% if session and session.totp_verified_at %}
+            <span class="nav-right">
+                {{ session.tg_username or "admin" }}
+                <form method="POST" action="/logout" style="display:inline;">
+                    {% if session.csrf_token %}
+                    <input type="hidden" name="csrf_token" value="{{ session.csrf_token }}">
+                    {% endif %}
+                    <button type="submit" class="btn-link">Logout</button>
+                </form>
+            </span>
+            {% endif %}
+        </nav>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <div id="flash-container">
+        {% block flash %}{% endblock %}
+    </div>
+</body>
+</html>

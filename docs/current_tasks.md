@@ -17,7 +17,9 @@
 
 > Эта секция отражает состояние проекта **на момент последнего обновления этого файла**. Она нужна для того, чтобы новый агент за 30 секунд понял, что происходит. Обновляй её при старте/завершении каждого PR-а.
 
-**На `main` после мерджа PR 4.1-N (новый, в работе):** **четырнадцатый и финальный PR Спринта 4.1** — **4.1-N** — Бизнес-метрики Prometheus + панели Grafana (закрывает остаток задачи 4.1.15 из ПД §7; **Спринт 4.1 закрыт целиком**). Новый порт `IBusinessMetrics` (`application/observability/business_metrics.py`) с 13 sync-методами + Literal-типы (`BusinessMetricsCurrency`/`CaravanOutcome`/`RaidOutcome`/`DuelResolvedOutcome`/`ForestRunOutcome`/`RouletteKind`) + null-object `NullBusinessMetrics`. Адаптер `PrometheusBusinessMetrics` (`infrastructure/observability/business_metrics.py`) с 10 метриками (4 Gauge + 6 Counter) на shared `CollectorRegistry` (общий `/metrics`-endpoint с Redis-метриками 4.1-J/L); все методы wrapped в try/except (no-throw guarantee). Инструментация 7 use-case-ов (CreateCaravan/CancelCaravan/FinishCaravanBattle/SummonBoss/CancelBossFight/FinishBossFight/RecordDonation) через kw-only `business_metrics: IBusinessMetrics | None = None` параметр. Wire-up в `bot/main.py`: `Container.business_metrics` (PrometheusBusinessMetrics при `needs_redis=True`, иначе NullBusinessMetrics); фоновый `_business_metrics_dau_poller(container, *, interval_seconds=60.0)` снимает DAU-snapshot через `IDauCounter.current()` (gauge, не counter — DAU как точка-во-времени); isinstance-guard на NullBusinessMetrics завершает таск сразу для тестов/sql-конфига. `monitoring/grafana/dashboards/business-metrics.json` (6 рядов × 12 data-панелей: DAU/Caravan active/Raid active/Prize pool stars-ton-usdt/Caravan outcomes/Raid outcomes/Forest started/Forest finished/Duel resolved/Roulette spins; `schemaVersion: 39`, `uid: pipirik-business-ops`). Тесты: 29 unit (PrometheusBusinessMetrics happy-path + NullBusinessMetrics no-op) + 10 smoke (JSON-валидность, schema, метрики, label-имена, datasource-uid). Финальное состояние: **7166 passed + 2 skipped + 95.26 % cov, 508.71 с**.
+**Активный PR — 4.5-A «Foundation: FastAPI scaffold + Telegram Login Widget + TOTP 2FA gate»** — первый PR Спринта 4.5 «Веб-админ-панель» (Фаза 4). Покрывает задачи 4.5.1 (FastAPI + TG Login) и 4.5.3 (TOTP 2FA). Базируется на `main = 9163b9f`. Ветка: `devin/1778703687-sprint-4-5-A-impl`. Новый пакет `src/pipirik_wars/admin_web/` (15 Python-файлов, 5 HTML-шаблонов, CSS, HTMX). 8 эндпоинтов, 4 auth-модуля, composition root, import-linter контракты. 53 теста (34 unit + 19 integration), ruff 0, mypy 0, 6 import contracts kept.
+
+**На `main` (АРХИВ, `9163b9f`):** **четырнадцатый и финальный PR Спринта 4.1** — **4.1-N** — Бизнес-метрики Prometheus + панели Grafana (закрывает остаток задачи 4.1.15 из ПД §7; **Спринт 4.1 закрыт целиком**). Новый порт `IBusinessMetrics` (`application/observability/business_metrics.py`) с 13 sync-методами + Literal-типы (`BusinessMetricsCurrency`/`CaravanOutcome`/`RaidOutcome`/`DuelResolvedOutcome`/`ForestRunOutcome`/`RouletteKind`) + null-object `NullBusinessMetrics`. Адаптер `PrometheusBusinessMetrics` (`infrastructure/observability/business_metrics.py`) с 10 метриками (4 Gauge + 6 Counter) на shared `CollectorRegistry` (общий `/metrics`-endpoint с Redis-метриками 4.1-J/L); все методы wrapped в try/except (no-throw guarantee). Инструментация 7 use-case-ов (CreateCaravan/CancelCaravan/FinishCaravanBattle/SummonBoss/CancelBossFight/FinishBossFight/RecordDonation) через kw-only `business_metrics: IBusinessMetrics | None = None` параметр. Wire-up в `bot/main.py`: `Container.business_metrics` (PrometheusBusinessMetrics при `needs_redis=True`, иначе NullBusinessMetrics); фоновый `_business_metrics_dau_poller(container, *, interval_seconds=60.0)` снимает DAU-snapshot через `IDauCounter.current()` (gauge, не counter — DAU как точка-во-времени); isinstance-guard на NullBusinessMetrics завершает таск сразу для тестов/sql-конфига. `monitoring/grafana/dashboards/business-metrics.json` (6 рядов × 12 data-панелей: DAU/Caravan active/Raid active/Prize pool stars-ton-usdt/Caravan outcomes/Raid outcomes/Forest started/Forest finished/Duel resolved/Roulette spins; `schemaVersion: 39`, `uid: pipirik-business-ops`). Тесты: 29 unit (PrometheusBusinessMetrics happy-path + NullBusinessMetrics no-op) + 10 smoke (JSON-валидность, schema, метрики, label-имена, datasource-uid). Финальное состояние: **7166 passed + 2 skipped + 95.26 % cov, 508.71 с**.
 
 **На `main` после мерджа PR 4.1-M (`f43d7a3`, АРХИВ):** тринадцатый PR Спринта 4.1 — **4.1-M** — ИИ-генерация предсказаний / forest-логов / duel-логов (закрывает задачу 4.1.13 из ПД §7, опц.). Новый порт `IAiTextGenerator` (`application/ai/ports.py`) с 3 async-методами + `DuelLogKind` Literal-тип + `AiGenerationError`. Адаптер `OpenAiTextGenerator` (`infrastructure/ai/openai_generator.py`) с duck-typed `client: Any`, safety-prompt-ами, retry на TimeoutError, валидацией плейсхолдеров. 3 AI-template-провайдера обёртывают `Json*Provider`-ы (in-memory кэш + fallback-на-static). `AiSettings(BaseSettings)` с env-prefix `AI_*`. Wire-up в `bot/main.py`: lazy-импорт `openai.AsyncOpenAI` только при `AI_ENABLED=True` + валидном `AI_API_KEY`; ImportError → warn + fallback; новые `Container.ai_*_provider: Optional[...]` поля; фоновый `_ai_refresh_loop(container, interval_seconds)` как `asyncio.Task` в `run()` (немедленный первый проход + sleep). `openai` — optional dependency (не добавлен в обязательные deps). Дефолтное поведение (`AI_ENABLED=False`) byte-identical pre-4.1-M. Тестов добавлено: 60 unit (settings/generator/3 providers/refresh-loop). Финальное состояние: **7124 passed + 2 skipped + 95.37 % cov, 528.12 с**.
 
@@ -63,7 +65,42 @@
 
 ---
 
-## 🎯 Активный спринт — Спринт 4.1 «Монетизация и масштаб» 🎯 (Фаза 4)
+## 🎯 Активный спринт — Спринт 4.5 «Веб-админ-панель» 🎯 (Фаза 4)
+
+> Спринт 4.1 закрыт целиком (14 PR-ов). Переходим к опциональному Спринту 4.5.
+
+### PR 4.5-A — Foundation: FastAPI scaffold + Telegram Login Widget + TOTP 2FA gate
+
+- [x] **A.0** — Hand-off commit (snapshot pivot + sticky AGENT_HANDOFF + plan)
+- [x] **A.1** — `pyproject.toml`: +5 deps + console-script `pipirik-admin-web` + `pip install -e ".[dev]"`
+- [x] **A.2** — `AdminWebSettings(BaseSettings)` с 11 env-vars (prefix `ADMIN_WEB_`)
+- [x] **A.3** — Auth-хелперы: `telegram_login`, `session`, `csrf`, `ip_allowlist`
+- [x] **A.4** — Composition root (`AdminWebContainer`) + `deps.py`
+- [x] **A.5** — Routes (8 endpoints) + templates (5 HTML + base + partials) + static (CSS, HTMX)
+- [x] **A.6** — Main entrypoint: `create_app()` factory + `run()` console-script
+- [x] **A.7** — Import-linter: +2 контракта (bot ⇏ admin_web, admin_web ⇏ bot); 6 kept / 0 broken
+- [x] **A.8** — Doc-sync (history.md + current_tasks.md) + PR creation
+
+**Текущая позиция:** A.8 — PR создан, ожидание CI.
+
+---
+
+## 📋 Следующие PR Спринта 4.5 (план)
+
+| PR | Задача ПД | Скоуп |
+|----|-----------|-------|
+| 4.5-B | 4.5.2 | RBAC из таблицы `admins` (Спринт 2.5) |
+| 4.5-C | 4.5.4 | Дашборд: DAU/MAU/concurrent, очередь, караваны/рейды |
+| 4.5-D | 4.5.5 | Раздел «Игроки»: поиск, карточка, журнал |
+| 4.5-E | 4.5.6 | Раздел «Племена»: карточка, история, заморозка |
+| 4.5-F | 4.5.7 | Раздел «Аудит-лог»: фильтрация |
+| 4.5-G | 4.5.8 | Редактор `balance.yaml` |
+| 4.5-H | 4.5.9 | Сетевой доступ: белый список IP / VPN |
+| 4.5-I | 4.5.10 | Паритет use-cases bot/web + audit source |
+
+---
+
+## [АРХИВ] Спринт 4.1 «Монетизация и масштаб» 🎯 (Фаза 4)
 
 > Цель спринта (по [`development_plan.md`](development_plan.md) §7 «Фаза 4 — Монетизация и масштаб», ГДД §12.5/§12.6): запуск платных каналов (Telegram Stars / TON / USDT) + крипто-призовой пул из 10% донат-зачислений + лот-генератор + крипто-приз в рулетке + use-case `ClaimPrize` + админ-команды + переход на Redis + многоязычность + метрики. Декомпозиция на 6 фичевых PR-ов (4.1-A → 4.1-F, см. Roadmap выше).
 

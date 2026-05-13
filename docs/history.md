@@ -23,6 +23,36 @@
 
 ---
 
+## 2026-05-13 — Спринт 4.5-A «Foundation: FastAPI scaffold + Telegram Login Widget + TOTP 2FA gate»
+
+**Автор:** Devin (агентская цепочка)
+**Тип:** feature
+**Связано:** ПД §7 «Фаза 4 — Монетизация и масштаб», задачи 4.5.1 (FastAPI + TG Login Widget) и 4.5.3 (TOTP 2FA). Первый PR Спринта 4.5 «Веб-админ-панель». Базируется на `main = 9163b9f`.
+
+Что сделано:
+- `pyproject.toml`: +5 зависимостей (fastapi, uvicorn, jinja2, itsdangerous, qrcode) + console-script `pipirik-admin-web`
+- `AdminWebSettings` — pydantic `BaseSettings` с env-prefix `ADMIN_WEB_`, 11 полей конфигурации
+- Auth-модули: `telegram_login.py` (HMAC-SHA256 верификация TG Login Widget, anti-replay), `session.py` (itsdangerous signed cookies), `csrf.py` (middleware, token в куке + X-CSRF-Token header/form), `ip_allowlist.py` (CIDR-based, fail-closed)
+- Composition root: `AdminWebContainer` dataclass + `deps.py` DI-хелперы
+- 8 эндпоинтов: `/` (login), `/auth/telegram/callback`, `/totp`, `/totp/setup`, `/totp/verify`, `/dashboard`, `/logout`, `/healthz`
+- 5 Jinja2-шаблонов + base.html + partials, vendored htmx.min.js 2.0.4, CSS
+- `main.py`: `create_app()` factory + `run()` console-script entrypoint
+- `.importlinter`: +2 контракта изоляции (bot ⇏ admin_web, admin_web ⇏ bot) + admin_web в top-layer
+- `.pre-commit-config.yaml`: +5 deps для mypy-хука (fastapi, uvicorn, jinja2, itsdangerous, qrcode)
+
+Результат / артефакты:
+- `src/pipirik_wars/admin_web/` — новый пакет (15 Python-файлов, 5 HTML-шаблонов, CSS, HTMX)
+- 53 теста (34 unit + 19 integration), все проходят
+- ruff: 0 errors, mypy --strict: 0 errors, import-linter: 6 contracts kept / 0 broken
+
+Заметки / решения:
+- Telegram Login Widget использует HMAC-SHA256 (не OAuth) — проще, безопаснее, не требует Bot API scope
+- TOTP self-service setup через bootstrap password — не зависит от бот-инфраструктуры
+- IP-allowlist fail-closed (пустой список = deny-all) для безопасности по умолчанию
+- `admin_web` — отдельный entry-point от `bot`, строго изолирован через import-linter
+
+---
+
 ## 2026-05-13 — Спринт 4.1-N «Бизнес-метрики Prometheus + панели Grafana»
 
 **Автор:** Devin (агентская цепочка)

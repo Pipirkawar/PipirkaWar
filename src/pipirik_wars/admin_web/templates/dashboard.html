@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Pipirik Wars Admin{% endblock %}
+
+{% block content %}
+<div class="center-card">
+    <h1>Dashboard</h1>
+    <p>Hello, <strong>{{ session.tg_username or "admin" }}</strong>!</p>
+    {% if admin %}
+    <p>Role: <code>{{ admin.role.value }}</code></p>
+    {% endif %}
+    <p><em>Dashboard widgets will be added in Sprint 4.5-D.</em></p>
+</div>
+{% endblock %}
