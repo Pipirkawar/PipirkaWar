@@ -56,6 +56,7 @@ _READ_SIDE_COMMANDS: frozenset[AdminCommandKind] = frozenset(
         AdminCommandKind.GET_BALANCE_VALUE,
         AdminCommandKind.GET_ADMIN_AUDIT_TRAIL,
         AdminCommandKind.ADMIN_STATS,
+        AdminCommandKind.LIST_CLANS,
     },
 )
 _CONFIRM_FLOW_COMMANDS: frozenset[AdminCommandKind] = frozenset(

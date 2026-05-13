@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Clans — Pipirik Wars Admin{% endblock %}
+
+{% block content %}
+<div class="center-card" style="max-width:900px;">
+    <h1>Tribes (Clans)</h1>
+
+    <div style="margin-bottom:1em;">
+        <a href="/clans?status=all" class="btn-link{% if status_filter == 'all' %} active{% endif %}">All</a>
+        <a href="/clans?status=active" class="btn-link{% if status_filter == 'active' %} active{% endif %}">Active</a>
+        <a href="/clans?status=frozen" class="btn-link{% if status_filter == 'frozen' %} active{% endif %}">Frozen</a>
+        <span style="margin-left:1em;">Total: <strong>{{ total }}</strong></span>
+    </div>
+
+    {% if clans %}
+    <table style="width:100%; border-collapse:collapse;">
+        <thead>
+            <tr>
+                <th style="text-align:left; padding:6px; border-bottom:2px solid #ccc;">ID</th>
+                <th style="text-align:left; padding:6px; border-bottom:2px solid #ccc;">Title</th>
+                <th style="text-align:left; padding:6px; border-bottom:2px solid #ccc;">Chat ID</th>
+                <th style="text-align:left; padding:6px; border-bottom:2px solid #ccc;">Status</th>
+                <th style="text-align:left; padding:6px; border-bottom:2px solid #ccc;">Created</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for clan in clans %}
+            <tr>
+                <td style="padding:6px; border-bottom:1px solid #eee;">
+                    <a href="/clans/{{ clan.id }}">{{ clan.id }}</a>
+                </td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">
+                    <a href="/clans/{{ clan.id }}">{{ clan.title.value }}</a>
+                </td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">{{ clan.chat_id }}</td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">
+                    {% if clan.status.value == 'frozen' %}
+                    <span style="color:#c00;">frozen</span>
+                    {% else %}
+                    <span style="color:#090;">active</span>
+                    {% endif %}
+                </td>
+                <td style="padding:6px; border-bottom:1px solid #eee;">{{ clan.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if total_pages > 1 %}
+    <div style="margin-top:1em; text-align:center;">
+        {% if page > 1 %}
+        <a href="/clans?status={{ status_filter }}&page={{ page - 1 }}">&laquo; Prev</a>
+        {% endif %}
+        <span style="margin:0 1em;">Page {{ page }} / {{ total_pages }}</span>
+        {% if page < total_pages %}
+        <a href="/clans?status={{ status_filter }}&page={{ page + 1 }}">Next &raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <p><em>No clans found.</em></p>
+    {% endif %}
+
+    <p style="margin-top:1em;"><a href="/dashboard">&larr; Dashboard</a></p>
+</div>
+{% endblock %}

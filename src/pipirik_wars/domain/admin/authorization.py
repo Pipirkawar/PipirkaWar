@@ -59,6 +59,7 @@ class AdminCommandKind(str, enum.Enum):
     GET_BALANCE_VALUE = "get_balance_value"
     GET_ADMIN_AUDIT_TRAIL = "get_admin_audit_trail"
     ADMIN_STATS = "admin_stats"
+    LIST_CLANS = "list_clans"
 
     # ── Поддержка (SUPPORT+) ──
     FREEZE_PLAYER = "freeze_player"
@@ -179,6 +180,7 @@ class RoleBasedAdminAuthorizationPolicy(IAdminAuthorizationPolicy):
             AdminCommandKind.GET_BALANCE_VALUE: frozenset(AdminRole),
             AdminCommandKind.GET_ADMIN_AUDIT_TRAIL: frozenset(AdminRole),
             AdminCommandKind.ADMIN_STATS: frozenset(AdminRole),
+            AdminCommandKind.LIST_CLANS: frozenset(AdminRole),
             # ── Confirm-flow: те, кто в принципе могут дёрнуть мутацию (то есть
             #    все, кроме READ_ONLY). Сама команда после verify ещё раз
             #    проверит, разрешена ли роли её command_kind. ──
