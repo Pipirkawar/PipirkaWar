@@ -12,6 +12,12 @@ from httpx import ASGITransport, AsyncClient
 
 from pipirik_wars.admin_web.main import create_app
 from pipirik_wars.admin_web.settings import AdminWebSettings
+from pipirik_wars.infrastructure.db.base import Base
+from pipirik_wars.infrastructure.db.models import (  # noqa: F401
+    AdminAuditLogORM,
+    AdminORM,
+    AuditLogORM,
+)
 
 _TEST_ENV = {
     "ADMIN_WEB_SECRET_KEY": "x" * 32,
@@ -29,9 +35,19 @@ def admin_web_settings() -> AdminWebSettings:
         return AdminWebSettings()  # type: ignore[call-arg]
 
 
+async def _create_schema_and_client(
+    settings: AdminWebSettings,
+) -> AsyncClient:
+    app = create_app(settings)
+    transport = ASGITransport(app=app)
+    engine = app.state.container.session_factory.kw["bind"]
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    return AsyncClient(transport=transport, base_url="http://test")
+
+
 @pytest_asyncio.fixture()
 async def client(admin_web_settings: AdminWebSettings) -> AsyncGenerator[AsyncClient]:
-    app = create_app(admin_web_settings)
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+    c = await _create_schema_and_client(admin_web_settings)
+    async with c:
         yield c

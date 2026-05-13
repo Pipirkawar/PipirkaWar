@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import abc
 import enum
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -358,3 +359,58 @@ class IAuditLogger(abc.ABC):
         Вызывается из use-case **внутри** транзакции (`IUnitOfWork`).
         Любая ошибка записи аудита откатывает всю операцию — это by design.
         """
+
+
+@dataclass(frozen=True, slots=True)
+class AuditRecord:
+    """Read-side запись ``audit_log`` для web-панели (Спринт 4.5-F).
+
+    Содержит все колонки ``AuditLogORM`` + PK ``id`` для курсорной
+    пагинации. Маппинг ``action`` / ``source`` остаётся строковым —
+    web-шаблон рендерит его as-is (перечни слишком широкие для
+    валидации на read-side).
+    """
+
+    id: int
+    occurred_at: datetime
+    action: str
+    actor_id: int | None
+    target_kind: str
+    target_id: str
+    reason: str
+    source: str
+
+
+class IAuditLogQuery(abc.ABC):
+    """Read-side порт ``audit_log`` (Спринт 4.5-F).
+
+    Реализация — ``SqlAlchemyAuditLogQuery``
+    (``infrastructure.db.services.audit_query``). Запросы исполняются
+    внутри контекста ``IUnitOfWork``.
+    """
+
+    @abc.abstractmethod
+    async def list_records(
+        self,
+        *,
+        limit: int,
+        offset: int = 0,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        actor_id: int | None = None,
+        action: str | None = None,
+        source: str | None = None,
+    ) -> Sequence[AuditRecord]:
+        """Последние ``limit`` записей с опциональными фильтрами."""
+
+    @abc.abstractmethod
+    async def count(
+        self,
+        *,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        actor_id: int | None = None,
+        action: str | None = None,
+        source: str | None = None,
+    ) -> int:
+        """Общее количество записей с учётом фильтров."""
