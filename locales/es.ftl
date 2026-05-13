@@ -279,13 +279,13 @@ lang-group = El comando `/lang` es solo para chat privado. Abre el DM.
 lang-other = El comando `/lang` es solo para usuarios normales.
 
 # Player is not registered yet.
-lang-not-registered = Pulsa /start primero, luego ejecuta /lang ru|en|pt|es|tr|id|fa|uk.
+lang-not-registered = Pulsa /start primero, luego ejecuta /lang ru|en|pt|es|tr|id|fa|uk|ar.
 
 # Usage hint when args are missing/invalid.
-lang-usage = Uso: /lang ru|en|pt|es|tr|id|fa|uk.
+lang-usage = Uso: /lang ru|en|pt|es|tr|id|fa|uk|ar.
 
 # Unsupported language code passed.
-lang-unsupported = El idioma `{ $code }` no es compatible. Disponibles: ru, en, pt, es, tr, id, fa, uk.
+lang-unsupported = El idioma `{ $code }` no es compatible. Disponibles: ru, en, pt, es, tr, id, fa, uk, ar.
 
 # Locale switched successfully. Each `lang-set-<code>` is rendered in its
 # own locale (the one the user just switched to), so the player sees the
@@ -298,6 +298,7 @@ lang-set-tr = Arayüz dili Türkçe olarak değiştirildi. Tüm yanıtlar ve ark
 lang-set-id = Bahasa antarmuka diubah ke Bahasa Indonesia. Semua balasan dan pesan latar belakang sekarang akan dalam Bahasa Indonesia.
 lang-set-fa = زبان رابط به فارسی تغییر یافت. تمام پاسخ‌ها و پیام‌های پس‌زمینه اکنون به فارسی خواهد بود.
 lang-set-uk = Мову інтерфейсу змінено на українську. Усі відповіді та фонові повідомлення тепер будуть українською.
+lang-set-ar = تم تغيير لغة الواجهة إلى العربية. جميع الردود والرسائل في الخلفية ستكون الآن باللغة العربية.
 
 
 # Anti-cheat hardcap (Sprint 1.6.D, GDD §3.3).

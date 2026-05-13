@@ -100,13 +100,14 @@ lang-group = Команда `/lang` доступна лише в приваті.
 
 lang-other = Команда `/lang` доступна лише звичайним користувачам.
 
-lang-not-registered = Спочатку натисни /start, потім — /lang ru|en|pt|es|tr|id|fa|uk.
+lang-not-registered = Спочатку натисни /start, потім — /lang ru|en|pt|es|tr|id|fa|uk|ar.
 
-lang-usage = Використання: /lang ru|en|pt|es|tr|id|fa|uk.
+lang-usage = Використання: /lang ru|en|pt|es|tr|id|fa|uk|ar.
 
-lang-unsupported = Мову `{ $code }` не підтримано. Доступно: ru, en, pt, es, tr, id, fa, uk.
+lang-unsupported = Мову `{ $code }` не підтримано. Доступно: ru, en, pt, es, tr, id, fa, uk, ar.
 
 lang-set-uk = Мову інтерфейсу змінено на українську. Усі відповіді та фонові повідомлення тепер будуть українською.
+lang-set-ar = تم تغيير لغة الواجهة إلى العربية. جميع الردود والرسائل في الخلفية ستكون الآن باللغة العربية.
 
 # ───────────────────────────────────────────────────────────────────────────
 # Announcement Channel (Sprint 4.9)
