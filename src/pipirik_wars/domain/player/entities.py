@@ -108,7 +108,7 @@ class Player:
         return self.status is PlayerStatus.FROZEN
 
     def _ensure_active(self) -> None:
-        if self.is_frozen:
+        if self.status is not PlayerStatus.ACTIVE:
             raise PlayerFrozenError(tg_id=self.tg_id)
 
     # ------- мутаторы (возвращают новый инстанс) -------
@@ -150,8 +150,12 @@ class Player:
         return replace(self, name=None, updated_at=now)
 
     def freeze(self, *, now: datetime) -> Player:
-        """Заморозить игрока. Идемпотентно: повторная заморозка — no-op."""
-        if self.is_frozen:
+        """Заморозить игрока. Идемпотентно: повторная заморозка — no-op.
+
+        На BANNED-игроке — тоже no-op: перезаписывать необратимый бан
+        заморозкой нельзя (иначе путь BANNED→FROZEN→ACTIVE обходит бан).
+        """
+        if self.status is not PlayerStatus.ACTIVE:
             return self
         return replace(self, status=PlayerStatus.FROZEN, updated_at=now)
 

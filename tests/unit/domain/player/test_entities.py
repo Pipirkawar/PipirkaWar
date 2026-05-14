@@ -299,3 +299,65 @@ class TestAnticheatBan:
         assert banned.length == Length(cm=50)
         assert banned.username == Username(value="ivan")
         assert banned.tg_id == 42
+
+
+class TestAdminBan:
+    """Необратимый бан (Спринт 2.5-B.4, ГДД §18.6)."""
+
+    def test_ban_sets_status(self) -> None:
+        p = Player.new(tg_id=42, username=None, now=NOW)
+        b = p.ban(now=LATER)
+        assert b.status is PlayerStatus.BANNED
+        assert b.updated_at == LATER
+
+    def test_ban_is_idempotent(self) -> None:
+        p = Player.new(tg_id=42, username=None, now=NOW).ban(now=NOW)
+        b = p.ban(now=LATER)
+        assert b is p
+
+    def test_freeze_on_banned_is_noop(self) -> None:
+        """freeze() не должна понижать BANNED до FROZEN (иначе BANNED→FROZEN→ACTIVE)."""
+        p = Player.new(tg_id=42, username=None, now=NOW).ban(now=NOW)
+        f = p.freeze(now=LATER)
+        assert f is p
+        assert f.status is PlayerStatus.BANNED
+
+    def test_unfreeze_on_banned_raises(self) -> None:
+        p = Player.new(tg_id=42, username=None, now=NOW).ban(now=NOW)
+        with pytest.raises(PlayerFrozenError):
+            p.unfreeze(now=LATER)
+
+
+class TestBannedPlayerCannotBeMutated:
+    """Любой with_* на забаненном игроке должен бросать PlayerFrozenError."""
+
+    def _banned(self) -> Player:
+        return Player.new(tg_id=42, username=None, now=NOW).ban(now=NOW)
+
+    def test_with_length_raises(self) -> None:
+        with pytest.raises(PlayerFrozenError):
+            self._banned().with_length(Length(cm=99), now=LATER)
+
+    def test_with_thickness_raises(self) -> None:
+        with pytest.raises(PlayerFrozenError):
+            self._banned().with_thickness(Thickness(level=5), now=LATER)
+
+    def test_with_title_raises(self) -> None:
+        with pytest.raises(PlayerFrozenError):
+            self._banned().with_title(Title.NEWBIE, now=LATER)
+
+    def test_with_name_raises(self) -> None:
+        with pytest.raises(PlayerFrozenError):
+            self._banned().with_name(PlayerName(value="X"), now=LATER)
+
+    def test_without_name_raises(self) -> None:
+        p = Player.new(tg_id=42, username=None, now=NOW).with_name(
+            PlayerName(value="Иванушка"), now=NOW
+        )
+        banned = p.ban(now=NOW)
+        with pytest.raises(PlayerFrozenError):
+            banned.without_name(now=LATER)
+
+    def test_with_username_raises(self) -> None:
+        with pytest.raises(PlayerFrozenError):
+            self._banned().with_username(Username(value="ivan"), now=LATER)
