@@ -15,7 +15,7 @@ from pipirik_wars.application.i18n import (
 class TestLocale:
     @pytest.mark.parametrize(
         "code",
-        ["ru", "en", "pt", "es", "tr", "id", "fa", "uk"],
+        ["ru", "en", "pt", "es", "tr", "id", "fa", "uk", "ar"],
     )
     def test_constructs_for_supported_codes(self, code: str) -> None:
         locale = Locale(code)
@@ -58,6 +58,7 @@ class TestLocale:
             "id",
             "fa",
             "uk",
+            "ar",
         } == SUPPORTED_LOCALES
 
 
@@ -114,6 +115,9 @@ class TestLocaleResolver:
             # Ukrainian
             ("uk", Locale("uk")),
             ("uk-UA", Locale("uk")),
+            # Arabic (RTL) — Спринт 4.5
+            ("ar", Locale("ar")),
+            ("ar-SA", Locale("ar")),
         ],
     )
     def test_resolves_extra_language_variants(
@@ -126,7 +130,7 @@ class TestLocaleResolver:
 
     @pytest.mark.parametrize(
         "tg_lang",
-        [None, "", "  ", "fr", "de", "zh-CN", "ja", "ar", "hi"],
+        [None, "", "  ", "fr", "de", "zh-CN", "ja", "hi"],
     )
     def test_unknown_falls_back_to_default(self, tg_lang: str | None) -> None:
         assert self.resolver.resolve(tg_lang=tg_lang) == DEFAULT_LOCALE

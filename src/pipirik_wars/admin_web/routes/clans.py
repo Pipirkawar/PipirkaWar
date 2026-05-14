@@ -68,28 +68,28 @@ async def clans_list(
     container = get_container(request)
     status_filter = _parse_status_filter(status)
 
-    uow = SqlAlchemyUnitOfWork(container.session_factory)
-    admins = SqlAlchemyAdminRepository(uow=uow)
-    clans = SqlAlchemyClanRepository(uow=uow)
-    audit = SqlAlchemyAdminAuditLogger(uow=uow)
+    async with SqlAlchemyUnitOfWork(container.session_factory) as uow:
+        admins = SqlAlchemyAdminRepository(uow=uow)
+        clans = SqlAlchemyClanRepository(uow=uow)
+        audit = SqlAlchemyAdminAuditLogger(uow=uow)
 
-    use_case = ListClansAdmin(
-        uow=uow,
-        admins=admins,
-        clans=clans,
-        audit=audit,
-        clock=container.clock,
-        authz=container.authorization_policy,
-    )
+        use_case = ListClansAdmin(
+            uow=uow,
+            admins=admins,
+            clans=clans,
+            audit=audit,
+            clock=container.clock,
+            authz=container.authorization_policy,
+        )
 
-    result = await use_case.execute(
-        ListClansAdminInput(
-            actor_tg_id=session.admin_id,
-            status_filter=status_filter,
-            page=page,
-            page_size=DEFAULT_PAGE_SIZE,
-        ),
-    )
+        result = await use_case.execute(
+            ListClansAdminInput(
+                actor_tg_id=session.admin_id,
+                status_filter=status_filter,
+                page=page,
+                page_size=DEFAULT_PAGE_SIZE,
+            ),
+        )
 
     total_pages = max(1, math.ceil(result.total / result.page_size))
 
@@ -114,56 +114,56 @@ async def clan_card(
     session = require_totp_verified(request)
     container = get_container(request)
 
-    uow = SqlAlchemyUnitOfWork(container.session_factory)
-    admins = SqlAlchemyAdminRepository(uow=uow)
-    clans = SqlAlchemyClanRepository(uow=uow)
-    clan_members = SqlAlchemyClanMembershipRepository(uow=uow)
-    players = SqlAlchemyPlayerRepository(uow=uow)
-    audit = SqlAlchemyAdminAuditLogger(uow=uow)
+    async with SqlAlchemyUnitOfWork(container.session_factory) as uow:
+        admins = SqlAlchemyAdminRepository(uow=uow)
+        clans = SqlAlchemyClanRepository(uow=uow)
+        clan_members = SqlAlchemyClanMembershipRepository(uow=uow)
+        players = SqlAlchemyPlayerRepository(uow=uow)
+        audit = SqlAlchemyAdminAuditLogger(uow=uow)
 
-    use_case = GetClanCard(
-        uow=uow,
-        admins=admins,
-        players=players,
-        clans=clans,
-        clan_members=clan_members,
-        audit=audit,
-        clock=container.clock,
-        authz=container.authorization_policy,
-    )
-
-    result = await use_case.execute(
-        GetClanCardInput(
-            actor_tg_id=session.admin_id,
-            query=clan_id,
-            source=AdminAuditSource.WEB,
-            ip=_client_ip(request),
-        ),
-    )
-
-    head_history = None
-    if result.card is not None:
-        daily_heads = SqlAlchemyDailyHeadRepository(uow=uow)
-        head_uc = GetClanDailyHeadHistory(
+        use_case = GetClanCard(
             uow=uow,
             admins=admins,
-            clans=clans,
             players=players,
-            daily_heads=daily_heads,
+            clans=clans,
+            clan_members=clan_members,
             audit=audit,
             clock=container.clock,
             authz=container.authorization_policy,
         )
-        head_result = await head_uc.execute(
-            GetClanDailyHeadHistoryInput(
+
+        result = await use_case.execute(
+            GetClanCardInput(
                 actor_tg_id=session.admin_id,
                 query=clan_id,
-                limit=10,
                 source=AdminAuditSource.WEB,
                 ip=_client_ip(request),
             ),
         )
-        head_history = head_result.entries
+
+        head_history = None
+        if result.card is not None:
+            daily_heads = SqlAlchemyDailyHeadRepository(uow=uow)
+            head_uc = GetClanDailyHeadHistory(
+                uow=uow,
+                admins=admins,
+                clans=clans,
+                players=players,
+                daily_heads=daily_heads,
+                audit=audit,
+                clock=container.clock,
+                authz=container.authorization_policy,
+            )
+            head_result = await head_uc.execute(
+                GetClanDailyHeadHistoryInput(
+                    actor_tg_id=session.admin_id,
+                    query=clan_id,
+                    limit=10,
+                    source=AdminAuditSource.WEB,
+                    ip=_client_ip(request),
+                ),
+            )
+            head_history = head_result.entries
 
     templates = request.app.state.templates
     content: str = templates.get_template("clan_card.html").render(
@@ -185,29 +185,29 @@ async def freeze_clan(
     session = require_totp_verified(request)
     container = get_container(request)
 
-    uow = SqlAlchemyUnitOfWork(container.session_factory)
-    admins = SqlAlchemyAdminRepository(uow=uow)
-    clans = SqlAlchemyClanRepository(uow=uow)
-    audit = SqlAlchemyAdminAuditLogger(uow=uow)
+    async with SqlAlchemyUnitOfWork(container.session_factory) as uow:
+        admins = SqlAlchemyAdminRepository(uow=uow)
+        clans = SqlAlchemyClanRepository(uow=uow)
+        audit = SqlAlchemyAdminAuditLogger(uow=uow)
 
-    use_case = FreezeClanAdmin(
-        uow=uow,
-        admins=admins,
-        clans=clans,
-        audit=audit,
-        clock=container.clock,
-        authz=container.authorization_policy,
-    )
+        use_case = FreezeClanAdmin(
+            uow=uow,
+            admins=admins,
+            clans=clans,
+            audit=audit,
+            clock=container.clock,
+            authz=container.authorization_policy,
+        )
 
-    await use_case.execute(
-        FreezeClanAdminInput(
-            actor_tg_id=session.admin_id,
-            query=clan_id,
-            reason=reason or None,
-            source=AdminAuditSource.WEB,
-            ip=_client_ip(request),
-        ),
-    )
+        await use_case.execute(
+            FreezeClanAdminInput(
+                actor_tg_id=session.admin_id,
+                query=clan_id,
+                reason=reason or None,
+                source=AdminAuditSource.WEB,
+                ip=_client_ip(request),
+            ),
+        )
 
     return RedirectResponse(url=f"/clans/{clan_id}", status_code=303)
 
@@ -220,27 +220,27 @@ async def unfreeze_clan(
     session = require_totp_verified(request)
     container = get_container(request)
 
-    uow = SqlAlchemyUnitOfWork(container.session_factory)
-    admins = SqlAlchemyAdminRepository(uow=uow)
-    clans = SqlAlchemyClanRepository(uow=uow)
-    audit = SqlAlchemyAdminAuditLogger(uow=uow)
+    async with SqlAlchemyUnitOfWork(container.session_factory) as uow:
+        admins = SqlAlchemyAdminRepository(uow=uow)
+        clans = SqlAlchemyClanRepository(uow=uow)
+        audit = SqlAlchemyAdminAuditLogger(uow=uow)
 
-    use_case = UnfreezeClanAdmin(
-        uow=uow,
-        admins=admins,
-        clans=clans,
-        audit=audit,
-        clock=container.clock,
-        authz=container.authorization_policy,
-    )
+        use_case = UnfreezeClanAdmin(
+            uow=uow,
+            admins=admins,
+            clans=clans,
+            audit=audit,
+            clock=container.clock,
+            authz=container.authorization_policy,
+        )
 
-    await use_case.execute(
-        UnfreezeClanAdminInput(
-            actor_tg_id=session.admin_id,
-            query=clan_id,
-            source=AdminAuditSource.WEB,
-            ip=_client_ip(request),
-        ),
-    )
+        await use_case.execute(
+            UnfreezeClanAdminInput(
+                actor_tg_id=session.admin_id,
+                query=clan_id,
+                source=AdminAuditSource.WEB,
+                ip=_client_ip(request),
+            ),
+        )
 
     return RedirectResponse(url=f"/clans/{clan_id}", status_code=303)
